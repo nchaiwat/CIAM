@@ -20,6 +20,4 @@ COPY . .
 # Ensure keys directory exists
 RUN mkdir -p /app/keys
 
-EXPOSE 8001
-
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--proxy-headers", "--forwarded-allow-ips=*"]

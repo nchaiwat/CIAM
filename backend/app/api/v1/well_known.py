@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request
 from app.core.oidc_keys import get_jwks
+from app.core.security import get_public_base_url
 from app.schemas.oauth import OpenIDConfigurationResponse
 
 router = APIRouter(tags=["OIDC Discovery & JWKS"])
@@ -20,7 +21,7 @@ def get_openid_configuration(request: Request):
     OpenID Connect Discovery 1.0 endpoint.
     Exposes Central IAM's endpoints and supported cryptographic capabilities.
     """
-    base_url = str(request.base_url).rstrip("/")
+    base_url = get_public_base_url(request)
     return OpenIDConfigurationResponse(
         issuer=base_url,
         authorization_endpoint=f"{base_url}/api/v1/oauth/authorize",

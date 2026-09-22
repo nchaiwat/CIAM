@@ -22,6 +22,7 @@ from app.schemas.oauth import (
 )
 from app.models.application import ConnectedApplication
 from app.models.oauth import OAuthAuthorizationCode
+from app.core.security import get_public_base_url
 from app.services.oidc_service import (
     validate_client_and_redirect_uri,
     verify_employee_credentials,
@@ -185,7 +186,7 @@ async def token_endpoint(
             detail="Missing required parameters: 'code' and 'redirect_uri'"
         )
 
-    base_url = str(request.base_url).rstrip("/")
+    base_url = get_public_base_url(request)
 
     tokens = exchange_authorization_code(
         db=db,
@@ -382,7 +383,7 @@ def portal_exchange_code(
             detail=f"Application for client '{auth_code.client_id}' not found"
         )
 
-    base_url = str(request.base_url).rstrip("/")
+    base_url = get_public_base_url(request)
     tokens = exchange_authorization_code(
         db=db,
         code_str=payload.code,

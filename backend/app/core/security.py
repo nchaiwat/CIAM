@@ -38,3 +38,21 @@ def decode_access_token(token: str) -> Optional[dict]:
 def secure_compare(a: str, b: str) -> bool:
     """Constant-time string comparison to mitigate timing attacks."""
     return secrets.compare_digest(a, b)
+
+
+def get_public_base_url(request: Any) -> str:
+    """
+    Extract public base URL honoring reverse proxy headers (X-Forwarded-Proto, X-Forwarded-Host).
+    Falls back to settings.FRONTEND_URL or request.base_url.
+    """
+    if hasattr(request, "headers"):
+        proto = request.headers.get("x-forwarded-proto")
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+        if proto and host:
+            return f"{proto}://{host}".rstrip("/")
+
+    if getattr(settings, "FRONTEND_URL", None) and "localhost" not in settings.FRONTEND_URL and "127.0.0.1" not in settings.FRONTEND_URL:
+        return settings.FRONTEND_URL.rstrip("/")
+
+    return str(getattr(request, "base_url", "http://localhost:8001")).rstrip("/")
+
