@@ -459,7 +459,7 @@ export const ciamApi = {
     }),
 
   getAuthorizeMeta: (params: Record<string, string>) => {
-    const qs = new URLSearchParams(params).toString();
+    const qs = new URLSearchParams({ ...params, format: "json" }).toString();
     return fetchApi<AuthorizeMeta>(`/oauth/authorize?${qs}`);
   },
 

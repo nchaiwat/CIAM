@@ -60,6 +60,20 @@ def authorize_get(
 
     app = validate_client_and_redirect_uri(db=db, client_id=client_id, redirect_uri=redirect_uri)
 
+    # Check if request comes from an interactive browser navigation
+    accept = request.headers.get("accept", "")
+    sec_fetch_dest = request.headers.get("sec-fetch-dest", "")
+    sec_fetch_mode = request.headers.get("sec-fetch-mode", "")
+    is_browser_nav = (
+        "text/html" in accept
+        or sec_fetch_dest in ["document", "frame", "iframe"]
+        or sec_fetch_mode == "navigate"
+    )
+
+    if is_browser_nav and request.query_params.get("format") != "json":
+        qs = str(request.query_params)
+        return RedirectResponse(url=f"/oauth/authorize?{qs}", status_code=status.HTTP_302_FOUND)
+
     # Return authorization session metadata for the Portal UI or client validation
     return {
         "client_id": client_id,
