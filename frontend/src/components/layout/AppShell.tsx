@@ -1,18 +1,46 @@
 "use client";
 
-import React, { useState } from "react";
-import { usePathname } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  // Standalone pages (e.g. employee SSO authorization portal) render without admin sidebar & header
-  if (pathname?.startsWith("/oauth/authorize")) {
+  const isStandalone =
+    pathname?.startsWith("/oauth/authorize") ||
+    pathname?.startsWith("/portal") ||
+    pathname === "/login";
+
+  useEffect(() => {
+    const token = localStorage.getItem("ciam_token");
+
+    if (!isStandalone && !token) {
+      router.replace("/login");
+    } else if (pathname === "/login" && token) {
+      router.replace("/");
+    } else {
+      setAuthChecked(true);
+    }
+  }, [pathname, isStandalone, router]);
+
+  // Standalone pages (Login & SSO authorization portal) render without admin sidebar & header
+  if (isStandalone) {
     return <main className="min-h-screen bg-[#070d1e]">{children}</main>;
+  }
+
+  // Prevent flashing protected admin dashboard before token check completes
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-3 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
   }
 
   return (

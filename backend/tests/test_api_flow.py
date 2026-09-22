@@ -27,6 +27,52 @@ def test_login_and_auth():
     assert me_resp.status_code == 200
     assert me_resp.json()["username"] == "admin"
 
+
+def test_login_honeypot_trap():
+    """ISO 27001 Security: Bot submitting decoy honeypot fields must be rejected immediately."""
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": "admin",
+            "password": "admin123",
+            "corporate_fax": "bot_automated_spammer_value"
+        }
+    )
+    assert response.status_code == 401
+    assert "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" in response.json()["detail"]
+
+
+def test_login_brute_force_lockout():
+    """ISO 27001 Security: Consecutive failed logins must trigger account lockout."""
+    # Reset admin state first by successful login
+    client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
+
+    # 4 failed attempts: return 401
+    for _ in range(4):
+        res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "wrong_password"})
+        assert res.status_code == 401
+
+    # 5th failed attempt: triggers lockout
+    res_5th = client.post("/api/v1/auth/login", json={"username": "admin", "password": "wrong_password"})
+    assert res_5th.status_code == 401
+
+    # 6th attempt (even with correct password): account is locked (HTTP 423)
+    res_locked = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
+    assert res_locked.status_code == 423
+    assert "ระงับชั่วคราว" in res_locked.json()["detail"]
+
+    # Unlock admin for subsequent tests
+    from app.core.database import SessionLocal
+    from app.models.user import AdminUser
+    db = SessionLocal()
+    admin = db.query(AdminUser).filter(AdminUser.username == "admin").first()
+    if admin:
+        admin.locked_until = None
+        admin.failed_login_attempts = 0
+        db.commit()
+    db.close()
+
+
 def test_dashboard_and_reconciliation_alert():
     response = client.get("/api/v1/dashboard/summary")
     assert response.status_code == 200

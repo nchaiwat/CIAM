@@ -1,7 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Menu, LogOut, User, Shield, PanelLeft } from "lucide-react";
+import { AdminUserOut } from "@/lib/api";
 
 interface HeaderProps {
   collapsed: boolean;
@@ -14,10 +16,23 @@ export default function Header({
   setCollapsed,
   setMobileOpen,
 }: HeaderProps) {
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<AdminUserOut | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("ciam_user");
+      if (stored) {
+        setCurrentUser(JSON.parse(stored));
+      }
+    } catch {}
+  }, []);
+
   const handleLogout = () => {
-    if (confirm("คุณต้องการออกจากระบบหรือไม่?")) {
-      // In local dev admin session or jwt token clear
-      window.location.reload();
+    if (confirm("คุณต้องการออกจากระบบ Central IAM หรือไม่?")) {
+      localStorage.removeItem("ciam_token");
+      localStorage.removeItem("ciam_user");
+      router.push("/login");
     }
   };
 
@@ -60,11 +75,11 @@ export default function Header({
           </div>
           <div className="text-left leading-tight hidden md:block">
             <div className="text-xs font-extrabold text-slate-900">
-              Chaiwat Nilawan
+              {currentUser?.full_name || "Chaiwat Nilawan"}
             </div>
             <div className="text-[11px] font-semibold text-blue-600 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Admin
+              {currentUser?.role || "SUPER_ADMIN"}
             </div>
           </div>
         </div>

@@ -262,10 +262,14 @@ export interface AuditLogsResponse {
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("ciam_token") : null;
+    const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
     const res = await fetch(url, {
       ...options,
       headers: {
         "Content-Type": "application/json",
+        ...authHeader,
         ...(options?.headers || {}),
       },
       cache: "no-store",
@@ -468,6 +472,14 @@ export const ciamApi = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  loginAdmin: (payload: LoginPayload) =>
+    fetchApi<AdminTokenResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  getAdminMe: () => fetchApi<AdminUserOut>("/auth/me"),
 };
 
 export const api = ciamApi;
@@ -551,4 +563,27 @@ export interface PortalLoginResponse {
     department?: string;
   };
 }
+
+export interface LoginPayload {
+  username: string;
+  password: string;
+  corporate_fax?: string;
+  security_honey?: string;
+}
+
+export interface AdminUserOut {
+  id: number;
+  username: string;
+  full_name: string;
+  email: string | null;
+  role: string;
+  is_active: boolean;
+}
+
+export interface AdminTokenResponse {
+  access_token: string;
+  token_type: string;
+  user: AdminUserOut;
+}
+
 

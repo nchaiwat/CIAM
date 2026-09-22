@@ -4,6 +4,9 @@ from pydantic import BaseModel, EmailStr
 class LoginRequest(BaseModel):
     username: str
     password: str
+    # Honeypot decoy fields (invisible in real browser, traps automated bot scripts)
+    corporate_fax: Optional[str] = None
+    security_honey: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str

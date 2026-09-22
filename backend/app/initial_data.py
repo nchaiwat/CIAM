@@ -17,6 +17,20 @@ def init_db():
     logger.info("Creating database tables if they do not exist...")
     Base.metadata.create_all(bind=engine)
 
+    # Safe auto-migration for security columns in existing databases (Postgres & SQLite)
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        columns = [c["name"] for c in inspector.get_columns("central_iam_admins")]
+        with engine.connect() as conn:
+            if "failed_login_attempts" not in columns:
+                conn.execute(text("ALTER TABLE central_iam_admins ADD COLUMN failed_login_attempts INTEGER DEFAULT 0;"))
+            if "locked_until" not in columns:
+                conn.execute(text("ALTER TABLE central_iam_admins ADD COLUMN locked_until TIMESTAMP;"))
+            conn.commit()
+    except Exception as e:
+        logger.debug("Auto-migration central_iam_admins notice: %s", e)
+
     db = SessionLocal()
     try:
         # 1. Seed Super Admin
