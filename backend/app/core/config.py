@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     # Active Directory Gateway
     AD_GATEWAY_URL: str = "http://192.168.12.11:3100"
     AD_SYNC_ENABLED: bool = False
+    AD_APP_ID: str = "CIAM"
+    AD_SECRET_KEY: str = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
 
     # Telegram Alert
     TELEGRAM_BOT_TOKEN: str = ""
@@ -36,6 +38,11 @@ class Settings(BaseSettings):
 
     # Development Simulation Mode for Spoke Apps
     SIMULATE_SPOKE_RESPONSES: bool = True
+
+    # Microsoft 365 (Microsoft Graph API)
+    M365_TENANT_ID: str = "3bf476e6-c0a4-4e60-9692-f9a20c16c12b"
+    M365_CLIENT_ID: str = "1d78dd68-7e09-4daa-8eac-de6331716980"
+    M365_CLIENT_SECRET: str = ""
 
     # CORS
     FRONTEND_URL: str = "http://localhost:3000"

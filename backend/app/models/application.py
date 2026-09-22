@@ -20,5 +20,19 @@ class ConnectedApplication(Base):
     last_sync_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
+    # OIDC / SSO Client Configuration
+    client_id = Column(String(100), unique=True, index=True, nullable=True)
+    client_secret = Column(String(255), nullable=True)
+    redirect_uris = Column(String(1000), nullable=True) # Comma-separated allowed callback URLs
+    sso_enabled = Column(Boolean, default=True, nullable=False)
+
+    # SAP Business One Service Layer Credentials (Zero-Trust Session Auth)
+    sap_company_db = Column(String(100), nullable=True)
+    sap_username = Column(String(100), nullable=True)
+    sap_password = Column(String(255), nullable=True)
+
+    # Active Directory Gateway Controls (Safety Guardrails)
+    ad_allow_status_patch = Column(Boolean, default=False, nullable=True)
+
     # Relationships
     accounts = relationship("AppAccountMapping", back_populates="application", cascade="all, delete-orphan")

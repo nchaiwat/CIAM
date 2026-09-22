@@ -10,6 +10,8 @@ from app.api.v1.directory import router as directory_router
 from app.api.v1.offboarding import router as offboarding_router
 from app.api.v1.applications import router as applications_router
 from app.api.v1.audit_logs import router as audit_logs_router
+from app.api.v1.oauth import router as oauth_router
+from app.api.v1.well_known import router as well_known_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,10 +25,13 @@ async def lifespan(app: FastAPI):
     try:
         init_db()
         logger.info("Central IAM database initialized and ready.")
+        from app.services.scheduler import start_background_scheduler
+        start_background_scheduler()
     except Exception as e:
         logger.error("Error during startup database initialization: %s", e)
     yield
     logger.info("Shutting down Central IAM Engine...")
+
 
 app = FastAPI(
     title="Central IAM API",
@@ -51,6 +56,11 @@ app.include_router(directory_router, prefix=settings.API_V1_PREFIX)
 app.include_router(offboarding_router, prefix=settings.API_V1_PREFIX)
 app.include_router(applications_router, prefix=settings.API_V1_PREFIX)
 app.include_router(audit_logs_router, prefix=settings.API_V1_PREFIX)
+app.include_router(oauth_router, prefix=settings.API_V1_PREFIX)
+
+# Expose standard OIDC Discovery and JWKS at root level (RFC 8414 & OIDC Core spec)
+app.include_router(well_known_router)
+app.include_router(well_known_router, prefix=settings.API_V1_PREFIX)
 
 @app.get("/")
 def root():

@@ -15,6 +15,7 @@ class AppAccountMapping(Base):
     is_active_in_app = Column(Boolean, default=True, nullable=False)
     last_sync_status = Column(String(50), default="IN_SYNC", nullable=False) # 'IN_SYNC', 'DISCREPANCY'
     last_app_login_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships

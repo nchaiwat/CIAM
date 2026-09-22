@@ -27,30 +27,28 @@ Provides a **"Single Pane of Glass"** to eliminate orphaned/ghost accounts acros
 
 ### 1. Database (PostgreSQL 16)
 ```bash
-# Start PostgreSQL container (default port 5432)
+# Start PostgreSQL container on port 5435 (avoids conflict with port 5432)
 docker compose up -d
 ```
 
 ### 2. Backend (FastAPI Core Engine)
 ```bash
 cd backend
-# Install dependencies using uv or venv
-uv sync
-# Initialize database tables and seed sample data
-uv run python -m app.initial_data
-# Launch FastAPI server (default: port 8000 or 8001)
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Activate virtual environment
+.\.venv\Scripts\Activate.ps1
+# Initialize database tables and seed real data
+python -m app.initial_data
+# Launch FastAPI server on port 8001 (port 8000 is reserved)
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
-Swagger API docs: `http://localhost:8000/docs`
+Swagger API docs: `http://localhost:8001/docs`
 
-### 3. Frontend (Next.js 16 - Impeccable GUI)
+### 3. Frontend (Next.js 16 - IRM-Style Layout)
 ```bash
 cd frontend
 npm install
-# Run development server (Port 3000 or Port 80)
+# Run development server (Port 3000)
 npm run dev
-# Or run on standard Port 80
-npm run dev:80
 ```
 
 ---
@@ -59,25 +57,25 @@ npm run dev:80
 
 ```
 .
-├── docker-compose.yml          # PostgreSQL 16 service
+├── docker-compose.yml          # PostgreSQL 16 service (Port 5435)
 ├── PRD.md                      # Product Requirements Document
 ├── .env.example                # Environment configuration template
 ├── backend/                    # FastAPI Core Governance Engine & Connectors
 │   ├── app/
 │   │   ├── api/v1/             # Endpoints (auth, dashboard, directory, offboard, apps, audit)
-│   │   ├── connectors/         # Hybrid Connector Layer (REST API + RPA Adapters)
+│   │   ├── connectors/         # Hybrid Connector Layer (REST API + RPA Adapters + SAP B1 + AD)
 │   │   ├── models/             # SQLAlchemy ORM Models
-│   │   ├── services/           # Offboarding orchestrator & Ghost account detector
+│   │   ├── services/           # Offboarding orchestrator, Provisioning & Ghost account detector
 │   │   └── initial_data.py     # Database seed data
 │   └── tests/                  # Pytest API integration test suite
-└── frontend/                   # Next.js App Router (Impeccable Design System)
+└── frontend/                   # Next.js App Router (IRM-Style Design System)
     ├── src/app/
     │   ├── page.tsx            # / (Dashboard)
-    │   ├── directory/page.tsx  # /directory (Cross-App Matrix)
+    │   ├── directory/page.tsx  # /directory (Cross-App Matrix & Quick Disable)
     │   ├── offboarding/page.tsx# /offboarding (Instant Offboarding Hub)
-    │   ├── applications/page.tsx # /applications (Spokes Registry & Ping)
+    │   ├── applications/page.tsx # /applications (Spokes Registry, Ping & Secret Key Modal)
     │   └── audit-logs/page.tsx # /audit-logs (Audit Trail & CSV Export)
-    └── src/components/layout/  # Enterprise Navbar & Layout
+    └── src/components/layout/  # IRM-Style Layout (Sidebar, Header, AppShell)
 ```
 
 ---
@@ -86,3 +84,14 @@ npm run dev:80
 - Prepared for **ISO 27001** and **PDPA** compliance audits.
 - Constant-time secret comparison (`secrets.compare_digest`).
 - Machine-to-Machine security tokens (`X-Management-API-Key`).
+
+---
+
+## 📚 Technical Specifications & Guides
+- [PRD.md](file:///d:/Python/Central-IAM/PRD.md) - Product Requirements Document
+- [HANDOFF.md](file:///d:/Python/Central-IAM/HANDOFF.md) - Developer & Operations Handoff Guide
+- [CENTRAL_IDENTITY_MANAGEMENT_API_SPEC.md](file:///d:/Python/Central-IAM/CENTRAL_IDENTITY_MANAGEMENT_API_SPEC.md) - Standard API Blueprint for Spoke Applications (IRM, QMS, ERP)
+- [AD_SYNC_AGENT_API_SPEC.md](file:///d:/Python/Central-IAM/AD_SYNC_AGENT_API_SPEC.md) - Administration API Blueprint for In-House AD Sync Agent
+- [ADAuthen.md](file:///d:/Python/Central-IAM/ADAuthen.md) - Active Directory Authentication Guide (Port 3100)
+- [MEMORY.md](file:///d:/Python/Central-IAM/MEMORY.md) - System Technical Memory & Ports
+

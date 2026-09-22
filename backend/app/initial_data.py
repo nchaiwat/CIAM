@@ -7,6 +7,8 @@ from app.models.application import ConnectedApplication
 from app.models.identity import MasterIdentity
 from app.models.mapping import AppAccountMapping
 from app.models.audit import IamAuditLog
+from app.models.oauth import OAuthAuthorizationCode
+from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ciam.init")
@@ -31,14 +33,18 @@ def init_db():
             db.add(admin)
             logger.info("Created default admin user: admin / admin123")
 
-        # 2. Seed Connected Applications
+        # 2. Seed Connected Applications (Real enterprise spokes)
         apps_data = [
             {
                 "app_code": "irm",
                 "app_name": "Incoming Raw Material (IRM)",
                 "connector_type": "REST_API",
                 "base_url": "https://irm.windowasia.com",
-                "api_key": "sec_irm_mgmt_a78f99201cb4e21a8d",
+                "api_key": "sec_irm_mgmt_9a4f21e8d3b76c501e4a",
+                "client_id": "irm-spoke-client",
+                "client_secret": "sec_irm_oauth_secret_2026",
+                "redirect_uris": "http://localhost:3000/portal/callback,http://localhost:3001/auth/callback,https://irm.windowasia.com/auth/callback",
+                "sso_enabled": True,
                 "health_status": "ONLINE",
                 "latency_ms": 32
             },
@@ -48,17 +54,65 @@ def init_db():
                 "connector_type": "REST_API",
                 "base_url": "https://qms.windowasia.com",
                 "api_key": "sec_qms_mgmt_f49b10398dc3a011ef",
+                "client_id": "qms-spoke-client",
+                "client_secret": "sec_qms_oauth_secret_2026",
+                "redirect_uris": "http://localhost:3000/portal/callback,http://localhost:3002/auth/callback,https://qms.windowasia.com/auth/callback",
+                "sso_enabled": True,
                 "health_status": "ONLINE",
                 "latency_ms": 28
             },
             {
-                "app_code": "legacy_erp",
-                "app_name": "Legacy ERP / SAP B1",
-                "connector_type": "RPA_WORKER",
-                "base_url": "http://erp-legacy.windowasia.internal",
-                "rpa_adapter_name": "mock_legacy_erp",
+                "app_code": "qol",
+                "app_name": "QT Online",
+                "connector_type": "REST_API",
+                "base_url": "https://qol.windowasia.com",
+                "api_key": "sec_qol_mgmt_7e1c8430a911bb",
+                "client_id": "qol-spoke-client",
+                "client_secret": "sec_qol_oauth_secret_2026",
+                "redirect_uris": "http://localhost:3000/portal/callback,https://qol.windowasia.com/auth/callback",
+                "sso_enabled": True,
                 "health_status": "ONLINE",
-                "latency_ms": 15
+                "latency_ms": 25
+            },
+            {
+                "app_code": "sap_b1",
+                "app_name": "SAP Business One (ERP)",
+                "connector_type": "SAP_B1",
+                "base_url": "https://sapb1.waapps.net",
+                "api_key": "sec_sap_b1_mgmt_8b2e1f409c3d",
+                "sap_company_db": "WA_PROD",
+                "sap_username": "ciam_reader",
+                "sap_password": "",
+                "client_id": "sap-b1-spoke-client",
+                "client_secret": "sec_sap_b1_oauth_secret_2026",
+                "redirect_uris": "http://localhost:3000/portal/callback",
+                "sso_enabled": False,
+                "health_status": "ONLINE",
+                "latency_ms": 22
+            },
+            {
+                "app_code": "ad",
+                "app_name": "Active Directory (DC Gateway)",
+                "connector_type": "AD_PROXY",
+                "base_url": "http://192.168.12.11:3100",
+                "api_key": "mgmt_ciam_key_9a88b1c0d2e3f4a5",
+                "ad_allow_status_patch": False,
+                "sso_enabled": False,
+                "health_status": "ONLINE",
+                "latency_ms": 246
+            },
+            {
+                "app_code": "m365",
+                "app_name": "Microsoft 365 (Entra ID & Exchange)",
+                "connector_type": "M365",
+                "base_url": "https://graph.microsoft.com",
+                "api_key": settings.M365_CLIENT_SECRET,
+                "client_id": settings.M365_CLIENT_ID,
+                "client_secret": settings.M365_CLIENT_SECRET,
+                "sap_company_db": settings.M365_TENANT_ID,
+                "sso_enabled": False,
+                "health_status": "ONLINE",
+                "latency_ms": 115
             }
         ]
 
@@ -72,7 +126,14 @@ def init_db():
                     connector_type=item["connector_type"],
                     base_url=item.get("base_url"),
                     api_key=item.get("api_key"),
-                    rpa_adapter_name=item.get("rpa_adapter_name"),
+                    sap_company_db=item.get("sap_company_db"),
+                    sap_username=item.get("sap_username"),
+                    sap_password=item.get("sap_password"),
+                    ad_allow_status_patch=item.get("ad_allow_status_patch", False),
+                    client_id=item.get("client_id"),
+                    client_secret=item.get("client_secret"),
+                    redirect_uris=item.get("redirect_uris"),
+                    sso_enabled=item.get("sso_enabled", True),
                     health_status=item["health_status"],
                     latency_ms=item["latency_ms"],
                     last_health_check_at=datetime.now(timezone.utc),
@@ -81,144 +142,104 @@ def init_db():
                 db.add(app)
                 db.flush()
                 logger.info("Seeded connected application: %s (%s)", app.app_name, app.connector_type)
+            else:
+                # Update client credentials if not already populated
+                if not app.client_id:
+                    app.client_id = item.get("client_id")
+                    app.client_secret = item.get("client_secret")
+                    app.redirect_uris = item.get("redirect_uris")
+                    app.sso_enabled = item.get("sso_enabled", True)
+                if item.get("sap_company_db") and not app.sap_company_db:
+                    app.sap_company_db = item.get("sap_company_db")
+                    app.sap_username = item.get("sap_username")
+                db.flush()
             app_objs[item["app_code"]] = app
 
-        # 3. Seed Master Identities from Active Directory
+        # 3. Seed Real Master Identities from Active Directory & IRM
         now = datetime.now(timezone.utc)
-        identities_data = [
+        real_identities = [
             {
-                "employee_id": "WA-00101",
-                "username": "somchai.p",
-                "full_name": "Somchai Prasert",
-                "email": "somchai.p@windowasia.com",
-                "department": "Procurement & Raw Material",
-                "telephone": "02-123-4501",
+                "username": "Patcha.S",
+                "full_name": "Patcha Suksawas",
+                "email": "patcha.s@windowasia.com",
+                "department": "Purchasing",
                 "is_active_in_ad": True,
-                "last_login_ad_at": now - timedelta(hours=2),
                 "mappings": [
-                    {"app": "irm", "role": "PU Manager", "active": True},
-                    {"app": "legacy_erp", "role": "PO Approver", "active": True}
+                    {"app": "irm", "role": "PU User", "active": True}
                 ]
             },
             {
-                "employee_id": "WA-00204",
-                "username": "wilai.k",
-                "full_name": "Wilai Kerdchok",
-                "email": "wilai.k@windowasia.com",
-                "department": "Quality Assurance",
-                "telephone": "02-123-4520",
+                "username": "Pinyada.S",
+                "full_name": "Pinyada Rungrattanaporn",
+                "email": "pinyada.s@windowasia.com",
+                "department": "Purchasing",
                 "is_active_in_ad": True,
-                "last_login_ad_at": now - timedelta(hours=5),
                 "mappings": [
-                    {"app": "qms", "role": "QA Lead Inspector", "active": True}
+                    {"app": "irm", "role": "PU User", "active": True}
                 ]
             },
             {
-                "employee_id": "WA-00315",
-                "username": "anuson.t",
-                "full_name": "Anuson Thongdee",
-                "email": "anuson.t@windowasia.com",
-                "department": "Supply Chain & Warehouse",
-                "telephone": "02-123-4588",
+                "username": "Chaiwat.N",
+                "full_name": "Chaiwat Nilawan",
+                "email": "chaiwat.n@windowasia.com",
+                "department": "Purchasing",
                 "is_active_in_ad": True,
-                "last_login_ad_at": now - timedelta(days=1),
                 "mappings": [
-                    {"app": "irm", "role": "Warehouse Supervisor", "active": True},
-                    {"app": "qms", "role": "QA Inspector", "active": True},
-                    {"app": "legacy_erp", "role": "Inventory Clerk", "active": True}
+                    {"app": "irm", "role": "PU User", "active": True}
                 ]
             },
             {
-                # GHOST ACCOUNT TEST CASE: Employee left the company (Disabled in AD), but still Active in IRM & QMS!
-                "employee_id": "WA-00409",
-                "username": "kittisak.s",
-                "full_name": "Kittisak Saetang",
-                "email": "kittisak.s@windowasia.com",
-                "department": "Warehouse Operations",
-                "telephone": "02-123-4599",
-                "is_active_in_ad": False, # Disabled in AD!
-                "last_login_ad_at": now - timedelta(days=25),
+                "username": "Apichai.P",
+                "full_name": "Apichai Parimanara",
+                "email": "apichai.p@windowasia.com",
+                "department": "Purchasing",
+                "is_active_in_ad": True,
                 "mappings": [
-                    {"app": "irm", "role": "Material Receiver", "active": True},
-                    {"app": "qms", "role": "QA Auditor", "active": True}
+                    {"app": "irm", "role": "PU User", "active": True}
                 ]
             },
             {
-                "employee_id": "WA-00522",
-                "username": "siriporn.m",
-                "full_name": "Siriporn Maneerat",
-                "email": "siriporn.m@windowasia.com",
-                "department": "Finance & Accounting",
-                "telephone": "02-123-4611",
+                "username": "Hermes.N",
+                "full_name": "Hermess Nilawan",
+                "email": "hermes.n@windowasia.com",
+                "department": "Warehouse",
                 "is_active_in_ad": True,
-                "last_login_ad_at": now - timedelta(hours=8),
                 "mappings": [
-                    {"app": "legacy_erp", "role": "General Ledger Accountant", "active": True}
+                    {"app": "irm", "role": "WH User", "active": True}
                 ]
             }
         ]
 
-        for item in identities_data:
+        for item in real_identities:
             ident = db.query(MasterIdentity).filter(MasterIdentity.username == item["username"]).first()
             if not ident:
                 ident = MasterIdentity(
-                    employee_id=item["employee_id"],
                     username=item["username"],
                     full_name=item["full_name"],
-                    email=item["email"],
-                    department=item["department"],
-                    telephone=item["telephone"],
+                    email=item.get("email"),
+                    department=item.get("department"),
                     is_active_in_ad=item["is_active_in_ad"],
-                    last_login_ad_at=item["last_login_ad_at"]
+                    last_login_ad_at=now - timedelta(hours=2)
                 )
                 db.add(ident)
                 db.flush()
 
-                # Add mappings
-                for map_spec in item["mappings"]:
+                for map_spec in item.get("mappings", []):
                     app_obj = app_objs.get(map_spec["app"])
                     if app_obj:
                         mapping = AppAccountMapping(
                             identity_id=ident.id,
                             application_id=app_obj.id,
                             app_username=ident.username,
-                            app_user_id=f"{app_obj.app_code}_{ident.employee_id}",
                             app_group_name=map_spec["role"],
                             is_active_in_app=map_spec["active"],
-                            last_sync_status="DISCREPANCY" if (not ident.is_active_in_ad and map_spec["active"]) else "IN_SYNC",
-                            last_app_login_at=now - timedelta(days=2)
+                            last_sync_status="IN_SYNC"
                         )
                         db.add(mapping)
-                logger.info("Seeded master identity: %s (%s)", ident.full_name, ident.username)
-
-        # 4. Seed sample audit logs
-        log_count = db.query(IamAuditLog).count()
-        if log_count == 0:
-            db.add(IamAuditLog(
-                actor_username="system_ad_sync",
-                action_type="SYNC",
-                target_username="ALL_USERS",
-                affected_app_code="ad",
-                execution_mode="AD_LDAP",
-                reason="Scheduled nightly reconciliation sync with AD 192.168.12.11:3100",
-                status="SUCCESS",
-                created_at=now - timedelta(hours=6)
-            ))
-            db.add(IamAuditLog(
-                actor_username="admin",
-                action_type="ENABLE_USER",
-                target_username="somchai.p",
-                affected_app_code="irm",
-                previous_status="DISABLED",
-                new_status="ACTIVE",
-                execution_mode="SYNC_REST",
-                reason="Onboarding to PU Manager role",
-                status="SUCCESS",
-                created_at=now - timedelta(days=10)
-            ))
+                logger.info("Seeded real master identity: %s (%s)", ident.full_name, ident.username)
 
         db.commit()
-        logger.info("Database initialization and initial seeding complete!")
+        logger.info("Database initialization and seeding complete with real data!")
     except Exception as e:
         db.rollback()
         logger.error("Database initialization failed: %s", e)

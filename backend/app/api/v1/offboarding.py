@@ -27,9 +27,25 @@ def preview_offboarding_impact(
     Calculate the blast radius and preview which systems will be affected
     before executing the offboarding action.
     """
-    identity = db.query(MasterIdentity).filter(MasterIdentity.username == request.username).first()
+    query_str = (request.username or "").strip()
+    # 1. Exact or case-insensitive match on username
+    identity = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(query_str)).first()
+    
+    # 2. Match prefix or contains on username, full name, or employee ID
     if not identity:
-        raise HTTPException(status_code=404, detail=f"User '{request.username}' not found in Enterprise Directory")
+        identity = (
+            db.query(MasterIdentity)
+            .filter(
+                (MasterIdentity.username.ilike(f"{query_str}%")) |
+                (MasterIdentity.username.ilike(f"%{query_str}%")) |
+                (MasterIdentity.full_name.ilike(f"%{query_str}%")) |
+                (MasterIdentity.employee_id.ilike(f"%{query_str}%"))
+            )
+            .first()
+        )
+
+    if not identity:
+        raise HTTPException(status_code=404, detail=f"ไม่พบข้อมูลผู้ใช้ '{request.username}' ในระบบ")
 
     mappings = (
         db.query(AppAccountMapping, ConnectedApplication)

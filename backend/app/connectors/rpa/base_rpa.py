@@ -18,3 +18,8 @@ class BaseRpaAdapter(BaseConnector, ABC):
     async def health_check(self) -> ConnectorHealth:
         """Verify bot worker availability, credentials, and target system responsiveness."""
         pass
+
+    async def sync_inventory(self) -> dict:
+        """Default inventory sync for RPA worker."""
+        return {"accounts": [], "total_accounts": 0}
+

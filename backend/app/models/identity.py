@@ -16,6 +16,7 @@ class MasterIdentity(Base):
     telephone = Column(String(50), nullable=True)
     is_active_in_ad = Column(Boolean, default=True, nullable=False)
     last_login_ad_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships

@@ -1,22 +1,100 @@
 services:
+  # 1. PostgreSQL Database Container (PostgreSQL 16 Alpine)
   postgres:
     image: postgres:16-alpine
     container_name: ciam-postgres
-    restart: unless-stopped
+    restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ciam_admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ciam_secure_pass_2026}
       POSTGRES_DB: ${POSTGRES_DB:-central_iam}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-5438}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ciam_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ciam_admin} -d ${POSTGRES_DB:-central_iam}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - default
+
+  # 2. FastAPI Core Engine Backend Container
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ciam-api
+    restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=False
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-ciam_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ciam_secure_pass_2026}
+      - POSTGRES_DB=${POSTGRES_DB:-central_iam}
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-ciam_admin}:${POSTGRES_PASSWORD:-ciam_secure_pass_2026}@postgres:5432/${POSTGRES_DB:-central_iam}
+      - SECRET_KEY=${SECRET_KEY:-central_iam_super_secret_jwt_key_2026_change_in_production}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=480
+      - FRONTEND_URL=https://ciam.windowasia.com
+      - AD_GATEWAY_URL=${AD_GATEWAY_URL:-http://192.168.12.11:3100}
+      - AD_SYNC_ENABLED=${AD_SYNC_ENABLED:-False}
+      - AD_APP_ID=CIAM
+      - AD_SECRET_KEY=${AD_SECRET_KEY:-aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823}
+      - KEYS_DIR=/app/keys
+    volumes:
+      - ciam_keys:/app/keys
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ciam-api.rule=Host(`ciam.windowasia.com`) && (PathPrefix(`/api`) || PathPrefix(`/.well-known`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.ciam-api.entrypoints=websecure"
+      - "traefik.http.routers.ciam-api.tls=true"
+      - "traefik.http.routers.ciam-api.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.ciam-api.loadbalancer.server.port=8001"
+      - "traefik.docker.network=root_default"
+    networks:
+      - default
+      - root_default
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # 3. Next.js 16 Frontend Web Container
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://ciam.windowasia.com/api/v1
+    container_name: ciam-web
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ciam-web.rule=Host(`ciam.windowasia.com`)"
+      - "traefik.http.routers.ciam-web.entrypoints=websecure"
+      - "traefik.http.routers.ciam-web.tls=true"
+      - "traefik.http.routers.ciam-web.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.ciam-web.loadbalancer.server.port=3000"
+      - "traefik.docker.network=root_default"
+    networks:
+      - default
+      - root_default
+    depends_on:
+      - api
+
+networks:
+  default:
+  root_default:
+    external: true
+    name: root_default
 
 volumes:
-  postgres_data:
-    driver: local
+  ciam_pgdata:
+  ciam_keys:

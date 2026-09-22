@@ -10,12 +10,12 @@ import {
   AlertTriangle,
   ArrowRight,
   ShieldCheck,
-  Zap,
-  Bot,
   RefreshCw,
-  Clock,
+  Server,
+  Zap,
 } from "lucide-react";
 import { ciamApi, DashboardSummary } from "@/lib/api";
+import { formatDateTime } from "@/lib/date";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardSummary | null>(null);
@@ -40,150 +40,161 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <div className="space-y-8 animate-fadeIn">
-      {/* Header with Title and Quick Sync */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-6">
+      {/* Header with Title and Quick Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3 border-b-2 border-slate-300">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-            <span>Identity Governance Dashboard</span>
-            <span className="px-2.5 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              Live Sync
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+              ภาพรวมการจัดการสิทธิ์
+            </h1>
+            <span className="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full flex items-center gap-1.5 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+              ระบบออนไลน์
             </span>
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Real-time security monitoring, cross-system reconciliation, and access control overview.
+          </div>
+          <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
+            ระบบติดตามสถานะบัญชีพนักงาน การตรวจจับสิทธิ์ไม่ตรงกัน และการเชื่อมต่อระบบ
           </p>
         </div>
-        <div className="flex items-center space-x-3">
+
+        <div className="flex items-center space-x-2.5">
           <button
             onClick={fetchDashboard}
             disabled={refreshing}
-            className="flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 text-sm font-medium hover:bg-slate-800 hover:text-white transition-colors"
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-md bg-white border-2 border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold hover:bg-slate-100 hover:border-slate-400 transition-colors shadow-xs"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
-            <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
+            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-blue-600" : "text-slate-600"}`} />
+            <span>{refreshing ? "กำลังรีเฟรช..." : "รีเฟรช"}</span>
           </button>
           <Link
             href="/offboarding"
-            className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white text-sm font-medium shadow-lg shadow-rose-900/30 transition-all transform hover:-translate-y-0.5"
+            className="flex items-center space-x-1.5 px-4 py-2 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold transition-colors shadow-sm"
           >
             <UserX className="w-4 h-4" />
-            <span>Instant Offboard</span>
+            <span>ระงับสิทธิ์พนักงาน</span>
           </Link>
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
+      {/* KPI Cards Grid - High Contrast */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1 */}
-        <div className="ciam-card p-5 relative overflow-hidden group">
+        {/* KPI 1: Total Identities */}
+        <div className="bg-white p-5 rounded-lg border-2 border-slate-300 shadow-xs hover:border-blue-400 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Total Enterprise Identities
+            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+              จำนวนตัวตนทั้งหมด
             </span>
-            <div className="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+            <div className="w-9 h-9 rounded-md bg-blue-100 border border-blue-300 flex items-center justify-center text-blue-700 shadow-2xs">
               <Users className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-extrabold text-white tracking-tight">
+            <span className="text-3xl font-black text-slate-900 tracking-tight">
               {loading ? "..." : data?.kpi.total_identities}
             </span>
-            <span className="text-xs text-slate-400 ml-2">in Active Directory</span>
+            <span className="text-xs text-slate-600 font-semibold ml-2">ใน Active Directory</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-            <span>Source of Truth</span>
-            <span className="font-mono text-indigo-400">AD: 192.168.12.11</span>
+          <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-medium">
+            <span>แหล่งข้อมูลหลัก:</span>
+            <span className="font-mono text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+              192.168.12.11
+            </span>
           </div>
         </div>
 
-        {/* KPI 2 */}
-        <div className="ciam-card p-5 relative overflow-hidden group">
+        {/* KPI 2: Active Accounts */}
+        <div className="bg-white p-5 rounded-lg border-2 border-slate-300 shadow-xs hover:border-emerald-400 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Active Accounts
+            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+              บัญชีที่เปิดใช้งาน
             </span>
-            <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <div className="w-9 h-9 rounded-md bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-700 shadow-2xs">
               <UserCheck className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-extrabold text-white tracking-tight">
+            <span className="text-3xl font-black text-slate-900 tracking-tight">
               {loading ? "..." : data?.kpi.active_accounts}
             </span>
-            <span className="text-xs text-emerald-400 ml-2">Authorized</span>
+            <span className="text-xs text-emerald-700 ml-2 font-bold">มีสิทธิ์ใช้งาน</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-            <span>Compliance Rate</span>
-            <span className="text-emerald-400 font-semibold">100% Verified</span>
+          <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-medium">
+            <span>สถานะระบบ:</span>
+            <span className="text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+              ปกติ 100%
+            </span>
           </div>
         </div>
 
-        {/* KPI 3 */}
-        <div className="ciam-card p-5 relative overflow-hidden group">
+        {/* KPI 3: Deprovisioned Accounts */}
+        <div className="bg-white p-5 rounded-lg border-2 border-slate-300 shadow-xs hover:border-rose-400 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              De-provisioned Accounts
+            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+              บัญชีที่ถูกระงับสิทธิ์
             </span>
-            <div className="w-9 h-9 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+            <div className="w-9 h-9 rounded-md bg-rose-100 border border-rose-300 flex items-center justify-center text-rose-700 shadow-2xs">
               <UserX className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-extrabold text-white tracking-tight">
+            <span className="text-3xl font-black text-slate-900 tracking-tight">
               {loading ? "..." : data?.kpi.deprovisioned_accounts}
             </span>
-            <span className="text-xs text-rose-400 ml-2">Safely Revoked</span>
+            <span className="text-xs text-rose-700 ml-2 font-bold">ตัดสิทธิ์สมบูรณ์</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-            <span>Zero-Access Enforced</span>
-            <span className="text-rose-400 font-semibold">Audited</span>
+          <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-medium">
+            <span>การระงับสิทธิ์:</span>
+            <span className="text-rose-800 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+              Zero-Access
+            </span>
           </div>
         </div>
 
-        {/* KPI 4 */}
-        <div className="ciam-card p-5 relative overflow-hidden group">
+        {/* KPI 4: Connected Systems */}
+        <div className="bg-white p-5 rounded-lg border-2 border-slate-300 shadow-xs hover:border-cyan-400 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Connected Systems
+            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+              ระบบที่เชื่อมต่อ
             </span>
-            <div className="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+            <div className="w-9 h-9 rounded-md bg-cyan-100 border border-cyan-300 flex items-center justify-center text-cyan-800 shadow-2xs">
               <Layers className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-extrabold text-white tracking-tight">
+            <span className="text-3xl font-black text-slate-900 tracking-tight">
               {loading ? "..." : `${data?.kpi.connected_systems_online}/${data?.kpi.connected_systems_total}`}
             </span>
-            <span className="text-xs text-cyan-400 ml-2">Online</span>
+            <span className="text-xs text-cyan-800 ml-2 font-bold">ระบบพร้อมใช้งาน</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-            <span>Hybrid Architecture</span>
-            <span className="text-cyan-400 font-semibold">REST + RPA Bots</span>
+          <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-medium">
+            <span>โปรโตคอล:</span>
+            <span className="text-blue-800 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+              M2M REST API
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Reconciliation Warning Box (Ghost Accounts Alert) */}
+      {/* Discrepancies Alert Box (Ghost Accounts) - Strong Contrast */}
       {data?.discrepancies && data.discrepancies.length > 0 ? (
-        <div className="p-6 rounded-2xl bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-slate-900 border border-amber-500/40 shadow-2xl shadow-amber-950/30 animate-pulse-subtle">
+        <div className="p-5 rounded-lg bg-amber-50 border-2 border-amber-400 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-start space-x-4">
-              <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+            <div className="flex items-start space-x-3.5">
+              <div className="w-10 h-10 rounded-lg bg-amber-200 border-2 border-amber-400 flex items-center justify-center text-amber-900 shrink-0 shadow-xs">
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <h3 className="text-base font-bold text-amber-300">
-                    Security Alert: {data.discrepancies.length} Orphaned / Ghost Accounts Detected!
+                  <h3 className="text-base font-bold text-amber-950">
+                    ตรวจพบบัญชีตกค้างในระบบลูก (Ghost Accounts) จำนวน {data.discrepancies.length} รายการ
                   </h3>
-                  <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-500/20 text-amber-300 rounded">
-                    HIGH RISK
+                  <span className="px-2 py-0.5 text-xs font-extrabold bg-amber-500 text-white rounded shadow-2xs">
+                    ความเสี่ยงสูง
                   </span>
                 </div>
-                <p className="text-sm text-slate-300 mt-1 max-w-2xl">
-                  พนักงานถูกระงับสิทธิ์ใน Active Directory แล้ว แต่ยังพบสถานะ <span className="font-semibold text-amber-400">Active</span> ค้างอยู่ในระบบลูก เสี่ยงต่อการรั่วไหลของข้อมูลตามมาตรฐาน ISO 27001
+                <p className="text-xs sm:text-sm text-amber-900 font-medium mt-1 max-w-2xl leading-relaxed">
+                  พนักงานถูกปิดการใช้งานใน Active Directory แล้ว แต่ยังพบสถานะเปิดใช้งานอยู่ในระบบลูก เสี่ยงต่อการเข้าถึงข้อมูลโดยไม่ได้รับอนุญาตตามมาตรฐาน ISO 27001
                 </p>
 
                 {/* List preview of ghost accounts */}
@@ -191,11 +202,13 @@ export default function DashboardPage() {
                   {data.discrepancies.map((d, idx) => (
                     <div
                       key={idx}
-                      className="px-3 py-1.5 rounded-lg bg-slate-950/80 border border-amber-500/30 text-xs text-slate-200 flex items-center space-x-2"
+                      className="px-3 py-1.5 rounded bg-white border-2 border-amber-300 text-xs text-slate-900 flex items-center space-x-2 shadow-xs"
                     >
-                      <span className="font-semibold text-white">{d.full_name}</span>
-                      <span className="text-slate-400 font-mono">({d.username})</span>
-                      <span className="text-amber-400 font-semibold">in {d.app_name}</span>
+                      <span className="font-bold text-slate-900">{d.full_name}</span>
+                      <span className="text-slate-600 font-mono font-semibold">({d.username})</span>
+                      <span className="text-amber-900 font-bold bg-amber-100 px-1.5 py-0.2 rounded border border-amber-200">
+                        ในระบบ {d.app_name}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -204,155 +217,162 @@ export default function DashboardPage() {
 
             <Link
               href="/offboarding"
-              className="inline-flex items-center justify-center space-x-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition-all shrink-0"
+              className="inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-md bg-amber-700 hover:bg-amber-800 text-white font-bold text-sm transition-colors shrink-0 shadow-sm"
             >
-              <span>Review & Fix Discrepancies</span>
+              <span>จัดการสิทธิ์พนักงาน</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
       ) : (
-        <div className="p-4 rounded-xl bg-slate-900/60 border border-emerald-500/20 flex items-center space-x-3 text-sm text-emerald-300">
-          <ShieldCheck className="w-5 h-5 text-emerald-400" />
-          <span>No orphaned or ghost accounts detected. All enterprise applications are 100% synchronized with Active Directory.</span>
+        <div className="p-4 rounded-lg bg-emerald-50 border-2 border-emerald-300 flex items-center space-x-3 text-xs sm:text-sm text-emerald-900 font-bold shadow-2xs">
+          <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+          <span>ไม่พบบัญชีตกค้าง ทุกระบบลูกสอดคล้องกับ Active Directory 100%</span>
         </div>
       )}
 
-      {/* Grid: Hybrid Connector Status & Recent Activity Feed */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Real-time Activity Feed */}
-        <div className="lg:col-span-2 ciam-card p-6">
-          <div className="flex items-center justify-between mb-5">
+      {/* Grid: Recent Activity Feed & Connection Architecture */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Left 2 Cols: Activity Feed */}
+        <div className="lg:col-span-2 bg-white p-5 rounded-lg border-2 border-slate-300 shadow-xs">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-slate-200">
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight">Recent Governance Activity</h2>
-              <p className="text-xs text-slate-400">Real-time audit stream of permissions & deprovisioning events</p>
+              <h2 className="text-base font-bold text-slate-900">ประวัติกิจกรรมล่าสุด</h2>
+              <p className="text-xs text-slate-600 font-medium">บันทึกเหตุการณ์การจัดการสิทธิ์และระงับบัญชี</p>
             </div>
             <Link
               href="/audit-logs"
-              className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center space-x-1"
+              className="text-xs font-bold text-blue-700 hover:text-blue-900 flex items-center space-x-1"
             >
-              <span>View full audit</span>
+              <span>ดูประวัติทั้งหมด</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {loading ? (
-              <div className="text-center py-8 text-slate-500 text-sm">Loading activity records...</div>
+              <div className="text-center py-8 text-slate-500 text-xs sm:text-sm font-medium">กำลังโหลดข้อมูล...</div>
             ) : data?.recent_activities.length === 0 ? (
-              <div className="text-center py-8 text-slate-500 text-sm">No recent activity logged yet.</div>
+              <div className="text-center py-8 text-slate-500 text-xs sm:text-sm font-medium">ยังไม่มีบันทึกกิจกรรมล่าสุด</div>
             ) : (
-              data?.recent_activities.map((act) => (
-                <div
-                  key={act.id}
-                  className="p-3.5 rounded-lg bg-slate-900/60 border border-slate-800/80 hover:border-slate-700/80 transition-colors flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                        act.action_type === "OFFBOARD_USER"
-                          ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                          : act.action_type === "ENABLE_USER"
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                          : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
-                      }`}
-                    >
-                      {act.action_type === "OFFBOARD_USER" ? (
-                        <UserX className="w-4 h-4" />
-                      ) : act.action_type === "ENABLE_USER" ? (
-                        <UserCheck className="w-4 h-4" />
-                      ) : (
-                        <RefreshCw className="w-4 h-4" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-slate-200 flex items-center space-x-2">
-                        <span>{act.action_type.replace("_", " ")}</span>
-                        <span className="text-slate-400">for</span>
-                        <span className="font-mono text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded text-xs">
-                          {act.target_username}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400 flex items-center space-x-2 mt-0.5">
-                        <span>by {act.actor_username}</span>
-                        <span>•</span>
-                        <span>App: {act.affected_app_code?.toUpperCase() || "ALL"}</span>
-                        <span>•</span>
-                        <span className="flex items-center space-x-1 font-mono text-[10px]">
-                          {act.execution_mode === "ASYNC_RPA" ? (
-                            <span className="text-cyan-400">RPA Bot Worker</span>
-                          ) : act.execution_mode === "SYNC_REST" ? (
-                            <span className="text-indigo-400">REST API</span>
-                          ) : (
-                            <span className="text-emerald-400">AD LDAP</span>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+              data?.recent_activities.map((act) => {
+                const actionLabels: Record<string, string> = {
+                  OFFBOARD_USER: "ระงับสิทธิ์",
+                  ENABLE_USER: "เปิดใช้งานสิทธิ์",
+                  CREATE_USER: "สร้างผู้ใช้ใหม่",
+                  PROVISION_USER: "แจกจ่ายสิทธิ์",
+                  SYNC: "ซิงก์ข้อมูล",
+                  PING: "ทดสอบการเชื่อมต่อ",
+                };
 
-                  <div className="text-right">
-                    <span
-                      className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
-                        act.status === "SUCCESS"
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                          : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      }`}
-                    >
-                      {act.status}
-                    </span>
-                    <div className="text-[10px] text-slate-400 mt-1">
-                      {new Date(act.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                return (
+                  <div
+                    key={act.id}
+                    className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 hover:bg-blue-50/40 hover:border-blue-300 transition-colors flex items-center justify-between gap-3 shadow-2xs"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className={`w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shadow-2xs ${
+                          act.action_type === "OFFBOARD_USER"
+                            ? "bg-rose-100 text-rose-800 border border-rose-300"
+                            : act.action_type === "ENABLE_USER"
+                            ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                            : "bg-blue-100 text-blue-800 border border-blue-300"
+                        }`}
+                      >
+                        {act.action_type === "OFFBOARD_USER" ? (
+                          <UserX className="w-4 h-4" />
+                        ) : act.action_type === "ENABLE_USER" ? (
+                          <UserCheck className="w-4 h-4" />
+                        ) : (
+                          <RefreshCw className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-xs sm:text-sm font-bold text-slate-900 flex items-center space-x-2">
+                          <span>{actionLabels[act.action_type] || act.action_type}</span>
+                          <span className="text-slate-500 font-normal">สำหรับ</span>
+                          <span className="font-mono text-blue-800 bg-blue-100 border border-blue-300 px-1.5 py-0.2 rounded text-xs font-bold">
+                            {act.target_username}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600 font-medium flex items-center space-x-2 mt-0.5">
+                          <span>โดย {act.actor_username}</span>
+                          <span>•</span>
+                          <span>ระบบ: <strong className="text-slate-800">{act.affected_app_code?.toUpperCase() || "ALL"}</strong></span>
+                          <span>•</span>
+                          <span className="font-mono text-[10px] text-slate-700 font-semibold">
+                            {act.execution_mode}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span
+                        className={`px-2.5 py-0.5 text-[11px] font-bold rounded shadow-2xs ${
+                          act.status === "SUCCESS"
+                            ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                            : "bg-rose-100 text-rose-900 border border-rose-300"
+                        }`}
+                      >
+                        {act.status === "SUCCESS" ? "สำเร็จ" : "ล้มเหลว"}
+                      </span>
+                      <div className="text-[11px] text-slate-500 font-mono font-medium mt-1">
+                        {formatDateTime(act.created_at, false)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
 
-        {/* Right 1 Col: Hybrid Architecture Explainer */}
-        <div className="ciam-card p-6 flex flex-col justify-between">
+        {/* Right 1 Col: Connector Architecture Explainer */}
+        <div className="bg-white p-5 rounded-lg border-2 border-slate-300 shadow-xs flex flex-col justify-between">
           <div>
-            <h2 className="text-lg font-bold text-white tracking-tight">Hybrid Connector Status</h2>
-            <p className="text-xs text-slate-400 mb-5">Unified execution across modern APIs and legacy bots</p>
+            <h2 className="text-base font-bold text-slate-900">การเชื่อมต่อระบบ</h2>
+            <p className="text-xs text-slate-600 font-medium mb-4">รูปแบบการทำงานระหว่าง CIAM กับระบบปลายทาง</p>
 
-            <div className="space-y-4">
-              <div className="p-3.5 rounded-xl bg-slate-900 border border-indigo-500/20">
+            <div className="space-y-3">
+              <div className="p-4 rounded-lg bg-slate-50 border-2 border-slate-300">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="flex items-center space-x-2 text-xs font-semibold text-indigo-300">
-                    <Zap className="w-4 h-4 text-indigo-400" />
-                    <span>Direct REST API (M2M)</span>
+                  <span className="flex items-center space-x-2 text-xs font-bold text-blue-900">
+                    <Zap className="w-4 h-4 text-blue-600" />
+                    <span>M2M REST API</span>
                   </span>
-                  <span className="px-1.5 py-0.5 text-[10px] bg-indigo-500/20 text-indigo-300 rounded">
-                    Active
+                  <span className="px-2 py-0.5 text-[10px] bg-blue-100 text-blue-800 border border-blue-200 rounded font-bold">
+                    ระบบลูก
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Used for modern systems like <strong>IRM</strong> and <strong>QMS</strong> with instant sub-second token de-provisioning.
+                <p className="text-xs text-slate-700 font-medium leading-relaxed">
+                  เชื่อมต่อตรงกับระบบ <strong>IRM</strong> และ <strong>QMS</strong> เพื่อจัดการสิทธิ์ สร้างบัญชี และระงับบัญชีแบบเรียลไทม์
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-slate-900 border border-cyan-500/20">
+              <div className="p-4 rounded-lg bg-slate-50 border-2 border-slate-300">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="flex items-center space-x-2 text-xs font-semibold text-cyan-300">
-                    <Bot className="w-4 h-4 text-cyan-400" />
-                    <span>In-House RPA Bot Worker</span>
+                  <span className="flex items-center space-x-2 text-xs font-bold text-slate-900">
+                    <Server className="w-4 h-4 text-emerald-600" />
+                    <span>AD Sync Agent</span>
                   </span>
-                  <span className="px-1.5 py-0.5 text-[10px] bg-cyan-500/20 text-cyan-300 rounded">
-                    Adapter Ready
+                  <span className="px-2 py-0.5 text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200 rounded font-bold">
+                    พอร์ต 3100
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Headless automation runner for legacy apps like <strong>SAP B1 / Legacy ERP</strong> without APIs, logging automated UI clicks.
+                <p className="text-xs text-slate-700 font-medium leading-relaxed">
+                  ควบคุมการ Disable / Enable บัญชีใน Domain Controller ผ่าน Security Gateway ป้องกันความเสี่ยงตามมาตรฐาน ISO 27001
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-800 text-xs text-slate-400 flex items-center justify-between">
-            <span>Security Framework</span>
-            <span className="font-semibold text-slate-300">ISO 27001 / PDPA</span>
+          <div className="mt-5 pt-3 border-t-2 border-slate-200 text-xs text-slate-600 font-semibold flex items-center justify-between">
+            <span>มาตรฐานกำกับดูแล:</span>
+            <span className="text-slate-900 font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
+              ISO 27001 / PDPA
+            </span>
           </div>
         </div>
       </div>

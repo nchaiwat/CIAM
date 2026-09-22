@@ -2,20 +2,11 @@
 
 import { useEffect, useState } from "react";
 import {
-  FileCheck2,
-  Download,
   Search,
-  Filter,
-  Shield,
-  Clock,
-  User,
-  Layers,
-  CheckCircle2,
-  XCircle,
-  RefreshCw,
   FileSpreadsheet,
 } from "lucide-react";
 import { ciamApi, AuditLogItem } from "@/lib/api";
+import { formatDateTime } from "@/lib/date";
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
@@ -56,18 +47,20 @@ export default function AuditLogsPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3 border-b-2 border-slate-300">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-            <span>Audit Trail & Compliance Records</span>
-            <span className="px-2.5 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+              ประวัติการใช้งานและตรวจสอบ
+            </h1>
+            <span className="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-full shadow-2xs">
               ISO 27001 Ready
             </span>
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Immutable transaction history of all identity lifecycle actions, access revocations, and automated bot runs.
+          </div>
+          <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
+            ประวัติการดำเนินงานทั้งหมด การระงับสิทธิ์ และการเข้าถึงระบบ แบบไม่สามารถแก้ไขย้อนหลังได้ (Immutable Audit Trail)
           </p>
         </div>
 
@@ -75,40 +68,42 @@ export default function AuditLogsPage() {
         <a
           href={ciamApi.getExportCsvUrl()}
           download="ciam_audit_logs.csv"
-          className="flex items-center space-x-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-sm font-semibold transition-all shadow-md self-start"
+          className="flex items-center space-x-2 px-4 py-2 bg-white hover:bg-slate-100 text-slate-900 border-2 border-slate-300 rounded-md text-xs sm:text-sm font-bold transition-colors shadow-xs self-start"
         >
-          <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-          <span>Export Audit to CSV</span>
+          <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+          <span>ส่งออก Audit เป็น CSV</span>
         </a>
       </div>
 
       {/* Filter Bar */}
-      <div className="ciam-card p-4 space-y-3">
+      <div className="bg-white p-4 rounded-lg border-2 border-slate-300 shadow-xs">
         <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row items-center gap-3">
           <div className="relative flex-1 w-full">
             <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search by actor, target employee username, or reason..."
+              placeholder="ค้นหาตามผู้ดำเนินการ, Username เป้าหมาย หรือเหตุผล..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full pl-10 pr-3.5 py-2 bg-white border-2 border-slate-300 rounded-md text-xs sm:text-sm text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
             <select
               value={actionFilter}
               onChange={(e) => {
                 setActionFilter(e.target.value);
                 setPage(1);
               }}
-              className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs font-medium text-slate-300 focus:outline-none focus:border-indigo-500"
+              className="px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-600"
             >
-              <option value="">All Actions</option>
-              <option value="OFFBOARD_USER">OFFBOARD_USER</option>
-              <option value="ENABLE_USER">ENABLE_USER</option>
-              <option value="SYNC">SYNC</option>
+              <option value="">ทุกการกระทำ</option>
+              <option value="OFFBOARD_USER">ระงับสิทธิ์ (OFFBOARD_USER)</option>
+              <option value="ENABLE_USER">เปิดใช้งานสิทธิ์ (ENABLE_USER)</option>
+              <option value="CREATE_USER">สร้างผู้ใช้ (CREATE_USER)</option>
+              <option value="PROVISION_USER">แจกจ่ายสิทธิ์ (PROVISION_USER)</option>
+              <option value="SYNC">ซิงก์ข้อมูล (SYNC)</option>
             </select>
 
             <select
@@ -117,105 +112,97 @@ export default function AuditLogsPage() {
                 setStatusFilter(e.target.value);
                 setPage(1);
               }}
-              className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs font-medium text-slate-300 focus:outline-none focus:border-indigo-500"
+              className="px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-600"
             >
-              <option value="">All Statuses</option>
-              <option value="SUCCESS">SUCCESS</option>
-              <option value="FAILED">FAILED</option>
+              <option value="">ทุกสถานะ</option>
+              <option value="SUCCESS">สำเร็จ (SUCCESS)</option>
+              <option value="FAILED">ล้มเหลว (FAILED)</option>
             </select>
 
             <button
               type="submit"
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition-all"
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-bold transition-colors shadow-xs"
             >
-              Filter
+              กรองข้อมูล
             </button>
           </div>
         </form>
       </div>
 
       {/* Audit Table */}
-      <div className="ciam-card overflow-hidden">
+      <div className="bg-white rounded-lg border-2 border-slate-300 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-900/80 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <table className="w-full text-left text-xs sm:text-sm text-slate-800">
+            <thead className="bg-slate-100 border-b-2 border-slate-300 text-xs font-extrabold text-slate-800 uppercase tracking-wider">
               <tr>
-                <th className="py-3.5 px-4">Timestamp (UTC)</th>
-                <th className="py-3.5 px-4">Authorizing Actor</th>
-                <th className="py-3.5 px-4">Action</th>
-                <th className="py-3.5 px-4">Target Identity</th>
-                <th className="py-3.5 px-4">Affected Spoke</th>
-                <th className="py-3.5 px-4">Execution Mode</th>
-                <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4">Reason / Notes</th>
+                <th className="py-3.5 px-4">วันและเวลา</th>
+                <th className="py-3.5 px-4">ผู้ดำเนินการ</th>
+                <th className="py-3.5 px-4">การกระทำ</th>
+                <th className="py-3.5 px-4">ผู้ใช้เป้าหมาย</th>
+                <th className="py-3.5 px-4">ระบบที่เกี่ยวข้อง</th>
+                <th className="py-3.5 px-4">โหมด</th>
+                <th className="py-3.5 px-4">สถานะ</th>
+                <th className="py-3.5 px-4">เหตุผล / หมายเหตุ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
-                    Loading audit records...
+                  <td colSpan={8} className="py-12 text-center text-slate-500 font-semibold text-sm">
+                    กำลังโหลดประวัติการตรวจสอบ...
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
-                    No audit records found matching criteria.
+                  <td colSpan={8} className="py-12 text-center text-slate-500 font-semibold text-sm">
+                    ไม่พบรายการประวัติที่ตรงตามเงื่อนไข
                   </td>
                 </tr>
               ) : (
                 logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-900/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono text-xs text-slate-400 whitespace-nowrap">
-                      {new Date(log.created_at).toLocaleString()}
+                  <tr key={log.id} className="hover:bg-blue-50/40 transition-colors">
+                    <td className="py-3.5 px-4 font-mono text-xs text-slate-600 font-semibold whitespace-nowrap">
+                      {formatDateTime(log.created_at)}
                     </td>
-                    <td className="py-3.5 px-4 font-semibold text-slate-200">
+                    <td className="py-3.5 px-4 font-bold text-slate-900">
                       {log.actor_username}
                     </td>
                     <td className="py-3.5 px-4">
                       <span
-                        className={`px-2 py-0.5 rounded text-xs font-bold ${
+                        className={`px-2.5 py-0.5 rounded text-xs font-bold shadow-2xs ${
                           log.action_type === "OFFBOARD_USER"
-                            ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                            ? "bg-rose-100 text-rose-900 border border-rose-300"
                             : log.action_type === "ENABLE_USER"
-                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                            : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                            ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                            : "bg-blue-100 text-blue-900 border border-blue-300"
                         }`}
                       >
                         {log.action_type}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 font-mono text-xs text-indigo-300 font-semibold">
+                    <td className="py-3.5 px-4 font-mono text-xs text-blue-700 font-bold">
                       {log.target_username}
                     </td>
-                    <td className="py-3.5 px-4 uppercase text-xs font-semibold text-slate-300">
+                    <td className="py-3.5 px-4 uppercase text-xs font-bold text-slate-800">
                       {log.affected_app_code || "ALL"}
                     </td>
                     <td className="py-3.5 px-4">
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded font-mono ${
-                          log.execution_mode === "ASYNC_RPA"
-                            ? "badge-rpa"
-                            : log.execution_mode === "SYNC_REST"
-                            ? "badge-rest"
-                            : "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
-                        }`}
-                      >
+                      <span className="text-[11px] px-2 py-0.5 rounded font-mono font-bold bg-slate-100 text-slate-800 border border-slate-300">
                         {log.execution_mode}
                       </span>
                     </td>
                     <td className="py-3.5 px-4">
                       <span
-                        className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                        className={`px-2.5 py-0.5 rounded text-xs font-bold shadow-2xs ${
                           log.status === "SUCCESS"
-                            ? "text-emerald-400 bg-emerald-500/10"
-                            : "text-rose-400 bg-rose-500/10"
+                            ? "text-emerald-900 bg-emerald-100 border border-emerald-300"
+                            : "text-rose-900 bg-rose-100 border border-rose-300"
                         }`}
                       >
-                        {log.status}
+                        {log.status === "SUCCESS" ? "สำเร็จ" : "ล้มเหลว"}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 text-xs text-slate-400 truncate max-w-xs">
+                    <td className="py-3.5 px-4 text-xs text-slate-600 font-medium truncate max-w-xs">
                       {log.reason || "N/A"}
                     </td>
                   </tr>
@@ -226,9 +213,9 @@ export default function AuditLogsPage() {
         </div>
 
         {/* Footer info */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/40 flex items-center justify-between text-xs text-slate-400">
-          <span>Showing {logs.length} of {total} total audit records</span>
-          <span className="font-mono text-slate-500">Non-repudiation verified</span>
+        <div className="p-3.5 border-t-2 border-slate-200 bg-slate-100/90 flex items-center justify-between text-xs text-slate-700 font-bold">
+          <span>แสดง {logs.length} จากทั้งหมด {total} รายการ</span>
+          <span>ตรวจสอบความถูกต้องตามมาตรฐาน ISO 27001 แล้ว</span>
         </div>
       </div>
     </div>

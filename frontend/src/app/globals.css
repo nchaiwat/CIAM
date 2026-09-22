@@ -1,18 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #090b10;
-  --foreground: #f1f5f9;
-  --card: #0f131c;
-  --card-hover: #151a26;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(99, 102, 241, 0.4);
-  --primary: #6366f1;
-  --primary-glow: rgba(99, 102, 241, 0.25);
-  --emerald: #10b981;
-  --amber: #f59e0b;
-  --rose: #f43f5e;
-  --cyan: #06b6d4;
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-hover: #ffffff;
+  --border: #cbd5e1;
+  --border-focus: #2563eb;
+  --primary: #2563eb;
+  --emerald: #059669;
+  --amber: #d97706;
+  --rose: #dc2626;
+  --cyan: #0284c7;
 }
 
 body {
@@ -22,112 +21,78 @@ body {
   overflow-x: hidden;
 }
 
-/* Subtle enterprise grid background pattern */
-.bg-grid-pattern {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 0);
-  background-size: 24px 24px;
-}
-
-/* Impeccable Card Styles */
+/* High-Contrast Corporate Card */
 .ciam-card {
-  background-color: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.08);
+  transition: all 0.15s ease;
 }
 
 .ciam-card:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-  background-color: var(--card-hover);
+  border-color: #94a3b8;
+  box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1), 0 2px 4px -2px rgba(15, 23, 42, 0.08);
 }
 
 .ciam-card-glow {
-  position: relative;
-  background-color: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background-color: #ffffff;
+  border: 2px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1);
 }
 
-.ciam-card-glow::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: 13px;
-  padding: 1px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), transparent 60%);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* Glassmorphism Navigation */
-.ciam-nav {
-  background-color: rgba(15, 19, 28, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border);
-}
-
-/* Badge System */
+/* Solid Badges with High Legibility */
 .badge-active {
-  background-color: rgba(16, 185, 129, 0.12);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+  font-weight: 600;
 }
 
 .badge-inactive {
-  background-color: rgba(244, 63, 94, 0.12);
-  color: #fb7185;
-  border: 1px solid rgba(244, 63, 94, 0.25);
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+  font-weight: 600;
 }
 
 .badge-ghost {
-  background-color: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  animation: pulse-border 2s infinite ease-in-out;
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  font-weight: 700;
 }
 
 .badge-rpa {
-  background-color: rgba(6, 182, 212, 0.12);
-  color: #22d3ee;
-  border: 1px solid rgba(6, 182, 212, 0.28);
+  background-color: #e0f2fe;
+  color: #075985;
+  border: 1px solid #7dd3fc;
+  font-weight: 600;
 }
 
 .badge-rest {
-  background-color: rgba(99, 102, 241, 0.12);
-  color: #818cf8;
-  border: 1px solid rgba(99, 102, 241, 0.28);
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+  font-weight: 600;
 }
 
-@keyframes pulse-border {
-  0%, 100% {
-    border-color: rgba(245, 158, 11, 0.3);
-    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.2);
-  }
-  50% {
-    border-color: rgba(245, 158, 11, 0.7);
-    box-shadow: 0 0 8px 1px rgba(245, 158, 11, 0.25);
-  }
-}
-
-/* Custom modern scrollbar */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(9, 11, 16, 0.8);
+  background: #e2e8f0;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: #94a3b8;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: #64748b;
 }

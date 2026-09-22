@@ -11,7 +11,8 @@ try:
         settings.DATABASE_URL,
         pool_pre_ping=True,
         pool_size=10,
-        max_overflow=20
+        max_overflow=20,
+        connect_args={"connect_timeout": 3}
     )
     # Test connection
     with engine.connect() as conn:

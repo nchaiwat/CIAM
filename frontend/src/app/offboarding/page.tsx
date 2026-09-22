@@ -8,26 +8,23 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  Clock,
   Printer,
-  FileCheck2,
   ShieldAlert,
   ArrowRight,
-  Bot,
   Zap,
-  RotateCcw,
-  Sparkles,
 } from "lucide-react";
-import { ciamApi, OffboardPreview, OffboardExecuteResult } from "@/lib/api";
+import { ciamApi, OffboardPreview, OffboardExecuteResult, UserListItem } from "@/lib/api";
+import { formatDateTime, formatDate } from "@/lib/date";
 
 function OffboardingHubContent() {
   const searchParams = useSearchParams();
   const initialUsername = searchParams.get("username") || "";
 
   const [usernameInput, setUsernameInput] = useState(initialUsername);
-  const [effectiveDate, setEffectiveDate] = useState("2026-09-03");
+  const [allUsers, setAllUsers] = useState<UserListItem[]>([]);
+  const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split("T")[0]);
   const [reason, setReason] = useState("Resigned");
-  const [notes, setNotes] = useState("Standard employee exit clearance completed.");
+  const [notes, setNotes] = useState("เสร็จสิ้นกระบวนการส่งมอบงานและคืนทรัพย์สินบริษัท");
 
   const [preview, setPreview] = useState<OffboardPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -36,7 +33,10 @@ function OffboardingHubContent() {
   const [executing, setExecuting] = useState(false);
   const [executeResult, setExecuteResult] = useState<OffboardExecuteResult | null>(null);
 
-  // Auto preview if username passed in URL
+  useEffect(() => {
+    ciamApi.getUsers().then(setAllUsers).catch(console.error);
+  }, []);
+
   useEffect(() => {
     if (initialUsername) {
       handlePreview(initialUsername);
@@ -52,7 +52,7 @@ function OffboardingHubContent() {
       const res = await ciamApi.previewOffboard(uname.trim());
       setPreview(res);
     } catch (err: any) {
-      setPreviewError(`Failed to fetch user preview: ${err.message || "User not found"}`);
+      setPreviewError(`ไม่พบข้อมูลพนักงาน: ${err.message || "User not found"}`);
       setPreview(null);
     } finally {
       setPreviewLoading(false);
@@ -71,7 +71,7 @@ function OffboardingHubContent() {
       });
       setExecuteResult(res);
     } catch (err: any) {
-      alert(`Offboarding failed: ${err.message}`);
+      alert(`การระงับสิทธิ์ล้มเหลว: ${err.message}`);
     } finally {
       setExecuting(false);
     }
@@ -82,54 +82,31 @@ function OffboardingHubContent() {
   };
 
   return (
-    <div className="space-y-8 animate-fadeIn max-w-5xl mx-auto">
+    <div className="space-y-6 max-w-5xl mx-auto">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3 border-b-2 border-slate-300">
         <div>
           <div className="flex items-center space-x-3">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-              <span>Instant Offboarding Hub</span>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+              ศูนย์ระงับสิทธิ์พนักงาน
             </h1>
-            <span className="px-2.5 py-0.5 text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full">
-              KILLER FEATURE
+            <span className="px-3 py-0.5 text-xs font-bold bg-rose-100 text-rose-900 border border-rose-300 rounded-full shadow-2xs">
+              1-Click Offboarding
             </span>
           </div>
-          <p className="text-sm text-slate-400 mt-1">
-            One-Click de-provisioning across Active Directory, Cloud REST APIs, and Legacy RPA Bot Workers.
+          <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
+            ตัดสิทธิ์พนักงานพร้อมกันข้าม Active Directory และระบบลูกทั้งหมด พร้อมออกใบรับรองสากล
           </p>
-        </div>
-
-        {/* Quick Demo Pre-fills */}
-        <div className="flex items-center space-x-2">
-          <span className="text-xs text-slate-500">Quick Test:</span>
-          <button
-            onClick={() => {
-              setUsernameInput("kittisak.s");
-              handlePreview("kittisak.s");
-            }}
-            className="px-2.5 py-1 text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded hover:bg-amber-500/20 transition-all"
-          >
-            ⚠️ Ghost: kittisak.s
-          </button>
-          <button
-            onClick={() => {
-              setUsernameInput("anuson.t");
-              handlePreview("anuson.t");
-            }}
-            className="px-2.5 py-1 text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 rounded hover:bg-slate-700 transition-all"
-          >
-            Multi-app: anuson.t
-          </button>
         </div>
       </div>
 
       {/* Step 1: Search and Select Target Employee */}
-      <div className="ciam-card p-6 space-y-4">
-        <h2 className="text-base font-bold text-white flex items-center space-x-2">
-          <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">
+      <div className="bg-white p-6 rounded-lg border-2 border-slate-300 shadow-sm space-y-4">
+        <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2.5">
+          <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold">
             1
           </span>
-          <span>Identify Offboarding Target</span>
+          <span>ระบุพนักงานเป้าหมาย</span>
         </h2>
 
         <form
@@ -143,25 +120,57 @@ function OffboardingHubContent() {
             <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Enter employee username (e.g. kittisak.s, anuson.t, somchai.p)..."
+              placeholder="กรอกชื่อ, นามสกุล หรือ Username (เช่น Hermes, Patcha, Chaiwat)..."
               value={usernameInput}
               onChange={(e) => setUsernameInput(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full pl-10 pr-3.5 py-2.5 bg-white border-2 border-slate-300 rounded-md text-xs sm:text-sm text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
             />
           </div>
           <button
             type="submit"
             disabled={previewLoading}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-xl transition-all shadow-md shadow-indigo-900/30 flex items-center justify-center space-x-2 shrink-0"
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold rounded-md transition-colors shadow-sm flex items-center justify-center space-x-2 shrink-0"
           >
-            <span>{previewLoading ? "Calculating..." : "Inspect Blast Radius"}</span>
+            <span>{previewLoading ? "กำลังตรวจสอบ..." : "ตรวจสอบผลกระทบรายระบบ"}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
+        {/* Quick Suggestions */}
+        {!preview && allUsers.length > 0 && (
+          <div className="pt-3 border-t-2 border-slate-200">
+            <div className="text-xs text-slate-600 font-bold mb-2">เลือกพนักงานด่วน:</div>
+            <div className="flex flex-wrap gap-2">
+              {allUsers.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => {
+                    setUsernameInput(u.username);
+                    handlePreview(u.username);
+                  }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold border-2 flex items-center space-x-1.5 transition-all shadow-2xs ${
+                    u.has_discrepancy
+                      ? "bg-amber-100 text-amber-950 border-amber-400 hover:bg-amber-200"
+                      : "bg-slate-50 text-slate-800 border-slate-300 hover:bg-slate-200"
+                  }`}
+                >
+                  <span>{u.full_name}</span>
+                  <span className="font-mono text-slate-600 font-bold">({u.username})</span>
+                  {u.has_discrepancy && (
+                    <span className="text-[10px] px-1.5 py-0.2 bg-amber-400 text-amber-950 rounded font-black">
+                      บัญชีผี
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {previewError && (
-          <div className="p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center space-x-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+          <div className="p-3.5 rounded-md bg-rose-50 border-2 border-rose-400 text-rose-900 text-xs font-bold flex items-center space-x-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-700" />
             <span>{previewError}</span>
           </div>
         )}
@@ -169,111 +178,111 @@ function OffboardingHubContent() {
 
       {/* Step 2 & 3: Impact Preview & Departure Details */}
       {preview && !executeResult && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Identity Summary Card */}
-            <div className="ciam-card p-5 space-y-3">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Target Identity Profile
+            <div className="bg-white p-5 rounded-lg border-2 border-slate-300 shadow-sm space-y-3">
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
+                ข้อมูลพนักงานเป้าหมาย
               </span>
               <div className="flex items-center space-x-3 pt-1">
-                <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-indigo-400 font-bold text-lg">
+                <div className="w-12 h-12 rounded-full bg-blue-100 border-2 border-blue-300 flex items-center justify-center text-blue-800 font-extrabold text-lg shadow-2xs">
                   {preview.full_name.charAt(0)}
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">{preview.full_name}</h3>
-                  <div className="text-xs text-slate-400 font-mono">@{preview.username}</div>
-                  <div className="text-xs text-slate-400">{preview.department}</div>
+                  <h3 className="font-bold text-slate-900 text-base">{preview.full_name}</h3>
+                  <div className="text-xs font-mono text-blue-700 font-bold">@{preview.username}</div>
+                  <div className="text-xs text-slate-600 font-semibold">{preview.department}</div>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 text-xs flex items-center justify-between">
-                <span className="text-slate-400">Current AD Status:</span>
+              <div className="pt-3 border-t-2 border-slate-200 text-xs flex items-center justify-between">
+                <span className="text-slate-600 font-medium">สถานะใน AD:</span>
                 <span
-                  className={`font-bold ${
-                    preview.ad_current_status === "ACTIVE" ? "text-emerald-400" : "text-rose-400"
+                  className={`font-extrabold ${
+                    preview.ad_current_status === "ACTIVE" ? "text-emerald-800" : "text-rose-800"
                   }`}
                 >
-                  {preview.ad_current_status}
+                  {preview.ad_current_status === "ACTIVE" ? "เปิดใช้งานใน AD" : "ปิดใช้งานใน AD"}
                 </span>
               </div>
             </div>
 
             {/* Departure Metadata Form */}
-            <div className="md:col-span-2 ciam-card p-5 space-y-4">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Departure Clearance Details
+            <div className="md:col-span-2 bg-white p-5 rounded-lg border-2 border-slate-300 shadow-sm space-y-3">
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
+                รายละเอียดการพ้นสภาพ
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">Effective Departure Date</label>
+                  <label className="block text-xs text-slate-700 mb-1 font-bold">วันที่มีผล</label>
                   <input
                     type="date"
                     value={effectiveDate}
                     onChange={(e) => setEffectiveDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-medium focus:outline-none focus:border-blue-600"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">Reason for Departure</label>
+                  <label className="block text-xs text-slate-700 mb-1 font-bold">สาเหตุการพ้นสภาพ</label>
                   <select
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-bold focus:outline-none focus:border-blue-600"
                   >
-                    <option value="Resigned">Resigned (ลาออกตามปกติ)</option>
-                    <option value="Terminated">Terminated (พ้นสภาพการจ้างงาน)</option>
-                    <option value="Contract Ended">Contract Ended (สิ้นสุดสัญญาจ้าง)</option>
-                    <option value="Security Incident">Security Incident (ระงับสิทธิ์ฉุกเฉิน)</option>
+                    <option value="Resigned">ลาออกตามปกติ (Resigned)</option>
+                    <option value="Terminated">พ้นสภาพการจ้างงาน (Terminated)</option>
+                    <option value="Contract Ended">สิ้นสุดสัญญาจ้าง (Contract Ended)</option>
+                    <option value="Security Incident">ระงับสิทธิ์ฉุกเฉิน (Security Incident)</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Audit Notes / Remarks</label>
+                <label className="block text-xs text-slate-700 mb-1 font-bold">บันทึกเพิ่มเติม / หมายเหตุ</label>
                 <input
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Additional IT Audit remarks..."
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                  placeholder="ระบุหมายเหตุสำหรับการตรวจสอบ..."
+                  className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-medium focus:outline-none focus:border-blue-600"
                 />
               </div>
             </div>
           </div>
 
           {/* Blast Radius Impact Preview */}
-          <div className="ciam-card p-6 space-y-4">
-            <div className="flex items-center justify-between">
+          <div className="bg-white p-6 rounded-lg border-2 border-slate-300 shadow-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b-2 border-slate-200">
               <div>
-                <h3 className="text-base font-bold text-white tracking-tight">
-                  Blast Radius: {preview.total_apps_affected + 1} Target Systems Will Be Deactivated
+                <h3 className="text-base font-bold text-slate-900">
+                  ระบบเป้าหมายที่จะถูกระงับสิทธิ์ ({preview.total_apps_affected + 1} ระบบ)
                 </h3>
-                <p className="text-xs text-slate-400">
-                  Executing this action will simultaneously revoke credentials in Active Directory and all child applications.
+                <p className="text-xs text-slate-600 font-medium">
+                  ระบบจะส่งคำสั่งตัดสิทธิ์ไปยัง Active Directory และระบบลูกพร้อมกัน
                 </p>
               </div>
 
-              <span className="px-3 py-1 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-xs font-semibold rounded-lg">
-                Orchestrated Execution
+              <span className="px-3 py-1 bg-slate-100 text-slate-800 border border-slate-300 text-xs font-bold rounded">
+                ทำงานอัตโนมัติ
               </span>
             </div>
 
             <div className="space-y-2.5">
               {/* Active Directory Target */}
-              <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between">
+              <div className="p-3.5 rounded-lg bg-slate-50 border-2 border-slate-300 flex items-center justify-between shadow-2xs">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-xs">
+                  <div className="w-8 h-8 rounded-md bg-emerald-100 border border-emerald-300 text-emerald-800 flex items-center justify-center font-bold text-xs shadow-2xs">
                     AD
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-white">Active Directory (Domain Controller)</div>
-                    <div className="text-xs text-slate-400">Sync Gateway at 192.168.12.11:3100</div>
+                    <div className="text-sm font-bold text-slate-900">Active Directory (Domain Controller)</div>
+                    <div className="text-xs text-slate-600 font-medium">ผ่าน AD Sync Agent พอร์ต 3100</div>
                   </div>
                 </div>
-                <span className="badge-active px-2.5 py-1 rounded text-xs font-semibold">
+                <span className="bg-rose-100 text-rose-900 border border-rose-300 px-3 py-1 rounded text-xs font-bold shadow-2xs">
                   Disable sAMAccountName
                 </span>
               </div>
@@ -282,36 +291,26 @@ function OffboardingHubContent() {
               {preview.affected_applications.map((app) => (
                 <div
                   key={app.application_id}
-                  className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between"
+                  className="p-3.5 rounded-lg bg-slate-50 border-2 border-slate-300 flex items-center justify-between shadow-2xs"
                 >
                   <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                        app.connector_type === "RPA_WORKER"
-                          ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
-                          : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
-                      }`}
-                    >
-                      {app.connector_type === "RPA_WORKER" ? <Bot className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+                    <div className="w-8 h-8 rounded-md bg-blue-100 border border-blue-300 text-blue-800 flex items-center justify-center text-xs shadow-2xs">
+                      <Zap className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-white flex items-center space-x-2">
+                      <div className="text-sm font-bold text-slate-900 flex items-center space-x-2">
                         <span>{app.app_name}</span>
-                        <span
-                          className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
-                            app.connector_type === "RPA_WORKER" ? "badge-rpa" : "badge-rest"
-                          }`}
-                        >
-                          {app.connector_type === "RPA_WORKER" ? "RPA BOT" : "REST API"}
+                        <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-blue-100 text-blue-800 border border-blue-200 font-bold">
+                          REST API
                         </span>
                       </div>
-                      <div className="text-xs text-slate-400">
-                        Account: <span className="font-mono text-slate-300">{app.app_username}</span>
+                      <div className="text-xs text-slate-600 font-medium">
+                        บัญชี: <span className="font-mono text-slate-900 font-bold">{app.app_username}</span>
                       </div>
                     </div>
                   </div>
 
-                  <span className="text-xs text-slate-300 bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">
+                  <span className="text-xs text-slate-800 bg-white px-3 py-1 rounded-md border-2 border-slate-300 font-bold shadow-2xs">
                     {app.action_to_take}
                   </span>
                 </div>
@@ -319,50 +318,50 @@ function OffboardingHubContent() {
             </div>
 
             {/* Confirmation & One-Click Execute Button */}
-            <div className="pt-5 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center space-x-2 text-xs text-slate-400">
-                <ShieldAlert className="w-4 h-4 text-amber-400" />
-                <span>Audit trail and certificate will be permanently recorded in PostgreSQL.</span>
+            <div className="pt-4 border-t-2 border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center space-x-2 text-xs text-slate-600 font-semibold">
+                <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
+                <span>ระบบจะบันทึก Audit Trail และออกใบรับรองความปลอดภัยอย่างถาวร</span>
               </div>
 
               <button
                 onClick={handleExecute}
                 disabled={executing}
-                className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-rose-600 via-rose-700 to-rose-800 hover:from-rose-500 hover:to-rose-600 text-white font-bold text-sm rounded-xl shadow-xl shadow-rose-900/40 transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2"
+                className="w-full sm:w-auto px-8 py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-sm rounded-lg shadow-md transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
               >
                 <UserX className={`w-5 h-5 ${executing ? "animate-spin" : ""}`} />
-                <span>{executing ? "Executing Across All Systems..." : "DISABLE EVERYWHERE (ระงับสิทธิ์ทุกระบบ)"}</span>
+                <span>{executing ? "กำลังตัดสิทธิ์ทุกระบบ..." : "ยืนยันระงับสิทธิ์ทุกระบบทันที (DISABLE EVERYWHERE)"}</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Step 4 & 5: Execution Results Checklist & Offboarding Certificate */}
+      {/* Step 4: Execution Results Checklist & Offboarding Certificate */}
       {executeResult && (
-        <div className="space-y-6 animate-fadeIn print:m-0 print:p-0">
+        <div className="space-y-6 print:m-0 print:p-0">
           {/* Success Banner */}
-          <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-emerald-900/30 to-slate-900 border border-emerald-500/40 shadow-2xl shadow-emerald-950/40">
+          <div className="p-6 rounded-lg bg-emerald-50 border-2 border-emerald-400 text-emerald-950 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+              <div className="flex items-center space-x-3.5">
+                <div className="w-12 h-12 rounded-full bg-emerald-200 border-2 border-emerald-400 text-emerald-900 flex items-center justify-center shrink-0 shadow-xs">
                   <CheckCircle2 className="w-7 h-7" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-extrabold text-white">Instant Offboarding Complete!</h2>
-                  <p className="text-xs text-slate-300 mt-0.5">
-                    Target identity <span className="font-bold text-white">{executeResult.target_full_name}</span> has been revoked across all enterprise systems.
+                  <h2 className="text-lg sm:text-xl font-black">ระงับสิทธิ์ทุกระบบสำเร็จเรียบร้อย</h2>
+                  <p className="text-xs sm:text-sm text-emerald-900 font-medium mt-0.5">
+                    พนักงาน <span className="font-bold underline">{executeResult.target_full_name}</span> ได้รับการตัดสิทธิ์ออกจากระบบทั้งหมดแล้ว
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2.5">
                 <button
                   onClick={handlePrintCertificate}
-                  className="flex items-center space-x-2 px-4 py-2.5 bg-white text-slate-950 hover:bg-slate-200 font-bold text-xs rounded-xl shadow-lg transition-all"
+                  className="flex items-center space-x-2 px-4 py-2 bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-900 font-bold text-xs rounded-md shadow-xs transition-colors"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Print Certificate (PDF)</span>
+                  <span>พิมพ์ใบรับรอง (PDF)</span>
                 </button>
                 <button
                   onClick={() => {
@@ -370,50 +369,52 @@ function OffboardingHubContent() {
                     setPreview(null);
                     setUsernameInput("");
                   }}
-                  className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all"
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-md transition-colors shadow-xs"
                 >
-                  New Offboard
+                  ระงับสิทธิ์พนักงานท่านอื่น
                 </button>
               </div>
             </div>
           </div>
 
           {/* Results Checklist */}
-          <div className="ciam-card p-6 space-y-4">
-            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
-              Execution Results Checklist
+          <div className="bg-white p-6 rounded-lg border-2 border-slate-300 shadow-sm space-y-4">
+            <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+              รายการผลการตัดสิทธิ์แยกตามระบบ
             </h3>
 
             <div className="space-y-2.5">
               {executeResult.checklist.map((item, idx) => (
                 <div
                   key={idx}
-                  className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between"
+                  className="p-3.5 rounded-lg bg-slate-50 border-2 border-slate-200 flex items-center justify-between"
                 >
                   <div className="flex items-center space-x-3">
                     <div
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                        item.status === "SUCCESS" ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+                      className={`w-7 h-7 rounded flex items-center justify-center ${
+                        item.status === "SUCCESS" ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-rose-100 text-rose-800 border border-rose-300"
                       }`}
                     >
                       {item.status === "SUCCESS" ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-white flex items-center space-x-2">
+                      <div className="text-sm font-bold text-slate-900 flex items-center space-x-2">
                         <span>{item.app_name}</span>
-                        <span className="text-[10px] font-mono text-slate-400">({item.execution_mode})</span>
+                        <span className="text-[10px] font-mono text-slate-600 font-semibold">({item.execution_mode})</span>
                       </div>
-                      <div className="text-xs text-slate-400">{item.message}</div>
+                      <div className="text-xs text-slate-600 font-medium">{item.message}</div>
                     </div>
                   </div>
 
                   <div className="text-right">
                     <span
-                      className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                        item.status === "SUCCESS" ? "badge-active" : "badge-inactive"
+                      className={`px-2.5 py-0.5 rounded text-xs font-extrabold ${
+                        item.status === "SUCCESS"
+                          ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                          : "bg-rose-100 text-rose-900 border border-rose-300"
                       }`}
                     >
-                      {item.status}
+                      {item.status === "SUCCESS" ? "สำเร็จ" : "ล้มเหลว"}
                     </span>
                     <div className="text-[10px] text-slate-500 font-mono mt-0.5">{item.execution_time_ms} ms</div>
                   </div>
@@ -423,21 +424,21 @@ function OffboardingHubContent() {
           </div>
 
           {/* Offboarding Certificate Card (Printable) */}
-          <div className="ciam-card-glow p-8 space-y-6 bg-slate-950 border border-slate-700 shadow-2xl relative">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-5">
+          <div className="bg-white p-8 rounded-lg border-4 border-slate-900 shadow-md space-y-6 text-slate-900">
+            <div className="flex items-center justify-between border-b-2 border-slate-800 pb-5">
               <div>
-                <span className="text-[11px] font-mono uppercase tracking-widest text-indigo-400 font-bold">
-                  Official Verification Document
+                <span className="text-xs font-mono uppercase tracking-widest text-blue-700 font-black">
+                  เอกสารรับรองความมั่นคงปลอดภัยสารสนเทศ
                 </span>
-                <h2 className="text-xl font-extrabold text-white mt-0.5">
-                  Enterprise Access De-provisioning Certificate
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
+                  ใบรับรองการระงับสิทธิ์การเข้าถึงระบบสารสนเทศ
                 </h2>
-                <p className="text-xs text-slate-400">ISO 27001 / PDPA Access Governance Compliance</p>
+                <p className="text-xs text-slate-600 font-medium">ISO 27001 / PDPA Access Governance Compliance</p>
               </div>
 
               <div className="text-right">
-                <div className="text-[10px] text-slate-400 font-mono uppercase">Certificate ID</div>
-                <div className="text-sm font-bold font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20 mt-0.5">
+                <div className="text-[10px] text-slate-600 font-mono uppercase font-bold">Certificate ID</div>
+                <div className="text-sm font-black font-mono text-slate-950 bg-slate-100 px-3 py-1 rounded border-2 border-slate-400 mt-1">
                   {executeResult.certificate_id}
                 </div>
               </div>
@@ -445,43 +446,43 @@ function OffboardingHubContent() {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
               <div>
-                <span className="text-slate-400">Employee Name:</span>
-                <p className="font-bold text-white text-sm mt-0.5">{executeResult.target_full_name}</p>
+                <span className="text-slate-600 font-semibold">ชื่อ-นามสกุล พนักงาน:</span>
+                <p className="font-extrabold text-slate-950 text-sm mt-0.5">{executeResult.target_full_name}</p>
               </div>
               <div>
-                <span className="text-slate-400">Username:</span>
-                <p className="font-mono text-indigo-300 mt-0.5">{executeResult.target_username}</p>
+                <span className="text-slate-600 font-semibold">Username:</span>
+                <p className="font-mono text-blue-700 font-black text-sm mt-0.5">{executeResult.target_username}</p>
               </div>
               <div>
-                <span className="text-slate-400">Department:</span>
-                <p className="text-white mt-0.5">{executeResult.target_department || "General"}</p>
+                <span className="text-slate-600 font-semibold">แผนก:</span>
+                <p className="text-slate-900 font-bold mt-0.5">{executeResult.target_department || "ทั่วไป"}</p>
               </div>
               <div>
-                <span className="text-slate-400">Departure Reason:</span>
-                <p className="font-semibold text-amber-300 mt-0.5">{executeResult.reason}</p>
+                <span className="text-slate-600 font-semibold">สาเหตุการพ้นสภาพ:</span>
+                <p className="font-extrabold text-slate-900 mt-0.5">{executeResult.reason}</p>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800/80 text-xs space-y-2">
+            <div className="p-4 rounded-lg bg-slate-50 border-2 border-slate-300 text-xs space-y-2">
               <div className="flex justify-between">
-                <span className="text-slate-400">Executed At (UTC):</span>
-                <span className="font-mono text-slate-200">
-                  {new Date(executeResult.executed_at).toUTCString()}
+                <span className="text-slate-600 font-semibold">วันและเวลาที่ดำเนินการ:</span>
+                <span className="font-mono text-slate-900 font-bold">
+                  {formatDateTime(executeResult.executed_at)} น.
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Authorizing Officer:</span>
-                <span className="text-slate-200">{executeResult.actor_username} (IT Security Lead)</span>
+                <span className="text-slate-600 font-semibold">เจ้าหน้าที่ผู้ดำเนินการ:</span>
+                <span className="text-slate-900 font-bold">{executeResult.actor_username} (ผู้ดูแลระบบความปลอดภัย IT)</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Overall Governance Status:</span>
-                <span className="text-emerald-400 font-bold uppercase">{executeResult.overall_status}</span>
+                <span className="text-slate-600 font-semibold">ผลการกำกับดูแล:</span>
+                <span className="text-emerald-800 font-black uppercase text-sm">สำเร็จสมบูรณ์ (Zero Access)</span>
               </div>
             </div>
 
-            <div className="pt-6 border-t border-slate-800 flex justify-between items-center text-[11px] text-slate-500">
-              <span>Window Asia Public Company Limited • Central IAM Governance Engine</span>
-              <span>Digitally Signed & Validated</span>
+            <div className="pt-4 border-t-2 border-slate-800 flex justify-between items-center text-xs text-slate-600 font-semibold">
+              <span>บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) • Central IAM Governance Engine</span>
+              <span>เอกสารรับรองทางอิเล็กทรอนิกส์</span>
             </div>
           </div>
         </div>
@@ -494,9 +495,9 @@ export default function OffboardingPage() {
   return (
     <Suspense
       fallback={
-        <div className="py-24 text-center text-slate-500 flex flex-col items-center justify-center space-y-3">
-          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm">Loading Instant Offboarding Hub...</p>
+        <div className="py-24 text-center text-slate-500 flex flex-col items-center justify-center space-y-2">
+          <div className="w-7 h-7 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-semibold">กำลังโหลดหน้าศูนย์ระงับสิทธิ์...</p>
         </div>
       }
     >

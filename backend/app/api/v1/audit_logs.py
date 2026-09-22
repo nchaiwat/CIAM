@@ -1,5 +1,6 @@
 import csv
 import io
+from datetime import timezone, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
@@ -9,6 +10,8 @@ from app.api.deps import get_current_admin
 from app.models.user import AdminUser
 from app.models.audit import IamAuditLog
 from app.schemas.audit import AuditLogListResponse, AuditLogOut
+
+BANGKOK_TZ = timezone(timedelta(hours=7))
 
 router = APIRouter(prefix="/audit-logs", tags=["Audit Trail & Compliance"])
 
@@ -62,21 +65,27 @@ def export_audit_logs_csv(
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
-    """Export complete audit history to CSV file for ISO 27001 / PDPA compliance audit."""
+    """Export complete audit history to CSV file for ISO 27001 / PDPA compliance audit in Asia/Bangkok."""
     logs = db.query(IamAuditLog).order_by(desc(IamAuditLog.created_at)).all()
 
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "Log ID", "Timestamp (UTC)", "Actor", "Action", "Target User",
+        "Log ID", "Timestamp (dd/mm/yyyy Asia/Bangkok)", "Actor", "Action", "Target User",
         "Affected App", "Previous Status", "New Status", "Execution Mode",
         "Reason", "Status", "IP Address"
     ])
 
     for log in logs:
+        ts_str = ""
+        if log.created_at:
+            dt = log.created_at
+            bkk_dt = dt.astimezone(BANGKOK_TZ) if dt.tzinfo else dt.replace(tzinfo=timezone.utc).astimezone(BANGKOK_TZ)
+            ts_str = bkk_dt.strftime("%d/%m/%Y %H:%M:%S")
+
         writer.writerow([
             log.id,
-            log.created_at.isoformat() if log.created_at else "",
+            ts_str,
             log.actor_username,
             log.action_type,
             log.target_username,

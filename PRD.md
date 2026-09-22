@@ -1,239 +1,167 @@
 # Product Requirements Document (PRD)
 # Centralized Identity Management & Access Governance System (Central IAM)
-**Document Version:** 1.0.0  
+**Document Version:** 1.3.0  
 **Target Project:** Central IAM Application  
 **Organization:** Window Asia Public Company Limited  
-**Status:** Approved for Implementation  
-**Related Documents:** CENTRAL_IDENTITY_MANAGEMENT_API_SPEC.md, API-Integration-Guide.md
+**Status:** In Production / Active Multi-Spoke Integration  
+**Last Updated:** 2026-09-05  
+**Related Documents:** [CENTRAL_IDENTITY_MANAGEMENT_API_SPEC.md](file:///d:/Python/Central-IAM/CENTRAL_IDENTITY_MANAGEMENT_API_SPEC.md), [AD_SYNC_AGENT_API_SPEC.md](file:///d:/Python/Central-IAM/AD_SYNC_AGENT_API_SPEC.md), [MEMORY.md](file:///d:/Python/Central-IAM/MEMORY.md), [HANDOFF.md](file:///d:/Python/Central-IAM/HANDOFF.md), [ADAuthen.md](file:///d:/Python/Central-IAM/ADAuthen.md)
 
 ---
 
 ## 1. บทนำและวิสัยทัศน์โครงการ (Executive Summary & Vision)
 
 ### 1.1 ที่มาและปัญหาเดิม (Problem Statement)
-ปัจจุบันบริษัท วินโดว์ เอเชีย จำกัด (มหาชน) มีการพัฒนาและใช้งานซอฟต์แวร์หลากหลายระบบภายในองค์กร เช่น **IRM (Incoming Raw Material)**, **QMS (Quality Management System)**, **ERP/SAP B1**, และ **WMS** โดยแต่ละระบบมีฐานข้อมูลผู้ใช้งาน (User Database) แยกจากกันอย่างอิสระ ส่งผลให้เกิดปัญหาสำคัญดังนี้:
-1. **บัญชีผี / บัญชีค้างในระบบ (Orphaned / Ghost Accounts):** เมื่อพนักงานลาออก ฝ่ายบุคคล (HR) หรือผู้ดูแลระบบอาจลืมปิดสิทธิ์ในบางระบบ ทำให้พนักงานที่พ้นสภาพยังสามารถเข้าถึงข้อมูลลับของบริษัทได้
-2. **ไม่มีศูนย์กลางควบคุมการเข้าถึง (Lack of Centralized Governance):** ผู้บริหารและทีม IT Audit ไม่สามารถตรวจสอบได้ในหน้าจอเดียวว่าพนักงาน 1 คน มีสิทธิ์เข้าถึงระบบใดบ้างในองค์กร
-3. **ภาระงานซ้ำซ้อน (High Operational Overhead):** การเปิดสิทธิ์พนักงานใหม่ (Onboarding) หรือปิดสิทธิ์พนักงานลาออก (Offboarding) ต้องล็อกอินเข้าไปทำรายการทีละระบบ ส่งผลให้ล่าช้าและเกิดข้อผิดพลาดจากมนุษย์ (Human Error)
+ปัจจุบัน บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) มีการพัฒนาและใช้งานซอฟต์แวร์หลากหลายระบบภายในองค์กร เช่น:
+* **IRM (Incoming Raw Material):** ระบบรับและตรวจสอบวัตถุดิบขาเข้า (`https://irm.windowasia.com`)
+* **QMS (Quality Management System):** ระบบบริหารคุณภาพ (`https://qms.windowasia.com`)
+* **SAP Business One (SAP B1):** ระบบ ERP หลักขององค์กร (รองรับ SAP Service Layer REST API)
+* **Legacy ERP:** ระบบคลังสินค้าดั้งเดิม (ควบคุมผ่าน RPA Bot Worker)
+* **Active Directory (AD):** ศูนย์กลาง Domain Controller หลักขององค์กร (เชื่อมต่อผ่าน AD Sync Agent / AD Proxy ที่พอร์ต `3100`)
 
-### 1.2 วัตถุประสงค์โครงการ (Project Objectives)
-สร้างระบบ **Central IAM (Centralized Identity & Access Management Application)** ทำหน้าที่เป็น **"Single Pane of Glass"** ศูนย์กลางในการบริหารจัดการตัวตน บัญชีผู้ใช้งาน และสิทธิ์การเข้าถึงทุกระบบในเครือบริษัท โดยมีเป้าหมายหลัก:
-* **Instant Offboarding:** ระงับสิทธิ์พนักงานที่ลาออกจากทุกระบบ (IRM, QMS, AD) ได้ทันทีด้วยการคลิกเพียงครั้งเดียว (One-Click De-provisioning)
-* **Automated Reconciliation:** ตรวจจับบัญชีตกค้าง (Ghost Accounts) ระหว่าง Active Directory กับระบบลูกโดยอัตโนมัติ
-* **Compliance & Audit Ready:** บันทึกประวัติการเปลี่ยนแปลงสิทธิ์ทุกขั้นตอนอย่างโปร่งใส รองรับมาตรฐาน **ISO 27001** และ **PDPA**
+เดิมฐานข้อมูลผู้ใช้ (User DB) แยกกันอย่างอิสระ ส่งผลให้เกิดความเสี่ยงระดับองค์กร:
+1. **Orphaned / Ghost Accounts:** เมื่อพนักงานลาออก HR แจ้ง IT แต่ IT ลืมปิดสิทธิ์ในบางระบบ ทำให้พนักงานเก่าที่พ้นสภาพยังเข้าถึงข้อมูลความลับทางการค้าและสต็อกสินค้าได้
+2. **Lack of Central Governance:** ฝ่ายตรวจสอบ (IT Audit / ISO 27001) ไม่สามารถดูภาพรวมในหน้าจอเดียวได้ว่า พนักงาน 1 คน มีสิทธิ์อยู่ในระบบใดบ้าง
+3. **High Operational Overhead & Delay:** การระงับสิทธิ์หรือสร้างสิทธิ์พนักงานต้องไล่ล็อกอินทีละแอปพลิเคชัน ใช้เวลานานและเสี่ยงต่อ Human Error
+
+### 1.2 วัตถุประสงค์หลัก (Project Objectives)
+สร้างระบบ **Central IAM** เพื่อทำหน้าที่เป็น **Single Pane of Glass** ในการควบคุมสิทธิ์และวงจรชีวิตตัวตน (Identity Lifecycle) ทั่วทั้งองค์กร:
+1. **Instant One-Click Offboarding (Killer Feature):** ปิดสิทธิ์พนักงานที่ลาออกจากทุกระบบ (AD, IRM, QMS, SAP B1) พร้อมกันในคลิกเดียว ภายในเสี้ยววินาที
+2. **Multi-System User Provisioning (New):** สร้างบัญชีพนักงานและแจกจ่ายสิทธิ์ (Provisioning) ไปยัง Active Directory และระบบลูกต่างๆ ที่เลือก พร้อมระบุ Role/Group ได้จากศูนย์กลาง
+3. **Multi-System Re-activation (New):** เปิดใช้งานสิทธิ์คืน (Re-enable) ข้ามระบบพร้อมกันในคลิกเดียวเมื่อพนักงานกลับมาปฏิบัติงาน
+4. **Automated Reconciliation & Ghost Detection:** ตรวจจับและแจ้งเตือนบัญชีผี (ผู้ใช้ที่ถูก Disable ใน AD แล้วแต่ยังเปิดใช้งานอยู่ในระบบลูก) ทันที
+5. **Modular Connector Architecture:** แยก Connector แต่ละระบบอย่างชัดเจน (AD Proxy, M2M REST API, SAP B1 Service Layer, และ RPA Worker)
+6. **Audit Trail & ISO 27001 / PDPA Compliance:** ออกเอกสารรับรองการปิดสิทธิ์ (**Offboarding Certificate**) พร้อมบันทึกหลักฐาน Immutable Audit Trail ส่งออก CSV ได้
 
 ---
 
 ## 2. สถาปัตยกรรมระบบ (System Architecture)
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       Central IAM Management App                            │
-│                 (Next.js Dashboard + FastAPI Core Engine)                   │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │
-        ┌──────────────────────────────┼──────────────────────────────┐
-        │                              │                              │
-        ▼                              ▼                              ▼
-┌────────────────────────┐  ┌────────────────────────┐  ┌────────────────────────┐
-│   Active Directory     │  │   IRM Application      │  │   QMS Application      │
-│   (Windows Server)     │  │   (Production VPS)     │  │   (Quality System)     │
-│   IP: 192.168.12.11    │  │   https://irm.wa.com   │  │   https://qms.wa.com   │
-│   Port: 3100 (Gateway) │  │   M2M Token Protected  │  │   M2M Token Protected  │
-└────────────────────────┘  └────────────────────────┘  └────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              Central IAM Management Web App                             │
+│                  Frontend: Next.js 16 (Port 3000) | Backend: FastAPI (Port 8001)        │
+│                           Database: PostgreSQL 16 (Port 5435)                           │
+└───────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                            │
+        ┌───────────────────┬───────────────┴───────────────┬───────────────────┐
+        │                   │                               │                   │
+ [AD Proxy Connector] [REST Connector]              [SAP B1 Connector]    [RPA Adapter]
+        │                   │                               │                   │
+        ▼                   ▼                               ▼                   ▼
+┌───────────────┐   ┌───────────────────────────┐   ┌───────────────┐   ┌───────────────┐
+│   AD Sync     │   │   Modern M2M Spokes       │   │    SAP B1     │   │  Legacy ERP   │
+│  Agent Proxy  │   │ - IRM (irm.windowasia)    │   │ Service Layer │   │  Automation   │
+│  (Port 3100)  │   │ - QMS (qms.windowasia)    │   │ (OData REST)  │   │  Bot Worker   │
+└───────┬───────┘   └───────────────────────────┘   └───────────────┘   └───────────────┘
+        │
+        ▼
+┌───────────────┐
+│  Active Dir   │
+│ Windows Server│
+│Domain Controlr│
+└───────────────┘
 ```
 
-### องค์ประกอบหลักในระบบ:
-1. **Identity Source of Truth:** ดึงข้อมูลพนักงานหลักจาก **Active Directory (AD Server 192.168.12.11)** ผ่าน AD Sync Gateway (Port 3100)
-2. **Child Applications (Spokes):** ระบบลูกทุกระบบในเครือ (เช่น IRM, QMS) เชื่อมต่อด้วย **Standard Central Identity Management API (SCIM-Like REST API)**
-3. **Security Transport:** สื่อสารผ่านโปรโตคอล HTTPS พร้อมยืนยันตัวตนระดับเครื่องต่อเครื่องด้วย `X-Management-API-Key` และการจำกัด IP Whitelisting
-
 ---
 
-## 3. โครงสร้างเมนูและหน้าจอการทำงาน (Menu & Page Architecture)
+## 3. โครงสร้างเมนูและหน้าจอการทำงาน (Menu & UI Architecture)
 
-ตัวแอปพลิเคชัน Central IAM จะประกอบด้วย **5 เมนูหลัก** ดังต่อไปนี้:
-
-| ลำดับ | ชื่อเมนู (Menu Name) | Path | วัตถุประสงค์หลัก |
+| ลำดับ | หน้าจอ (Page) | Route | หน้าที่หลัก |
 | :---: | :--- | :--- | :--- |
-| **1** | **Dashboard** | `/dashboard` | ภาพรวมสถานะตัวตนผู้ใช้ทั้งองค์กร และสรุปเตือนบัญชีผิดปกติ |
-| **2** | **User Directory** | `/directory` | ทะเบียนรายชื่อพนักงานและตารางสิทธิ์ข้ามระบบ (Cross-App Matrix) |
-| **3** | **Offboarding Hub** | `/offboarding` | ศูนย์สั่งการระงับสิทธิ์พนักงานลาออกพร้อมกันทุกระบบ (One-Click) |
-| **4** | **Connected Apps** | `/applications` | ทะเบียนระบบลูก, จัดการ API Keys, และทดสอบสถานะ Health Check |
-| **5** | **Audit Trail & Logs**| `/audit-logs` | ประวัติการให้และระงับสิทธิ์ทั้งหมด เพื่อการตรวจสอบตามมาตรฐาน ISO |
+| **1** | **Dashboard** | `/` | ภาพรวม KPI, สรุปจำนวน Ghost Accounts, และ Real-time Activity Logs |
+| **2** | **User Directory** | `/directory` | ทะเบียนพนักงานส่วนกลาง, ตารางสิทธิ์ข้ามระบบ (Cross-App Matrix), ปุ่ม **+ Create New User** (Provisioning), และปุ่ม **Re-activate User** |
+| **3** | **Offboarding Hub** | `/offboarding` | ศูนย์สั่งการตัดสิทธิ์พนักงานลาออก 1-Click พร้อมพิมพ์ใบรับรอง Certificate (`CERT-YYYYMMDD-XXXXXX`) |
+| **4** | **Connected Applications** | `/applications` | ทะเบียนระบบลูก, ตรวจสอบสถานะ Ping, ดึงดู Live Accounts, และ Sync Inventory เข้า DB |
+| **5** | **Audit Trail & Logs** | `/audit-logs` | ประวัติการดำเนินงานทั้งหมด (`OFFBOARD_USER`, `ENABLE_USER`, `CREATE_USER`, `PROVISION_USER`) พร้อมปุ่ม Export CSV |
 
 ---
 
-## 4. รายละเอียดฟังก์ชันแต่ละหน้าจอ (Functional Specifications)
+## 4. รายละเอียดข้อกำหนดการทำงาน (Functional Requirements)
 
-### 4.1 หน้า Dashboard (`/dashboard`)
-หน้าแรกสำหรับผู้ดูแลระบบ แสดงสถานะความมั่นคงปลอดภัยด้านสิทธิ์แบบ Real-time:
+### 4.1 หน้า Dashboard (`/`)
 * **KPI Metrics Cards:**
-  * **Total Enterprise Identities:** จำนวนพนักงานทั้งหมดใน Active Directory
-  * **Active Accounts:** จำนวนบัญชีที่กำลังเปิดใช้งานอยู่ในปัจจุบัน
-  * **De-provisioned Accounts:** จำนวนบัญชีที่ถูกระงับสิทธิ์แล้ว
-  * **Connected Systems:** จำนวนระบบที่เชื่อมต่อสำเร็จและออนไลน์ (เช่น 2/2 ระบบ: IRM, QMS)
-* **Reconciliation Warning Box (กล่องเตือนภัยบัญชีผี):**
-  * แสดงตัวเลขเตือนหากพบพนักงานที่ลาออกจาก AD แล้วแต่ยังมีสถานะ Active อยู่ในระบบลูก
-  * มีปุ่มทางลัด **"Review & Fix Discrepancies"** เพื่อเข้าสู่กระบวนการปิดสิทธิ์ทันที
-* **Real-time Activity Feed:** แสดงรายการที่มีการเปลี่ยนแปลงสิทธิ์ 10 รายการล่าสุด
+  * **Total Identities:** จำนวนตัวตนพนักงานทั้งหมดในระบบ
+  * **Active Accounts:** จำนวนบัญชีที่ยัง Active อยู่ในองค์กร
+  * **De-provisioned Accounts:** จำนวนบัญชีที่ถูกตัดสิทธิ์ไปแล้ว
+  * **Connected Systems Online:** อัตราความพร้อมของระบบลูก (เช่น 3/3 ระบบ Online)
+  * **Ghost Accounts Alert:** จำนวนบัญชีผิดปกติที่พนักงานลาออกจาก AD แล้วแต่ยังมีสิทธิ์ในระบบลูก
+* **Discrepancy Remediation Table:** รายการบัญชีผีที่ตรวจพบ พร้อมปุ่มลัดนำทางไปยัง Offboarding Hub
+* **Recent Activity Feed:** รายการเคลื่อนไหว 10 รายการล่าสุด แสดง Actor, Action, และ Application ที่เกี่ยวข้อง
 
----
+### 4.2 หน้า User Directory & Provisioning (`/directory`)
+* **Universal Search & Filter:** ค้นหาตามชื่อ, Username, แผนก, หรืออีเมล พร้อมฟิลเตอร์กรองตามสถานะและแอปพลิเคชัน
+* **Cross-App Matrix Table:**
+  * ข้อมูล Master Identity: ชื่อ-สกุล, แผนก, รหัสพนักงาน, สถานะใน AD
+  * Spoke Access Badges: แสดงสถานะการมีบัญชีใน IRM, QMS, SAP B1, และ Legacy ERP พร้อมระบุ Role/Group (เช่น `PU User`, `QA Inspector`, `SAP User`)
+* **Create & Provision New Employee Modal (`+ Create New User`):**
+  * ฟอร์มบันทึกข้อมูลพนักงาน: Username, ชื่อ-นามสกุล, อีเมล, แผนก, เบอร์โทร, รหัสพนักงาน
+  * สวิตช์เปิด/ปิด: สร้าง Identity ใน Active Directory ผ่าน AD Proxy
+  * รายการ Checkbox เลือกระบบลูกที่ต้องการสร้างบัญชี พร้อมช่องระบุ Role/Group
+  * แสดง Checklist ผลลัพธ์การ Provision แยกรายระบบแบบเรียลไทม์
+* **Re-activate User Action:**
+  * ปุ่ม **Re-activate User** ในตารางและในหน้าต่าง Inspect Matrix (แสดงเมื่อบัญชีถูกระงับ)
+  * ส่งคำสั่งเปิดใช้งานคืนพร้อมกันทั้งใน AD (ผ่าน AD Proxy) และในระบบลูกทั้งหมดที่ผูกไว้
 
-### 4.2 หน้า User Directory (`/directory`)
-ศูนย์รวมข้อมูลพนักงานทุกคนและการถือครองสิทธิ์ในระบบต่างๆ:
-* **ระบบค้นหาและตัวกรองอัจฉริยะ (Universal Filter):**
-  * ค้นหาจาก: รหัสพนักงาน, ชื่อ-นามสกุล, Username, อีเมล, หรือแผนก
-  * กรองตามสถานะ: Active, Inactive, หรือ กรองตามระบบที่สังกัด (เช่น ดูเฉพาะผู้ที่มีบัญชีใน IRM)
-* **ตารางรายชื่อพนักงาน (Directory Table):**
-  * คอลัมน์: รหัสพนักงาน | ชื่อ-สกุล | Username | แผนก | สถานะใน AD | สิทธิ์ในระบบลูก (Badges) | การจัดการ
-* **หน้ารายละเอียดรายบุคคล (User Cross-App Access View):**
-  * เมื่อคลิกที่ชื่อพนักงาน จะแสดงการ์ดสรุปข้อมูล:
-    * ข้อมูลจาก AD: รหัส, อีเมล, แผนก, เบอร์โทร, วันที่ล็อกอินล่าสุด
-    * **Cross-Application Matrix:**
-      * **IRM System:** 🟢 Active (กลุ่ม: `PU User`, เข้าใช้งานล่าสุด: `03/09/2026`)
-      * **QMS System:** 🟢 Active (กลุ่ม: `QA Inspector`, เข้าใช้งานล่าสุด: `01/09/2026`)
-      * **SAP B1:** 🔴 Inactive (ไม่มีสิทธิ์)
-
----
-
-### 4.3 หน้า Offboarding Hub (`/offboarding`) — ฟังก์ชันพระเอก
-หน้าจอสำคัญสำหรับจัดการเมื่อพนักงานลาออกจากบริษัท เพื่อตัดความเสี่ยงด้านความปลอดภัย 100%:
-* **ขั้นตอนการทำงาน (Instant Offboarding Workflow):**
-  1. **เลือกพนักงาน:** พิมพ์ค้นหาชื่อหรือ Username พนักงานที่ลาออก
-  2. **ระบุข้อมูลการพ้นสภาพ:** ใส่วันที่สิ้นสุดการทำงาน และเหตุผล (เช่น `Resigned`, `Terminated`)
-  3. **ระบบพรีวิวผลกระทบ (Impact Preview):**
-     * แสดงรายการระบบทั้งหมดที่พนักงานคนนี้มีบัญชีอยู่ (เช่น จะระงับสิทธิ์ใน: 1. AD, 2. IRM, 3. QMS)
-  4. **กดปุ่มยืนยัน "Disable Everywhere (ระงับสิทธิ์ทุกระบบ)":**
-     * ระบบจะยิงคำสั่ง Asynchronous HTTP PATCH ไปยังทุกระบบลูกพร้อมกัน
-     * ยิงคำสั่งปิดบัญชีใน Active Directory
-  5. **ผลลัพธ์แบบ Checklist:**
-     * ✅ Active Directory: Disabled
-     * ✅ IRM System: Disabled (HTTP 200 OK)
-     * ✅ QMS System: Disabled (HTTP 200 OK)
-  6. **สร้างเอกสารรับรอง (Offboarding Certificate):**
-     * สามารถกดปุ่ม **"Print / Export PDF"** ใบยืนยันการตัดสิทธิ์เพื่อแนบส่งฝ่ายบุคคลและฝ่ายตรวจสอบ
-
----
+### 4.3 หน้า Offboarding Hub (`/offboarding`)
+* **Step 1 - Select Target User:** ค้นหาพนักงานที่ต้องการระงับสิทธิ์
+* **Step 2 - Dynamic Blast Radius Preview:** แสดงรายการระบบทั้งหมดที่จะได้รับผลกระทบทันที
+* **Step 3 - Single-Click Execute ("Disable Everywhere"):**
+  * สั่ง Disable ใน Active Directory ผ่าน AD Proxy Connector
+  * ส่งคำสั่ง `PATCH /api/v1/directory/accounts/{username}/status` ไปยัง REST API Spokes (เช่น IRM, QMS)
+  * ส่งคำสั่ง Lock บัญชีไปยัง SAP B1 Service Layer (`Locked: "tYES"`)
+  * ส่งงาน deprovision ไปยัง RPA Worker สำหรับ Legacy Spokes
+* **Step 4 - Execution Checklist & Compliance Certificate:**
+  * แสดงผลการปิดสิทธิ์แยกระบบแบบเรียลไทม์ พร้อม Response Code และ Latency
+  * สร้างรหัสใบรับรองสากล `CERT-YYYYMMDD-XXXXXX`
+  * ปุ่ม **"Print Certificate"** สำหรับส่งมอบให้ฝ่ายบุคคลและผู้ตรวจประเมิน ISO
 
 ### 4.4 หน้า Connected Applications (`/applications`)
-ทะเบียนควบคุมระบบซอฟต์แวร์ทั้งหมดที่นำมาผูกกับ Central IAM:
-* **การเพิ่ม/แก้ไขระบบลูก (App Registration):**
-  * Application Name (เช่น `IRM System`, `QMS System`)
-  * Base URL (เช่น `https://irm.windowasia.com`)
-  * Health Check Endpoint (เช่น `/api/health`)
-  * Management API Key (สร้างแบบสุ่ม 32 Bytes เข้ารหัส `sec_irm_mgmt_...`)
-  * Allowed Outbound IPs (IP ของ Central Server สำหรับทำ Whitelist)
-* **เครื่องมือทดสอบ (Diagnostic Tools):**
-  * ปุ่ม **"Ping / Test Connection"**: ตรวจสอบ Latency และความพร้อมของ API ปลายทาง
-  * ปุ่ม **"Sync Account Inventory"**: สั่งดึงรายชื่อผู้ใช้ทั้งหมดจากระบบนั้นทันที (`GET /api/v1/directory/accounts`)
+* **Spoke Registry:** แสดงการ์ดของแต่ละระบบลูก (IRM, QMS, SAP B1, Legacy ERP)
+* **Diagnostic Tools:**
+  * **Ping:** วัดค่า Latency และตรวจสอบการยืนยันตัวตน
+  * **Live Accounts:** เปิด Modal แสดงรายชื่อผู้ใช้ที่ดึงสดจาก Spoke API
+  * **Sync Inventory:** ซิงก์ข้อมูลรายชื่อและสถานะจากระบบลูกเข้าสู่ Central IAM Database
+
+### 4.5 หน้า Audit Trail (`/audit-logs`)
+* บันทึกทุก Action (`OFFBOARD_USER`, `ENABLE_USER`, `CREATE_USER`, `PROVISION_USER`, `SYNC`, `PING`) แบบ Non-repudiation
+* เก็บรวบรวม Actor, Target Username, Execution Mode, Status, IP Address, และรายละเอียด JSON
+* ปุ่ม **Export CSV** ดาวน์โหลดไฟล์รายงานสำหรับใช้ยื่นตรวจประเมินความปลอดภัยประจำปี
 
 ---
 
-### 4.5 หน้า Audit Trail & Compliance (`/audit-logs`)
-บันทึกประวัติการดำเนินงานทั้งหมด ป้องกันการปฏิเสธความรับผิดชอบ:
-* บันทึกข้อมูลละเอียดทุกธุรกรรม:
-  * วันที่และเวลา (Timestamp ISO 8601)
-  * ผู้ดำเนินการ (Admin Actor เช่น `admin_somchai`)
-  * พนักงานเป้าหมาย (Target User)
-  * การกระทำ (Action: `OFFBOARD_USER`, `ENABLE_USER`, `MANUAL_SYNC`)
-  * ระบบที่ส่งผลกระทบ (Affected Apps)
-  * สถานะผลลัพธ์ (Success / Partial Failed / Error)
-  * IP Address ของผู้สั่งการ
-* ฟังก์ชันการส่งออก: **Export to Excel / CSV** สำหรับใช้ยื่นการตรวจประเมินความปลอดภัยประจำปี
+## 5. มาตรฐานการเชื่อมต่อ API ของระบบลูก (Spoke API Standard)
+
+ระบบลูกประเภท REST API ทั้งหมดต้องปฏิบัติตามมาตรฐานกลาง [CENTRAL_IDENTITY_MANAGEMENT_API_SPEC.md](file:///d:/Python/Central-IAM/CENTRAL_IDENTITY_MANAGEMENT_API_SPEC.md):
+
+1. **GET `/api/v1/directory/accounts`**: สำหรับส่งคืน Inventory บัญชีผู้ใช้ในระบบทั้งหมด (Reconciliation)
+2. **PATCH `/api/v1/directory/accounts/{username}/status`**: สำหรับรับคำสั่งเปิด/ระงับบัญชีผู้ใช้ (`is_active: true/false`)
+3. **POST `/api/v1/directory/accounts`**: สำหรับรับคำสั่งสร้างบัญชีผู้ใช้ใหม่ (Provisioning)
+   * Headers: `X-Management-API-Key: sec_<app>_mgmt_<hex32>`, `Content-Type: application/json`
+   * Body: `username`, `full_name`, `email`, `department`, `group_name`, `use_ad_auth`, `created_by`
+4. **Security:** อนุญาตเฉพาะ IP Whitelist ของ Central Management Server
+
+### 5.1 แนวทางปฏิบัติสำหรับระบบลูก (No DB Schema Alteration Needed)
+* **ระบบลูกไม่ต้องแก้ Database Schema เดิม:** ไม่จำเป็นต้องมี Field เท่ากัน เพียงแต่ใน API Controller ให้แปลงค่า (Map) ฟิลด์เดิมใน DB ส่งออกมาเป็นชื่อมาตรฐานของ CIAM
+* **ใช้ `username` เดียวกันเป็นแกนหลัก:** แนะนำให้ใช้ `sAMAccountName` จาก AD หรือ รหัสพนักงาน
+
+### 5.2 การเชื่อมต่อกับ Active Directory (AD Proxy & OU Strategy)
+* **AD Proxy Agent:** CIAM จะไม่ต่อตรงกับ Domain Controller แต่คุยผ่าน AD Sync Agent (พอร์ต `3100`) ที่มีอยู่เดิม โดยเพิ่ม Endpoint สำหรับ Disable/Enable ด้วยคำสั่ง PowerShell บนเครื่อง Agent
+* **OU Management Strategy:**
+  * **แบบที่แนะนำ (AD-First Approach):** ให้ฝ่าย IT สร้าง User ใน AD ตาม OU และ Group Policy ปกติ $\rightarrow$ Central IAM ซิงก์ดึงข้อมูลเข้ามา $\rightarrow$ Admin กด 1-Click Provision กระจายต่อไปยัง IRM, QMS, SAP B1 ได้ทันทีโดยไม่ต้องเสี่ยงสร้าง OU ผิดใน AD
+  * **แบบ Staging OU:** กำหนดให้สร้างลงใน `OU=Pending_Users,DC=windowasia,DC=local` เป็นจุดพักก่อนให้ IT ย้ายเข้า OU ประจำ
 
 ---
 
-## 5. การออกแบบฐานข้อมูล (Database Schema)
-
-ระบบ Central IAM ใช้ฐานข้อมูลเชิงสัมพันธ์ (PostgreSQL) ประกอบด้วยตารางหลักดังนี้:
-
-```sql
--- 1. ตารางระบบลูกที่เชื่อมต่อ
-CREATE TABLE connected_applications (
-    id SERIAL PRIMARY KEY,
-    app_code VARCHAR(50) UNIQUE NOT NULL,      -- เช่น 'irm', 'qms'
-    app_name VARCHAR(100) NOT NULL,            -- เช่น 'Incoming Raw Material'
-    base_url VARCHAR(255) NOT NULL,            -- เช่น 'https://irm.windowasia.com'
-    api_key VARCHAR(255) NOT NULL,             -- Machine-to-Machine Secret Key
-    is_active BOOLEAN DEFAULT TRUE,
-    last_sync_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 2. ตารางพนักงานหลัก (Sync มาจาก Active Directory)
-CREATE TABLE master_identities (
-    id SERIAL PRIMARY KEY,
-    ad_guid VARCHAR(100) UNIQUE,
-    employee_id VARCHAR(50),
-    username VARCHAR(100) UNIQUE NOT NULL,     -- sAMAccountName
-    full_name VARCHAR(200) NOT NULL,
-    email VARCHAR(150),
-    department VARCHAR(100),
-    telephone VARCHAR(50),
-    is_active_in_ad BOOLEAN DEFAULT TRUE,
-    last_login_ad_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 3. ตารางการถือครองบัญชีในระบบลูก (Cross-App Mapping)
-CREATE TABLE app_account_mappings (
-    id SERIAL PRIMARY KEY,
-    identity_id INTEGER REFERENCES master_identities(id) ON DELETE CASCADE,
-    application_id INTEGER REFERENCES connected_applications(id) ON DELETE CASCADE,
-    app_username VARCHAR(100) NOT NULL,
-    app_user_id VARCHAR(50),
-    app_group_name VARCHAR(100),
-    is_active_in_app BOOLEAN NOT NULL,
-    last_sync_status VARCHAR(50),              -- 'IN_SYNC', 'DISCREPANCY'
-    last_app_login_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(application_id, app_username)
-);
-
--- 4. ตารางบันทึกประวัติการตรวจสอบสิทธิ์ (Audit Logs)
-CREATE TABLE iam_audit_logs (
-    id SERIAL PRIMARY KEY,
-    actor_username VARCHAR(100) NOT NULL,
-    action_type VARCHAR(50) NOT NULL,          -- 'OFFBOARD_USER', 'ENABLE_USER', 'SYNC'
-    target_username VARCHAR(100) NOT NULL,
-    affected_app_code VARCHAR(50),
-    previous_status VARCHAR(50),
-    new_status VARCHAR(50),
-    reason TEXT,
-    ip_address VARCHAR(50),
-    status VARCHAR(20) NOT NULL,               -- 'SUCCESS', 'FAILED'
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
----
-
-## 6. ข้อกำหนดด้านความปลอดภัย (Security & Compliance Requirements)
-
-1. **การเข้ารหัสข้อมูล (Encryption):**
-   * ข้อมูลการสื่อสารทั้งหมดต้องผ่าน TLS 1.3 (HTTPS)
-   * API Key ของระบบลูกต้องเข้ารหัสในฐานข้อมูล
-2. **การป้องกัน Replay Attack & Tampering:**
-   * ตรวจสอบ Timestamp ใน Header ให้คลาดเคลื่อนไม่เกิน 300 วินาที
-   * เปรียบเทียบ API Key ด้วยวิธี Constant-Time Comparison (`secrets.compare_digest`)
-3. **การแจ้งเตือนเหตุการณ์สำคัญ (Critical Alerts):**
-   * เมื่อมีการทำรายการ Instant Offboarding สำเร็จ ระบบต้องยิงสรุปแจ้งเตือนเข้ากลุ่ม **Telegram IT Security** ทันที
-
----
-
-## 7. แผนการพัฒนาและเป้าหมายในแต่ละเฟส (Implementation Roadmap)
-
-* **Phase 1 (MVP - Core Offboarding & Directory):**
-  * สร้างหน้า Dashboard, Directory, Connected Apps
-  * เชื่อมต่อ API ระงับสิทธิ์กับระบบ **IRM** และ **QMS**
-  * ฟังก์ชัน Instant Offboarding แบบคลิกเดียว
-* **Phase 2 (Automated AD Sync & Reconciliation):**
-  * เชื่อมต่อ AD Gateway เพื่อดึงรายชื่อพนักงานจาก Active Directory 192.168.12.11 อัตโนมัติทุกคืน
-  * ระบบตรวจจับและแจ้งเตือนบัญชีผี (Ghost Account Detection)
-* **Phase 3 (Full SCIM 2.0 & Auto-Provisioning):**
-  * ยกระดับเป็นมาตรฐาน Full SCIM 2.0 Protocol
-  * รองรับการ Provision สร้างผู้ใช้ใหม่อัตโนมัติเมื่อพนักงานเข้างาน
-
----
-**เอกสารฉบับนี้พร้อมใช้งานเป็นพิมพ์เขียว (Blueprint) สำหรับทีมพัฒนาระบบ Central IAM ทันที**
+## 6. แผนงานและการต่อยอดในอนาคต (Roadmap)
+* [x] **Phase 1 (Completed):** Core Engine, M2M REST Connector, RPA Mock Adapter, Offboarding Hub, ISO Certificate Export
+* [x] **Phase 2 (Completed):** เชื่อมต่อระบบจริงกับ **IRM (Incoming Raw Material)** ดึงบัญชีจริงและทดสอบ Health Check สำเร็จ
+* [x] **Phase 3 (Completed):** 
+  * ออกแบบและพัฒนา `SapB1Connector` รองรับ SAP B1 Service Layer REST API
+  * พัฒนา `AdProxyConnector` รองรับการสื่อสารกับ AD Sync Agent Proxy
+  * ขยายสเปกกลางรองรับ `POST /accounts` (User Provisioning)
+  * พัฒนาฟังก์ชัน Multi-System User Creation และ Re-activation ทั้ง Backend และ Frontend UI
+* [ ] **Phase 4:** 
+  * ให้ทีม AD Sync Agent เพิ่ม Endpoint สำหรับ `Disable-ADAccount` / `Enable-ADAccount`
+  * ติดตั้งและทดสอบ Spoke API บนระบบ **QMS**
+  * เชื่อมต่อ Production URL ของ **SAP B1 Service Layer**
