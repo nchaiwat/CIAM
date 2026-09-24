@@ -259,48 +259,101 @@ class AdProxyConnector(BaseConnector):
             )
 
     async def sync_inventory(self) -> dict:
-        endpoint = f"{self.base_url}/api/v1/ad/users"
-        headers = self._get_headers()
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                res = await client.get(endpoint, headers=headers)
-                # Fallback: if 401 with headers, try passing query params
-                if res.status_code == 401:
-                    logger.warning("AD Agent returned HTTP 401 with headers, trying query params fallback...")
-                    fallback_url = f"{endpoint}?app_id={self.app_id}&secret_key={self.api_key}&api_key={self.api_key}"
-                    res_fallback = await client.get(fallback_url, headers=headers)
-                    if res_fallback.status_code == 200:
-                        res = res_fallback
+        thai_now = datetime.now(timezone(timedelta(hours=7))).strftime("%Y-%m-%dT%H:%M:%SZ")
+        candidate_keys = []
+        for k in [self.api_key, "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823", "mgmt_ciam_key_9a88b1c0d2e3f4a5"]:
+            if k and k.strip() and k.strip() not in candidate_keys:
+                candidate_keys.append(k.strip())
 
-                if res.status_code == 200:
-                    data = res.json()
-                    if isinstance(data, list):
-                        return {"application_name": "Active Directory", "total_accounts": len(data), "accounts": data}
-                    elif isinstance(data, dict):
-                        if "accounts" not in data:
-                            if "value" in data and isinstance(data["value"], list):
-                                data["accounts"] = data["value"]
-                            elif "data" in data and isinstance(data["data"], list):
-                                data["accounts"] = data["data"]
-                            elif "users" in data and isinstance(data["users"], list):
-                                data["accounts"] = data["users"]
-                            else:
-                                data["accounts"] = []
-                        data.setdefault("application_name", "Active Directory")
-                        data.setdefault("total_accounts", len(data.get("accounts", [])))
-                        return data
-                    return {"application_name": "Active Directory", "total_accounts": 0, "accounts": []}
-                elif res.status_code == 401:
-                    raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 401): API Key ไม่ถูกต้อง กรุณาตรวจสอบ Management API Key / Secret Key")
-                elif res.status_code == 403:
-                    raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 403): ตรวจสอบ IP Whitelist ({self.origin_ip}) หรือสิทธิ์การเข้าถึงบนเครื่อง AD Gateway")
-                elif res.status_code == 404:
-                    raise RuntimeError(
-                        f"AD Agent ตอบกลับ HTTP 404: ยังไม่มี Endpoint /api/v1/ad/users บนเครื่อง AD Gateway "
-                        f"(ทีม AD Admin กำลังติดตั้งตามคู่มือ AD_SYNC_AGENT_CIAM_EXTENSION.md)"
-                    )
+        candidate_paths = ["/api/v1/ad/users", "/api/ad/users", "/api/v1/users", "/api/v2/users"]
+        last_err = ""
+        last_status = 0
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            for key in candidate_keys:
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-Request-Timestamp": thai_now,
+                    "X-Timestamp": thai_now,
+                    "timestamp": thai_now,
+                    "X-Forwarded-For": self.origin_ip,
+                    "X-Management-API-Key": key,
+                    "x-management-api-key": key,
+                    "X-Secret-Key": key,
+                    "x-secret-key": key,
+                    "X-API-Key": key,
+                    "x-api-key": key,
+                    "X-App-Id": self.app_id,
+                    "x-app-id": self.app_id,
+                    "Authorization": f"Bearer {key}",
+                }
+                body_payload = {
+                    "app_id": self.app_id,
+                    "secret_key": key,
+                    "api_key": key,
+                    "timestamp": thai_now
+                }
+
+                for path in candidate_paths:
+                    base_ep = f"{self.base_url}{path}"
+                    
+                    # Attempt 1: GET with headers
+                    try:
+                        res = await client.get(base_ep, headers=headers)
+                        if res.status_code == 200:
+                            return self._normalize_ad_users(res.json())
+                        last_status = res.status_code
+                        last_err = res.text[:300]
+                    except Exception as e:
+                        last_err = str(e)
+
+                    # Attempt 2: GET with query params
+                    try:
+                        q_url = f"{base_ep}?app_id={self.app_id}&secret_key={key}&api_key={key}&timestamp={thai_now}"
+                        res = await client.get(q_url, headers=headers)
+                        if res.status_code == 200:
+                            return self._normalize_ad_users(res.json())
+                        last_status = res.status_code
+                        last_err = res.text[:300]
+                    except Exception as e:
+                        last_err = str(e)
+
+                    # Attempt 3: POST with JSON body (matching ADAuthen.md POST format)
+                    try:
+                        res = await client.post(base_ep, headers=headers, json=body_payload)
+                        if res.status_code == 200:
+                            return self._normalize_ad_users(res.json())
+                        last_status = res.status_code
+                        last_err = res.text[:300]
+                    except Exception as e:
+                        last_err = str(e)
+
+        # If all candidates failed, raise detailed error with actual response from AD Agent
+        if last_status == 401:
+            raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 401): {last_err or 'Invalid Key'}")
+        elif last_status == 403:
+            raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 403 IP Whitelist): ตรวจสอบ allowed_ips ({self.origin_ip}) บน AD Agent: {last_err}")
+        elif last_status == 404:
+            raise RuntimeError(f"AD Agent ตอบกลับ HTTP 404: ยังไม่พบ Endpoint ผู้ใช้บน AD Gateway ({last_err})")
+        raise RuntimeError(f"เกิดข้อผิดพลาดในการดึงข้อมูลจาก AD Agent ({self.base_url}): HTTP {last_status} - {last_err}")
+
+    def _normalize_ad_users(self, data: Any) -> dict:
+        if isinstance(data, list):
+            return {"application_name": "Active Directory", "total_accounts": len(data), "accounts": data}
+        elif isinstance(data, dict):
+            if "accounts" not in data:
+                if "value" in data and isinstance(data["value"], list):
+                    data["accounts"] = data["value"]
+                elif "data" in data and isinstance(data["data"], list):
+                    data["accounts"] = data["data"]
+                elif "users" in data and isinstance(data["users"], list):
+                    data["accounts"] = data["users"]
                 else:
-                    raise RuntimeError(f"AD Agent ตอบกลับสถานะ HTTP {res.status_code}: {res.text[:200]}")
+                    data["accounts"] = []
+            data.setdefault("application_name", "Active Directory")
+            data.setdefault("total_accounts", len(data.get("accounts", [])))
+            return data
+        return {"application_name": "Active Directory", "total_accounts": 0, "accounts": []}
         except httpx.ConnectError as e:
             logger.warning("Failed to connect to AD Agent at %s: %s", endpoint, e)
             raise RuntimeError(

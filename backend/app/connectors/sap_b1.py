@@ -428,6 +428,138 @@ class SapB1Connector(BaseConnector):
             message="SAP B1 Service Layer v2 Ready (Simulated)"
         )
 
+    def _sync_with_requests_sync(self) -> dict:
+        import requests
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        session = requests.Session()
+        session.verify = False
+
+        # Determine base versions to try: prioritize what was in base_url or try v2 then v1
+        api_ver = "v1" if "/b1s/v1" in self.raw_base_url else "v2"
+        other_ver = "v2" if api_ver == "v1" else "v1"
+
+        # 1. Login
+        login_payload = {
+            "CompanyDB": self.company_db,
+            "UserName": self.sap_username,
+            "Password": self.sap_password
+        }
+
+        login_url = f"{self.base_url}/b1s/{api_ver}/Login"
+        res_login = session.post(login_url, json=login_payload, timeout=20)
+        if res_login.status_code != 200:
+            # Try other API version
+            login_url2 = f"{self.base_url}/b1s/{other_ver}/Login"
+            res_login2 = session.post(login_url2, json=login_payload, timeout=20)
+            if res_login2.status_code == 200:
+                res_login = res_login2
+                api_ver = other_ver
+            else:
+                raise RuntimeError(f"SAP B1 Login ไม่สำเร็จ (HTTP {res_login.status_code}): {res_login.text[:200]}")
+
+        session_id = None
+        try:
+            session_id = res_login.json().get("SessionId")
+        except Exception:
+            pass
+
+        # Extract ROUTEID from cookies if available
+        route_id = session.cookies.get("ROUTEID")
+
+        # Prepare headers for GET
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        if session_id:
+            cookie_hdr = f"B1SESSION={session_id}"
+            if route_id:
+                cookie_hdr += f"; ROUTEID={route_id}"
+            headers["Cookie"] = cookie_hdr
+
+        # Candidate endpoints to query
+        candidate_eps = [
+            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
+            f"{self.base_url}/b1s/{api_ver}/Users",
+            f"{self.base_url}/b1s/{other_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
+            f"{self.base_url}/b1s/{other_ver}/Users",
+            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active",
+            f"{self.base_url}/b1s/{other_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active"
+        ]
+
+        all_records = []
+        is_employee_mode = False
+        last_error = ""
+
+        for ep in candidate_eps:
+            url = ep
+            ep_ok = False
+            while url:
+                resp = session.get(url, headers=headers, timeout=25)
+                if resp.status_code == 200:
+                    ep_ok = True
+                    is_employee_mode = "EmployeesInfo" in ep
+                    data = resp.json()
+                    raw_items = data.get("value", [])
+                    all_records.extend(raw_items)
+
+                    next_link = data.get("@odata.nextLink") or data.get("odata.nextLink")
+                    if next_link:
+                        if next_link.startswith("http"):
+                            url = next_link
+                        else:
+                            base_prefix = f"/b1s/{api_ver}/" if f"/b1s/{api_ver}/" in ep else f"/b1s/{other_ver}/"
+                            url = f"{self.base_url}{base_prefix}{next_link.lstrip('/')}"
+                    else:
+                        break
+                else:
+                    last_error = f"HTTP {resp.status_code}: {resp.text[:250]}"
+                    break
+            if ep_ok:
+                break
+
+        if not all_records:
+            if last_error:
+                raise RuntimeError(f"SAP B1 ตอบกลับข้อผิดพลาด ({last_error})")
+            return {"application_name": "SAP Business One", "total_accounts": 0, "accounts": []}
+
+        accounts = []
+        if is_employee_mode:
+            for emp in all_records:
+                eid = str(emp.get("EmployeeID") or "")
+                first = emp.get("FirstName") or ""
+                last = emp.get("LastName") or ""
+                fullname = f"{first} {last}".strip() or eid
+                email = emp.get("eMail")
+                accounts.append({
+                    "username": email.split("@")[0] if email and "@" in email else f"emp_{eid}",
+                    "full_name": fullname,
+                    "email": email,
+                    "department": str(emp.get("Department")) if emp.get("Department") is not None and emp.get("Department") != -2 else None,
+                    "is_active": emp.get("Active") != "tNO",
+                    "group_name": "SAP Employee"
+                })
+        else:
+            for u in all_records:
+                ucode = u.get("UserCode")
+                if ucode:
+                    accounts.append({
+                        "username": ucode,
+                        "full_name": u.get("UserName") or ucode,
+                        "email": u.get("eMail"),
+                        "department": str(u.get("Department")) if u.get("Department") is not None and u.get("Department") != -2 else None,
+                        "is_active": u.get("Locked") != "tYES",
+                        "group_name": "SAP B1 User"
+                    })
+
+        return {
+            "application_name": "SAP Business One",
+            "total_accounts": len(accounts),
+            "accounts": accounts
+        }
+
     async def sync_inventory(self) -> dict:
         if not self.base_url.startswith("http://") and not self.base_url.startswith("https://"):
             return {
@@ -453,68 +585,6 @@ class SapB1Connector(BaseConnector):
                 ]
             }
 
-        # Determine base versions to try: prioritize what was in base_url or try v2 then v1
-        api_ver = "v1" if "/b1s/v1" in self.raw_base_url else "v2"
-        other_ver = "v2" if api_ver == "v1" else "v1"
-
-        candidate_endpoints = [
-            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
-            f"{self.base_url}/b1s/{api_ver}/Users",
-            f"{self.base_url}/b1s/{other_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
-            f"{self.base_url}/b1s/{other_ver}/Users",
-        ]
-
-        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
-            session_ok = await self._ensure_session(client)
-            if not session_ok:
-                raise RuntimeError("ไม่สามารถ Login เข้าสู่ SAP Service Layer ได้ กรุณาตรวจสอบ CompanyDB, Username และ Password ในการตั้งค่า")
-
-            all_users = []
-            last_err = ""
-            for ep in candidate_endpoints:
-                url = ep
-                ep_success = False
-                while url:
-                    res = await client.get(url, headers=self._get_headers())
-                    if res.status_code == 200:
-                        ep_success = True
-                        data = res.json()
-                        raw_users = data.get("value", [])
-                        all_users.extend(raw_users)
-
-                        next_link = data.get("@odata.nextLink") or data.get("odata.nextLink")
-                        if next_link:
-                            if next_link.startswith("http"):
-                                url = next_link
-                            else:
-                                base_prefix = "/b1s/v2/" if "/b1s/v2/" in ep else "/b1s/v1/"
-                                url = f"{self.base_url}{base_prefix}{next_link.lstrip('/')}"
-                        else:
-                            break
-                    else:
-                        last_err = f"HTTP {res.status_code}: {res.text[:250]}"
-                        break
-                if ep_success:
-                    break
-
-            if not all_users and last_err:
-                raise RuntimeError(f"SAP B1 Users API ตอบกลับข้อผิดพลาด ({last_err})")
-
-            accounts = [
-                {
-                    "username": u.get("UserCode"),
-                    "full_name": u.get("UserName") or u.get("UserCode"),
-                    "email": u.get("eMail"),
-                    "department": str(u.get("Department")) if u.get("Department") is not None and u.get("Department") != -2 else None,
-                    "is_active": u.get("Locked") != "tYES",
-                    "group_name": "SAP B1 User"
-                }
-                for u in all_users
-                if u.get("UserCode")
-            ]
-            return {
-                "application_name": "SAP Business One",
-                "total_accounts": len(accounts),
-                "accounts": accounts
-            }
+        import asyncio
+        return await asyncio.to_thread(self._sync_with_requests_sync)
 
