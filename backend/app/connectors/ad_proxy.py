@@ -354,19 +354,3 @@ class AdProxyConnector(BaseConnector):
             data.setdefault("total_accounts", len(data.get("accounts", [])))
             return data
         return {"application_name": "Active Directory", "total_accounts": 0, "accounts": []}
-        except httpx.ConnectError as e:
-            logger.warning("Failed to connect to AD Agent at %s: %s", endpoint, e)
-            raise RuntimeError(
-                f"ไม่สามารถเชื่อมต่อไปยัง AD Agent ({self.base_url}): Connect Error "
-                f"สำหรับ VPS แนะนำให้ตั้งค่า Gateway URL เป็น http://172.18.0.1:3100 (Docker Host Gateway ไปยัง VPN) "
-                f"และตรวจสอบ Origin IP ({self.origin_ip})"
-            )
-        except httpx.TimeoutException as e:
-            logger.warning("Timeout connecting to AD Agent at %s: %s", endpoint, e)
-            raise RuntimeError(
-                f"การเชื่อมต่อไปยัง AD Agent ({self.base_url}) หมดเวลา (Timeout): "
-                f"ไม่สามารถส่งข้อมูลไปยัง {self.base_url} ได้ แนะนำให้ลองเปลี่ยน URL เป็น http://172.18.0.1:3100"
-            )
-        except Exception as e:
-            logger.warning("Failed to sync inventory from AD Agent at %s: %s", endpoint, e)
-            raise RuntimeError(f"เกิดข้อผิดพลาดในการดึงข้อมูลจาก AD Agent ({self.base_url}): {str(e)}")
