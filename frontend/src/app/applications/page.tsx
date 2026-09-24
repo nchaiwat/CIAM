@@ -162,23 +162,23 @@ export default function ApplicationsPage() {
     try {
       const creds = await ciamApi.getApplicationCredentials(app.id);
       setEditApiKey(creds.api_key || "");
-      setEditClientId(creds.client_id || `${app.app_code.toLowerCase()}-spoke-client`);
+      setEditClientId(creds.client_id || (isAd ? "CIAM" : `${app.app_code.toLowerCase()}-spoke-client`));
       setEditClientSecret(creds.client_secret || "");
       setEditRedirectUris(
         creds.redirect_uris ||
           `${app.base_url || "https://" + app.app_code + ".windowasia.com"}/api/auth/callback,http://localhost:3000/portal/callback`
       );
       setEditSsoEnabled(creds.sso_enabled ?? true);
-      setEditSapCompanyDb(creds.sap_company_db || "WA_PROD");
+      setEditSapCompanyDb(creds.sap_company_db || (isAd ? "157.173.219.153" : "WA_PROD"));
       setEditSapUsername(creds.sap_username || "");
       setEditSapPassword(creds.sap_password || "");
     } catch {
       setEditApiKey("");
-      setEditClientId(`${app.app_code.toLowerCase()}-spoke-client`);
+      setEditClientId(isAd ? "CIAM" : `${app.app_code.toLowerCase()}-spoke-client`);
       setEditClientSecret("");
       setEditRedirectUris("");
       setEditSsoEnabled(true);
-      setEditSapCompanyDb("WA_PROD");
+      setEditSapCompanyDb(isAd ? "157.173.219.153" : "WA_PROD");
       setEditSapUsername("");
       setEditSapPassword("");
     }
@@ -1375,15 +1375,34 @@ export default function ApplicationsPage() {
               {/* TAB 4: Active Directory & Safety Guardrails */}
               {editTab === "AD_PROXY" && (
                 <div className="space-y-3.5">
-                  {/* Info Alert */}
-                  <div className="p-3 bg-purple-50 border-2 border-purple-200 rounded-lg space-y-1">
-                    <div className="font-bold text-purple-950 text-xs flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-purple-700" />
-                      <span>Active Directory Sync Agent Gateway (Windows Domain Controller)</span>
+                  {/* VPS Network Routing Alert & One-Click Preset */}
+                  <div className="p-3.5 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border-2 border-purple-300 rounded-lg space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <div className="font-extrabold text-purple-950 text-xs flex items-center gap-1.5">
+                          <Server className="w-4 h-4 text-purple-700" />
+                          <span>การกำหนดค่าสำหรับเซิร์ฟเวอร์ Cloud VPS (Hostinger) ที่เชื่อมต่อ VPN ไปยัง On-Premise</span>
+                        </div>
+                        <p className="text-[11px] text-purple-900 leading-relaxed">
+                          เนื่องจาก Central IAM รันอยู่บน Docker Container บนเซิร์ฟเวอร์ VPS ที่ต่อ VPN ไปยัง On-Premise Domain Controller 
+                          การเชื่อมต่อไปยัง AD Gateway จึงต้องชี้ไปที่ <strong>Docker Host Gateway (<code>http://172.18.0.1:3100</code>)</strong> 
+                          และส่ง Header <strong><code>X-Forwarded-For: 157.173.219.153</code></strong> เพื่อให้ผ่านการตรวจสอบ IP Whitelist ของ AD Sync Agent (แบบเดียวกับระบบ IRM)
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditBaseUrl("http://172.18.0.1:3100");
+                          setEditSapCompanyDb("157.173.219.153");
+                          if (!editClientId || editClientId.includes("client")) setEditClientId("CIAM");
+                          if (!editClientSecret) setEditClientSecret("aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823");
+                        }}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md font-bold text-xs shrink-0 flex items-center gap-1 shadow-sm cursor-pointer transition-all"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>⚡ ตั้งค่าเป็น VPS Gateway ทันที</span>
+                      </button>
                     </div>
-                    <p className="text-[11px] text-purple-900 leading-relaxed">
-                      เชื่อมต่อไปยัง AD Sync Agent (พอร์ต 3100) เพื่อดึงข้อมูลสถานะพนักงานแบบเรียลไทม์ และควบคุมความปลอดภัยในการสั่งแก้ไขสถานะบัญชี
-                    </p>
                   </div>
 
                   {/* Safety Guardrail Toggle Box */}
@@ -1396,7 +1415,7 @@ export default function ApplicationsPage() {
                       <div className="space-y-1 flex-1">
                         <div className="flex items-center gap-2">
                           <h4 className="font-extrabold text-slate-900 text-xs">
-                            การอนุญาตส่งคำสั่งแก้ไขสถานะ (PATCH) ไปยัง Active Directory
+                            เปิดใช้งานระบบ Active Directory (AD Master Switch & Status PATCH)
                           </h4>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
                             editAdAllowStatusPatch
@@ -1408,8 +1427,8 @@ export default function ApplicationsPage() {
                         </div>
                         <p className="text-[11px] text-slate-600 leading-relaxed">
                           {editAdAllowStatusPatch
-                            ? "เมื่อ Admin สั่งระงับสิทธิ์หรือคืนสิทธิ์พนักงานในหน้า Offboarding ระบบ Central IAM จะยิงคำสั่ง PATCH /api/v1/ad/users/:username/status ไปสั่ง Enable/Disable บัญชีจริงบน Windows Domain Controller โดยตรง"
-                            : "ระบบ Central IAM จะทำหน้าที่เพียงแค่อ่านและตรวจสอบบัญชีจาก AD เพื่อตรวจหาบัญชีผี (Ghost Accounts) เท่านั้น โดยจะไม่มีการส่งคำสั่งไปแก้ไข ล็อก หรือแตะต้องบัญชีใดๆ บน AD ทั้งสิ้น (แนะนำเพื่อความปลอดภัยสูงสุด)"}
+                            ? "เมื่อ Admin สั่งระงับสิทธิ์หรือคืนสิทธิ์พนักงานในหน้า Offboarding ระบบ Central IAM จะส่งคำสั่ง PATCH ไปยัง AD Gateway เพื่อ Enable/Disable บัญชีจริงบน Windows Server"
+                            : "ระบบ Central IAM จะทำหน้าที่เพียงแค่อ่านและตรวจสอบบัญชีจาก AD เพื่อเปรียบเทียบและตรวจหาบัญชีผี (Ghost Accounts) เท่านั้น โดยจะไม่แตะต้องหรือแก้ไขบัญชีใดๆ บน AD ทั้งสิ้น"}
                         </p>
                       </div>
 
@@ -1420,31 +1439,103 @@ export default function ApplicationsPage() {
                           onChange={(e) => setEditAdAllowStatusPatch(e.target.checked)}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                        <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
                       </label>
                     </div>
                   </div>
 
-                  {/* Gateway Configuration */}
+                  {/* Gateway Connection Details (Matching IRM Configuration Form) */}
                   <div className="p-3.5 bg-slate-50 border-2 border-slate-200 rounded-lg space-y-3">
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">
-                        AD Sync Agent Gateway URL
-                      </label>
-                      <input
-                        type="text"
-                        value={editBaseUrl}
-                        onChange={(e) => setEditBaseUrl(e.target.value)}
-                        placeholder="http://192.168.12.11:3100"
-                        className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono font-bold text-xs focus:outline-none focus:border-purple-600"
-                      />
-                      <span className="text-[10px] text-slate-500 mt-1 block">
-                        URL ของเซิร์ฟเวอร์ที่รัน AD Sync Agent พอร์ต 3100
-                      </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* AD Gateway Endpoint URL */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block font-bold text-slate-700 text-xs">
+                            AD Gateway Endpoint URL *
+                          </label>
+                          <span className="text-[10px] text-purple-700 font-bold bg-purple-100 px-1.5 py-0.2 rounded border border-purple-200">
+                            พอร์ต 3100
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          value={editBaseUrl}
+                          onChange={(e) => setEditBaseUrl(e.target.value)}
+                          placeholder="http://172.18.0.1:3100"
+                          className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono font-bold text-xs focus:outline-none focus:border-purple-600"
+                        />
+                        <span className="text-[10px] text-slate-500 mt-1 block">
+                          VPS Docker ใช้: <code>http://172.18.0.1:3100</code> | เครื่อง Local LAN ใช้: <code>http://192.168.12.11:3100</code>
+                        </span>
+                      </div>
+
+                      {/* App ID (app_id) */}
+                      <div>
+                        <label className="block font-bold text-slate-700 text-xs mb-1">
+                          App ID (app_id) *
+                        </label>
+                        <input
+                          type="text"
+                          value={editClientId}
+                          onChange={(e) => setEditClientId(e.target.value)}
+                          placeholder="CIAM หรือ IRM"
+                          className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono font-bold text-xs focus:outline-none focus:border-purple-600"
+                        />
+                        <span className="text-[10px] text-slate-500 mt-1 block">
+                          รหัสระบบที่ลงทะเบียนไว้ใน registry.json บนเซิร์ฟเวอร์ AD (เช่น CIAM หรือ IRM)
+                        </span>
+                      </div>
                     </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Secret Key (secret_key) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block font-bold text-slate-700 text-xs">
+                            Secret Key (secret_key) *
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowClientSecret(!showClientSecret)}
+                            className="text-[11px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
+                          >
+                            {showClientSecret ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            <span>{showClientSecret ? "ซ่อน" : "แสดง"}</span>
+                          </button>
+                        </div>
+                        <input
+                          type={showClientSecret ? "text" : "password"}
+                          value={editClientSecret}
+                          onChange={(e) => setEditClientSecret(e.target.value)}
+                          placeholder="aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
+                          className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono text-xs focus:outline-none focus:border-purple-600"
+                        />
+                        <span className="text-[10px] text-slate-500 mt-1 block">
+                          คีย์ลับสำหรับยืนยันสิทธิ์ของ App ID ในการส่งคำขอตรวจสอบรหัสผ่าน
+                        </span>
+                      </div>
+
+                      {/* Origin IP Header (X-Forwarded-For) */}
+                      <div>
+                        <label className="block font-bold text-slate-700 text-xs mb-1">
+                          Origin IP Header (X-Forwarded-For) *
+                        </label>
+                        <input
+                          type="text"
+                          value={editSapCompanyDb}
+                          onChange={(e) => setEditSapCompanyDb(e.target.value)}
+                          placeholder="157.173.219.153"
+                          className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono font-bold text-xs focus:outline-none focus:border-purple-600"
+                        />
+                        <span className="text-[10px] text-slate-500 mt-1 block">
+                          IP ของเซิร์ฟเวอร์ที่อยู่ใน allowed_ips ของ AD Gateway (VPS: 157.173.219.153)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Management API Key */}
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">
+                      <label className="block font-bold text-slate-700 text-xs mb-1">
                         Management API Key (x-management-api-key)
                       </label>
                       <input
@@ -1454,12 +1545,15 @@ export default function ApplicationsPage() {
                         placeholder="mgmt_ciam_key_9a88b1c0d2e3f4a5"
                         className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono text-xs focus:outline-none focus:border-purple-600"
                       />
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        ใช้สำหรับเรียก Endpoint ดึงข้อมูลผู้ใช้ (/api/v1/ad/users) เพื่อนำมาทำ User Reconciliation
+                      </span>
                     </div>
 
                     {/* Test Connection Button */}
                     <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
                       <span className="text-[11px] text-slate-500 font-medium">
-                        ทดสอบส่งคำขอ Ping ไปยัง AD Sync Agent (/health)
+                        ทดสอบส่งคำขอ Ping ตรวจสอบการเชื่อมต่อพอร์ต 3100
                       </span>
                       <button
                         type="button"
@@ -1468,7 +1562,7 @@ export default function ApplicationsPage() {
                         className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border-2 border-purple-300 rounded-md font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                       >
                         <Activity className={`w-3.5 h-3.5 ${pingingId === editApp.id ? "animate-spin text-purple-600" : "text-purple-700"}`} />
-                        <span>{pingingId === editApp.id ? "กำลังทดสอบ..." : "⚡ ทดสอบ Ping AD Agent"}</span>
+                        <span>{pingingId === editApp.id ? "กำลังทดสอบ..." : "⚡ ทดสอบต่อ AD Gateway"}</span>
                       </button>
                     </div>
 
@@ -1476,10 +1570,10 @@ export default function ApplicationsPage() {
                     <div className="p-2.5 bg-slate-900 rounded text-slate-200 space-y-1 mt-2">
                       <div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold">
                         <Code2 className="w-3 h-3 text-purple-400" />
-                        <span>Endpoints การทำงานของ AD Sync Agent:</span>
+                        <span>การทำงานและการส่ง Header ของ Central IAM ไปยัง AD Gateway:</span>
                       </div>
                       <pre className="text-[10px] font-mono overflow-x-auto text-purple-300 whitespace-pre-wrap p-1.5 bg-slate-950 rounded border border-slate-800">
-                        {`1. Health Check:  GET ${editBaseUrl || "http://192.168.12.11:3100"}/health\n2. Inventory:     GET ${editBaseUrl || "http://192.168.12.11:3100"}/api/v1/ad/users\n3. Status Patch:  PATCH ${editBaseUrl || "http://192.168.12.11:3100"}/api/v1/ad/users/:username/status\n   (สถานะสิทธิ์คำสั่ง PATCH ปัจจุบัน: ${editAdAllowStatusPatch ? "เปิดใช้งาน (LIVE)" : "ปิดใช้งาน (READ-ONLY)"})\n4. SSO Auth:      POST ${editBaseUrl || "http://192.168.12.11:3100"}/api/v2/login`}
+                        {`• Base Gateway URL:   ${editBaseUrl || "http://172.18.0.1:3100"}\n• Header X-Forwarded-For: ${editSapCompanyDb || "157.173.219.153"} (ส่งทุก Request เพื่อผ่าน IP Whitelist)\n• Health Check:       GET  ${(editBaseUrl || "http://172.18.0.1:3100").replace("/api/v2/login", "")}/health\n• User Inventory:     GET  ${(editBaseUrl || "http://172.18.0.1:3100").replace("/api/v2/login", "")}/api/v1/ad/users\n• Verify Password:    POST ${(editBaseUrl || "http://172.18.0.1:3100").replace("/api/v2/login", "")}/api/v2/login`}
                       </pre>
                     </div>
                   </div>

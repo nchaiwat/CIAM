@@ -15,11 +15,33 @@ class AdProxyConnector(BaseConnector):
     protecting Domain Controllers from direct external access.
     """
 
-    def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None, allow_status_patch: bool = False):
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        allow_status_patch: bool = False,
+        origin_ip: Optional[str] = None
+    ):
         self.app_code = "ad"
-        self.base_url = (base_url or settings.AD_GATEWAY_URL or "http://192.168.12.11:3100").rstrip("/")
+        self.base_url = (base_url or settings.AD_GATEWAY_URL or "http://172.18.0.1:3100").rstrip("/")
         self.api_key = api_key or getattr(settings, "AD_MANAGEMENT_KEY", "mgmt_ciam_key_9a88b1c0d2e3f4a5")
         self.allow_status_patch = allow_status_patch
+        self.origin_ip = origin_ip or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
+
+    def _get_headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        headers = {
+            "Content-Type": "application/json",
+            "X-Request-Timestamp": str(int(datetime.now(timezone.utc).timestamp())),
+        }
+        if self.origin_ip:
+            headers["X-Forwarded-For"] = self.origin_ip
+        if self.api_key:
+            headers["x-management-api-key"] = self.api_key
+            headers["X-Management-API-Key"] = self.api_key
+            headers["x-api-key"] = self.api_key
+        if extra:
+            headers.update(extra)
+        return headers
 
     async def set_account_status(
         self,
@@ -43,12 +65,7 @@ class AdProxyConnector(BaseConnector):
                 details={"patch_skipped": True, "read_only_mode": True}
             )
         endpoint = f"{self.base_url}/api/v1/ad/users/{username}/status"
-        headers = {
-            "Content-Type": "application/json",
-            "X-Request-Timestamp": str(int(datetime.now(timezone.utc).timestamp()))
-        }
-        if self.api_key:
-            headers["x-management-api-key"] = self.api_key
+        headers = self._get_headers()
 
         payload = {
             "is_active": is_active,
@@ -123,12 +140,7 @@ class AdProxyConnector(BaseConnector):
         start_time = time.time()
         username = account_data.get("username")
         endpoint = f"{self.base_url}/api/v1/ad/users"
-        headers = {
-            "Content-Type": "application/json",
-            "X-Request-Timestamp": str(int(datetime.now(timezone.utc).timestamp()))
-        }
-        if self.api_key:
-            headers["X-Management-API-Key"] = self.api_key
+        headers = self._get_headers()
 
         payload = {
             "sAMAccountName": username,
@@ -188,16 +200,36 @@ class AdProxyConnector(BaseConnector):
 
     async def health_check(self) -> ConnectorHealth:
         start_time = time.time()
-        endpoint = f"{self.base_url}/health"
+        headers = self._get_headers()
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                res = await client.get(endpoint)
+                # 1. Probe /health
+                try:
+                    res = await client.get(f"{self.base_url}/health", headers=headers)
+                    elapsed = int((time.time() - start_time) * 1000)
+                    if res.status_code == 200:
+                        return ConnectorHealth(
+                            is_online=True,
+                            latency_ms=elapsed,
+                            message=f"AD Sync Agent Online ({self.base_url})"
+                        )
+                except Exception:
+                    pass
+
+                # 2. Dual Probe /api/v2/login (verifies port 3100 network connectivity)
+                res = await client.post(f"{self.base_url}/api/v2/login", headers=headers, json={})
                 elapsed = int((time.time() - start_time) * 1000)
-                if res.status_code == 200:
+                if res.status_code in [200, 400, 401, 422]:
                     return ConnectorHealth(
                         is_online=True,
                         latency_ms=elapsed,
-                        message="AD Sync Agent Proxy Online"
+                        message=f"AD Gateway ตอบสนองปกติ (Port 3100 Online ผ่าน {self.base_url})"
+                    )
+                elif res.status_code == 403:
+                    return ConnectorHealth(
+                        is_online=False,
+                        latency_ms=elapsed,
+                        message=f"AD Gateway ปฏิเสธ (HTTP 403 Forbidden): กรุณาตรวจสอบว่า IP {self.origin_ip} อยู่ใน allowed_ips"
                     )
                 return ConnectorHealth(
                     is_online=False,
@@ -207,16 +239,14 @@ class AdProxyConnector(BaseConnector):
         except Exception as exc:
             elapsed = int((time.time() - start_time) * 1000)
             return ConnectorHealth(
-                is_online=False if settings.AD_SYNC_ENABLED else True,
+                is_online=False,
                 latency_ms=elapsed or 15,
-                message="AD Proxy Ready (Simulated Agent)" if not settings.AD_SYNC_ENABLED else f"Unreachable: {str(exc)[:50]}"
+                message=f"Unreachable ({self.base_url}): {str(exc)[:80]}"
             )
 
     async def sync_inventory(self) -> dict:
         endpoint = f"{self.base_url}/api/v1/ad/users"
-        headers = {}
-        if self.api_key:
-            headers["x-management-api-key"] = self.api_key
+        headers = self._get_headers()
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.get(endpoint, headers=headers)
@@ -225,21 +255,26 @@ class AdProxyConnector(BaseConnector):
                 elif res.status_code == 401:
                     raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 401): API Key ไม่ถูกต้อง กรุณาตรวจสอบ Management API Key")
                 elif res.status_code == 403:
-                    raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 403): ตรวจสอบ IP Whitelist หรือสิทธิ์การเข้าถึงบนเครื่อง AD Gateway")
+                    raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 403): ตรวจสอบ IP Whitelist ({self.origin_ip}) หรือสิทธิ์การเข้าถึงบนเครื่อง AD Gateway")
+                elif res.status_code == 404:
+                    raise RuntimeError(
+                        f"AD Agent ตอบกลับ HTTP 404: ยังไม่มี Endpoint /api/v1/ad/users บนเครื่อง AD Gateway "
+                        f"(ทีม AD Admin กำลังติดตั้งตามคู่มือ AD_SYNC_AGENT_CIAM_EXTENSION.md)"
+                    )
                 else:
                     raise RuntimeError(f"AD Agent ตอบกลับสถานะ HTTP {res.status_code}: {res.text[:200]}")
         except httpx.ConnectError as e:
             logger.warning("Failed to connect to AD Agent at %s: %s", endpoint, e)
             raise RuntimeError(
-                f"ไม่สามารถเชื่อมต่อไปยัง AD Agent ({self.base_url}): ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ปลายทางได้ (Connect Error) "
-                f"เนื่องจาก {self.base_url} เป็น IP วงแลนภายใน (Private IP) เซิร์ฟเวอร์ Cloud VPS จึงไม่สามารถเข้าถึงได้โดยตรง "
-                f"กรุณาตั้งค่า VPN Tunnel (Site-to-Site) หรือชี้ Domain/Public IP ที่เชื่อมต่อไปยังพอร์ต 3100 ของ Domain Controller"
+                f"ไม่สามารถเชื่อมต่อไปยัง AD Agent ({self.base_url}): Connect Error "
+                f"สำหรับ VPS แนะนำให้ตั้งค่า Gateway URL เป็น http://172.18.0.1:3100 (Docker Host Gateway ไปยัง VPN) "
+                f"และตรวจสอบ Origin IP ({self.origin_ip})"
             )
         except httpx.TimeoutException as e:
             logger.warning("Timeout connecting to AD Agent at %s: %s", endpoint, e)
             raise RuntimeError(
                 f"การเชื่อมต่อไปยัง AD Agent ({self.base_url}) หมดเวลา (Timeout): "
-                f"เซิร์ฟเวอร์ Cloud VPS ไม่สามารถส่งข้อมูลไปยัง {self.base_url} ได้ กรุณาตรวจสอบ Network Route และ Firewall"
+                f"ไม่สามารถส่งข้อมูลไปยัง {self.base_url} ได้ แนะนำให้ลองเปลี่ยน URL เป็น http://172.18.0.1:3100"
             )
         except Exception as e:
             logger.warning("Failed to sync inventory from AD Agent at %s: %s", endpoint, e)

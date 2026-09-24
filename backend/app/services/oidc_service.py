@@ -114,20 +114,37 @@ def verify_employee_credentials(
                 detail="Invalid Active Directory credentials"
             )
     else:
-        # Live AD Gateway verification per ADAuthen.md
+        # Live AD Gateway verification per ADAuthen.md & Spoke Specification
         import httpx
-        timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        ad_url = f"{settings.AD_GATEWAY_URL.rstrip('/')}/api/v2/login"
+        from datetime import timedelta
+        from app.models.application import ConnectedApplication
+
+        # 1. Fetch AD App configuration from database or fallback to settings
+        ad_app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "ad").first()
+        ad_base = (ad_app.base_url if ad_app and ad_app.base_url else settings.AD_GATEWAY_URL).rstrip('/')
+        ad_app_id = (ad_app.client_id if ad_app and ad_app.client_id else settings.AD_APP_ID)
+        ad_secret = (ad_app.client_secret or ad_app.api_key if ad_app else None) or settings.AD_SECRET_KEY
+        origin_ip = (ad_app.sap_company_db if ad_app and ad_app.sap_company_db else None) or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
+
+        # 2. Thai Local Time (+7) formatted with trailing 'Z' and NO fractional seconds (ADAuthen.md Section 3)
+        tz_thai = timezone(timedelta(hours=7))
+        timestamp_str = datetime.now(tz_thai).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        ad_url = f"{ad_base}/api/v2/login"
         payload = {
-            "app_id": settings.AD_APP_ID,
-            "secret_key": settings.AD_SECRET_KEY,
+            "app_id": ad_app_id,
+            "secret_key": ad_secret,
             "username": username,
             "password": password,
             "timestamp": timestamp_str
         }
+        headers = {
+            "Content-Type": "application/json",
+            "X-Forwarded-For": origin_ip
+        }
         try:
             with httpx.Client(timeout=8.0) as client:
-                resp = client.post(ad_url, json=payload)
+                resp = client.post(ad_url, json=payload, headers=headers)
                 if resp.status_code != 200:
                     err_msg = "Invalid Active Directory credentials"
                     try:
@@ -152,7 +169,7 @@ def verify_employee_credentials(
             logger.error("Failed to connect to AD Gateway at %s: %s", ad_url, e)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Cannot reach Active Directory Gateway at {settings.AD_GATEWAY_URL}: {str(e)}"
+                detail=f"Cannot reach Active Directory Gateway at {ad_base}: {str(e)}"
             )
 
     # Collect application roles

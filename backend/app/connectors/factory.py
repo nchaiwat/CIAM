@@ -31,8 +31,9 @@ def get_connector_for_app(app: ConnectedApplication) -> BaseConnector:
     elif c_type in ["AD_PROXY", "AD_GATEWAY"] or app.app_code.lower() == "ad":
         return AdProxyConnector(
             base_url=app.base_url,
-            api_key=app.api_key,
-            allow_status_patch=bool(getattr(app, "ad_allow_status_patch", False))
+            api_key=app.api_key or app.client_secret,
+            allow_status_patch=bool(getattr(app, "ad_allow_status_patch", False)),
+            origin_ip=app.sap_company_db or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
         )
     elif c_type == "RPA_WORKER":
         if app.rpa_adapter_name == "mock_legacy_erp":

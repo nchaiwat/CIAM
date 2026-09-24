@@ -41,9 +41,10 @@ services:
       - SECRET_KEY=${SECRET_KEY:-central_iam_super_secret_jwt_key_2026_change_in_production}
       - ACCESS_TOKEN_EXPIRE_MINUTES=480
       - FRONTEND_URL=https://ciam.windowasia.com
-      - AD_GATEWAY_URL=${AD_GATEWAY_URL:-http://192.168.12.11:3100}
+      - AD_GATEWAY_URL=${AD_GATEWAY_URL:-http://172.18.0.1:3100}
+      - AD_ORIGIN_IP=${AD_ORIGIN_IP:-157.173.219.153}
       - AD_SYNC_ENABLED=${AD_SYNC_ENABLED:-False}
-      - AD_APP_ID=CIAM
+      - AD_APP_ID=${AD_APP_ID:-CIAM}
       - AD_SECRET_KEY=${AD_SECRET_KEY:-aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823}
       - KEYS_DIR=/app/keys
     volumes:

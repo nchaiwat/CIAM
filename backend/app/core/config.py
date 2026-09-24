@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
 
     # Active Directory Gateway
-    AD_GATEWAY_URL: str = "http://192.168.12.11:3100"
+    AD_GATEWAY_URL: str = "http://172.18.0.1:3100"
+    AD_ORIGIN_IP: str = "157.173.219.153"
     AD_SYNC_ENABLED: bool = False
     AD_APP_ID: str = "CIAM"
     AD_SECRET_KEY: str = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
