@@ -1,5 +1,6 @@
 import time
 import logging
+import re
 from typing import Optional, Dict, Any
 import httpx
 from app.connectors.base import BaseConnector, ConnectorResult, ConnectorHealth
@@ -28,8 +29,9 @@ class SapB1Connector(BaseConnector):
         app_code: str = "sap_b1"
     ):
         self.app_code = app_code
+        self.raw_base_url = (base_url or "").rstrip("/")
         # Clean base_url (remove trailing slash and /b1s/v1 or /b1s/v2 suffix if user added it)
-        raw_url = (base_url or "").rstrip("/")
+        raw_url = self.raw_base_url
         if raw_url.endswith("/b1s/v2") or raw_url.endswith("/b1s/v1"):
             raw_url = raw_url.rsplit("/b1s/", 1)[0]
         self.base_url = raw_url
@@ -47,15 +49,19 @@ class SapB1Connector(BaseConnector):
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
-        # SAP B1 Service Layer v2 strictly requires Cookie authentication (B1SESSION / ROUTEID).
-        cookie_items = dict(self.session_cookies)
-        if self.b1_session_id and "B1SESSION" not in cookie_items:
-            cookie_items["B1SESSION"] = self.b1_session_id
-        if self.route_id and "ROUTEID" not in cookie_items and "RouteId" not in cookie_items:
-            cookie_items["ROUTEID"] = self.route_id
+        # SAP B1 Service Layer strictly requires Cookie authentication (B1SESSION / ROUTEID).
+        cookie_parts = []
+        if self.b1_session_id:
+            cookie_parts.append(f"B1SESSION={self.b1_session_id}")
+        if self.route_id:
+            cookie_parts.append(f"ROUTEID={self.route_id}")
 
-        if cookie_items:
-            headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in cookie_items.items())
+        for k, v in self.session_cookies.items():
+            if k.upper() not in ["B1SESSION", "ROUTEID"]:
+                cookie_parts.append(f"{k}={v}")
+
+        if cookie_parts:
+            headers["Cookie"] = "; ".join(cookie_parts)
         return headers
 
     async def _ensure_session(self, client: httpx.AsyncClient) -> bool:
@@ -71,7 +77,9 @@ class SapB1Connector(BaseConnector):
             # No credentials configured, cannot do real B1S session login
             return False
 
-        login_url = f"{self.base_url}/b1s/v2/Login"
+        # Check if user specified v1 in base URL
+        api_ver = "v1" if "/b1s/v1" in self.raw_base_url else "v2"
+        login_url = f"{self.base_url}/b1s/{api_ver}/Login"
         payload = {
             "CompanyDB": self.company_db,
             "UserName": self.sap_username,
@@ -86,31 +94,44 @@ class SapB1Connector(BaseConnector):
                 except Exception:
                     pass
 
-                # Extract all cookies from response
                 self.session_cookies = {}
+                # 1. First get cookies httpx managed to extract
                 try:
                     for k, v in res.cookies.items():
                         self.session_cookies[k] = v
                 except Exception:
                     pass
 
-                # Parse raw Set-Cookie headers for load-balancer stickiness (ROUTEID / RouteId)
-                for sc in res.headers.get_list("set-cookie"):
-                    parts = sc.split(";")
-                    if parts and "=" in parts[0]:
-                        k, v = parts[0].split("=", 1)
+                # 2. Extract from raw Set-Cookie headers using regex (crucial for Cloudflare/Caddy/Apache proxies)
+                raw_cookie_headers = res.headers.get_list("set-cookie")
+                combined_cookies = "\n".join(raw_cookie_headers) if raw_cookie_headers else res.headers.get("set-cookie", "")
+
+                b1_match = re.search(r'(?i)\bB1SESSION\s*=\s*([^;,\s]+)', combined_cookies)
+                if b1_match:
+                    self.b1_session_id = b1_match.group(1).strip()
+                    self.session_cookies["B1SESSION"] = self.b1_session_id
+                elif isinstance(data, dict) and data.get("SessionId"):
+                    self.b1_session_id = data.get("SessionId").strip()
+                    self.session_cookies["B1SESSION"] = self.b1_session_id
+
+                route_match = re.search(r'(?i)\bROUTEID\s*=\s*([^;,\s]+)', combined_cookies)
+                if route_match:
+                    self.route_id = route_match.group(1).strip()
+                    self.session_cookies["ROUTEID"] = self.route_id
+
+                # Collect all key=value from set-cookie strings
+                for raw_item in re.split(r'[,;\n]', combined_cookies):
+                    if '=' in raw_item:
+                        k, v = raw_item.split('=', 1)
                         k_clean = k.strip()
                         v_clean = v.strip()
-                        self.session_cookies[k_clean] = v_clean
-                        if k_clean.upper() == "B1SESSION":
-                            self.b1_session_id = v_clean
-                        elif k_clean.upper() == "ROUTEID":
-                            self.route_id = v_clean
+                        if k_clean.lower() not in ["path", "domain", "expires", "httponly", "secure", "samesite", "max-age"]:
+                            self.session_cookies[k_clean] = v_clean
 
-                session_id = data.get("SessionId") if isinstance(data, dict) else None
-                if session_id:
-                    self.b1_session_id = session_id
-                    self.session_cookies["B1SESSION"] = session_id
+                if self.b1_session_id:
+                    self.session_cookies["B1SESSION"] = self.b1_session_id
+                if self.route_id:
+                    self.session_cookies["ROUTEID"] = self.route_id
 
                 if not self.b1_session_id:
                     logger.warning("SAP B1 login HTTP 200 but failed to find SessionId/B1SESSION in: %s", res.text[:200])
@@ -118,11 +139,19 @@ class SapB1Connector(BaseConnector):
 
                 # Put cookies into client cookie jar as well
                 for k, v in self.session_cookies.items():
-                    client.cookies.set(k, v)
+                    try:
+                        client.cookies.set(k, v)
+                    except Exception:
+                        pass
 
                 timeout_mins = data.get("SessionTimeout", 30) if isinstance(data, dict) else 30
                 self.session_expiry = now + (timeout_mins * 60) - 60  # refresh 1 min early
-                logger.info("SAP B1 Service Layer session acquired (SessionId: %s..., cookies: %s)", self.b1_session_id[:8], list(self.session_cookies.keys()))
+                logger.info(
+                    "SAP B1 Service Layer session acquired (SessionId: %s..., ROUTEID: %s, total cookies: %d)",
+                    self.b1_session_id[:8] if self.b1_session_id else "None",
+                    self.route_id or "None",
+                    len(self.session_cookies)
+                )
                 return True
             else:
                 logger.warning("SAP B1 Service Layer login failed (HTTP %s): %s", res.status_code, res.text[:200])
@@ -424,36 +453,52 @@ class SapB1Connector(BaseConnector):
                 ]
             }
 
-        endpoint = f"{self.base_url}/b1s/v2/Users?$select=UserCode,UserName,eMail,Department,Locked"
+        # Determine base versions to try: prioritize what was in base_url or try v2 then v1
+        api_ver = "v1" if "/b1s/v1" in self.raw_base_url else "v2"
+        other_ver = "v2" if api_ver == "v1" else "v1"
+
+        candidate_endpoints = [
+            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
+            f"{self.base_url}/b1s/{api_ver}/Users",
+            f"{self.base_url}/b1s/{other_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
+            f"{self.base_url}/b1s/{other_ver}/Users",
+        ]
+
         async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
             session_ok = await self._ensure_session(client)
             if not session_ok:
-                raise RuntimeError("ไม่สามารถ Login เข้าสู่ SAP Service Layer v2 ได้ กรุณาตรวจสอบ CompanyDB, Username และ Password ในการตั้งค่า")
+                raise RuntimeError("ไม่สามารถ Login เข้าสู่ SAP Service Layer ได้ กรุณาตรวจสอบ CompanyDB, Username และ Password ในการตั้งค่า")
 
             all_users = []
-            url = endpoint
-            while url:
-                res = await client.get(url, headers=self._get_headers())
-                if res.status_code != 200:
-                    err_msg = res.text[:250]
-                    if res.status_code == 401 and "Authorization header not found" in err_msg:
-                        raise RuntimeError(
-                            f"SAP B1 Users API ตอบกลับ (HTTP 401): {err_msg} "
-                            f"(กรุณาตรวจสอบว่าบัญชี '{self.sap_username}' ได้รับสิทธิ์ Superuser หรือสิทธิ์เข้าถึงตาราง Users ในระบบ SAP B1 หรือไม่)"
-                        )
-                    raise RuntimeError(f"SAP B1 Users API ตอบกลับข้อผิดพลาด (HTTP {res.status_code}): {err_msg}")
-                data = res.json()
-                raw_users = data.get("value", [])
-                all_users.extend(raw_users)
+            last_err = ""
+            for ep in candidate_endpoints:
+                url = ep
+                ep_success = False
+                while url:
+                    res = await client.get(url, headers=self._get_headers())
+                    if res.status_code == 200:
+                        ep_success = True
+                        data = res.json()
+                        raw_users = data.get("value", [])
+                        all_users.extend(raw_users)
 
-                next_link = data.get("@odata.nextLink") or data.get("odata.nextLink")
-                if next_link:
-                    if next_link.startswith("http"):
-                        url = next_link
+                        next_link = data.get("@odata.nextLink") or data.get("odata.nextLink")
+                        if next_link:
+                            if next_link.startswith("http"):
+                                url = next_link
+                            else:
+                                base_prefix = "/b1s/v2/" if "/b1s/v2/" in ep else "/b1s/v1/"
+                                url = f"{self.base_url}{base_prefix}{next_link.lstrip('/')}"
+                        else:
+                            break
                     else:
-                        url = f"{self.base_url}/b1s/v2/{next_link.lstrip('/')}"
-                else:
+                        last_err = f"HTTP {res.status_code}: {res.text[:250]}"
+                        break
+                if ep_success:
                     break
+
+            if not all_users and last_err:
+                raise RuntimeError(f"SAP B1 Users API ตอบกลับข้อผิดพลาด ({last_err})")
 
             accounts = [
                 {
