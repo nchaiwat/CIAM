@@ -40,6 +40,7 @@ class SapB1Connector(BaseConnector):
         self.b1_session_id: Optional[str] = None
         self.route_id: Optional[str] = None
         self.session_expiry: float = 0
+        self.session_cookies: Dict[str, str] = {}
 
     def _get_headers(self) -> Dict[str, str]:
         headers = {
@@ -47,13 +48,14 @@ class SapB1Connector(BaseConnector):
             "Accept": "application/json"
         }
         # SAP B1 Service Layer v2 strictly requires Cookie authentication (B1SESSION / ROUTEID).
-        # Sending 'Authorization: Bearer ...' causes SAP B1 to reject with HTTP 401 code 300
-        # ("Invalid format of authorization header: not starting with Basic").
-        if self.b1_session_id:
-            cookie_parts = [f"B1SESSION={self.b1_session_id}"]
-            if self.route_id:
-                cookie_parts.append(f"ROUTEID={self.route_id}")
-            headers["Cookie"] = "; ".join(cookie_parts)
+        cookie_items = dict(self.session_cookies)
+        if self.b1_session_id and "B1SESSION" not in cookie_items:
+            cookie_items["B1SESSION"] = self.b1_session_id
+        if self.route_id and "ROUTEID" not in cookie_items and "RouteId" not in cookie_items:
+            cookie_items["ROUTEID"] = self.route_id
+
+        if cookie_items:
+            headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in cookie_items.items())
         return headers
 
     async def _ensure_session(self, client: httpx.AsyncClient) -> bool:
@@ -84,26 +86,43 @@ class SapB1Connector(BaseConnector):
                 except Exception:
                     pass
 
-                # Extract B1SESSION from JSON body (SessionId) or cookies
-                self.b1_session_id = data.get("SessionId") or res.cookies.get("B1SESSION")
-                self.route_id = res.cookies.get("ROUTEID")
+                # Extract all cookies from response
+                self.session_cookies = {}
+                try:
+                    for k, v in res.cookies.items():
+                        self.session_cookies[k] = v
+                except Exception:
+                    pass
 
-                # Fallback to scanning raw Set-Cookie headers
+                # Parse raw Set-Cookie headers for load-balancer stickiness (ROUTEID / RouteId)
                 for sc in res.headers.get_list("set-cookie"):
-                    for part in sc.split(";"):
-                        part_clean = part.strip()
-                        if part_clean.startswith("B1SESSION=") and not self.b1_session_id:
-                            self.b1_session_id = part_clean.split("=", 1)[1]
-                        elif part_clean.startswith("ROUTEID=") and not self.route_id:
-                            self.route_id = part_clean.split("=", 1)[1]
+                    parts = sc.split(";")
+                    if parts and "=" in parts[0]:
+                        k, v = parts[0].split("=", 1)
+                        k_clean = k.strip()
+                        v_clean = v.strip()
+                        self.session_cookies[k_clean] = v_clean
+                        if k_clean.upper() == "B1SESSION":
+                            self.b1_session_id = v_clean
+                        elif k_clean.upper() == "ROUTEID":
+                            self.route_id = v_clean
+
+                session_id = data.get("SessionId") if isinstance(data, dict) else None
+                if session_id:
+                    self.b1_session_id = session_id
+                    self.session_cookies["B1SESSION"] = session_id
 
                 if not self.b1_session_id:
                     logger.warning("SAP B1 login HTTP 200 but failed to find SessionId/B1SESSION in: %s", res.text[:200])
                     return False
 
+                # Put cookies into client cookie jar as well
+                for k, v in self.session_cookies.items():
+                    client.cookies.set(k, v)
+
                 timeout_mins = data.get("SessionTimeout", 30) if isinstance(data, dict) else 30
                 self.session_expiry = now + (timeout_mins * 60) - 60  # refresh 1 min early
-                logger.info("SAP B1 Service Layer session acquired (SessionId: %s..., ROUTEID: %s)", self.b1_session_id[:8], self.route_id)
+                logger.info("SAP B1 Service Layer session acquired (SessionId: %s..., cookies: %s)", self.b1_session_id[:8], list(self.session_cookies.keys()))
                 return True
             else:
                 logger.warning("SAP B1 Service Layer login failed (HTTP %s): %s", res.status_code, res.text[:200])
@@ -416,7 +435,13 @@ class SapB1Connector(BaseConnector):
             while url:
                 res = await client.get(url, headers=self._get_headers())
                 if res.status_code != 200:
-                    raise RuntimeError(f"SAP B1 Users API ตอบกลับข้อผิดพลาด (HTTP {res.status_code}): {res.text[:200]}")
+                    err_msg = res.text[:250]
+                    if res.status_code == 401 and "Authorization header not found" in err_msg:
+                        raise RuntimeError(
+                            f"SAP B1 Users API ตอบกลับ (HTTP 401): {err_msg} "
+                            f"(กรุณาตรวจสอบว่าบัญชี '{self.sap_username}' ได้รับสิทธิ์ Superuser หรือสิทธิ์เข้าถึงตาราง Users ในระบบ SAP B1 หรือไม่)"
+                        )
+                    raise RuntimeError(f"SAP B1 Users API ตอบกลับข้อผิดพลาด (HTTP {res.status_code}): {err_msg}")
                 data = res.json()
                 raw_users = data.get("value", [])
                 all_users.extend(raw_users)
