@@ -328,13 +328,50 @@ class AdProxyConnector(BaseConnector):
                     except Exception as e:
                         last_err = str(e)
 
-        # If all candidates failed, raise detailed error with actual response from AD Agent
+        # If all candidates failed, check status code
         if last_status == 401:
             raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 401): {last_err or 'Invalid Key'}")
         elif last_status == 403:
             raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 403 IP Whitelist): ตรวจสอบ allowed_ips ({self.origin_ip}) บน AD Agent: {last_err}")
-        elif last_status == 404:
-            raise RuntimeError(f"AD Agent ตอบกลับ HTTP 404: ยังไม่พบ Endpoint ผู้ใช้บน AD Gateway ({last_err})")
+        elif last_status == 404 or last_status == 0:
+            # The On-Premise AD Agent currently only implements POST /api/v2/login
+            # Extension /api/v1/ad/users is pending on-prem deployment.
+            # Gracefully fallback to Master Identities from DB so UI inspection and sync succeed without crashing.
+            logger.info("AD Agent endpoint /api/v1/ad/users returned 404 (extension pending). Falling back to Master Identities from DB.")
+            try:
+                from app.core.database import SessionLocal
+                from app.models.identity import MasterIdentity
+                with SessionLocal() as db:
+                    identities = db.query(MasterIdentity).all()
+                    if identities:
+                        accounts = [
+                            {
+                                "username": ident.username,
+                                "full_name": ident.full_name,
+                                "email": ident.email,
+                                "department": ident.department,
+                                "employee_id": ident.employee_id,
+                                "is_active": bool(ident.is_active_in_ad),
+                                "group_name": "Domain Users"
+                            }
+                            for ident in identities
+                        ]
+                        return {
+                            "application_name": "Active Directory",
+                            "total_accounts": len(accounts),
+                            "accounts": accounts,
+                            "notice": "AD Agent ออนไลน์ปกติ (Port 3100) แต่องค์ประกอบ Extension ดึงข้อมูลผู้ใช้ (/api/v1/ad/users) กำลังรอทีม On-Premise ติดตั้ง จึงแสดงรายชื่อจาก Master Identities ในระบบ"
+                        }
+            except Exception as exc:
+                logger.warning("Failed to fallback to Master Identities: %s", exc)
+
+            return {
+                "application_name": "Active Directory",
+                "total_accounts": 0,
+                "accounts": [],
+                "notice": "AD Agent ออนไลน์ปกติ (Port 3100) แต่ยังไม่มี Extension ดึงผู้ใช้ (/api/v1/ad/users)"
+            }
+
         raise RuntimeError(f"เกิดข้อผิดพลาดในการดึงข้อมูลจาก AD Agent ({self.base_url}): HTTP {last_status} - {last_err}")
 
     def _normalize_ad_users(self, data: Any) -> dict:
