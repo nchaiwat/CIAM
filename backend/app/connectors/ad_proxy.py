@@ -2,7 +2,7 @@ import time
 import logging
 from typing import Optional, Dict, Any
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from app.connectors.base import BaseConnector, ConnectorResult, ConnectorHealth
 from app.core.config import settings
 
@@ -24,14 +24,22 @@ class AdProxyConnector(BaseConnector):
     ):
         self.app_code = "ad"
         self.base_url = (base_url or settings.AD_GATEWAY_URL or "http://172.18.0.1:3100").rstrip("/")
-        self.api_key = api_key or getattr(settings, "AD_MANAGEMENT_KEY", "mgmt_ciam_key_9a88b1c0d2e3f4a5")
+        raw_key = api_key or getattr(settings, "AD_SECRET_KEY", None) or getattr(settings, "AD_MANAGEMENT_KEY", None)
+        if not raw_key or raw_key.strip() in ["mgmt_ciam_key_9a88b1c0d2e3f4a5", ""]:
+            raw_key = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
+        self.api_key = raw_key.strip()
         self.allow_status_patch = allow_status_patch
         self.origin_ip = origin_ip or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
+        self.app_id = getattr(settings, "AD_APP_ID", "CIAM")
 
     def _get_headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        # Thai local time (+7) format with trailing 'Z' per ADAuthen.md & AD_SYNC_AGENT_CIAM_EXTENSION.md
+        thai_now = datetime.now(timezone(timedelta(hours=7))).strftime("%Y-%m-%dT%H:%M:%SZ")
         headers = {
             "Content-Type": "application/json",
-            "X-Request-Timestamp": str(int(datetime.now(timezone.utc).timestamp())),
+            "X-Request-Timestamp": thai_now,
+            "X-Timestamp": thai_now,
+            "timestamp": thai_now,
         }
         if self.origin_ip:
             headers["X-Forwarded-For"] = self.origin_ip
@@ -39,6 +47,12 @@ class AdProxyConnector(BaseConnector):
             headers["x-management-api-key"] = self.api_key
             headers["X-Management-API-Key"] = self.api_key
             headers["x-api-key"] = self.api_key
+            headers["X-API-Key"] = self.api_key
+            headers["x-secret-key"] = self.api_key
+            headers["X-Secret-Key"] = self.api_key
+            headers["x-app-id"] = self.app_id
+            headers["X-App-Id"] = self.app_id
+            headers["Authorization"] = f"Bearer {self.api_key}"
         if extra:
             headers.update(extra)
         return headers
@@ -248,12 +262,36 @@ class AdProxyConnector(BaseConnector):
         endpoint = f"{self.base_url}/api/v1/ad/users"
         headers = self._get_headers()
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 res = await client.get(endpoint, headers=headers)
+                # Fallback: if 401 with headers, try passing query params
+                if res.status_code == 401:
+                    logger.warning("AD Agent returned HTTP 401 with headers, trying query params fallback...")
+                    fallback_url = f"{endpoint}?app_id={self.app_id}&secret_key={self.api_key}&api_key={self.api_key}"
+                    res_fallback = await client.get(fallback_url, headers=headers)
+                    if res_fallback.status_code == 200:
+                        res = res_fallback
+
                 if res.status_code == 200:
-                    return res.json()
+                    data = res.json()
+                    if isinstance(data, list):
+                        return {"application_name": "Active Directory", "total_accounts": len(data), "accounts": data}
+                    elif isinstance(data, dict):
+                        if "accounts" not in data:
+                            if "value" in data and isinstance(data["value"], list):
+                                data["accounts"] = data["value"]
+                            elif "data" in data and isinstance(data["data"], list):
+                                data["accounts"] = data["data"]
+                            elif "users" in data and isinstance(data["users"], list):
+                                data["accounts"] = data["users"]
+                            else:
+                                data["accounts"] = []
+                        data.setdefault("application_name", "Active Directory")
+                        data.setdefault("total_accounts", len(data.get("accounts", [])))
+                        return data
+                    return {"application_name": "Active Directory", "total_accounts": 0, "accounts": []}
                 elif res.status_code == 401:
-                    raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 401): API Key ไม่ถูกต้อง กรุณาตรวจสอบ Management API Key")
+                    raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 401): API Key ไม่ถูกต้อง กรุณาตรวจสอบ Management API Key / Secret Key")
                 elif res.status_code == 403:
                     raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 403): ตรวจสอบ IP Whitelist ({self.origin_ip}) หรือสิทธิ์การเข้าถึงบนเครื่อง AD Gateway")
                 elif res.status_code == 404:

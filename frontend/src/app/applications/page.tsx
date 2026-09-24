@@ -189,10 +189,13 @@ export default function ApplicationsPage() {
     if (!editApp) return;
     try {
       setSavingEdit(true);
+      const effectiveApiKey = editApp.app_code === "ad" && (!editApiKey || editApiKey === "mgmt_ciam_key_9a88b1c0d2e3f4a5")
+        ? (editClientSecret || "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823")
+        : editApiKey;
       await ciamApi.updateApplication(editApp.id, {
         app_name: editAppName,
         base_url: editBaseUrl || undefined,
-        api_key: editApiKey || undefined,
+        api_key: effectiveApiKey || undefined,
         connector_type: editConnectorType,
         client_id: editClientId || undefined,
         client_secret: editClientSecret || undefined,
@@ -1394,8 +1397,9 @@ export default function ApplicationsPage() {
                         onClick={() => {
                           setEditBaseUrl("http://172.18.0.1:3100");
                           setEditSapCompanyDb("157.173.219.153");
-                          if (!editClientId || editClientId.includes("client")) setEditClientId("CIAM");
-                          if (!editClientSecret) setEditClientSecret("aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823");
+                          setEditClientId("CIAM");
+                          setEditClientSecret("aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823");
+                          setEditApiKey("aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823");
                         }}
                         className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md font-bold text-xs shrink-0 flex items-center gap-1 shadow-sm cursor-pointer transition-all"
                       >
@@ -1535,18 +1539,27 @@ export default function ApplicationsPage() {
 
                     {/* Management API Key */}
                     <div>
-                      <label className="block font-bold text-slate-700 text-xs mb-1">
-                        Management API Key (x-management-api-key)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-slate-700 text-xs">
+                          Management API Key / Secret Key (x-management-api-key)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setEditApiKey(editClientSecret || "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823")}
+                          className="text-[10px] text-purple-700 hover:text-purple-900 font-bold underline cursor-pointer"
+                        >
+                          คัดลอกจาก Secret Key ด้านบน
+                        </button>
+                      </div>
                       <input
                         type="text"
                         value={editApiKey}
                         onChange={(e) => setEditApiKey(e.target.value)}
-                        placeholder="mgmt_ciam_key_9a88b1c0d2e3f4a5"
+                        placeholder="aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
                         className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono text-xs focus:outline-none focus:border-purple-600"
                       />
                       <span className="text-[10px] text-slate-500 mt-1 block">
-                        ใช้สำหรับเรียก Endpoint ดึงข้อมูลผู้ใช้ (/api/v1/ad/users) เพื่อนำมาทำ User Reconciliation
+                        ใช้สำหรับเรียก Endpoint ดึงข้อมูลผู้ใช้ (/api/v1/ad/users) เพื่อทำ Reconciliation (เทียบกับ secret_key ใน registry.json ฝั่ง On-Premise)
                       </span>
                     </div>
 

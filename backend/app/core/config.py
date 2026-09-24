@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     AD_SYNC_ENABLED: bool = False
     AD_APP_ID: str = "CIAM"
     AD_SECRET_KEY: str = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
+    AD_MANAGEMENT_KEY: str = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
 
     # Telegram Alert
     TELEGRAM_BOT_TOKEN: str = ""

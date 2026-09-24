@@ -109,7 +109,7 @@ def init_db():
                 "app_name": "Active Directory (DC Gateway)",
                 "connector_type": "AD_PROXY",
                 "base_url": "http://172.18.0.1:3100",
-                "api_key": "mgmt_ciam_key_9a88b1c0d2e3f4a5",
+                "api_key": "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823",
                 "client_id": "CIAM",
                 "client_secret": "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823",
                 "sap_company_db": "157.173.219.153",
@@ -169,6 +169,14 @@ def init_db():
                 if item.get("sap_company_db") and not app.sap_company_db:
                     app.sap_company_db = item.get("sap_company_db")
                     app.sap_username = item.get("sap_username")
+                # Auto-upgrade AD configuration if holding old placeholder key
+                if item["app_code"] == "ad":
+                    if not app.api_key or app.api_key == "mgmt_ciam_key_9a88b1c0d2e3f4a5":
+                        app.api_key = item.get("api_key")
+                    if not app.client_secret or app.client_secret == "mgmt_ciam_key_9a88b1c0d2e3f4a5":
+                        app.client_secret = item.get("client_secret")
+                    if not app.client_id:
+                        app.client_id = "CIAM"
                 db.flush()
             app_objs[item["app_code"]] = app
 
