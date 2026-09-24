@@ -222,6 +222,25 @@ class AdProxyConnector(BaseConnector):
                 res = await client.get(endpoint, headers=headers)
                 if res.status_code == 200:
                     return res.json()
+                elif res.status_code == 401:
+                    raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 401): API Key ไม่ถูกต้อง กรุณาตรวจสอบ Management API Key")
+                elif res.status_code == 403:
+                    raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 403): ตรวจสอบ IP Whitelist หรือสิทธิ์การเข้าถึงบนเครื่อง AD Gateway")
+                else:
+                    raise RuntimeError(f"AD Agent ตอบกลับสถานะ HTTP {res.status_code}: {res.text[:200]}")
+        except httpx.ConnectError as e:
+            logger.warning("Failed to connect to AD Agent at %s: %s", endpoint, e)
+            raise RuntimeError(
+                f"ไม่สามารถเชื่อมต่อไปยัง AD Agent ({self.base_url}): ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ปลายทางได้ (Connect Error) "
+                f"เนื่องจาก {self.base_url} เป็น IP วงแลนภายใน (Private IP) เซิร์ฟเวอร์ Cloud VPS จึงไม่สามารถเข้าถึงได้โดยตรง "
+                f"กรุณาตั้งค่า VPN Tunnel (Site-to-Site) หรือชี้ Domain/Public IP ที่เชื่อมต่อไปยังพอร์ต 3100 ของ Domain Controller"
+            )
+        except httpx.TimeoutException as e:
+            logger.warning("Timeout connecting to AD Agent at %s: %s", endpoint, e)
+            raise RuntimeError(
+                f"การเชื่อมต่อไปยัง AD Agent ({self.base_url}) หมดเวลา (Timeout): "
+                f"เซิร์ฟเวอร์ Cloud VPS ไม่สามารถส่งข้อมูลไปยัง {self.base_url} ได้ กรุณาตรวจสอบ Network Route และ Firewall"
+            )
         except Exception as e:
             logger.warning("Failed to sync inventory from AD Agent at %s: %s", endpoint, e)
-        return {"accounts": [], "total_accounts": 0}
+            raise RuntimeError(f"เกิดข้อผิดพลาดในการดึงข้อมูลจาก AD Agent ({self.base_url}): {str(e)}")

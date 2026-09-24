@@ -78,16 +78,32 @@ class SapB1Connector(BaseConnector):
         try:
             res = await client.post(login_url, json=payload, headers={"Content-Type": "application/json"}, timeout=15.0)
             if res.status_code == 200:
-                self.b1_session_id = res.cookies.get("B1SESSION")
-                self.route_id = res.cookies.get("ROUTEID")
-                # Parse session timeout from body or default to 30 mins
+                data = {}
                 try:
                     data = res.json()
-                    timeout_mins = data.get("SessionTimeout", 30)
                 except Exception:
-                    timeout_mins = 30
-                self.session_expiry = now + (timeout_mins * 60) - 60 # refresh 1 min early
-                logger.info("SAP B1 Service Layer session acquired for company: %s", self.company_db)
+                    pass
+
+                # Extract B1SESSION from JSON body (SessionId) or cookies
+                self.b1_session_id = data.get("SessionId") or res.cookies.get("B1SESSION")
+                self.route_id = res.cookies.get("ROUTEID")
+
+                # Fallback to scanning raw Set-Cookie headers
+                for sc in res.headers.get_list("set-cookie"):
+                    for part in sc.split(";"):
+                        part_clean = part.strip()
+                        if part_clean.startswith("B1SESSION=") and not self.b1_session_id:
+                            self.b1_session_id = part_clean.split("=", 1)[1]
+                        elif part_clean.startswith("ROUTEID=") and not self.route_id:
+                            self.route_id = part_clean.split("=", 1)[1]
+
+                if not self.b1_session_id:
+                    logger.warning("SAP B1 login HTTP 200 but failed to find SessionId/B1SESSION in: %s", res.text[:200])
+                    return False
+
+                timeout_mins = data.get("SessionTimeout", 30) if isinstance(data, dict) else 30
+                self.session_expiry = now + (timeout_mins * 60) - 60  # refresh 1 min early
+                logger.info("SAP B1 Service Layer session acquired (SessionId: %s..., ROUTEID: %s)", self.b1_session_id[:8], self.route_id)
                 return True
             else:
                 logger.warning("SAP B1 Service Layer login failed (HTTP %s): %s", res.status_code, res.text[:200])

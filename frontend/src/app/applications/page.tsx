@@ -29,6 +29,7 @@ import {
   Server,
   Clock,
   Calendar,
+  Cloud,
 } from "lucide-react";
 import { ciamApi, ConnectedApp, SyncSchedule, SyncAllResult } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
@@ -89,11 +90,11 @@ export default function ApplicationsPage() {
 
   // Settings / Secret Key & SSO Modal states
   const [editApp, setEditApp] = useState<ConnectedApp | null>(null);
-  const [editTab, setEditTab] = useState<"M2M" | "SSO" | "SAP_B1" | "AD_PROXY">("M2M");
+  const [editTab, setEditTab] = useState<"M2M" | "SSO" | "SAP_B1" | "AD_PROXY" | "M365">("M2M");
   const [editAppName, setEditAppName] = useState("");
   const [editBaseUrl, setEditBaseUrl] = useState("");
   const [editApiKey, setEditApiKey] = useState("");
-  const [editConnectorType, setEditConnectorType] = useState<"REST_API" | "RPA_WORKER" | "SAP_B1" | "AD_PROXY">("REST_API");
+  const [editConnectorType, setEditConnectorType] = useState<string>("REST_API");
   const [editSapCompanyDb, setEditSapCompanyDb] = useState("");
   const [editSapUsername, setEditSapUsername] = useState("");
   const [editSapPassword, setEditSapPassword] = useState("");
@@ -136,7 +137,7 @@ export default function ApplicationsPage() {
     setTimeout(() => setter(false), 2000);
   };
 
-  const handleOpenEdit = async (app: ConnectedApp, defaultTab: "M2M" | "SSO" | "SAP_B1" | "AD_PROXY" = "M2M") => {
+  const handleOpenEdit = async (app: ConnectedApp, defaultTab: "M2M" | "SSO" | "SAP_B1" | "AD_PROXY" | "M365" = "M2M") => {
     setEditApp(app);
     setEditAppName(app.app_name);
     setEditBaseUrl(app.base_url || "");
@@ -149,11 +150,13 @@ export default function ApplicationsPage() {
     setCopiedClientId(false);
     setCopiedClientSecret(false);
     
-    // Auto-select tab if AD or SAP application
+    // Auto-select tab if AD, SAP, or M365 application
     const isAd = app.connector_type === "AD_PROXY" || app.app_code.toLowerCase() === "ad";
     const isSap = app.connector_type === "SAP_B1" || app.app_code.toLowerCase().includes("sap");
+    const isM365 = app.connector_type === "M365" || app.app_code.toLowerCase().includes("m365");
     if (isAd) setEditTab("AD_PROXY");
     else if (isSap) setEditTab("SAP_B1");
+    else if (isM365) setEditTab("M365");
     else setEditTab(defaultTab);
 
     try {
@@ -687,6 +690,17 @@ export default function ApplicationsPage() {
                       <span>AD Settings</span>
                     </button>
                   )}
+
+                  {(app.connector_type === "M365" || app.app_code.toLowerCase().includes("m365")) && (
+                    <button
+                      onClick={() => handleOpenEdit(app, "M365")}
+                      title="ตั้งค่าเชื่อมต่อ Microsoft 365 (Entra ID & Graph API)"
+                      className="px-2.5 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-900 border-2 border-sky-300 rounded-md text-xs font-bold transition-colors flex items-center space-x-1 shadow-2xs cursor-pointer"
+                    >
+                      <Cloud className="w-3.5 h-3.5 text-sky-700" />
+                      <span>M365</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -706,6 +720,8 @@ export default function ApplicationsPage() {
                     ? "bg-purple-100 border-2 border-purple-300 text-purple-800"
                     : editTab === "SAP_B1"
                     ? "bg-emerald-100 border-2 border-emerald-300 text-emerald-800"
+                    : editTab === "M365"
+                    ? "bg-sky-100 border-2 border-sky-300 text-sky-800"
                     : editTab === "SSO"
                     ? "bg-blue-100 border-2 border-blue-300 text-blue-800"
                     : "bg-amber-100 border-2 border-amber-300 text-amber-800"
@@ -714,6 +730,8 @@ export default function ApplicationsPage() {
                     <ShieldCheck className="w-4 h-4" />
                   ) : editTab === "SAP_B1" ? (
                     <Database className="w-4 h-4" />
+                  ) : editTab === "M365" ? (
+                    <Cloud className="w-4 h-4" />
                   ) : editTab === "SSO" ? (
                     <Lock className="w-4 h-4" />
                   ) : (
@@ -770,6 +788,21 @@ export default function ApplicationsPage() {
                   <Database className="w-3.5 h-3.5 text-emerald-600" />
                   <span>SAP B1 Service Layer v2</span>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                </button>
+              )}
+              {(editApp.connector_type === "M365" || editApp.app_code.toLowerCase().includes("m365")) && (
+                <button
+                  type="button"
+                  onClick={() => setEditTab("M365")}
+                  className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                    editTab === "M365"
+                      ? "border-sky-600 text-sky-800 bg-sky-50/50"
+                      : "border-transparent text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <Cloud className="w-3.5 h-3.5 text-sky-600" />
+                  <span>Microsoft 365 (Graph API)</span>
+                  <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
                 </button>
               )}
               <button
@@ -1216,6 +1249,125 @@ export default function ApplicationsPage() {
                         {`1. Session Login:  POST ${editBaseUrl || "https://sapb1.waapps.net"}/b1s/v2/Login\n2. User Status:    GET ${editBaseUrl || "https://sapb1.waapps.net"}/b1s/v2/Users('{username}')?$select=UserCode,UserName,Locked\n   (Locked: "tNO" = Active | "tYES" = Disactive / Locked)`}
                       </pre>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: Microsoft 365 Entra ID & Graph API */}
+              {editTab === "M365" && (
+                <div className="space-y-4">
+                  {/* Info Alert */}
+                  <div className="p-3 bg-sky-50 border-2 border-sky-200 rounded-lg space-y-1">
+                    <div className="font-bold text-sky-950 text-xs flex items-center gap-1.5">
+                      <Cloud className="w-4 h-4 text-sky-700" />
+                      <span>Microsoft 365 / Microsoft Entra ID (Graph API Read-Only Monitor)</span>
+                    </div>
+                    <p className="text-[11px] text-sky-900 leading-relaxed">
+                      เชื่อมต่อกับ Microsoft Graph API เพื่อดึงรายชื่อผู้ใช้ อีเมล และตรวจจับสิทธิ์ไม่ตรงกัน (Ghost Accounts) ตามมาตรฐานความปลอดภัย ISO 27001 (Safe Read-Only Mode)
+                    </p>
+                  </div>
+
+                  {/* Warning on Azure Client Secret Value vs ID */}
+                  <div className="p-3.5 bg-amber-50 border-2 border-amber-300 rounded-lg text-xs text-amber-950 space-y-1.5 shadow-2xs">
+                    <div className="font-extrabold flex items-center gap-1.5 text-amber-900 text-xs">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>ข้อควรระวังสำคัญมากในการคัดลอก Client Secret จาก Azure Portal:</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-amber-900">
+                      ใน <strong>portal.azure.com</strong> &gt; <strong>App registrations</strong> &gt; แอปพลิเคชัน &gt; <strong>Certificates & secrets</strong>:
+                      <br />• ให้คัดลอกค่าจากคอลัมน์ <strong>&quot;Value&quot;</strong> เท่านั้น (เป็นสตริง เช่น <code>wxy~8Q...</code>)
+                      <br />• <strong>ห้ามคัดลอกคอลัมน์ &quot;Secret ID&quot;</strong> (เพราะ Secret ID เป็นเพียง UUID อ้างอิง จะทำให้เกิดข้อผิดพลาด <code>HTTP 401: AADSTS7000215: Invalid client secret provided</code> ทันที)
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+                    {/* Tenant ID */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Directory (Tenant) ID
+                      </label>
+                      <input
+                        type="text"
+                        value={editSapCompanyDb}
+                        onChange={(e) => setEditSapCompanyDb(e.target.value)}
+                        placeholder="เช่น 3bf476e6-c0a4-4e60-9692-f9a20c16c12b"
+                        className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono font-bold text-xs focus:outline-none focus:border-sky-600"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        คัดลอกจากหน้า Overview ของ App Registration ใน Azure
+                      </span>
+                    </div>
+
+                    {/* Client ID */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Application (Client) ID
+                      </label>
+                      <input
+                        type="text"
+                        value={editClientId}
+                        onChange={(e) => setEditClientId(e.target.value)}
+                        placeholder="เช่น 1d78dd68-7e09-4daa-8eac-de6331716980"
+                        className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono font-bold text-xs focus:outline-none focus:border-sky-600"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        Application ID ของ Entra App ที่ได้รับสิทธิ์ User.Read.All
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Client Secret Value */}
+                  <div className="text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700">
+                        Client Secret Value (รหัสลับ Value - ไม่ใช่ Secret ID)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowClientSecret(!showClientSecret)}
+                        className="text-[11px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
+                      >
+                        {showClientSecret ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        <span>{showClientSecret ? "ซ่อนรหัส" : "แสดงรหัส"}</span>
+                      </button>
+                    </div>
+                    <input
+                      type={showClientSecret ? "text" : "password"}
+                      value={editClientSecret}
+                      onChange={(e) => setEditClientSecret(e.target.value)}
+                      placeholder="วางค่า Value ของ Client Secret จาก Azure (ไม่ใช่ Secret ID)"
+                      className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono text-xs focus:outline-none focus:border-sky-600"
+                    />
+                  </div>
+
+                  {/* Base URL */}
+                  <div className="text-xs">
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Microsoft Graph Base URL
+                    </label>
+                    <input
+                      type="text"
+                      value={editBaseUrl || "https://graph.microsoft.com"}
+                      onChange={(e) => setEditBaseUrl(e.target.value)}
+                      placeholder="https://graph.microsoft.com"
+                      className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono text-xs focus:outline-none focus:border-sky-600"
+                    />
+                  </div>
+
+                  {/* Ping Test Button */}
+                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      ทดสอบขอ Access Token ผ่าน OAuth 2.0 Client Credentials
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handlePing(editApp.id)}
+                      disabled={pingingId === editApp.id}
+                      className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 border-2 border-sky-300 rounded-md font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                    >
+                      <Activity className={`w-3.5 h-3.5 ${pingingId === editApp.id ? "animate-spin text-sky-600" : "text-sky-700"}`} />
+                      <span>{pingingId === editApp.id ? "กำลังทดสอบ..." : "⚡ ทดสอบต่อ Microsoft Graph"}</span>
+                    </button>
                   </div>
                 </div>
               )}

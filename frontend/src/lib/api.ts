@@ -136,7 +136,7 @@ export interface ConnectedApp {
   id: number;
   app_code: string;
   app_name: string;
-  connector_type: "REST_API" | "RPA_WORKER" | "SAP_B1" | "AD_PROXY";
+  connector_type: "REST_API" | "RPA_WORKER" | "SAP_B1" | "AD_PROXY" | "M365" | string;
   base_url: string | null;
   rpa_adapter_name: string | null;
   is_active: boolean;
