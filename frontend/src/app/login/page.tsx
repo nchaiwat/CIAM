@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   ShieldCheck,
   Lock,
@@ -249,6 +250,16 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+
+        {/* Portal Entry for Employees */}
+        <div className="pt-2 text-center">
+          <Link
+            href="/portal"
+            className="inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-sky-400 hover:text-sky-300 text-xs font-semibold border border-slate-700/80 transition-all shadow-xs"
+          >
+            <span>🏢 พนักงานทั่วไป: ไปยังหน้า App Portal (Single Sign-On) ➜</span>
+          </Link>
+        </div>
 
         {/* Security Compliance Badges */}
         <div className="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[10px] text-slate-400 font-medium">

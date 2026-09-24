@@ -46,9 +46,9 @@ class SapB1Connector(BaseConnector):
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-            headers["X-Management-API-Key"] = self.api_key
+        # SAP B1 Service Layer v2 strictly requires Cookie authentication (B1SESSION / ROUTEID).
+        # Sending 'Authorization: Bearer ...' causes SAP B1 to reject with HTTP 401 code 300
+        # ("Invalid format of authorization header: not starting with Basic").
         if self.b1_session_id:
             cookie_parts = [f"B1SESSION={self.b1_session_id}"]
             if self.route_id:

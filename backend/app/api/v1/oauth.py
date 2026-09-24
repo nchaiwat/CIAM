@@ -343,10 +343,17 @@ def launch_portal_app(
             redirect_uri = candidate
 
     if not redirect_uri:
-        if app.redirect_uris:
-            redirect_uri = app.redirect_uris.split(",")[0].strip()
+        uris = [u.strip() for u in (app.redirect_uris or "").split(",") if u.strip()]
+        # Prioritize production / live enterprise URI (*.windowasia.com) over localhost simulator
+        prod_uri = next((u for u in uris if "windowasia.com" in u), None)
+        if prod_uri:
+            redirect_uri = prod_uri
+        elif app.base_url:
+            redirect_uri = app.base_url
+        elif uris:
+            redirect_uri = uris[0]
         else:
-            redirect_uri = app.base_url or "http://localhost:3000/portal/callback"
+            redirect_uri = "http://localhost:3000/portal/callback"
 
     # Issue one-time code for current user
     code = create_authorization_code(

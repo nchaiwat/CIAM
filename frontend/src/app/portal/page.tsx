@@ -85,9 +85,17 @@ export default function PortalPage() {
     setLaunchingAppCode(app.app_code);
     setOpenMenuAppCode(null);
     try {
-      const res = await api.launchPortalApp(app.client_id, undefined, targetUri);
+      // Determine production destination if targetUri not specified
+      let destUri = targetUri;
+      if (!destUri) {
+        const targets = getAppTargets(app);
+        const prod = targets.find((t) => !t.isSimulator && !t.isLocal);
+        destUri = prod?.uri || app.base_url || undefined;
+      }
+
+      const res = await api.launchPortalApp(app.client_id, undefined, destUri);
       if (res && res.launch_url) {
-        // Open the target app with one-time SSO code
+        // Open the target app with one-time SSO code in a new tab
         window.open(res.launch_url, "_blank", "noopener,noreferrer");
       }
     } catch (err: any) {
@@ -104,7 +112,11 @@ export default function PortalPage() {
     if (raw.length === 0 && app.base_url) {
       raw.push(app.base_url);
     }
-    return raw.map((uri) => {
+    // Filter out simulator callback by default for normal production portal usage
+    const filtered = raw.filter((uri) => !uri.includes("localhost:3000/portal/callback"));
+    const listToMap = filtered.length > 0 ? filtered : raw;
+
+    return listToMap.map((uri) => {
       let label = uri;
       let isSimulator = false;
       let isLocal = false;
@@ -114,17 +126,13 @@ export default function PortalPage() {
         label = "Portal Simulator (CIAM Test)";
         isSimulator = true;
         note = "ทดสอบรับ Token & Claims ในหน้า Portal";
-      } else if (uri.includes("localhost:3001")) {
-        label = "Local IRM App (localhost:3001)";
+      } else if (uri.includes("localhost:")) {
+        label = `Local Dev Server (${uri})`;
         isLocal = true;
-        note = "เปิดเข้าแอป IRM บนเครื่อง Development";
-      } else if (uri.includes("localhost:3002")) {
-        label = "Local QMS App (localhost:3002)";
-        isLocal = true;
-        note = "เปิดเข้าแอป QMS บนเครื่อง Development";
+        note = "เปิดเข้าแอปบนเครื่อง Development";
       } else if (uri.includes("windowasia.com")) {
-        label = "Production Cloud (windowasia.com)";
-        note = "เซิร์ฟเวอร์ Cloud (ต้อง Deploy ก่อนใช้งาน)";
+        label = "ระบบจริง (Production Cloud)";
+        note = uri;
       }
 
       return { uri, label, note, isSimulator, isLocal };
@@ -246,18 +254,17 @@ export default function PortalPage() {
         </div>
       </div>
 
-      {/* SSO Testing Environment Notice */}
+      {/* SSO Instructions Banner */}
       <div className="bg-blue-50/80 border border-blue-200/80 rounded-xl p-4 flex items-start gap-3.5 text-xs text-blue-900 shadow-xs">
         <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
         <div className="space-y-1">
           <div className="font-bold text-blue-950 flex items-center gap-2">
-            <span>คำแนะนำสำหรับการเข้าใช้งานและทดสอบ Single Sign-On (SSO Launch)</span>
-            <span className="px-2 py-0.5 rounded-full bg-blue-200/70 text-blue-800 text-[10px] font-bold">Phase 5.3 Ready</span>
+            <span>คำแนะนำการใช้งานระบบ Single Sign-On (SSO Launch)</span>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">ระบบพร้อมใช้งาน</span>
           </div>
           <p className="text-blue-800 leading-relaxed">
-            • <strong>โหมดทดสอบทันที:</strong> กดปุ่ม <strong>&quot;เข้าสู่ระบบ (SSO Launch)&quot;</strong> เพื่อทดสอบการรับ Authorization Code, ตรวจสอบลายเซ็น RS256 และดูข้อมูลพนักงานผ่าน <em>Portal Callback Simulator</em> ได้ทันที<br />
-            • <strong>โหมด Spoke App บนเครื่อง Local:</strong> หากรันแอป IRM บนเครื่องนี้ (พอร์ต 3001) สามารถกดปุ่มเมนู ▾ ข้างปุ่ม Launch เพื่อเลือกเปิดเข้า <code>http://localhost:3001/auth/callback</code> ได้โดยตรง<br />
-            • <strong>ระบบ Cloud Production (<code>irm.windowasia.com</code>):</strong> ปัจจุบันบนคลาวด์ยังไม่ได้ Deploy โค้ด Phase 5.3 จึงจะยังไม่พบหน้า Callback บนเซิร์ฟเวอร์จริง (HTTP 404) จนกว่าจะนำโค้ดขึ้น Production
+            • <strong>คลิกเพื่อเข้าสู่ระบบทันที:</strong> กดปุ่ม <strong>&quot;เข้าสู่ระบบ (SSO Launch)&quot;</strong> บนการ์ดระบบงานที่ท่านต้องการ ระบบจะเปิดหน้าต่างใหม่และยืนยันตัวตนอัตโนมัติด้วยมาตรฐานความปลอดภัยระดับองค์กร<br />
+            • <strong>เข้าผ่านระบบปลายทางโดยตรง (SP-Initiated):</strong> ท่านยังสามารถเข้าเว็บของระบบนั้นๆ โดยตรง (เช่น <code>irm.windowasia.com</code>) แล้วกดปุ่ม <strong>&quot;เข้าสู่ระบบด้วย Window Asia SSO&quot;</strong> ได้เช่นเดียวกัน
           </p>
         </div>
       </div>
