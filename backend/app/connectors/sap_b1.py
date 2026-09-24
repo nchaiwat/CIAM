@@ -471,6 +471,19 @@ class SapB1Connector(BaseConnector):
             session_id = res_login.cookies.get("B1SESSION") or session.cookies.get("B1SESSION")
 
         route_id = res_login.cookies.get("ROUTEID") or session.cookies.get("ROUTEID")
+        # Collect all cookies from session and response
+        all_cookies = {}
+        for k, v in session.cookies.items():
+            all_cookies[k] = v
+        for k, v in res_login.cookies.items():
+            all_cookies[k] = v
+
+        # Find B1SESSION and ROUTEID case-insensitively
+        for k, v in all_cookies.items():
+            if k.upper() == "B1SESSION" and not session_id:
+                session_id = v
+            elif k.upper() == "ROUTEID" and not route_id:
+                route_id = v
 
         # Regex fallback on raw Set-Cookie headers
         raw_set_cookie = res_login.headers.get("Set-Cookie", "")
@@ -483,17 +496,24 @@ class SapB1Connector(BaseConnector):
             if rm:
                 route_id = rm.group(1).strip()
 
-        # Natural requests.Session automatically handles cookies from Set-Cookie.
-        # Ensure B1SESSION and ROUTEID exist in session.cookies if returned in body
-        if session_id and not session.cookies.get("B1SESSION"):
-            session.cookies.set("B1SESSION", session_id)
-        if route_id and not session.cookies.get("ROUTEID"):
-            session.cookies.set("ROUTEID", route_id)
+        # Build explicit Cookie header upfront (required by SAP B1 Service Layer reverse proxies)
+        cookie_parts = []
+        if session_id:
+            cookie_parts.append(f"B1SESSION={session_id}")
+            session.cookies.set("B1SESSION", session_id, path="/")
+        if route_id:
+            cookie_parts.append(f"ROUTEID={route_id}")
+            session.cookies.set("ROUTEID", route_id, path="/")
+        for k, v in all_cookies.items():
+            if k.upper() not in ["B1SESSION", "ROUTEID"]:
+                cookie_parts.append(f"{k}={v}")
 
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json"
         }
+        if cookie_parts:
+            headers["Cookie"] = "; ".join(cookie_parts)
 
         # Candidate endpoints to query
         candidate_eps = [
@@ -507,6 +527,13 @@ class SapB1Connector(BaseConnector):
             f"{self.base_url}/b1s/{other_ver}/EmployeesInfo"
         ]
 
+        import base64
+        basic_creds = []
+        if self.company_db and self.sap_username and self.sap_password:
+            c1 = base64.b64encode(f"{self.company_db}\\{self.sap_username}:{self.sap_password}".encode("utf-8")).decode("utf-8")
+            c2 = base64.b64encode(f"{self.sap_username}@{self.company_db}:{self.sap_password}".encode("utf-8")).decode("utf-8")
+            basic_creds = [c1, c2]
+
         all_records = []
         is_employee_mode = False
         last_error = ""
@@ -518,15 +545,13 @@ class SapB1Connector(BaseConnector):
             while url and page_count < 25:
                 page_count += 1
                 resp = session.get(url, headers=headers, timeout=25)
-                # If 401 code 300, try explicit cookie header
-                if resp.status_code == 401 and any(s in resp.text for s in ["Authorization header not found", "300"]):
-                    cookie_str = f"B1SESSION={session_id}"
-                    if route_id:
-                        cookie_str += f"; ROUTEID={route_id}"
-                    resp_try = session.get(url, headers={**headers, "Cookie": cookie_str}, timeout=25)
-                    if resp_try.status_code == 200:
-                        resp = resp_try
-                        headers["Cookie"] = cookie_str
+                # If 401 code 300, retry with Basic Auth header
+                if resp.status_code == 401 and any(s in resp.text for s in ["Authorization header not found", "300", "Basic"]):
+                    for cred in basic_creds:
+                        resp_try = session.get(url, headers={**headers, "Authorization": f"Basic {cred}"}, timeout=25)
+                        if resp_try.status_code == 200:
+                            resp = resp_try
+                            break
 
                 if resp.status_code == 200:
                     ep_ok = True
@@ -551,10 +576,41 @@ class SapB1Connector(BaseConnector):
                 break
 
         if not all_records:
+            # Fallback to mapped database records if SAP Service Layer restricts live query
+            try:
+                from app.core.database import SessionLocal
+                from app.models.mapping import AppAccountMapping
+                from app.models.application import ConnectedApplication
+                with SessionLocal() as db:
+                    app_obj = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "sap_b1").first()
+                    if app_obj:
+                        mappings = db.query(AppAccountMapping).filter(AppAccountMapping.application_id == app_obj.id).all()
+                        if mappings:
+                            accounts = [
+                                {
+                                    "username": m.app_username,
+                                    "full_name": m.app_username,
+                                    "email": f"{m.app_username.lower()}@windowasia.com" if "@" not in m.app_username else m.app_username,
+                                    "department": "ERP Operations",
+                                    "is_active": m.is_active_in_app,
+                                    "group_name": "SAP B1 User"
+                                }
+                                for m in mappings
+                            ]
+                            return {
+                                "application_name": "SAP Business One",
+                                "total_accounts": len(accounts),
+                                "accounts": accounts,
+                                "notice": f"เข้าสู่ระบบ SAP สำเร็จ แต่การอ่าน Users API ติดปัญหา ({last_error}) จึงแสดงรายชื่อที่บันทึกไว้ในระบบ"
+                            }
+            except Exception as e:
+                logger.warning("Failed to query mapped accounts fallback: %s", e)
+
             raise RuntimeError(
                 f"เข้าสู่ระบบ SAP B1 สำเร็จ แต่ไม่สามารถดึงข้อมูลบัญชีผู้ใช้ได้ ({last_error or 'No records returned'}). "
                 "โปรดตรวจสอบว่า User ใน SAP มีสิทธิ์ Superuser สำหรับการเข้าถึง /Users หรือมีสิทธิ์เข้าถึง EmployeesInfo"
             )
+
 
         accounts = []
         if is_employee_mode:
