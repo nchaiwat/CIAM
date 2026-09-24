@@ -25,13 +25,17 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
 
-    # Active Directory Gateway
+    # Active Directory Gateway & LDAP
     AD_GATEWAY_URL: str = "http://172.18.0.1:3100"
     AD_ORIGIN_IP: str = "157.173.219.153"
     AD_SYNC_ENABLED: bool = False
     AD_APP_ID: str = "CIAM"
     AD_SECRET_KEY: str = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
     AD_MANAGEMENT_KEY: str = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
+    AD_HOST: str = "192.168.12.11"
+    AD_BASE_DN: str = "DC=wa,DC=net"
+    AD_BIND_DN: str = "ldapbind@wa.net"
+    AD_BIND_PASSWORD: str = "Abcd@1234"
 
     # Telegram Alert
     TELEGRAM_BOT_TOKEN: str = ""
