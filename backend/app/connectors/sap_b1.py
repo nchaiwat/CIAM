@@ -560,6 +560,108 @@ class SapB1Connector(BaseConnector):
             "accounts": accounts
         }
 
+    async def _sync_with_httpx(self) -> dict:
+        api_ver = "v1" if "/b1s/v1" in self.raw_base_url else "v2"
+        other_ver = "v2" if api_ver == "v1" else "v1"
+
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+            session_ok = await self._ensure_session(client)
+            if not session_ok:
+                raise RuntimeError("ไม่สามารถ Login เข้าสู่ SAP Service Layer ได้ กรุณาตรวจสอบ CompanyDB, Username และ Password ในการตั้งค่า")
+
+            cookie_hdr = ""
+            if self.b1_session_id:
+                cookie_hdr = f"B1SESSION={self.b1_session_id}"
+                if self.route_id:
+                    cookie_hdr += f"; ROUTEID={self.route_id}"
+
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
+            if cookie_hdr:
+                headers["Cookie"] = cookie_hdr
+
+            candidate_eps = [
+                f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
+                f"{self.base_url}/b1s/{api_ver}/Users",
+                f"{self.base_url}/b1s/{other_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
+                f"{self.base_url}/b1s/{other_ver}/Users",
+                f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active",
+                f"{self.base_url}/b1s/{other_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active"
+            ]
+
+            all_records = []
+            is_employee_mode = False
+            last_error = ""
+
+            for ep in candidate_eps:
+                url = ep
+                ep_ok = False
+                while url:
+                    res = await client.get(url, headers=headers)
+                    if res.status_code == 200:
+                        ep_ok = True
+                        is_employee_mode = "EmployeesInfo" in ep
+                        data = res.json()
+                        raw_items = data.get("value", [])
+                        all_records.extend(raw_items)
+
+                        next_link = data.get("@odata.nextLink") or data.get("odata.nextLink")
+                        if next_link:
+                            if next_link.startswith("http"):
+                                url = next_link
+                            else:
+                                base_prefix = f"/b1s/{api_ver}/" if f"/b1s/{api_ver}/" in ep else f"/b1s/{other_ver}/"
+                                url = f"{self.base_url}{base_prefix}{next_link.lstrip('/')}"
+                        else:
+                            break
+                    else:
+                        last_error = f"HTTP {res.status_code}: {res.text[:250]}"
+                        break
+                if ep_ok:
+                    break
+
+            if not all_records:
+                if last_error:
+                    raise RuntimeError(f"SAP B1 ตอบกลับข้อผิดพลาด ({last_error})")
+                return {"application_name": "SAP Business One", "total_accounts": 0, "accounts": []}
+
+            accounts = []
+            if is_employee_mode:
+                for emp in all_records:
+                    eid = str(emp.get("EmployeeID") or "")
+                    first = emp.get("FirstName") or ""
+                    last = emp.get("LastName") or ""
+                    fullname = f"{first} {last}".strip() or eid
+                    email = emp.get("eMail")
+                    accounts.append({
+                        "username": email.split("@")[0] if email and "@" in email else f"emp_{eid}",
+                        "full_name": fullname,
+                        "email": email,
+                        "department": str(emp.get("Department")) if emp.get("Department") is not None and emp.get("Department") != -2 else None,
+                        "is_active": emp.get("Active") != "tNO",
+                        "group_name": "SAP Employee"
+                    })
+            else:
+                for u in all_records:
+                    ucode = u.get("UserCode")
+                    if ucode:
+                        accounts.append({
+                            "username": ucode,
+                            "full_name": u.get("UserName") or ucode,
+                            "email": u.get("eMail"),
+                            "department": str(u.get("Department")) if u.get("Department") is not None and u.get("Department") != -2 else None,
+                            "is_active": u.get("Locked") != "tYES",
+                            "group_name": "SAP B1 User"
+                        })
+
+            return {
+                "application_name": "SAP Business One",
+                "total_accounts": len(accounts),
+                "accounts": accounts
+            }
+
     async def sync_inventory(self) -> dict:
         if not self.base_url.startswith("http://") and not self.base_url.startswith("https://"):
             return {
@@ -585,6 +687,10 @@ class SapB1Connector(BaseConnector):
                 ]
             }
 
-        import asyncio
-        return await asyncio.to_thread(self._sync_with_requests_sync)
+        try:
+            import requests  # noqa: F401
+            import asyncio
+            return await asyncio.to_thread(self._sync_with_requests_sync)
+        except ImportError:
+            return await self._sync_with_httpx()
 
