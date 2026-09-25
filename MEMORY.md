@@ -185,4 +185,25 @@ FRONTEND_URL=http://localhost:3000
   3. Dynamic Failover: Spoke apps can fallback directly to AD Gateway (`http://192.168.12.11:3100/api/v2/login` per `ADAuthen.md`) if CIAM health check fails.
   4. Real-time Telegram/LINE alert triggered on break-glass activation.
 
+---
+
+## 7. VPS Deployment Commands & Docker Service Names
+
+> [!IMPORTANT]
+> **CRITICAL RULE FOR AGENT:**
+> Service names in `docker-compose.yml` are:
+> - Backend: **`api`**
+> - Frontend: **`web`** (⚠️ NEVER use `frontend`! The service is named `web`)
+> - Database: **`postgres`**
+>
+> **The EXACT deployment commands on VPS (`/var/www/Ciam`):**
+> ```bash
+> cd /var/www/Ciam
+> git pull
+> docker compose build api web
+> docker compose up -d api web
+> ```
+> - If updating **Backend only**: `docker compose build api && docker compose up -d api`
+> - If updating **Frontend only**: `docker compose build web && docker compose up -d web`
+
 
