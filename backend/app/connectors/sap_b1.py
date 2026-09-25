@@ -502,25 +502,29 @@ class SapB1Connector(BaseConnector):
                 f"(Cookies: {dict(res_login.cookies)}, Set-Cookie: {raw_set_cookie[:100]})"
             )
 
-        # Build explicit Cookie header upfront (required by SAP B1 Service Layer reverse proxies)
-        cookie_parts = [f"B1SESSION={session_id}"]
-        if route_id:
-            cookie_parts.append(f"ROUTEID={route_id}")
-
-        clean_headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }
-        if cookie_parts:
-            clean_headers["Cookie"] = "; ".join(cookie_parts)
-
-        # Candidate endpoints to query: only use the api_ver where Login succeeded
+        # Candidate endpoints to query: optimize with $select to prevent permission & timeout issues
         candidate_eps = [
-            f"{self.base_url}/b1s/{api_ver}/Users?$top=200",
+            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked&$top=250",
+            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
             f"{self.base_url}/b1s/{api_ver}/Users",
-            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$top=200",
+            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active&$top=250",
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo"
         ]
+
+        from urllib.parse import urlparse
+        domain = urlparse(self.base_url).hostname
+        if session_id:
+            if domain:
+                session.cookies.set("B1SESSION", session_id, domain=domain, path="/")
+            session.cookies.set("B1SESSION", session_id, path="/")
+        if route_id:
+            if domain:
+                session.cookies.set("ROUTEID", route_id, domain=domain, path="/")
+            session.cookies.set("ROUTEID", route_id, path="/")
+
+        cookie_str = f"B1SESSION={session_id}"
+        if route_id:
+            cookie_str += f"; ROUTEID={route_id}"
 
         all_records = []
         is_employee_mode = False
@@ -532,13 +536,18 @@ class SapB1Connector(BaseConnector):
             page_count = 0
             while url and page_count < 25:
                 page_count += 1
-                # Try 1: Explicit clean Cookie header
-                resp = session.get(url, headers=clean_headers, timeout=20)
-                # Try 2: If 401, try natural session cookies (like POS2Invoice)
+                # Attempt 1: Standard session.get with native CookieJar (matching POS2Invoice)
+                resp = session.get(url, headers={"Accept": "application/json"}, timeout=20)
+                # Attempt 2: If 401 code 300, try explicit Cookie header via standalone requests.get
                 if resp.status_code == 401:
-                    resp_nat = session.get(url, headers={"Accept": "application/json"}, timeout=20)
-                    if resp_nat.status_code == 200:
-                        resp = resp_nat
+                    resp_try = requests.get(
+                        url,
+                        headers={"Accept": "application/json", "Cookie": cookie_str},
+                        verify=False,
+                        timeout=20
+                    )
+                    if resp_try.status_code == 200:
+                        resp = resp_try
 
                 if resp.status_code == 200:
                     ep_ok = True
@@ -559,58 +568,16 @@ class SapB1Connector(BaseConnector):
                 else:
                     last_error = f"HTTP {resp.status_code}: {resp.text[:250]}"
                     logger.warning("SAP endpoint query %s failed (%s). Moving to next candidate...", url, last_error)
-                    # If /Users fails with 401/403 (e.g. requires Superuser), immediately proceed to /EmployeesInfo
                     break
             if ep_ok and all_records:
                 break
 
         if not all_records:
-            # Fallback to mapped database records or MasterIdentity if SAP Service Layer restricts live query
-            try:
-                from app.core.database import SessionLocal
-                from app.models.mapping import AppAccountMapping
-                from app.models.application import ConnectedApplication
-                from app.models.identity import MasterIdentity
-                with SessionLocal() as db:
-                    app_obj = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "sap_b1").first()
-                    accounts = []
-                    if app_obj:
-                        mappings = db.query(AppAccountMapping).filter(AppAccountMapping.application_id == app_obj.id).all()
-                        if mappings:
-                            accounts = [
-                                {
-                                    "username": m.app_username,
-                                    "full_name": m.app_username,
-                                    "email": f"{m.app_username.lower()}@windowasia.com" if "@" not in m.app_username else m.app_username,
-                                    "department": "ERP Operations",
-                                    "is_active": m.is_active_in_app,
-                                    "group_name": "SAP B1 User"
-                                }
-                                for m in mappings
-                            ]
-                    if not accounts:
-                        # Fallback to Master Identities active in corporate directory
-                        identities = db.query(MasterIdentity).filter(MasterIdentity.is_active_in_ad == True).all()
-                        accounts = [
-                            {
-                                "username": ident.username,
-                                "full_name": ident.full_name or ident.username,
-                                "email": ident.email or f"{ident.username.lower()}@windowasia.com",
-                                "department": ident.department or "ERP Operations",
-                                "is_active": True,
-                                "group_name": "SAP B1 User"
-                            }
-                            for ident in identities
-                        ]
-                    if accounts:
-                        return {
-                            "application_name": "SAP Business One",
-                            "total_accounts": len(accounts),
-                            "accounts": accounts,
-                            "notice": f"เข้าสู่ระบบ SAP สำเร็จ (HTTP 200) แต่การอ่าน Users API ตอบกลับ ({last_error}) จึงแสดงรายชื่อที่บันทึกไว้ในระบบ"
-                        }
-            except Exception as e:
-                logger.warning("Failed to query mapped accounts fallback: %s", e)
+            # Strictly return SAP B1 error - never mix other identities into this spoke
+            raise RuntimeError(
+                f"เข้าสู่ระบบ SAP B1 สำเร็จ แต่ไม่สามารถดึงข้อมูลบัญชีผู้ใช้จากระบบ SAP B1 ได้ ({last_error or 'ไม่มีข้อมูลตอบกลับ'}). "
+                "โปรดตรวจสอบว่า User ใน SAP มีสิทธิ์ Superuser สำหรับการเข้าถึง /Users หรือมีสิทธิ์เข้าถึง EmployeesInfo หรือไม่"
+            )
 
 
         accounts = []
@@ -671,13 +638,15 @@ class SapB1Connector(BaseConnector):
                 headers["Cookie"] = cookie_hdr
 
             candidate_eps = [
+                f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked&$top=250",
+                f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
                 f"{self.base_url}/b1s/{api_ver}/Users?$top=200",
                 f"{self.base_url}/b1s/{api_ver}/Users",
-                f"{self.base_url}/b1s/{other_ver}/Users?$top=200",
+                f"{self.base_url}/b1s/{other_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked&$top=250",
                 f"{self.base_url}/b1s/{other_ver}/Users",
-                f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$top=200",
+                f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active&$top=250",
                 f"{self.base_url}/b1s/{api_ver}/EmployeesInfo",
-                f"{self.base_url}/b1s/{other_ver}/EmployeesInfo?$top=200",
+                f"{self.base_url}/b1s/{other_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active&$top=250",
                 f"{self.base_url}/b1s/{other_ver}/EmployeesInfo"
             ]
 
