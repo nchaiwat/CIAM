@@ -500,20 +500,15 @@ class SapB1Connector(BaseConnector):
         cookie_parts = []
         if session_id:
             cookie_parts.append(f"B1SESSION={session_id}")
-            session.cookies.set("B1SESSION", session_id, path="/")
         if route_id:
             cookie_parts.append(f"ROUTEID={route_id}")
-            session.cookies.set("ROUTEID", route_id, path="/")
-        for k, v in all_cookies.items():
-            if k.upper() not in ["B1SESSION", "ROUTEID"]:
-                cookie_parts.append(f"{k}={v}")
 
-        headers = {
+        clean_headers = {
             "Accept": "application/json",
             "Content-Type": "application/json"
         }
         if cookie_parts:
-            headers["Cookie"] = "; ".join(cookie_parts)
+            clean_headers["Cookie"] = "; ".join(cookie_parts)
 
         # Candidate endpoints to query: only use the api_ver where Login succeeded
         candidate_eps = [
@@ -522,13 +517,6 @@ class SapB1Connector(BaseConnector):
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$top=200",
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo"
         ]
-
-        import base64
-        basic_creds = []
-        if self.company_db and self.sap_username and self.sap_password:
-            c1 = base64.b64encode(f"{self.company_db}\\{self.sap_username}:{self.sap_password}".encode("utf-8")).decode("utf-8")
-            c2 = base64.b64encode(f"{self.sap_username}@{self.company_db}:{self.sap_password}".encode("utf-8")).decode("utf-8")
-            basic_creds = [c1, c2]
 
         all_records = []
         is_employee_mode = False
@@ -540,22 +528,8 @@ class SapB1Connector(BaseConnector):
             page_count = 0
             while url and page_count < 25:
                 page_count += 1
-                # Attempt 1: Natural requests.Session cookies (like POS2Invoice)
-                resp = session.get(url, headers={"Accept": "application/json"}, timeout=25)
-
-                # Attempt 2: If 401 code 300, try with explicit headers (including Cookie)
-                if resp.status_code == 401 and headers.get("Cookie"):
-                    resp_try = session.get(url, headers=headers, timeout=25)
-                    if resp_try.status_code == 200:
-                        resp = resp_try
-
-                # Attempt 3: If still 401 code 300, try Basic Auth header
-                if resp.status_code == 401 and any(s in resp.text for s in ["Authorization header not found", "300", "Basic"]):
-                    for cred in basic_creds:
-                        resp_try = session.get(url, headers={"Accept": "application/json", "Authorization": f"Basic {cred}"}, timeout=25)
-                        if resp_try.status_code == 200:
-                            resp = resp_try
-                            break
+                # Directly send clean Cookie header on every request to avoid "Authorization header not found"
+                resp = session.get(url, headers=clean_headers, timeout=25)
 
                 if resp.status_code == 200:
                     ep_ok = True
@@ -575,7 +549,8 @@ class SapB1Connector(BaseConnector):
                         break
                 else:
                     last_error = f"HTTP {resp.status_code}: {resp.text[:250]}"
-                    # If /Users fails with 401/403 (requires Superuser), immediately proceed to /EmployeesInfo
+                    logger.warning("SAP endpoint query %s failed (%s). Moving to next candidate...", url, last_error)
+                    # If /Users fails with 401/403 (e.g. requires Superuser), immediately proceed to /EmployeesInfo
                     break
             if ep_ok and all_records:
                 break
