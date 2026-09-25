@@ -496,10 +496,14 @@ class SapB1Connector(BaseConnector):
             if rm:
                 route_id = rm.group(1).strip()
 
+        if not session_id:
+            raise RuntimeError(
+                f"เข้าสู่ระบบ SAP B1 สำเร็จ (HTTP {res_login.status_code}) แต่ระบบไม่พบ SessionId หรือ B1SESSION "
+                f"(Cookies: {dict(res_login.cookies)}, Set-Cookie: {raw_set_cookie[:100]})"
+            )
+
         # Build explicit Cookie header upfront (required by SAP B1 Service Layer reverse proxies)
-        cookie_parts = []
-        if session_id:
-            cookie_parts.append(f"B1SESSION={session_id}")
+        cookie_parts = [f"B1SESSION={session_id}"]
         if route_id:
             cookie_parts.append(f"ROUTEID={route_id}")
 
