@@ -77,7 +77,11 @@ export default function LoginPage() {
 
       setSuccess(true);
       setTimeout(() => {
-        router.push("/");
+        if (res.user?.role === "PORTAL_USER") {
+          router.push("/portal");
+        } else {
+          router.push("/");
+        }
       }, 700);
     } catch (err: any) {
       console.error("Login attempt failed:", err);

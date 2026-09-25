@@ -190,7 +190,8 @@ def init_db():
                 "department": "Purchasing",
                 "is_active_in_ad": True,
                 "mappings": [
-                    {"app": "irm", "role": "PU User", "active": True}
+                    {"app": "irm", "role": "PU User", "active": True},
+                    {"app": "sap_b1", "role": "SAP B1 User", "active": True}
                 ]
             },
             {
@@ -200,7 +201,8 @@ def init_db():
                 "department": "Purchasing",
                 "is_active_in_ad": True,
                 "mappings": [
-                    {"app": "irm", "role": "PU User", "active": True}
+                    {"app": "irm", "role": "PU User", "active": True},
+                    {"app": "sap_b1", "role": "SAP B1 User", "active": True}
                 ]
             },
             {
@@ -210,7 +212,8 @@ def init_db():
                 "department": "Purchasing",
                 "is_active_in_ad": True,
                 "mappings": [
-                    {"app": "irm", "role": "PU User", "active": True}
+                    {"app": "irm", "role": "PU User", "active": True},
+                    {"app": "sap_b1", "role": "SAP B1 Superuser", "active": True}
                 ]
             },
             {
