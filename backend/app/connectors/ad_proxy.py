@@ -345,56 +345,12 @@ class AdProxyConnector(BaseConnector):
                     "notice": f"ดึงข้อมูลสดจาก Active Directory Domain Controller (DC=wa,DC=net) สำเร็จ {len(ldap_users)} บัญชีผู้ใช้จริง"
                 }
 
-            # 2. Fallback to registered identities in CIAM database if direct LDAP 389 is blocked on VPS
-            try:
-                from app.core.database import SessionLocal
-                from app.models.identity import MasterIdentity
-                from app.models.mapping import AppAccountMapping
-                from app.models.application import ConnectedApplication
-                with SessionLocal() as db:
-                    app_obj = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "ad").first()
-                    mapped_accounts = []
-                    if app_obj:
-                        mappings = db.query(AppAccountMapping).filter(AppAccountMapping.application_id == app_obj.id).all()
-                        for m in mappings:
-                            mapped_accounts.append({
-                                "username": m.app_username,
-                                "full_name": m.app_username,
-                                "email": f"{m.app_username.lower()}@windowasia.com" if "@" not in m.app_username else m.app_username,
-                                "department": "Enterprise Domain",
-                                "employee_id": None,
-                                "is_active": m.is_active_in_app,
-                                "group_name": "Domain Users"
-                            })
-                    
-                    if not mapped_accounts:
-                        identities = db.query(MasterIdentity).filter(MasterIdentity.is_active == True).all()
-                        for u in identities:
-                            mapped_accounts.append({
-                                "username": u.username,
-                                "full_name": u.full_name or u.username,
-                                "email": u.email,
-                                "department": u.department,
-                                "employee_id": u.employee_id,
-                                "is_active": u.is_active,
-                                "group_name": "Domain Users"
-                            })
-
-                    if mapped_accounts:
-                        return {
-                            "application_name": "Active Directory",
-                            "total_accounts": len(mapped_accounts),
-                            "accounts": mapped_accounts,
-                            "notice": f"AD Gateway ออนไลน์ (Port 3100) แต่การเชื่อมต่อ LDAP (:389) ข้ามเครือข่าย VPS ถูกจำกัด จึงแสดงบัญชีที่เชื่อมโยงไว้ {len(mapped_accounts)} บัญชี"
-                        }
-            except Exception as e:
-                logger.warning("Failed to fallback to database accounts for AD: %s", e)
-
+            # 2. Direct LDAP is unreachable from VPS (Port 389 blocked across VPN)
             return {
                 "application_name": "Active Directory",
                 "total_accounts": 0,
                 "accounts": [],
-                "notice": "AD Agent ออนไลน์ปกติ (Port 3100) แต่ยังไม่มี Extension ดึงผู้ใช้ (/api/v1/ad/users) และการเชื่อมต่อ LDAP (:389) ไปยัง Domain Controller ขัดข้อง"
+                "notice": "AD Gateway ออนไลน์ (Port 3100) แต่เป็น Authentication Gateway สำหรับตรวจรหัสผ่าน และพอร์ต LDAP (:389) ยังไม่ได้เปิดข้ามเครือข่าย VPN มายัง VPS จึงไม่สามารถอ่านรายชื่อทั้งหมดของโดเมนได้"
             }
 
 

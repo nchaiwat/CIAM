@@ -16,6 +16,7 @@ import {
   Building2,
   CheckCircle2,
   ShieldAlert,
+  Clock,
 } from "lucide-react";
 import { ciamApi } from "@/lib/api";
 
@@ -33,8 +34,19 @@ export default function LoginPage() {
   const [corporateFax, setCorporateFax] = useState("");
   const [securityHoney, setSecurityHoney] = useState("");
 
-  // Check if already authenticated
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  // Check if already authenticated or session expired
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("expired") === "1") {
+        setSessionExpired(true);
+        localStorage.removeItem("ciam_token");
+        localStorage.removeItem("ciam_user");
+        return;
+      }
+    }
     const existingToken = localStorage.getItem("ciam_token");
     if (existingToken) {
       router.replace("/");
@@ -118,6 +130,16 @@ export default function LoginPage() {
             ระบบนี้สำหรับผู้ดูแลระบบที่ได้รับอนุญาตเท่านั้น การพยายามเข้าถึงโดยไม่ได้รับอนุญาตมีโทษตาม พ.ร.บ. คอมพิวเตอร์ พ.ศ. 2560 และมีการบันทึก Audit Logs ตลอดเวลา
           </div>
         </div>
+
+        {/* Session Expired Banner */}
+        {sessionExpired && !errorMsg && (
+          <div className="bg-amber-950/80 border border-amber-500/80 rounded-xl p-3.5 flex items-start gap-2.5 text-left animate-in fade-in zoom-in-95 duration-200">
+            <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-200 leading-snug">
+              <span className="font-bold">เซสชันการใช้งานของคุณหมดอายุ:</span> กรุณาเข้าสู่ระบบใหม่อีกครั้งเพื่อความปลอดภัยในการเข้าถึง
+            </div>
+          </div>
+        )}
 
         {/* Error Alert Message */}
         {errorMsg && (

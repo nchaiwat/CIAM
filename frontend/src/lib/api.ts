@@ -275,6 +275,16 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
       cache: "no-store",
     });
     if (!res.ok) {
+      if (res.status === 401 && typeof window !== "undefined") {
+        localStorage.removeItem("ciam_token");
+        localStorage.removeItem("ciam_user");
+        const currentPath = window.location.pathname;
+        if (!currentPath.includes("/login") && !currentPath.includes("/portal/callback")) {
+          window.location.href = `/login?expired=1&redirect=${encodeURIComponent(currentPath + window.location.search)}`;
+          return Promise.reject(new Error("เซสชันการใช้งานของคุณหมดอายุแล้ว กำลังนำทางไปหน้าเข้าสู่ระบบ...")) as any;
+        }
+      }
+
       const errBody = await res.text();
       let errorMsg = `API Error [${res.status}]: ${errBody}`;
       try {

@@ -515,16 +515,12 @@ class SapB1Connector(BaseConnector):
         if cookie_parts:
             headers["Cookie"] = "; ".join(cookie_parts)
 
-        # Candidate endpoints to query
+        # Candidate endpoints to query: only use the api_ver where Login succeeded
         candidate_eps = [
             f"{self.base_url}/b1s/{api_ver}/Users?$top=200",
             f"{self.base_url}/b1s/{api_ver}/Users",
-            f"{self.base_url}/b1s/{other_ver}/Users?$top=200",
-            f"{self.base_url}/b1s/{other_ver}/Users",
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$top=200",
-            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo",
-            f"{self.base_url}/b1s/{other_ver}/EmployeesInfo?$top=200",
-            f"{self.base_url}/b1s/{other_ver}/EmployeesInfo"
+            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo"
         ]
 
         import base64
@@ -544,11 +540,19 @@ class SapB1Connector(BaseConnector):
             page_count = 0
             while url and page_count < 25:
                 page_count += 1
-                resp = session.get(url, headers=headers, timeout=25)
-                # If 401 code 300, retry with Basic Auth header
+                # Attempt 1: Natural requests.Session cookies (like POS2Invoice)
+                resp = session.get(url, headers={"Accept": "application/json"}, timeout=25)
+
+                # Attempt 2: If 401 code 300, try with explicit headers (including Cookie)
+                if resp.status_code == 401 and headers.get("Cookie"):
+                    resp_try = session.get(url, headers=headers, timeout=25)
+                    if resp_try.status_code == 200:
+                        resp = resp_try
+
+                # Attempt 3: If still 401 code 300, try Basic Auth header
                 if resp.status_code == 401 and any(s in resp.text for s in ["Authorization header not found", "300", "Basic"]):
                     for cred in basic_creds:
-                        resp_try = session.get(url, headers={**headers, "Authorization": f"Basic {cred}"}, timeout=25)
+                        resp_try = session.get(url, headers={"Accept": "application/json", "Authorization": f"Basic {cred}"}, timeout=25)
                         if resp_try.status_code == 200:
                             resp = resp_try
                             break
@@ -565,12 +569,13 @@ class SapB1Connector(BaseConnector):
                         if next_link.startswith("http"):
                             url = next_link
                         else:
-                            base_prefix = f"/b1s/{api_ver}/" if f"/b1s/{api_ver}/" in ep else f"/b1s/{other_ver}/"
+                            base_prefix = f"/b1s/{api_ver}/"
                             url = f"{self.base_url}{base_prefix}{next_link.lstrip('/')}"
                     else:
                         break
                 else:
                     last_error = f"HTTP {resp.status_code}: {resp.text[:250]}"
+                    # If /Users fails with 401/403 (requires Superuser), immediately proceed to /EmployeesInfo
                     break
             if ep_ok and all_records:
                 break
