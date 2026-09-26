@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date:** 26 กันยายน 2026 (Local Time: ~15:05 ICT)  
+> **Date:** 26 กันยายน 2026 (Local Time: ~15:17 ICT)  
 > **Repository:** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Workspace Local:** `D:\Python\Central-IAM`  
 > **Production VPS:** `/var/www/Ciam` (Linux Ubuntu)
@@ -45,7 +45,7 @@ docker compose up -d api web
 ## 3. สถานะการพัฒนางานล่าสุด (Recent Progress & Key Commits)
 
 ### 1) การแก้ไข Authentication & SSO Login (`auth.py` & `login/page.tsx`)
-- **การแก้ไข (Commit `d855850` & `fdabed3`):**
+- **การแก้ไข (Commit `d855850`, `fdabed3`, `0beb1ae`):**
   - เพิ่ม Fallback ให้ตรวจสอบรหัสผ่านคู่ขนานกับ **Active Directory Gateway (`/api/v2/login`)**
   - **ส่ง Security Headers ครบถ้วน:** ส่ง `X-App-Id`, `X-Secret-Key`, `X-Management-API-Key`, `X-Request-Timestamp`, `X-Forwarded-For`
   - **Flexible Response Evaluation:** ตรวจสอบทั้ง `success: true`, `authenticated: true`, `status: "success"`, `code: 200` และ User Data Object
@@ -53,19 +53,30 @@ docker compose up -d api web
   - **Role & Portal Redirect (ข้อกำหนดข้อ 3):**
     - บัญชี Admin (`Chaiwat.N`, `admin`, `superadmin`) ได้สิทธิ์ `SUPER_ADMIN` และเข้าสู่ Dashboard หลัก (`/`)
     - พนักงานทั่วไปได้สิทธิ์ `PORTAL_USER` และ Redirect ไปยังหน้า SSO Portal (`/portal`) ทันทีเพื่อ Launch แอปอื่นๆ ผ่าน OIDC โดยไม่ต้องพึ่งพาการดึง List ทั้งหมดจาก AD
+  - **⚠️ BUG FIX (Commit `0beb1ae`):** เพิ่ม `import logging` และ `logger = logging.getLogger("ciam.auth")` ที่ขาดหายไปจาก `auth.py` — นี่คือ Root Cause ที่ทำให้ AD Login ล้มเหลวทุกครั้งด้วย `NameError: name 'logger' is not defined` (AD Auth block crash ก่อนส่ง request ออก)
 
 ### 2) การแก้ไข Spoke SAP Business One (`sap_b1.py`)
 - **ปัญหาเดิม:** 
   1. เมื่อทดสอบบน VPS การยิงดึงบัญชีจาก SAP B1 Service Layer ติด `HTTP 401 code 300 (Authorization header not found)`
   2. มีการเรียก `session.cookies.set(...)` ซ้ำซ้อนลงใน Jar หลายครั้ง ทำให้ส่งคุกกี้ `B1SESSION` ซ้ำ 3 ตัว ส่งผลให้ Apache LB ของ SAP Service Layer ปฏิเสธ
-- **การแก้ไข (Commit `901a09a` & `fdabed3`):**
-  - **แก้ไข Cookie Handling:** ปล่อยให้ `requests.Session` บริหารจัดการ Cookie ตามธรรมชาติแบบเดียวกับ `POS2Invoice` ที่ใช้งานได้บน Production และป้องกันไม่ให้เกิดคุกกี้ซ้ำซ้อน
-  - **Superuser vs EmployeesInfo Fallback:** เนื่องจาก Endpoint `/b1s/v2/Users` (ตาราง `OUSR`) ต้องใช้สิทธิ์ Superuser หากผู้ใช้ SAP ที่นำมาเชื่อมต่อไม่ใช่ Superuser ระบบจะ Fallback ไปดึงจาก `/b1s/v2/EmployeesInfo` (ตาราง `OHEM` พนักงาน) ซึ่งเป็นสิทธิ์ทั่วไปให้อัตโนมัติ
-  - **Strict Spoke Isolation:** ดึงเฉพาะบัญชีจริงจาก SAP B1 ไม่นำ MasterIdentity หรือ AD มาปน
+- **การแก้ไข (Commit `901a09a`, `fdabed3`, `0beb1ae`):**
+  - **⚠️ BUG FIX (Commit `0beb1ae`):** เปลี่ยน cookie path จาก `path=f"/b1s/{api_ver}"` เป็น **`path="/"`** — Root Cause ที่ทำให้ `requests.Session` ไม่ส่ง B1SESSION cookie ไปพร้อมกับ request เพราะ cookie ถูก scope ไว้แค่ path `/b1s/v2` แต่ SAP Service Layer ที่ deploy ผ่าน HTTPS reverse proxy ต้องการ cookie ระดับ root path
+  - เปลี่ยนกลยุทธ์เป็น **Explicit Cookie Header as Primary Strategy**: ใส่ `Cookie: B1SESSION=...; ROUTEID=...` เป็น header ตรงๆ เสมอ แทนที่จะพึ่ง session jar (ซึ่ง HTTPS proxy อาจตัดทิ้ง)
+  - **Superuser vs EmployeesInfo Fallback:** ยังคงอยู่ครบ
+  - **Strict Spoke Isolation:** ดึงเฉพาะบัญชีจริงจาก SAP B1
 
 ### 3) การแก้ไข Factory & AD Proxy (`factory.py` & `ad_proxy.py`)
 - เพิ่ม `from app.core.config import settings` ใน `factory.py`
 - ตัด `/api/v2/login` ออกจาก `base_url` ใน `ad_proxy.py` อัตโนมัติ
+
+### 4) ข้อมูล AD Sync Agent (On-Prem) — สิ่งที่ต้องดำเนินการบน Server On-Prem
+> **สถานะ:** AD Agent (Port 3100) ยังไม่ได้ implement endpoints เพิ่มเติม → ทำให้ List AD Account ไม่ได้
+- ต้องให้ทีม On-Prem อัปเดต `registry.json` ใน AD Sync Agent เพิ่ม `app_id: "CIAM"` และเพิ่ม VPS IP ใน `allowed_ips`
+- ต้องให้ทีม On-Prem สร้าง endpoint ตาม `AD_SYNC_AGENT_CIAM_EXTENSION.md`:
+  - `GET /health`
+  - `GET /api/v1/ad/users` (สำหรับ Reconciliation)
+  - `PATCH /api/v1/ad/users/:username/status` (สำหรับ Offboarding)
+- **Login ผ่าน AD ทำงานได้ตามปกติ** ผ่าน `POST /api/v2/login` ที่มีอยู่แล้ว (ไม่ต้องสร้างใหม่)
 
 ---
 
