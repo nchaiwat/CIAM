@@ -502,6 +502,13 @@ class SapB1Connector(BaseConnector):
                 f"(Cookies: {dict(res_login.cookies)}, Set-Cookie: {raw_set_cookie[:100]})"
             )
 
+        logger.info(
+            "SAP B1 Login OK | session_id=%s... | route_id=%s | login_data_keys=%s",
+            session_id[:8] if session_id else "None",
+            route_id or "None",
+            list(login_data.keys()) if login_data else []
+        )
+
         # Candidate endpoints to query: optimize with $select to prevent permission & timeout issues
         candidate_eps = [
             f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked&$top=250",
@@ -532,6 +539,13 @@ class SapB1Connector(BaseConnector):
         all_records = []
         is_employee_mode = False
         last_error = ""
+
+        logger.info(
+            "SAP B1 starting endpoint queries | cookie_str='%s' | base_url=%s | api_ver=%s",
+            cookie_str[:40] if cookie_str else "EMPTY!",
+            self.base_url,
+            api_ver
+        )
 
         for ep in candidate_eps:
             url = ep
@@ -579,8 +593,12 @@ class SapB1Connector(BaseConnector):
                     else:
                         break
                 else:
-                    last_error = f"HTTP {resp.status_code}: {resp.text[:250]}"
-                    logger.warning("SAP endpoint query %s failed (%s). Moving to next candidate...", url, last_error)
+                    last_error = f"HTTP {resp.status_code}: {resp.text[:400]}"
+                    logger.warning(
+                        "SAP endpoint FAILED: %s | cookie_sent=%s | status=%s | response=%s",
+                        url, cookie_str[:30] if cookie_str else "NONE",
+                        resp.status_code, resp.text[:200]
+                    )
                     break
             if ep_ok and all_records:
                 break
