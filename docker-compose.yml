@@ -48,6 +48,7 @@ services:
       - AD_SECRET_KEY=${AD_SECRET_KEY:-aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823}
       - KEYS_DIR=/app/keys
     volumes:
+      - ./backend:/app
       - ciam_keys:/app/keys
     labels:
       - "traefik.enable=true"

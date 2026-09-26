@@ -442,7 +442,7 @@ async def sync_application_inventory(
             db.query(AppAccountMapping)
             .filter(
                 AppAccountMapping.application_id == app.id,
-                ~func.lower(AppAccountMapping.app_username).in_(live_usernames)
+                ~func.trim(func.lower(AppAccountMapping.app_username)).in_(live_usernames)
             )
             .all()
         )
@@ -451,7 +451,7 @@ async def sync_application_inventory(
 
         db.flush()
 
-        # Deduplicate any remaining mappings for this app that differ only by case
+        # Deduplicate any remaining mappings for this app that differ only by case or duplicate identity
         all_app_mappings = (
             db.query(AppAccountMapping)
             .filter(AppAccountMapping.application_id == app.id)
@@ -459,12 +459,15 @@ async def sync_application_inventory(
             .all()
         )
         seen_lower = set()
+        seen_identity_ids = set()
         for m in all_app_mappings:
-            low = m.app_username.strip().lower()
-            if low in seen_lower:
+            low = (m.app_username or "").strip().lower()
+            if low in seen_lower or (m.identity_id and m.identity_id in seen_identity_ids):
                 db.delete(m)
             else:
                 seen_lower.add(low)
+                if m.identity_id:
+                    seen_identity_ids.add(m.identity_id)
 
         # If syncing AD, mark MasterIdentity as inactive in AD if they are no longer in AD inventory
         if app.app_code.lower() == "ad":
