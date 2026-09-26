@@ -514,53 +514,43 @@ class SapB1Connector(BaseConnector):
             list(login_data.keys()) if login_data else []
         )
 
-        # Ensure all cookies in session do not have secure flag so requests sends them over HTTP or HTTPS
+        # Unset secure flag so cookies are sent over HTTP connections
         for c in session.cookies:
             c.secure = False
 
-        # Inject cookies with root path and domain so they match all endpoints
-        from urllib.parse import urlparse
-        host = urlparse(self.base_url).hostname or ""
-        if session_id:
-            session.cookies.set("B1SESSION", session_id, domain=host, path="/", secure=False)
-            session.cookies.set("B1SESSION", session_id, path="/", secure=False)
-        if route_id:
-            session.cookies.set("ROUTEID", route_id, domain=host, path="/", secure=False)
-            session.cookies.set("ROUTEID", route_id, path="/", secure=False)
-
-        # Build clean Cookie header string
-        cookie_parts = []
-        if session_id:
-            cookie_parts.append(f"B1SESSION={session_id}")
-        if route_id:
-            cookie_parts.append(f"ROUTEID={route_id}")
-        for c in session.cookies:
-            if c.name.upper() not in ["B1SESSION", "ROUTEID"] and c.value:
-                cookie_parts.append(f"{c.name}={c.value}")
-        cookie_str = "; ".join(cookie_parts)
+        # Only inject into session.cookies if not already captured by requests.Session from Login response
+        has_b1session = any(c.name.upper() == "B1SESSION" for c in session.cookies)
+        if not has_b1session and session_id:
+            session.cookies.set("B1SESSION", session_id, path="/")
+        has_routeid = any(c.name.upper() == "ROUTEID" for c in session.cookies)
+        if not has_routeid and route_id:
+            session.cookies.set("ROUTEID", route_id, path="/")
 
         # Standard query headers (matching POS2Invoice pattern: NO Authorization header, NO Content-Type on GET)
         query_headers = {
             "Accept": "application/json",
             "Prefer": "odata.maxpagesize=250"
         }
-        if cookie_str:
-            query_headers["Cookie"] = cookie_str
+        # If requests cookie jar has no cookies, supply fallback Cookie header
+        if not any(c.name.upper() == "B1SESSION" for c in session.cookies) and session_id:
+            fallback_parts = [f"B1SESSION={session_id}"]
+            if route_id:
+                fallback_parts.append(f"ROUTEID={route_id}")
+            query_headers["Cookie"] = "; ".join(fallback_parts)
 
         all_records = []
         is_employee_mode = False
         last_error = ""
 
         logger.info(
-            "SAP B1 starting endpoint queries | cookie_str='%s' | base_url=%s | api_ver=%s",
-            cookie_str[:40] if cookie_str else "EMPTY!",
+            "SAP B1 starting queries | session_cookies=%s | base_url=%s | api_ver=%s",
+            [(c.name, c.value[:8] + '...') for c in session.cookies],
             self.base_url,
             api_ver
         )
 
         candidate_eps = [
             f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked&$top=250",
-            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
             f"{self.base_url}/b1s/{api_ver}/Users",
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active&$top=250",
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo"
@@ -578,6 +568,8 @@ class SapB1Connector(BaseConnector):
                     last_error = f"Network error: {str(exc)[:200]}"
                     logger.warning("SAP endpoint network exception on %s: %s", url, exc)
                     break
+
+                logger.info("SAP B1 query endpoint: %s -> HTTP %s", url, resp.status_code)
 
                 if resp.status_code == 200:
                     ep_ok = True
@@ -598,7 +590,7 @@ class SapB1Connector(BaseConnector):
                 else:
                     last_error = f"HTTP {resp.status_code}: {resp.text[:400]}"
                     logger.warning(
-                        "SAP endpoint FAILED: %s | status=%s | response=%s",
+                        "SAP endpoint %s returned HTTP %s: %s",
                         url, resp.status_code, resp.text[:200]
                     )
                     break
