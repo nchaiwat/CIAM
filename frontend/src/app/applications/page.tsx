@@ -45,6 +45,7 @@ export default function ApplicationsPage() {
     appName: string;
     total: number;
     accounts: any[];
+    notice?: string;
   } | null>(null);
   const [inventoryLoading, setInventoryLoading] = useState(false);
 
@@ -386,6 +387,7 @@ export default function ApplicationsPage() {
         appName: app.app_name,
         total: res.total_accounts || res.accounts?.length || 0,
         accounts: res.accounts || [],
+        notice: res.notice,
       });
     } catch (err: any) {
       const msg = err.message || "";

@@ -412,7 +412,7 @@ export const ciamApi = {
     }),
 
   getApplicationInventory: (id: number) =>
-    fetchApi<{ application_name: string; total_accounts: number; active_accounts: number; accounts: any[] }>(
+    fetchApi<{ application_name: string; total_accounts: number; active_accounts: number; accounts: any[]; notice?: string }>(
       `/applications/${id}/inventory`
     ),
 
