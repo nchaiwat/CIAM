@@ -317,18 +317,20 @@ class AdProxyConnector(BaseConnector):
                         "X-Secret-Key": self.secret_key,
                         "x-api-key": key,
                         "X-API-Key": key,
+                        "Authorization": f"Bearer {key}",
                         "x-app-id": self.app_id,
                         "X-App-Id": self.app_id,
                     }
+                    # Send key both in Header and in Query string (in case reverse proxy strips custom x- headers)
+                    q_ep = f"{ep}?api_key={key}&management_key={key}&secret_key={self.secret_key}&app_id={self.app_id}"
                     try:
-                        res = await client.get(ep, headers=headers)
+                        res = await client.get(q_ep, headers=headers)
                         if res.status_code == 200:
                             data = res.json()
                             normalized = self._normalize_ad_users(data)
                             if normalized.get("total_accounts", 0) > 0:
                                 logger.info("AD sync_inventory success: fetched %d accounts via GET %s (key %s...)", normalized["total_accounts"], ep, key[:8])
                                 return normalized
-                            # If Agent returned HTTP 200 but accounts are empty or null (old ciam-extension.js bug)
                             raw_accs = data if isinstance(data, list) else data.get("accounts", [])
                             if raw_accs and len(raw_accs) > 0:
                                 return {
@@ -344,6 +346,28 @@ class AdProxyConnector(BaseConnector):
                     except Exception as exc:
                         last_err = str(exc)
                         logger.warning("AD GET %s connection error: %s", ep, exc)
+
+                    # Fallback to POST with JSON body (helps with proxies that drop headers on GET)
+                    try:
+                        post_body = {
+                            "app_id": self.app_id,
+                            "api_key": key,
+                            "secret_key": self.secret_key,
+                            "management_key": key,
+                            "timestamp": utc_now
+                        }
+                        res_post = await client.post(ep, headers=headers, json=post_body)
+                        if res_post.status_code == 200:
+                            data = res_post.json()
+                            normalized = self._normalize_ad_users(data)
+                            if normalized.get("total_accounts", 0) > 0:
+                                logger.info("AD sync_inventory success: fetched %d accounts via POST %s (key %s...)", normalized["total_accounts"], ep, key[:8])
+                                return normalized
+                            return normalized
+                        last_status = res_post.status_code
+                        last_err = res_post.text[:300]
+                    except Exception as exc:
+                        logger.debug("AD POST %s fallback error: %s", ep, exc)
 
         # If Agent specifically rejected authentication or IP
         if last_status == 401:
