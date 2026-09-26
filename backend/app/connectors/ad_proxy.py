@@ -22,8 +22,30 @@ class AdProxyConnector(BaseConnector):
         allow_status_patch: bool = False,
         origin_ip: Optional[str] = None
     ):
-        raw_endpoint = base_url or settings.AD_GATEWAY_URL or "http://172.18.0.1:3100"
-        self.base_url = raw_endpoint.replace("/api/v2/login", "").rstrip("/")
+        # Docker bridge IP (172.18.0.1) is the correct host IP from inside Docker container on VPS.
+        # It routes through the plink.exe SSH tunnel to reach the On-Prem AD Sync Agent on port 3100.
+        # Private IPs (192.168.x.x, 192.168.12.x) are NOT reachable from Docker unless explicitly tunnelled.
+        raw_endpoint = (base_url or settings.AD_GATEWAY_URL or "http://172.18.0.1:3100").replace("/api/v2/login", "").rstrip("/")
+
+        # Detect private subnet IP that won't work from Docker container
+        import ipaddress
+        def _is_unreachable_private(url: str) -> bool:
+            try:
+                host = url.split("://")[-1].split(":")[0].split("/")[0]
+                addr = ipaddress.ip_address(host)
+                # 172.18.x.x is Docker bridge — reachable; other private ranges are not
+                return addr.is_private and not host.startswith("172.18.")
+            except Exception:
+                return False
+
+        DOCKER_BRIDGE = "http://172.18.0.1:3100"
+        if _is_unreachable_private(raw_endpoint):
+            self.base_url = DOCKER_BRIDGE
+            self.base_url_fallbacks: list = [raw_endpoint]
+        else:
+            self.base_url = raw_endpoint
+            self.base_url_fallbacks = [DOCKER_BRIDGE] if raw_endpoint != DOCKER_BRIDGE else []
+
         raw_key = api_key or getattr(settings, "AD_SECRET_KEY", None) or getattr(settings, "AD_MANAGEMENT_KEY", None)
         if not raw_key or raw_key.strip() in ["mgmt_ciam_key_9a88b1c0d2e3f4a5", ""]:
             raw_key = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
@@ -269,64 +291,79 @@ class AdProxyConnector(BaseConnector):
         last_err = ""
         last_status = 0
 
+        # Build ordered list of base URLs to try: primary first, then fallbacks (Docker bridge etc.)
+        all_base_urls = [self.base_url] + getattr(self, "base_url_fallbacks", [])
+        # Deduplicate
+        seen_urls: set = set()
+        base_url_candidates: list = []
+        for u in all_base_urls:
+            if u and u not in seen_urls:
+                seen_urls.add(u)
+                base_url_candidates.append(u)
+
         async with httpx.AsyncClient(timeout=15.0) as client:
-            for key in candidate_keys:
-                headers = {
-                    "Content-Type": "application/json",
-                    "X-Request-Timestamp": thai_now,
-                    "X-Timestamp": thai_now,
-                    "timestamp": thai_now,
-                    "X-Forwarded-For": self.origin_ip,
-                    "X-Management-API-Key": key,
-                    "x-management-api-key": key,
-                    "X-Secret-Key": key,
-                    "x-secret-key": key,
-                    "X-API-Key": key,
-                    "x-api-key": key,
-                    "X-App-Id": self.app_id,
-                    "x-app-id": self.app_id,
-                    "Authorization": f"Bearer {key}",
-                }
-                body_payload = {
-                    "app_id": self.app_id,
-                    "secret_key": key,
-                    "api_key": key,
-                    "timestamp": thai_now
-                }
+            for base_candidate in base_url_candidates:
+                for key in candidate_keys:
+                    headers = {
+                        "Content-Type": "application/json",
+                        "X-Request-Timestamp": thai_now,
+                        "X-Timestamp": thai_now,
+                        "timestamp": thai_now,
+                        "X-Forwarded-For": self.origin_ip,
+                        "X-Management-API-Key": key,
+                        "x-management-api-key": key,
+                        "X-Secret-Key": key,
+                        "x-secret-key": key,
+                        "X-API-Key": key,
+                        "x-api-key": key,
+                        "X-App-Id": self.app_id,
+                        "x-app-id": self.app_id,
+                        "Authorization": f"Bearer {key}",
+                    }
+                    body_payload = {
+                        "app_id": self.app_id,
+                        "secret_key": key,
+                        "api_key": key,
+                        "timestamp": thai_now
+                    }
 
-                for path in candidate_paths:
-                    base_ep = f"{self.base_url}{path}"
-                    
-                    # Attempt 1: GET with headers
-                    try:
-                        res = await client.get(base_ep, headers=headers)
-                        if res.status_code == 200:
-                            return self._normalize_ad_users(res.json())
-                        last_status = res.status_code
-                        last_err = res.text[:300]
-                    except Exception as e:
-                        last_err = str(e)
+                    for path in candidate_paths:
+                        base_ep = f"{base_candidate}{path}"
 
-                    # Attempt 2: GET with query params
-                    try:
-                        q_url = f"{base_ep}?app_id={self.app_id}&secret_key={key}&api_key={key}&timestamp={thai_now}"
-                        res = await client.get(q_url, headers=headers)
-                        if res.status_code == 200:
-                            return self._normalize_ad_users(res.json())
-                        last_status = res.status_code
-                        last_err = res.text[:300]
-                    except Exception as e:
-                        last_err = str(e)
+                        # Attempt 1: GET with headers
+                        try:
+                            res = await client.get(base_ep, headers=headers)
+                            if res.status_code == 200:
+                                logger.info("AD sync_inventory success via GET %s (key prefix: %s...)", base_ep, key[:8])
+                                return self._normalize_ad_users(res.json())
+                            last_status = res.status_code
+                            last_err = res.text[:300]
+                            logger.debug("AD GET %s → HTTP %s: %s", base_ep, res.status_code, res.text[:100])
+                        except Exception as e:
+                            last_err = str(e)
 
-                    # Attempt 3: POST with JSON body (matching ADAuthen.md POST format)
-                    try:
-                        res = await client.post(base_ep, headers=headers, json=body_payload)
-                        if res.status_code == 200:
-                            return self._normalize_ad_users(res.json())
-                        last_status = res.status_code
-                        last_err = res.text[:300]
-                    except Exception as e:
-                        last_err = str(e)
+                        # Attempt 2: GET with query params
+                        try:
+                            q_url = f"{base_ep}?app_id={self.app_id}&secret_key={key}&api_key={key}&timestamp={thai_now}"
+                            res = await client.get(q_url, headers=headers)
+                            if res.status_code == 200:
+                                logger.info("AD sync_inventory success via GET+params %s", base_ep)
+                                return self._normalize_ad_users(res.json())
+                            last_status = res.status_code
+                            last_err = res.text[:300]
+                        except Exception as e:
+                            last_err = str(e)
+
+                        # Attempt 3: POST with JSON body (matching ADAuthen.md POST format)
+                        try:
+                            res = await client.post(base_ep, headers=headers, json=body_payload)
+                            if res.status_code == 200:
+                                logger.info("AD sync_inventory success via POST %s", base_ep)
+                                return self._normalize_ad_users(res.json())
+                            last_status = res.status_code
+                            last_err = res.text[:300]
+                        except Exception as e:
+                            last_err = str(e)
 
         # If all candidates failed, check status code
         if last_status == 401:
@@ -350,11 +387,12 @@ class AdProxyConnector(BaseConnector):
                 "application_name": "Active Directory",
                 "total_accounts": 0,
                 "accounts": [],
-                "notice": "AD Gateway ออนไลน์ (Port 3100) แต่เป็น Authentication Gateway สำหรับตรวจรหัสผ่าน และพอร์ต LDAP (:389) ยังไม่ได้เปิดข้ามเครือข่าย VPN มายัง VPS จึงไม่สามารถอ่านรายชื่อทั้งหมดของโดเมนได้"
+                "notice": "AD Gateway ออนไลน์ (Port 3100) แต่ยังไม่มี endpoint /api/v1/ad/users — กรุณาให้ทีม On-Prem เพิ่ม endpoint ตาม AD_SYNC_AGENT_CIAM_EXTENSION.md"
             }
 
+        raise RuntimeError(f"เกิดข้อผิดพลาดในการดึงข้อมูลจาก AD Agent (ลองทั้งหมด {len(base_url_candidates)} URLs): HTTP {last_status} - {last_err}")
 
-        raise RuntimeError(f"เกิดข้อผิดพลาดในการดึงข้อมูลจาก AD Agent ({self.base_url}): HTTP {last_status} - {last_err}")
+
 
     def _query_ldap_users(self) -> Optional[list]:
         """
