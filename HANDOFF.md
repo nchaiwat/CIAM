@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date:** 25 กันยายน 2026 (Local Time: ~21:45 ICT)  
+> **Date:** 26 กันยายน 2026 (Local Time: ~15:05 ICT)  
 > **Repository:** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Workspace Local:** `D:\Python\Central-IAM`  
 > **Production VPS:** `/var/www/Ciam` (Linux Ubuntu)
@@ -45,21 +45,27 @@ docker compose up -d api web
 ## 3. สถานะการพัฒนางานล่าสุด (Recent Progress & Key Commits)
 
 ### 1) การแก้ไข Authentication & SSO Login (`auth.py` & `login/page.tsx`)
-- **ปัญหาเดิม:** เมื่อพนักงานหรือ Admin ที่มีบัญชีอยู่บน Active Directory (เช่น `Chaiwat.N`) เข้าใช้งานผ่านหน้า Login ระบบตรวจสอบเฉพาะตาราง `AdminUser` ในฐานข้อมูลท้องถิ่น ทำให้ฟ้อง `ADMIN_LOGIN_FAILED | User not found in Central IAM Admin directory`
-- **การแก้ไข (Commit `d855850`):**
+- **การแก้ไข (Commit `d855850` & `fdabed3`):**
   - เพิ่ม Fallback ให้ตรวจสอบรหัสผ่านคู่ขนานกับ **Active Directory Gateway (`/api/v2/login`)**
-  - หาก Authen ผ่าน AD สำเร็จ:
-    - ถ้าเป็นบัญชีผู้ดูแลระบบ (`Chaiwat.N` / `admin`) จะได้สิทธิ์ `SUPER_ADMIN` และเข้า Dashboard หลัก (`/`)
-    - ถ้าเป็นพนักงานทั่วไป จะได้สิทธิ์ `PORTAL_USER` และ Redirect ไปยังหน้า SSO Portal (`/portal`) ทันที
+  - **ส่ง Security Headers ครบถ้วน:** ส่ง `X-App-Id`, `X-Secret-Key`, `X-Management-API-Key`, `X-Request-Timestamp`, `X-Forwarded-For`
+  - **Flexible Response Evaluation:** ตรวจสอบทั้ง `success: true`, `authenticated: true`, `status: "success"`, `code: 200` และ User Data Object
+  - **Case-Insensitive & Clean Username:** ตัด Domain Prefix (`wa\`) และ Suffix (`@windowasia.com`) ออก และค้นหาด้วย `ilike`
+  - **Role & Portal Redirect (ข้อกำหนดข้อ 3):**
+    - บัญชี Admin (`Chaiwat.N`, `admin`, `superadmin`) ได้สิทธิ์ `SUPER_ADMIN` และเข้าสู่ Dashboard หลัก (`/`)
+    - พนักงานทั่วไปได้สิทธิ์ `PORTAL_USER` และ Redirect ไปยังหน้า SSO Portal (`/portal`) ทันทีเพื่อ Launch แอปอื่นๆ ผ่าน OIDC โดยไม่ต้องพึ่งพาการดึง List ทั้งหมดจาก AD
 
 ### 2) การแก้ไข Spoke SAP Business One (`sap_b1.py`)
 - **ปัญหาเดิม:** 
-  1. เมื่อทดสอบบน VPS การยิงดึงบัญชีจาก SAP B1 Service Layer ผ่าน Domain `https://sapb1.waapps.net` มีปัญหาติด `HTTP 401 code 300 (Authorization header not found)`
-  2. โค้ดมี Fallback ชั่วคราวที่ดึงเอา `MasterIdentity` (ซึ่งเป็นบัญชี AD เช่น `uploader`, `Test_Sale1`, `Patcharakorn.T`) มาแสดงแทน ทำให้เกิดการสับสน
-- **การแก้ไข (Commit `901a09a`):**
-  - **ตัด Fallback ของ MasterIdentity ออก 100%:** บังคับใช้ **Strict Spoke Isolation Rule** ว่าแต่ละ Spoke จะต้องแสดงผลเฉพาะบัญชีที่ดึงสดมาจากระบบนั้นๆ เท่านั้น ห้ามนำบัญชีจากระบบอื่นมาปน
-  - **ใส่ `$select=UserCode,UserName,eMail,Department,Locked`:** ช่วยให้ Service Layer query ข้อมูลผู้ใช้จากตาราง `OUSR` ได้รวดเร็ว และไม่ถูกบล็อกด้วย permission ย่อย
-  - **จัดการ Cookie Domain อัตโนมัติ:** ใช้ `requests.Session` จัดเก็บและส่ง `B1SESSION` + `ROUTEID` ไปยัง Domain ปลายทางโดยอัตโนมัติแบบเดียวกับในสคริปต์ `POS2Invoice` ที่ใช้งานได้บน Production
+  1. เมื่อทดสอบบน VPS การยิงดึงบัญชีจาก SAP B1 Service Layer ติด `HTTP 401 code 300 (Authorization header not found)`
+  2. มีการเรียก `session.cookies.set(...)` ซ้ำซ้อนลงใน Jar หลายครั้ง ทำให้ส่งคุกกี้ `B1SESSION` ซ้ำ 3 ตัว ส่งผลให้ Apache LB ของ SAP Service Layer ปฏิเสธ
+- **การแก้ไข (Commit `901a09a` & `fdabed3`):**
+  - **แก้ไข Cookie Handling:** ปล่อยให้ `requests.Session` บริหารจัดการ Cookie ตามธรรมชาติแบบเดียวกับ `POS2Invoice` ที่ใช้งานได้บน Production และป้องกันไม่ให้เกิดคุกกี้ซ้ำซ้อน
+  - **Superuser vs EmployeesInfo Fallback:** เนื่องจาก Endpoint `/b1s/v2/Users` (ตาราง `OUSR`) ต้องใช้สิทธิ์ Superuser หากผู้ใช้ SAP ที่นำมาเชื่อมต่อไม่ใช่ Superuser ระบบจะ Fallback ไปดึงจาก `/b1s/v2/EmployeesInfo` (ตาราง `OHEM` พนักงาน) ซึ่งเป็นสิทธิ์ทั่วไปให้อัตโนมัติ
+  - **Strict Spoke Isolation:** ดึงเฉพาะบัญชีจริงจาก SAP B1 ไม่นำ MasterIdentity หรือ AD มาปน
+
+### 3) การแก้ไข Factory & AD Proxy (`factory.py` & `ad_proxy.py`)
+- เพิ่ม `from app.core.config import settings` ใน `factory.py`
+- ตัด `/api/v2/login` ออกจาก `base_url` ใน `ad_proxy.py` อัตโนมัติ
 
 ---
 
@@ -78,9 +84,10 @@ docker compose up -d api web
 
 ## 5. แผนงานสำหรับพัฒนาต่อ (Next Steps)
 
-1. **ทดสอบ SAP B1 Live Query บน VPS:**
-   - ตรวจสอบการดึงรายชื่อผู้ใช้สดใน SAP B1 Spoke ด้วยบัญชี Admin/Superuser ของ SAP
-   - ตรวจสอบการแสดงผลสถานะ Active/Disactive ของ User ใน SAP B1
+1. **ทดสอบ Login และ SAP B1 บน VPS:**
+   - อัปเดต Backend ด้วยคำสั่ง `docker compose build api && docker compose up -d api`
+   - ทดสอบล็อกอินด้วยบัญชี AD `Chaiwat.N` และบัญชีพนักงานทั่วไป
+   - ทดสอบการดึงข้อมูลบัญชีผู้ใช้สดในหน้า SAP B1 Spoke
 2. **SSO Portal App Launcher & Single Sign-On:**
    - ทดสอบการกด Launch Application จากหน้า `/portal` ไปยังระบบต่างๆ เช่น IRM ด้วย OIDC Token
    - ปรับแต่งหน้า Portal ให้แสดงเฉพาะ Application ที่ผู้ใช้ได้รับสิทธิ์ (Mapped Roles)
@@ -91,4 +98,12 @@ docker compose up -d api web
 
 ---
 
-> 📌 **สรุปสถานะล่าสุด:** Code ทั้งหมดได้รับการ Commit และ Push ขึ้นสาขา `main` เรียบร้อยแล้ว (Latest Commit: `901a09a`). เมื่อกลับมาทำงานต่อ สามารถดึงสถานะนี้ขึ้นมาพัฒนาต่อได้ทันทีครับ!
+> 📌 **สรุปสถานะล่าสุด:** Code ทั้งหมดได้รับการ Commit และ Push ขึ้นสาขา `main` เรียบร้อยแล้ว (Latest Commit: `fdabed3`).  
+> **คำสั่ง Deploy บน VPS (`/var/www/Ciam`):**
+> ```bash
+> cd /var/www/Ciam
+> git pull
+> docker compose build api
+> docker compose up -d api
+> ```
+

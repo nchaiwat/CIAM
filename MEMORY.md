@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
-**Last Updated:** 2026-09-18  
-**Version:** 1.7.0 (pfSense 2.7.2 Specification, M365 Integration, Thai Timezone Standard & SSO Session Stabilization)  
+**Last Updated:** 2026-09-26  
+**Version:** 1.8.0 (AD Gateway Auth Multi-Strategy, SAP B1 Service Layer Session Stabilization & Strict Spoke Isolation)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -49,11 +49,13 @@
 * **M2M Secret API Key:** `sec_qms_mgmt_f49b10398dc3a011ef`
 * **Health Status:** `ONLINE` (Prepared for production M2M cutover)
 
-### 2.3 Legacy ERP / SAP B1
-* **Base URL:** `http://erp-legacy.windowasia.internal`
-* **Connector Type:** `RPA_WORKER`
-* **RPA Adapter Name:** `mock_legacy_erp` (located in [mock_legacy.py](file:///d:/Python/Central-IAM/backend/app/connectors/rpa/mock_legacy.py))
-* **Execution Mode:** `ASYNC_RPA` (Emulates headless robotic process automation)
+### 2.3 SAP Business One (ERP) — LIVE SERVICE LAYER
+* **Production Domain:** `https://sapb1.waapps.net`
+* **Connector Type:** `SAP_B1` (using [sap_b1.py](file:///d:/Python/Central-IAM/backend/app/connectors/sap_b1.py))
+* **Engine:** SAP B1 Service Layer REST API (`/b1s/v2`)
+* **Session & Cookie Standard:** Natural `requests.Session` cookie lifecycle matching production script `POS2Invoice` (retains `B1SESSION` and `ROUTEID` without cookie jar corruption or duplicate headers).
+* **Superuser & Employee Fallback:** Automatic fallback from `/b1s/v2/Users` (requires Superuser) to `/b1s/v2/EmployeesInfo` (`OHEM` general HR staff table).
+* **Isolation Rule:** Strict Spoke Isolation — never mix MasterIdentity or AD accounts into SAP B1 user lists.
 
 ### 2.4 Microsoft 365 (Entra ID & Exchange Mailbox) — LIVE CONNECTED
 * **API Engine:** Microsoft Graph API (`https://graph.microsoft.com/v1.0`)
