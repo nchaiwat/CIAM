@@ -514,106 +514,118 @@ class SapB1Connector(BaseConnector):
             list(login_data.keys()) if login_data else []
         )
 
-        # Match Postman exactly: clear internal cookie jar and send explicit Cookie header
-        session.cookies.clear()
-
+        # Build clean cookie header values for fallback
         cookie_header_val = f"B1SESSION={session_id}"
         if route_id:
             cookie_header_val += f"; ROUTEID={route_id}"
 
-        query_headers = {
+        # Ensure session.cookies has B1SESSION and ROUTEID with path="/" so they apply to all subpaths
+        if session_id and not any(c.name.upper() == "B1SESSION" for c in session.cookies):
+            session.cookies.set("B1SESSION", session_id, path="/")
+        if route_id and not any(c.name.upper() == "ROUTEID" for c in session.cookies):
+            session.cookies.set("ROUTEID", route_id, path="/")
+
+        # Define headers matching proven clients
+        headers_native = {
+            "Accept": "application/json"
+        }
+        headers_postman_cookie = {
             "Accept": "application/json",
             "User-Agent": "PostmanRuntime/7.43.0",
-            "Prefer": "odata.maxpagesize=250",
+            "Cookie": f"B1SESSION={session_id}"
+        }
+        headers_postman_both = {
+            "Accept": "application/json",
+            "User-Agent": "PostmanRuntime/7.43.0",
             "Cookie": cookie_header_val
         }
 
-        all_records = []
-        is_employee_mode = False
-        last_error = ""
+        # Strategies to try in priority order
+        strategies = [
+            ("Native-SessionJar", headers_native),
+            ("Postman-B1SessionOnly", headers_postman_cookie),
+            ("Postman-BothCookies", headers_postman_both),
+        ]
 
-        logger.info(
-            "SAP B1 starting queries | session_cookies=%s | base_url=%s | api_ver=%s",
-            [(c.name, c.value[:8] + '...') for c in session.cookies],
-            self.base_url,
-            api_ver
-        )
-
+        # Prioritize exact endpoints proven in Postman
         candidate_eps = [
+            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active&$top=10",
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active&$top=250",
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo",
             f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked&$top=250",
             f"{self.base_url}/b1s/{api_ver}/Users"
         ]
 
+        all_records = []
+        is_employee_mode = False
+        audit_trail = []
+        working_strategy = None
+
+        logger.info(
+            "SAP B1 query start | session_id=%s... | route_id=%s | base_url=%s | cookies_in_jar=%s",
+            session_id[:8] if session_id else "None",
+            route_id or "None",
+            self.base_url,
+            [(c.name, c.value[:8] + '...') for c in session.cookies]
+        )
+
         for ep in candidate_eps:
             url = ep
             ep_ok = False
             page_count = 0
-            while url and page_count < 25:
-                page_count += 1
-                try:
-                    resp = session.get(url, headers=query_headers, timeout=25, verify=False, allow_redirects=True)
-                except Exception as exc:
-                    last_error = f"Network error: {str(exc)[:200]}"
-                    logger.warning("SAP endpoint network exception on %s: %s", url, exc)
-                    break
 
-                logger.info("SAP B1 query endpoint: %s -> HTTP %s", url, resp.status_code)
+            # If we don't have a working strategy yet, try each strategy on the first page
+            strategies_to_test = [working_strategy] if working_strategy else strategies
+
+            for strat_name, strat_headers in strategies_to_test:
+                try:
+                    resp = session.get(url, headers=strat_headers, timeout=25, verify=False, allow_redirects=True)
+                    audit_trail.append(f"{strat_name} -> {url.split('/b1s/')[1].split('?')[0]}: HTTP {resp.status_code}")
+                except Exception as exc:
+                    audit_trail.append(f"{strat_name} -> Network Error: {str(exc)[:100]}")
+                    continue
 
                 if resp.status_code == 200:
                     ep_ok = True
+                    working_strategy = (strat_name, strat_headers)
                     is_employee_mode = "EmployeesInfo" in ep
-                    data = resp.json()
-                    raw_items = data.get("value", [])
-                    all_records.extend(raw_items)
+                    try:
+                        data = resp.json()
+                        raw_items = data.get("value", [])
+                        all_records.extend(raw_items)
+                        logger.info("SAP B1 query SUCCESS [%s] on %s: fetched %d records", strat_name, ep, len(raw_items))
 
-                    next_link = data.get("@odata.nextLink") or data.get("odata.nextLink")
-                    if next_link:
-                        if next_link.startswith("http"):
-                            url = next_link
-                        else:
-                            base_prefix = f"/b1s/{api_ver}/"
-                            url = f"{self.base_url}{base_prefix}{next_link.lstrip('/')}"
-                    else:
-                        break
-                else:
-                    last_error = f"HTTP {resp.status_code}: {resp.text[:400]}"
-                    logger.warning(
-                        "SAP endpoint %s returned HTTP %s: %s",
-                        url, resp.status_code, resp.text[:200]
-                    )
+                        # Follow pagination
+                        next_link = data.get("@odata.nextLink") or data.get("odata.nextLink")
+                        while next_link and page_count < 25:
+                            page_count += 1
+                            if next_link.startswith("http"):
+                                next_url = next_link
+                            else:
+                                base_prefix = f"/b1s/{api_ver}/"
+                                next_url = f"{self.base_url}{base_prefix}{next_link.lstrip('/')}"
+                            res_next = session.get(next_url, headers=strat_headers, timeout=25, verify=False, allow_redirects=True)
+                            if res_next.status_code == 200:
+                                d_next = res_next.json()
+                                items_next = d_next.get("value", [])
+                                all_records.extend(items_next)
+                                next_link = d_next.get("@odata.nextLink") or d_next.get("odata.nextLink")
+                            else:
+                                break
+                    except Exception as parse_err:
+                        logger.warning("Failed parsing SAP response JSON: %s", parse_err)
                     break
 
             if ep_ok and all_records:
                 break
 
         if not all_records:
-            # Diagnostic Probe: Test if authenticated session works on standard business objects (/Items)
-            probe_ok = False
-            for probe_ep in [f"{self.base_url}/b1s/{api_ver}/Items?$top=1", f"{self.base_url}/b1s/{api_ver}/BusinessPartners?$top=1"]:
-                try:
-                    pr = session.get(probe_ep, headers=query_headers, timeout=15, verify=False, allow_redirects=True)
-                    if pr.status_code == 200:
-                        probe_ok = True
-                        logger.info("SAP B1 Session Diagnostic Probe SUCCEEDED on %s! Session is verified active.", probe_ep)
-                        break
-                except Exception:
-                    pass
-
-            if probe_ok:
-                raise RuntimeError(
-                    f"เข้าสู่ระบบ SAP B1 สำเร็จ และยืนยัน Session ใช้งานได้จริง (ทดสอบดึง /Items สำเร็จ 200 OK) "
-                    f"แต่ SAP B1 ปฏิเสธการเข้าถึงรายชื่อ /Users และ /EmployeesInfo ({last_error}) "
-                    "เนื่องจาก User ใน SAP นี้ไม่มีสิทธิ์ Superuser หรือไม่มีสิทธิ์เข้าถึงโมดูล User / HR Master Data "
-                    "โปรดตรวจสอบใน SAP Business One: เข้าเมนู Administration > Setup > General > Users แล้วติ๊กถูกที่ช่อง [Superuser] "
-                    "หรือกำหนด Full Authorization สำหรับ User Master Data"
-                )
-            else:
-                raise RuntimeError(
-                    f"เข้าสู่ระบบ SAP B1 สำเร็จ แต่ไม่สามารถดึงข้อมูลบัญชีผู้ใช้จากระบบ SAP B1 ได้ ({last_error or 'ไม่มีข้อมูลตอบกลับ'}). "
-                    "โปรดตรวจสอบว่า User ใน SAP มีสิทธิ์ Superuser สำหรับการเข้าถึง /Users หรือมีสิทธิ์เข้าถึง EmployeesInfo หรือไม่"
-                )
+            diag_str = " | ".join(audit_trail[-6:])
+            raise RuntimeError(
+                f"เข้าสู่ระบบ SAP B1 สำเร็จ (SessionId={session_id[:8]}..., ROUTEID={route_id or 'None'}) "
+                f"แต่เรียกข้อมูลไม่สำเร็จ ผลการทดสอบทุกวิธี: [{diag_str}]. "
+                "โปรดตรวจสอบสิทธิ์ของ User ใน SAP ว่าได้รับสิทธิ์การเข้าถึงข้อมูล EmployeesInfo / Users หรือไม่"
+            )
 
 
         accounts = []
