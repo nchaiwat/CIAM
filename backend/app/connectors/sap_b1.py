@@ -558,23 +558,58 @@ class SapB1Connector(BaseConnector):
             api_ver
         )
 
-        # Prepare candidate Authorization headers to satisfy reverse proxy / API gateway authentication
-        import base64
-        auth_candidates = []
-        if session_id:
-            auth_candidates.append(f"Bearer {session_id}")
-        if self.api_key:
-            auth_candidates.append(f"Bearer {self.api_key}")
-        if self.sap_username and self.sap_password:
-            b64_u = base64.b64encode(f"{self.sap_username}:{self.sap_password}".encode()).decode()
-            auth_candidates.append(f"Basic {b64_u}")
-            if self.company_db:
-                b64_db_u = base64.b64encode(f"{self.company_db}\\{self.sap_username}:{self.sap_password}".encode()).decode()
-                auth_candidates.append(f"Basic {b64_db_u}")
-        # Always include pure Cookie mode as a fallback
-        auth_candidates.append(None)
+        # Helper: Robust session get with manual redirect tracking to prevent requests from stripping Cookie header
+        def _robust_get(sess, target_url, headers_dict):
+            try:
+                r = sess.get(target_url, headers=headers_dict, allow_redirects=False, timeout=25, verify=False)
+                hops = 0
+                while r.is_redirect and hops < 5:
+                    hops += 1
+                    loc = r.headers.get("Location")
+                    if not loc:
+                        break
+                    from urllib.parse import urljoin
+                    target_url = urljoin(target_url, loc)
+                    logger.info("SAP B1 manual redirect follow: %s (preserving headers)", target_url)
+                    r = sess.get(target_url, headers=headers_dict, allow_redirects=False, timeout=25, verify=False)
+                return r
+            except Exception as e:
+                logger.debug("Robust get exception for %s: %s", target_url, e)
+                return None
 
-        working_auth = None
+        # 2. Diagnostic Session Probe: Test if authenticated session works on standard business objects (/Items)
+        probe_ok = False
+        probe_endpoints = [
+            f"{self.base_url}/b1s/{api_ver}/Items?$top=1",
+            f"{self.base_url}/b1s/{api_ver}/BusinessPartners?$top=1"
+        ]
+        for p_url in probe_endpoints:
+            p_res = _robust_get(session, p_url, {"Accept": "application/json"})
+            if p_res is not None and p_res.status_code == 200:
+                probe_ok = True
+                logger.info("SAP B1 Session Diagnostic Probe SUCCEEDED on %s! Session is verified 100%% active.", p_url)
+                break
+            elif cookie_str:
+                p_res_c = _robust_get(session, p_url, {"Accept": "application/json", "Cookie": cookie_str})
+                if p_res_c is not None and p_res_c.status_code == 200:
+                    probe_ok = True
+                    logger.info("SAP B1 Session Diagnostic Probe SUCCEEDED on %s (with Cookie header)! Session is verified 100%% active.", p_url)
+                    break
+
+        # Header strategies to satisfy all proxy and SAP configuration modes
+        header_strategies = [
+            # Strategy 1: Pure native session cookie jar (like POS2Invoice, no manual header override)
+            {"Accept": "application/json", "Content-Type": "application/json"},
+            # Strategy 2: Explicit Cookie header (both B1SESSION and ROUTEID)
+            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": cookie_str} if cookie_str else None,
+            # Strategy 3: Pure B1SESSION only
+            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": f"B1SESSION={session_id}"} if session_id else None,
+            # Strategy 4: Bearer SessionId
+            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": cookie_str, "Authorization": f"Bearer {session_id}"} if (session_id and cookie_str) else None,
+        ]
+        header_strategies = [s for s in header_strategies if s is not None]
+
+        working_headers = None
 
         for ep in candidate_eps:
             url = ep
@@ -584,41 +619,27 @@ class SapB1Connector(BaseConnector):
                 page_count += 1
                 resp = None
 
-                # If a working authorization header is already established, prioritize it
-                auth_list = [working_auth] if working_auth is not None else auth_candidates
+                strategies_to_try = [working_headers] if working_headers is not None else header_strategies
 
-                for cand_auth in auth_list:
-                    req_headers = {
-                        "Accept": "application/json",
-                        "Content-Type": "application/json",
-                    }
-                    if cookie_str:
-                        req_headers["Cookie"] = cookie_str
-                    if cand_auth:
-                        req_headers["Authorization"] = cand_auth
+                for strat_headers in strategies_to_try:
+                    # 1. Try robust session get
+                    resp = _robust_get(session, url, strat_headers)
 
-                    # 1. Native requests.Session get (standard approach as in POS2Invoice)
-                    try:
-                        resp = session.get(url, headers=req_headers, timeout=25, verify=False)
-                    except Exception as sess_err:
-                        logger.debug("session.get error for %s (auth=%s): %s", url, cand_auth[:15] if cand_auth else "None", sess_err)
-                        resp = None
-
-                    # 2. Standalone requests.get with manual Cookie header
+                    # 2. Try standalone requests.get as fallback
                     if resp is None or resp.status_code == 401:
                         try:
-                            resp_direct = requests.get(url, headers=req_headers, timeout=25, verify=False)
-                            if resp_direct.status_code == 200 or (resp is None):
+                            resp_direct = requests.get(url, headers=strat_headers, timeout=25, verify=False, allow_redirects=True)
+                            if resp_direct.status_code == 200 or resp is None:
                                 resp = resp_direct
                         except Exception:
                             pass
 
                     if resp is not None and resp.status_code == 200:
-                        working_auth = cand_auth
-                        logger.info("SAP B1 query SUCCESS on %s with auth candidate: %s", url, cand_auth[:15] if cand_auth else "CookieOnly")
+                        working_headers = strat_headers
+                        logger.info("SAP B1 query SUCCESS on %s with strategy: %s", url, list(strat_headers.keys()))
                         break
                     elif resp is not None and resp.status_code not in [401, 403]:
-                        # Response is not an auth error (e.g. 404, 400, 500)
+                        # Non-auth error (404, 400, 500)
                         break
 
                 if resp is not None and resp.status_code == 200:
@@ -650,11 +671,19 @@ class SapB1Connector(BaseConnector):
                 break
 
         if not all_records:
-            # Strictly return SAP B1 error - never mix other identities into this spoke
-            raise RuntimeError(
-                f"เข้าสู่ระบบ SAP B1 สำเร็จ แต่ไม่สามารถดึงข้อมูลบัญชีผู้ใช้จากระบบ SAP B1 ได้ ({last_error or 'ไม่มีข้อมูลตอบกลับ'}). "
-                "โปรดตรวจสอบว่า User ใน SAP มีสิทธิ์ Superuser สำหรับการเข้าถึง /Users หรือมีสิทธิ์เข้าถึง EmployeesInfo หรือไม่"
-            )
+            if probe_ok:
+                raise RuntimeError(
+                    f"เข้าสู่ระบบ SAP B1 สำเร็จ และยืนยัน Session ใช้งานได้จริง (ทดสอบดึง /Items สำเร็จ 200 OK) "
+                    f"แต่ SAP B1 ปฏิเสธการเข้าถึงรายชื่อ /Users และ /EmployeesInfo ({last_error}) "
+                    "เนื่องจาก User ใน SAP นี้ไม่มีสิทธิ์ Superuser หรือไม่มีสิทธิ์เข้าถึงโมดูล User / HR Master Data "
+                    "โปรดตรวจสอบใน SAP Business One: เข้าเมนู Administration > Setup > General > Users แล้วติ๊กถูกที่ช่อง [Superuser] "
+                    "หรือกำหนด Full Authorization สำหรับ User Master Data"
+                )
+            else:
+                raise RuntimeError(
+                    f"เข้าสู่ระบบ SAP B1 สำเร็จ แต่ไม่สามารถดึงข้อมูลบัญชีผู้ใช้จากระบบ SAP B1 ได้ ({last_error or 'ไม่มีข้อมูลตอบกลับ'}). "
+                    "โปรดตรวจสอบว่า User ใน SAP มีสิทธิ์ Superuser สำหรับการเข้าถึง /Users หรือมีสิทธิ์เข้าถึง EmployeesInfo หรือไม่"
+                )
 
 
         accounts = []

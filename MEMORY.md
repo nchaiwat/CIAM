@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-09-26  
-**Version:** 1.9.1 (AD Login 500 Fix, App Name Integration & SAP B1 401 Authorization Header Resolution)  
+**Version:** 1.9.2 (SAP B1 Robust Redirect & Session Diagnostic Probe, AD MasterIdentity Notice Fallback & Non-Truncated Audit Trail UI)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  

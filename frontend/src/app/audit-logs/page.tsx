@@ -244,8 +244,8 @@ export default function AuditLogsPage() {
                         {log.status === "SUCCESS" ? "สำเร็จ" : "ล้มเหลว"}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 text-xs text-slate-700 font-medium max-w-sm">
-                      <div className="line-clamp-2" title={log.reason || ""}>
+                    <td className="py-3.5 px-4 text-xs text-slate-700 font-medium min-w-[280px]">
+                      <div className="whitespace-normal break-words leading-relaxed" title={log.reason || ""}>
                         {log.reason || "N/A"}
                       </div>
                     </td>

@@ -1647,9 +1647,15 @@ export default function ApplicationsPage() {
 
             {/* Accounts Table */}
             <div className="flex-1 overflow-y-auto pr-1 space-y-2">
+              {liveInventory.notice && (
+                <div className="p-3 mb-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs font-medium flex items-start space-x-2">
+                  <span className="text-base shrink-0">ℹ️</span>
+                  <div className="leading-relaxed">{liveInventory.notice}</div>
+                </div>
+              )}
               {liveInventory.accounts.length === 0 ? (
                 <div className="py-12 text-center text-slate-500 font-medium">
-                  ไม่พบบัญชีผู้ใช้ในระบบลูกนี้
+                  {liveInventory.notice ? "ยังไม่มีข้อมูลบัญชีตอบกลับจากปลายทาง (โปรดดูรายละเอียดในแถบแจ้งเตือนด้านบน)" : "ไม่พบบัญชีผู้ใช้ในระบบลูกนี้"}
                 </div>
               ) : (
                 liveInventory.accounts.map((acc: any, idx: number) => (

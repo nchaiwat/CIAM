@@ -84,10 +84,11 @@ docker compose up -d api web
   - **Raw AD Probe Diagnostics:** บันทึกทุกคำขอและเนื้อหาดิบที่ AD Sync Agent ตอบกลับมาลงใน `IamAuditLog.details`
   - **Full-Screen Audit Modal (`audit-logs/page.tsx`):** เพิ่มโหมดขยายเต็มหน้าจอ (Full Screen) สำหรับ Admin พร้อมการ์ดแสดงผลการเชื่อมต่อ AD Sync Agent (URL, App ID, HTTP Status Code, และ Raw Response Body) โดยเฉพาะ
 
-### 6) การแก้ไขข้อผิดพลาด Login 500, App Name & SAP B1 401 (v1.9.1)
-- **AD Login 500 Fix:** แก้ไข `auth.py` กรณี AD Authenticate ผ่านแล้ว เกิด `ImportError: cannot import name 'get_password_hash'` ซึ่งฟังก์ชันจริงคือ `hash_password` พร้อมครอบ `try...except` ป้องกัน HTTP 500 และเพิ่ม `get_password_hash` alias ใน `security.py`
-- **App Name Integration:** ส่งทั้ง `app_id: "CIAM"` และ `app_name: "CIAM"` ใน Body และ Security Headers (`X-App-Id`, `X-App-Name`, `X-Forwarded-For: 157.173.219.153`)
-- **SAP B1 401 Authorization Header Fix:** แก้ไข `sap_b1.py` ใน `_get_headers` และ `_sync_with_requests_sync` ให้ส่ง `Authorization` header แบบครอบคลุม (`Bearer {session_id}`, `Bearer {api_key}`, `Basic {base64}`, และ pure Cookie) ทำให้ Gateway / Reverse Proxy ของ SAP Service Layer ยอมรับการดึงข้อมูลบัญชีผู้ใช้และปลดล็อคข้อผิดพลาด `HTTP 401 code 300 Authorization header not found`
+### 7) การแก้ไขข้อผิดพลาด SAP B1 Redirect & Session Diagnostic, AD MasterIdentity Fallback & Audit Log Full Text (v1.9.2)
+- **SAP B1 Redirect & Session Diagnostic Probe:** เพิ่ม `_robust_get` ติดตามการเปลี่ยนเส้นทาง (HTTP 301/302 Redirect) แบบ Manual เพื่อป้องกันไม่ให้ Python requests ตัด Header `Cookie` ทิ้ง และเพิ่ม Session Diagnostic Probe (`/Items?$top=1`) เพื่อพิสูจน์ความสมบูรณ์ของ Session อย่างชัดเจน หาก Session ผ่านแต่ `/Users` ยังติด 401 ระบบจะแจ้งข้อความระบุเจาะจงว่าผู้ใช้ใน SAP ขาดสิทธิ์ `Superuser`
+- **AD MasterIdentity Fallback & Notice:** เพิ่มระบบแสดง MasterIdentity จากฐานข้อมูลกลางเมื่อ AD Agent บน On-Prem ตอบ 404 (ยังไม่โหลด extension) พร้อมแสดงแบนเนอร์แจ้งเตือนอย่างชัดเจน ไม่ปล่อยให้เป็นหน้าจอว่าง 0 บัญชี
+- **Non-Truncated Audit Trail:** ปลดล็อกการตัดบรรทัด `max-w-sm` และ `line-clamp-2` ในหน้าประวัติการใช้งาน ทำให้แสดงผลเหตุผลและการทำงานครบถ้วนไม่ถูกตัดขาด
+- **AD Role Assignment Clarity:** ปรับปรุงให้คง Role เดิมของผู้ใช้ที่กำหนดไว้ในฐานข้อมูล และอธิบายที่มาของการกำหนดสิทธิ์ `SUPER_ADMIN` ชัดเจน
 
 ---
 

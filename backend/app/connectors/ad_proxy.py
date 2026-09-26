@@ -383,12 +383,39 @@ class AdProxyConnector(BaseConnector):
                     "notice": f"ดึงข้อมูลสดจาก Active Directory Domain Controller (DC=wa,DC=net) สำเร็จ {len(ldap_users)} บัญชีผู้ใช้จริง"
                 }
 
-            # 2. Direct LDAP is unreachable from VPS (Port 389 blocked across VPN)
+            # 2. Second Priority: Retrieve existing MasterIdentities in Central IAM directory
+            try:
+                from app.core.database import SessionLocal
+                from app.models.identity import MasterIdentity
+                with SessionLocal() as db:
+                    identities = db.query(MasterIdentity).filter(MasterIdentity.is_active_in_ad == True).all()
+                    if identities:
+                        cached_accounts = [
+                            {
+                                "username": idt.username,
+                                "full_name": idt.full_name or idt.username,
+                                "email": idt.email or f"{idt.username.lower()}@windowasia.com",
+                                "department": idt.department or "Active Directory",
+                                "is_active": idt.is_active_in_ad,
+                                "group_name": "Domain Users"
+                            }
+                            for idt in identities
+                        ]
+                        return {
+                            "application_name": "Active Directory (Directory Sync)",
+                            "total_accounts": len(cached_accounts),
+                            "accounts": cached_accounts,
+                            "notice": f"AD Gateway ออนไลน์ (Port 3100) แต่ Agent ปลายทางยังไม่ได้เปิด Endpoint /api/v1/ad/users จึงแสดงรายชื่อที่บันทึกไว้ใน Central IAM ({len(cached_accounts)} บัญชี) ชั่วคราว — กรุณาเปิดใช้งาน ciam-extension.js บนเครื่อง AD Agent"
+                        }
+            except Exception as db_err:
+                logger.warning("Error fetching cached master identities: %s", db_err)
+
+            # 3. Direct LDAP is unreachable from VPS and no MasterIdentity records exist
             return {
                 "application_name": "Active Directory",
                 "total_accounts": 0,
                 "accounts": [],
-                "notice": "AD Gateway ออนไลน์ (Port 3100) แต่ยังไม่มี endpoint /api/v1/ad/users — กรุณาให้ทีม On-Prem เพิ่ม endpoint ตาม AD_SYNC_AGENT_CIAM_EXTENSION.md"
+                "notice": "AD Gateway ออนไลน์ (Port 3100) แต่ยังไม่มี endpoint /api/v1/ad/users บน Agent ปลายทาง — กรุณาโหลด ciam-extension.js ใน index.js บนเซิร์ฟเวอร์ AD เพื่อเปิดใช้งานการดึงรายชื่อแบบสด"
             }
 
         raise RuntimeError(f"เกิดข้อผิดพลาดในการดึงข้อมูลจาก AD Agent (ลองทั้งหมด {len(base_url_candidates)} URLs): HTTP {last_status} - {last_err}")

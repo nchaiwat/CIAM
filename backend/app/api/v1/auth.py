@@ -237,7 +237,8 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
         if ad_auth_success:
             is_valid = True
             auth_mode = "ACTIVE_DIRECTORY_AUTH"
-            is_admin = clean_username.lower() in ["chaiwat.n", "admin", "superadmin"]
+            # Check if this user should have admin privileges
+            is_default_admin = clean_username.lower() in ["admin", "superadmin", "chaiwat.n"]
 
             # Ensure AdminUser record exists for access token & profile resolution
             try:
@@ -249,7 +250,7 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                     ident = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(clean_username)).first()
                     full_name = ident.full_name if ident else clean_username
                     email = ident.email if ident else f"{clean_username.lower()}@windowasia.com"
-                    user_role = "SUPER_ADMIN" if is_admin else "PORTAL_USER"
+                    user_role = "SUPER_ADMIN" if is_default_admin else "PORTAL_USER"
 
                     user = AdminUser(
                         username=clean_username,
@@ -267,10 +268,9 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                     user.failed_login_attempts = 0
                     user.locked_until = None
                     user.is_active = True
-                    if is_admin and user.role != "SUPER_ADMIN":
-                        user.role = "SUPER_ADMIN"
+                    # Preserve existing role configured in AdminUser table without overwriting
                     db.commit()
-                logger.info("AD Authentication succeeded for user '%s' (Assigned role: %s)", clean_username, user.role)
+                logger.info("AD Authentication succeeded for user '%s' (Role: %s)", clean_username, user.role)
             except Exception as user_provision_err:
                 logger.error("Error creating/updating AdminUser on AD login: %s", user_provision_err)
                 db.rollback()
@@ -365,7 +365,7 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
         execution_mode=auth_mode,
         ip_address=client_ip,
         status="SUCCESS",
-        reason=f"User authenticated successfully ({auth_mode})",
+        reason=f"User '{user.username}' authenticated successfully via {auth_mode} (Role: {user.role}, IP: {client_ip})",
         details=json.dumps(success_details_obj, ensure_ascii=False)
     ))
     db.commit()
