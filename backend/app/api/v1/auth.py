@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -8,6 +9,7 @@ from app.models.audit import IamAuditLog
 from app.schemas.auth import LoginRequest, TokenResponse, AdminUserOut
 from app.api.deps import get_current_admin
 
+logger = logging.getLogger("ciam.auth")
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 MAX_FAILED_ATTEMPTS = 5
