@@ -549,12 +549,12 @@ class SapB1Connector(BaseConnector):
             ("Postman-BothCookies", headers_postman_both),
         ]
 
-        # Prioritize exact endpoints to fetch all records
+        # Prioritize SAP Users (User accounts like Chaiwat.N, Locked status) over EmployeesInfo (HR records)
         candidate_eps = [
+            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked,Superuser",
+            f"{self.base_url}/b1s/{api_ver}/Users",
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active",
-            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo",
-            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
-            f"{self.base_url}/b1s/{api_ver}/Users"
+            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo"
         ]
 
         all_records = []
@@ -656,13 +656,14 @@ class SapB1Connector(BaseConnector):
             for u in all_records:
                 ucode = u.get("UserCode")
                 if ucode:
+                    is_super = u.get("Superuser") == "tYES"
                     accounts.append({
                         "username": ucode,
                         "full_name": u.get("UserName") or ucode,
                         "email": u.get("eMail"),
                         "department": str(u.get("Department")) if u.get("Department") is not None and u.get("Department") != -2 else None,
                         "is_active": u.get("Locked") != "tYES",
-                        "group_name": "SAP B1 User"
+                        "group_name": "SAP B1 Superuser" if is_super else "SAP B1 User"
                     })
 
         return {
