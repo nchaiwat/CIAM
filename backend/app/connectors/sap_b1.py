@@ -63,12 +63,8 @@ class SapB1Connector(BaseConnector):
         if cookie_parts:
             headers["Cookie"] = "; ".join(cookie_parts)
 
-        # Reverse proxies / API Gateways require an explicit Authorization header
-        if self.sap_username and self.sap_password:
-            import base64
-            b64_user = base64.b64encode(f"{self.sap_username}:{self.sap_password}".encode()).decode()
-            headers["Authorization"] = f"Basic {b64_user}"
-        elif self.api_key:
+        # Do NOT send Authorization: Basic when B1SESSION is available, as Apache returns Error 300
+        if not self.b1_session_id and self.api_key:
             headers["Authorization"] = f"Basic {self.api_key}"
 
         return headers
@@ -518,32 +514,38 @@ class SapB1Connector(BaseConnector):
             list(login_data.keys()) if login_data else []
         )
 
-        # Candidate endpoints to query: optimize with $select to prevent permission & timeout issues
-        candidate_eps = [
-            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked&$top=250",
-            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
-            f"{self.base_url}/b1s/{api_ver}/Users",
-            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active&$top=250",
-            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo"
-        ]
+        # Ensure all cookies in session do not have secure flag so requests sends them over HTTP or HTTPS
+        for c in session.cookies:
+            c.secure = False
 
-        # Inject cookies with root path so they are sent to ALL endpoints (not just /b1s/v2)
-        # This is critical when SAP B1 is behind an HTTPS reverse proxy (Apache/Nginx/Caddy)
-        # that may not forward cookies correctly unless path="/"
-        has_b1session = any(c.name.upper() == "B1SESSION" for c in session.cookies)
-        has_routeid = any(c.name.upper() == "ROUTEID" for c in session.cookies)
+        # Inject cookies with root path and domain so they match all endpoints
+        from urllib.parse import urlparse
+        host = urlparse(self.base_url).hostname or ""
+        if session_id:
+            session.cookies.set("B1SESSION", session_id, domain=host, path="/", secure=False)
+            session.cookies.set("B1SESSION", session_id, path="/", secure=False)
+        if route_id:
+            session.cookies.set("ROUTEID", route_id, domain=host, path="/", secure=False)
+            session.cookies.set("ROUTEID", route_id, path="/", secure=False)
 
-        if not has_b1session and session_id:
-            session.cookies.set("B1SESSION", session_id, path="/")
-        if not has_routeid and route_id:
-            session.cookies.set("ROUTEID", route_id, path="/")
-
+        # Build clean Cookie header string
         cookie_parts = []
         if session_id:
             cookie_parts.append(f"B1SESSION={session_id}")
         if route_id:
             cookie_parts.append(f"ROUTEID={route_id}")
+        for c in session.cookies:
+            if c.name.upper() not in ["B1SESSION", "ROUTEID"] and c.value:
+                cookie_parts.append(f"{c.name}={c.value}")
         cookie_str = "; ".join(cookie_parts)
+
+        # Standard query headers (matching POS2Invoice pattern: NO Authorization header, NO Content-Type on GET)
+        query_headers = {
+            "Accept": "application/json",
+            "Prefer": "odata.maxpagesize=250"
+        }
+        if cookie_str:
+            query_headers["Cookie"] = cookie_str
 
         all_records = []
         is_employee_mode = False
@@ -556,67 +558,13 @@ class SapB1Connector(BaseConnector):
             api_ver
         )
 
-        # Helper: Robust session get with manual redirect tracking to prevent requests from stripping Cookie header
-        def _robust_get(sess, target_url, headers_dict):
-            try:
-                r = sess.get(target_url, headers=headers_dict, allow_redirects=False, timeout=25, verify=False)
-                hops = 0
-                while r.is_redirect and hops < 5:
-                    hops += 1
-                    loc = r.headers.get("Location")
-                    if not loc:
-                        break
-                    from urllib.parse import urljoin
-                    target_url = urljoin(target_url, loc)
-                    logger.info("SAP B1 manual redirect follow: %s (preserving headers)", target_url)
-                    r = sess.get(target_url, headers=headers_dict, allow_redirects=False, timeout=25, verify=False)
-                return r
-            except Exception as e:
-                logger.debug("Robust get exception for %s: %s", target_url, e)
-                return None
-
-        # 2. Diagnostic Session Probe: Test if authenticated session works on standard business objects (/Items)
-        probe_ok = False
-        probe_endpoints = [
-            f"{self.base_url}/b1s/{api_ver}/Items?$top=1",
-            f"{self.base_url}/b1s/{api_ver}/BusinessPartners?$top=1"
+        candidate_eps = [
+            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked&$top=250",
+            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
+            f"{self.base_url}/b1s/{api_ver}/Users",
+            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active&$top=250",
+            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo"
         ]
-        for p_url in probe_endpoints:
-            p_res = _robust_get(session, p_url, {"Accept": "application/json"})
-            if p_res is not None and p_res.status_code == 200:
-                probe_ok = True
-                logger.info("SAP B1 Session Diagnostic Probe SUCCEEDED on %s! Session is verified 100%% active.", p_url)
-                break
-            elif cookie_str:
-                p_res_c = _robust_get(session, p_url, {"Accept": "application/json", "Cookie": cookie_str})
-                if p_res_c is not None and p_res_c.status_code == 200:
-                    probe_ok = True
-                    logger.info("SAP B1 Session Diagnostic Probe SUCCEEDED on %s (with Cookie header)! Session is verified 100%% active.", p_url)
-                    break
-
-        # Header strategies to satisfy all proxy and SAP configuration modes
-        import base64
-        b64_basic_user = base64.b64encode(f"{self.sap_username}:{self.sap_password}".encode()).decode() if (self.sap_username and self.sap_password) else ""
-        b64_basic_db_user = base64.b64encode(f"{self.company_db};{self.sap_username}:{self.sap_password}".encode()).decode() if (self.company_db and self.sap_username and self.sap_password) else ""
-        b64_basic_db_colon = base64.b64encode(f"{self.company_db}:{self.sap_username}:{self.sap_password}".encode()).decode() if (self.company_db and self.sap_username and self.sap_password) else ""
-
-        header_strategies = [
-            # Strategy 1: Explicit Cookie + Basic Auth (UserName:Password)
-            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": cookie_str, "Authorization": f"Basic {b64_basic_user}"} if (b64_basic_user and cookie_str) else None,
-            # Strategy 2: Explicit Cookie + Basic Auth (CompanyDB;UserName:Password)
-            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": cookie_str, "Authorization": f"Basic {b64_basic_db_user}"} if (b64_basic_db_user and cookie_str) else None,
-            # Strategy 3: Explicit Cookie + Basic Auth (CompanyDB:UserName:Password)
-            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": cookie_str, "Authorization": f"Basic {b64_basic_db_colon}"} if (b64_basic_db_colon and cookie_str) else None,
-            # Strategy 4: Pure Basic Auth only (without cookie)
-            {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Basic {b64_basic_user}"} if b64_basic_user else None,
-            # Strategy 5: Explicit Cookie header (both B1SESSION and ROUTEID)
-            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": cookie_str} if cookie_str else None,
-            # Strategy 6: Pure native session cookie jar
-            {"Accept": "application/json", "Content-Type": "application/json"},
-        ]
-        header_strategies = [s for s in header_strategies if s is not None]
-
-        working_headers = None
 
         for ep in candidate_eps:
             url = ep
@@ -624,32 +572,14 @@ class SapB1Connector(BaseConnector):
             page_count = 0
             while url and page_count < 25:
                 page_count += 1
-                resp = None
+                try:
+                    resp = session.get(url, headers=query_headers, timeout=25, verify=False, allow_redirects=True)
+                except Exception as exc:
+                    last_error = f"Network error: {str(exc)[:200]}"
+                    logger.warning("SAP endpoint network exception on %s: %s", url, exc)
+                    break
 
-                strategies_to_try = [working_headers] if working_headers is not None else header_strategies
-
-                for strat_headers in strategies_to_try:
-                    # 1. Try robust session get
-                    resp = _robust_get(session, url, strat_headers)
-
-                    # 2. Try standalone requests.get as fallback
-                    if resp is None or resp.status_code == 401:
-                        try:
-                            resp_direct = requests.get(url, headers=strat_headers, timeout=25, verify=False, allow_redirects=True)
-                            if resp_direct.status_code == 200 or resp is None:
-                                resp = resp_direct
-                        except Exception:
-                            pass
-
-                    if resp is not None and resp.status_code == 200:
-                        working_headers = strat_headers
-                        logger.info("SAP B1 query SUCCESS on %s with strategy: %s", url, list(strat_headers.keys()))
-                        break
-                    elif resp is not None and resp.status_code not in [401, 403]:
-                        # Non-auth error (404, 400, 500)
-                        break
-
-                if resp is not None and resp.status_code == 200:
+                if resp.status_code == 200:
                     ep_ok = True
                     is_employee_mode = "EmployeesInfo" in ep
                     data = resp.json()
@@ -666,18 +596,29 @@ class SapB1Connector(BaseConnector):
                     else:
                         break
                 else:
-                    if resp is not None:
-                        last_error = f"HTTP {resp.status_code}: {resp.text[:400]}"
-                        logger.warning(
-                            "SAP endpoint FAILED: %s | cookie_sent=%s | status=%s | response=%s",
-                            url, cookie_str[:30] if cookie_str else "NONE",
-                            resp.status_code, resp.text[:200]
-                        )
+                    last_error = f"HTTP {resp.status_code}: {resp.text[:400]}"
+                    logger.warning(
+                        "SAP endpoint FAILED: %s | status=%s | response=%s",
+                        url, resp.status_code, resp.text[:200]
+                    )
                     break
+
             if ep_ok and all_records:
                 break
 
         if not all_records:
+            # Diagnostic Probe: Test if authenticated session works on standard business objects (/Items)
+            probe_ok = False
+            for probe_ep in [f"{self.base_url}/b1s/{api_ver}/Items?$top=1", f"{self.base_url}/b1s/{api_ver}/BusinessPartners?$top=1"]:
+                try:
+                    pr = session.get(probe_ep, headers=query_headers, timeout=15, verify=False, allow_redirects=True)
+                    if pr.status_code == 200:
+                        probe_ok = True
+                        logger.info("SAP B1 Session Diagnostic Probe SUCCEEDED on %s! Session is verified active.", probe_ep)
+                        break
+                except Exception:
+                    pass
+
             if probe_ok:
                 raise RuntimeError(
                     f"เข้าสู่ระบบ SAP B1 สำเร็จ และยืนยัน Session ใช้งานได้จริง (ทดสอบดึง /Items สำเร็จ 200 OK) "
@@ -745,7 +686,7 @@ class SapB1Connector(BaseConnector):
 
             headers = {
                 "Accept": "application/json",
-                "Content-Type": "application/json"
+                "Prefer": "odata.maxpagesize=250"
             }
             if cookie_hdr:
                 headers["Cookie"] = cookie_hdr
