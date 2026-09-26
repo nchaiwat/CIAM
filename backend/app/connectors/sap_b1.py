@@ -29,12 +29,11 @@ class SapB1Connector(BaseConnector):
         app_code: str = "sap_b1"
     ):
         self.app_code = app_code
-        self.raw_base_url = (base_url or "").rstrip("/")
-        # Clean base_url (remove trailing slash and /b1s/v1 or /b1s/v2 suffix if user added it)
-        raw_url = self.raw_base_url
-        if raw_url.endswith("/b1s/v2") or raw_url.endswith("/b1s/v1"):
-            raw_url = raw_url.rsplit("/b1s/", 1)[0]
-        self.base_url = raw_url
+        self.raw_base_url = (base_url or "").strip().rstrip("/")
+        # Robustly clean base_url to just scheme and host (e.g. https://sapb1.waapps.net)
+        # Strips any trailing /b1s, /b1s/v1, /b1s/v2, /b1s/v2/Login, /b1s/v1/Login, etc.
+        clean_url = re.sub(r'/b1s(/v[12])?(/.*)?$', '', self.raw_base_url, flags=re.IGNORECASE)
+        self.base_url = clean_url.rstrip("/")
         self.api_key = api_key or ""
         self.company_db = (company_db or "").strip()
         self.sap_username = (sap_username or "").strip()
@@ -580,7 +579,8 @@ class SapB1Connector(BaseConnector):
             for strat_name, strat_headers in strategies_to_test:
                 try:
                     resp = session.get(url, headers=strat_headers, timeout=25, verify=False, allow_redirects=True)
-                    audit_trail.append(f"{strat_name} -> {url.split('/b1s/')[1].split('?')[0]}: HTTP {resp.status_code}")
+                    short_ep = url.replace(self.base_url, "").split("?")[0]
+                    audit_trail.append(f"{strat_name} -> {short_ep}: HTTP {resp.status_code}")
                 except Exception as exc:
                     audit_trail.append(f"{strat_name} -> Network Error: {str(exc)[:100]}")
                     continue
