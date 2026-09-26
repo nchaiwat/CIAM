@@ -101,25 +101,21 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
             from app.core.config import settings
             import httpx
 
+            ad_app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "ad").first()
+
             # --- Build candidate AD Gateway URLs ---
             # The Docker container (VPS) uses 172.18.0.1 as the Docker host bridge IP
             # which tunnels through plink.exe VPN to reach the On-Prem AD Sync Agent.
-            # Never rely solely on the DB base_url which may store a private IP (192.168.12.x)
-            # that is unreachable from the Docker container environment.
-            def _normalize_ad_base(url: str) -> str:
-                """Strip /api/v2/login suffix and trailing slash."""
+            # Other apps (IRM, PettyCash) also use http://172.18.0.1:3100/api/v2/login
+            def _norm(url: str) -> str:
                 return url.replace("/api/v2/login", "").rstrip("/")
 
-            db_base = _normalize_ad_base(ad_app.base_url) if ad_app and ad_app.base_url else None
-            cfg_base = _normalize_ad_base(settings.AD_GATEWAY_URL)
-
-            # Always include Docker bridge IP as primary candidate (most reliable from container)
+            db_base = _norm(ad_app.base_url) if ad_app and ad_app.base_url else None
+            cfg_base = _norm(settings.AD_GATEWAY_URL)
             docker_base = "http://172.18.0.1:3100"
-            url_candidates_raw = [docker_base, cfg_base]
-            if db_base:
-                url_candidates_raw.insert(0, db_base)  # DB value first, then fallbacks
 
-            # Deduplicate while preserving order
+            # Priority: DB value first, then Docker bridge (most reliable in container), then config
+            url_candidates_raw = [db_base, docker_base, cfg_base]
             seen_urls: set = set()
             url_candidates: list = []
             for u in url_candidates_raw:
@@ -131,7 +127,7 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
             primary_secret = (
                 (ad_app.client_secret or ad_app.api_key) if ad_app else None
             ) or getattr(settings, "AD_SECRET_KEY", None) or "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
-            origin_ip = (ad_app.sap_company_db if ad_app and ad_app.sap_company_db else None) or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
+            origin_ip = getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
 
             # Collect candidate (app_id, secret_key) pairs — tries all registered app credentials
             strategies = [
