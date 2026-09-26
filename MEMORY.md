@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-09-26  
-**Version:** 1.9.0 (AD Gateway UTC Timestamp Fix, Raw Probe Diagnostics in Audit Logs & Full-Screen Audit Detail UI)  
+**Version:** 1.9.1 (AD Login 500 Fix, App Name Integration & SAP B1 401 Authorization Header Resolution)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -54,6 +54,7 @@
 * **Connector Type:** `SAP_B1` (using [sap_b1.py](file:///d:/Python/Central-IAM/backend/app/connectors/sap_b1.py))
 * **Engine:** SAP B1 Service Layer REST API (`/b1s/v2`)
 * **Session & Cookie Standard:** Natural `requests.Session` cookie lifecycle matching production script `POS2Invoice` (retains `B1SESSION` and `ROUTEID` without cookie jar corruption or duplicate headers).
+* **Authorization Header Cascade:** Sends `Authorization` header (`Bearer {session_id}`, `Bearer {api_key}`, `Basic {base64}`, and pure Cookie) to satisfy Service Layer reverse proxy / gateway checks and resolve `HTTP 401 code 300 Authorization header not found`.
 * **Superuser & Employee Fallback:** Automatic fallback from `/b1s/v2/Users` (requires Superuser) to `/b1s/v2/EmployeesInfo` (`OHEM` general HR staff table).
 * **Isolation Rule:** Strict Spoke Isolation — never mix MasterIdentity or AD accounts into SAP B1 user lists.
 

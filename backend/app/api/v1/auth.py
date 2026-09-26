@@ -152,6 +152,7 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                     for cand_app_id, cand_secret in candidate_pairs:
                         payload = {
                             "app_id": cand_app_id,
+                            "app_name": cand_app_id,
                             "secret_key": cand_secret,
                             "username": clean_username,
                             "password": login_req.password,
@@ -165,6 +166,8 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                             "timestamp": timestamp_str,
                             "X-App-Id": cand_app_id,
                             "x-app-id": cand_app_id,
+                            "X-App-Name": cand_app_id,
+                            "x-app-name": cand_app_id,
                             "X-Secret-Key": cand_secret,
                             "x-secret-key": cand_secret,
                             "X-Management-API-Key": cand_secret,
@@ -176,6 +179,7 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                             ad_probe_logs.append({
                                 "url": ad_url,
                                 "app_id": cand_app_id,
+                                "app_name": cand_app_id,
                                 "user": clean_username,
                                 "status_code": ad_resp.status_code,
                                 "response": resp_text_preview,
@@ -216,6 +220,7 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                             ad_probe_logs.append({
                                 "url": ad_url,
                                 "app_id": cand_app_id,
+                                "app_name": cand_app_id,
                                 "user": clean_username,
                                 "error": err_str,
                                 "timestamp": timestamp_str
@@ -235,37 +240,42 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
             is_admin = clean_username.lower() in ["chaiwat.n", "admin", "superadmin"]
 
             # Ensure AdminUser record exists for access token & profile resolution
-            if not user:
-                from app.models.identity import MasterIdentity
-                from app.core.security import get_password_hash
-                import secrets
+            try:
+                if not user:
+                    from app.models.identity import MasterIdentity
+                    from app.core.security import hash_password
+                    import secrets
 
-                ident = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(clean_username)).first()
-                full_name = ident.full_name if ident else clean_username
-                email = ident.email if ident else f"{clean_username.lower()}@windowasia.com"
-                user_role = "SUPER_ADMIN" if is_admin else "PORTAL_USER"
+                    ident = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(clean_username)).first()
+                    full_name = ident.full_name if ident else clean_username
+                    email = ident.email if ident else f"{clean_username.lower()}@windowasia.com"
+                    user_role = "SUPER_ADMIN" if is_admin else "PORTAL_USER"
 
-                user = AdminUser(
-                    username=clean_username,
-                    email=email,
-                    full_name=full_name,
-                    hashed_password=get_password_hash(secrets.token_urlsafe(32)),
-                    role=user_role,
-                    is_active=True,
-                    failed_login_attempts=0
-                )
-                db.add(user)
-                db.commit()
-                db.refresh(user)
-            else:
-                user.failed_login_attempts = 0
-                user.locked_until = None
-                user.is_active = True
-                if is_admin and user.role != "SUPER_ADMIN":
-                    user.role = "SUPER_ADMIN"
-                db.commit()
-
-            logger.info("AD Authentication succeeded for user '%s' (Assigned role: %s)", clean_username, user.role)
+                    user = AdminUser(
+                        username=clean_username,
+                        email=email,
+                        full_name=full_name,
+                        hashed_password=hash_password(secrets.token_urlsafe(32)),
+                        role=user_role,
+                        is_active=True,
+                        failed_login_attempts=0
+                    )
+                    db.add(user)
+                    db.commit()
+                    db.refresh(user)
+                else:
+                    user.failed_login_attempts = 0
+                    user.locked_until = None
+                    user.is_active = True
+                    if is_admin and user.role != "SUPER_ADMIN":
+                        user.role = "SUPER_ADMIN"
+                    db.commit()
+                logger.info("AD Authentication succeeded for user '%s' (Assigned role: %s)", clean_username, user.role)
+            except Exception as user_provision_err:
+                logger.error("Error creating/updating AdminUser on AD login: %s", user_provision_err)
+                db.rollback()
+                # Re-query existing user in case of race condition
+                user = db.query(AdminUser).filter(AdminUser.username.ilike(clean_username)).first()
 
     if not is_valid:
         if user:

@@ -84,6 +84,11 @@ docker compose up -d api web
   - **Raw AD Probe Diagnostics:** บันทึกทุกคำขอและเนื้อหาดิบที่ AD Sync Agent ตอบกลับมาลงใน `IamAuditLog.details`
   - **Full-Screen Audit Modal (`audit-logs/page.tsx`):** เพิ่มโหมดขยายเต็มหน้าจอ (Full Screen) สำหรับ Admin พร้อมการ์ดแสดงผลการเชื่อมต่อ AD Sync Agent (URL, App ID, HTTP Status Code, และ Raw Response Body) โดยเฉพาะ
 
+### 6) การแก้ไขข้อผิดพลาด Login 500, App Name & SAP B1 401 (v1.9.1)
+- **AD Login 500 Fix:** แก้ไข `auth.py` กรณี AD Authenticate ผ่านแล้ว เกิด `ImportError: cannot import name 'get_password_hash'` ซึ่งฟังก์ชันจริงคือ `hash_password` พร้อมครอบ `try...except` ป้องกัน HTTP 500 และเพิ่ม `get_password_hash` alias ใน `security.py`
+- **App Name Integration:** ส่งทั้ง `app_id: "CIAM"` และ `app_name: "CIAM"` ใน Body และ Security Headers (`X-App-Id`, `X-App-Name`, `X-Forwarded-For: 157.173.219.153`)
+- **SAP B1 401 Authorization Header Fix:** แก้ไข `sap_b1.py` ใน `_get_headers` และ `_sync_with_requests_sync` ให้ส่ง `Authorization` header แบบครอบคลุม (`Bearer {session_id}`, `Bearer {api_key}`, `Basic {base64}`, และ pure Cookie) ทำให้ Gateway / Reverse Proxy ของ SAP Service Layer ยอมรับการดึงข้อมูลบัญชีผู้ใช้และปลดล็อคข้อผิดพลาด `HTTP 401 code 300 Authorization header not found`
+
 ---
 
 ## 4. กฎเหล็กและข้อกำหนดสำคัญ (Strict Architecture Rules)

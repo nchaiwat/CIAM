@@ -62,6 +62,17 @@ class SapB1Connector(BaseConnector):
 
         if cookie_parts:
             headers["Cookie"] = "; ".join(cookie_parts)
+
+        # Reverse proxies / API Gateways require an explicit Authorization header
+        if self.b1_session_id:
+            headers["Authorization"] = f"Bearer {self.b1_session_id}"
+        elif self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        elif self.sap_username and self.sap_password:
+            import base64
+            b64_user = base64.b64encode(f"{self.sap_username}:{self.sap_password}".encode()).decode()
+            headers["Authorization"] = f"Basic {b64_user}"
+
         return headers
 
     async def _ensure_session(self, client: httpx.AsyncClient) -> bool:
@@ -547,36 +558,70 @@ class SapB1Connector(BaseConnector):
             api_ver
         )
 
+        # Prepare candidate Authorization headers to satisfy reverse proxy / API gateway authentication
+        import base64
+        auth_candidates = []
+        if session_id:
+            auth_candidates.append(f"Bearer {session_id}")
+        if self.api_key:
+            auth_candidates.append(f"Bearer {self.api_key}")
+        if self.sap_username and self.sap_password:
+            b64_u = base64.b64encode(f"{self.sap_username}:{self.sap_password}".encode()).decode()
+            auth_candidates.append(f"Basic {b64_u}")
+            if self.company_db:
+                b64_db_u = base64.b64encode(f"{self.company_db}\\{self.sap_username}:{self.sap_password}".encode()).decode()
+                auth_candidates.append(f"Basic {b64_db_u}")
+        # Always include pure Cookie mode as a fallback
+        auth_candidates.append(None)
+
+        working_auth = None
+
         for ep in candidate_eps:
             url = ep
             ep_ok = False
             page_count = 0
             while url and page_count < 25:
                 page_count += 1
-                # Primary strategy: explicit Cookie header (most reliable through HTTPS proxies)
-                # This fixes the 401 "Authorization header not found" error on SAP Service Layer behind
-                # Apache/Nginx/Caddy reverse proxies on production VPS which may strip session cookies.
-                primary_headers = {
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                }
-                if cookie_str:
-                    primary_headers["Cookie"] = cookie_str
+                resp = None
 
-                resp = requests.get(
-                    url,
-                    headers=primary_headers,
-                    verify=False,
-                    timeout=25
-                )
+                # If a working authorization header is already established, prioritize it
+                auth_list = [working_auth] if working_auth is not None else auth_candidates
 
-                # Fallback: If explicit cookie header also fails, try via session jar
-                if resp.status_code == 401:
-                    resp_session = session.get(url, headers={"Accept": "application/json"}, timeout=25)
-                    if resp_session.status_code == 200:
-                        resp = resp_session
+                for cand_auth in auth_list:
+                    req_headers = {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                    }
+                    if cookie_str:
+                        req_headers["Cookie"] = cookie_str
+                    if cand_auth:
+                        req_headers["Authorization"] = cand_auth
 
-                if resp.status_code == 200:
+                    # 1. Native requests.Session get (standard approach as in POS2Invoice)
+                    try:
+                        resp = session.get(url, headers=req_headers, timeout=25, verify=False)
+                    except Exception as sess_err:
+                        logger.debug("session.get error for %s (auth=%s): %s", url, cand_auth[:15] if cand_auth else "None", sess_err)
+                        resp = None
+
+                    # 2. Standalone requests.get with manual Cookie header
+                    if resp is None or resp.status_code == 401:
+                        try:
+                            resp_direct = requests.get(url, headers=req_headers, timeout=25, verify=False)
+                            if resp_direct.status_code == 200 or (resp is None):
+                                resp = resp_direct
+                        except Exception:
+                            pass
+
+                    if resp is not None and resp.status_code == 200:
+                        working_auth = cand_auth
+                        logger.info("SAP B1 query SUCCESS on %s with auth candidate: %s", url, cand_auth[:15] if cand_auth else "CookieOnly")
+                        break
+                    elif resp is not None and resp.status_code not in [401, 403]:
+                        # Response is not an auth error (e.g. 404, 400, 500)
+                        break
+
+                if resp is not None and resp.status_code == 200:
                     ep_ok = True
                     is_employee_mode = "EmployeesInfo" in ep
                     data = resp.json()
@@ -593,12 +638,13 @@ class SapB1Connector(BaseConnector):
                     else:
                         break
                 else:
-                    last_error = f"HTTP {resp.status_code}: {resp.text[:400]}"
-                    logger.warning(
-                        "SAP endpoint FAILED: %s | cookie_sent=%s | status=%s | response=%s",
-                        url, cookie_str[:30] if cookie_str else "NONE",
-                        resp.status_code, resp.text[:200]
-                    )
+                    if resp is not None:
+                        last_error = f"HTTP {resp.status_code}: {resp.text[:400]}"
+                        logger.warning(
+                            "SAP endpoint FAILED: %s | cookie_sent=%s | status=%s | response=%s",
+                            url, cookie_str[:30] if cookie_str else "NONE",
+                            resp.status_code, resp.text[:200]
+                        )
                     break
             if ep_ok and all_records:
                 break
