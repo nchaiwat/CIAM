@@ -126,9 +126,8 @@ def verify_employee_credentials(
         ad_secret = (ad_app.client_secret or ad_app.api_key if ad_app else None) or settings.AD_SECRET_KEY
         origin_ip = (ad_app.sap_company_db if ad_app and ad_app.sap_company_db else None) or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
 
-        # 2. Thai Local Time (+7) formatted with trailing 'Z' and NO fractional seconds (ADAuthen.md Section 3)
-        tz_thai = timezone(timedelta(hours=7))
-        timestamp_str = datetime.now(tz_thai).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # 2. ISO 8601 UTC timestamp format (matches IRM and AD gateway requirement)
+        timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         ad_url = f"{ad_base}/api/v2/login"
         payload = {

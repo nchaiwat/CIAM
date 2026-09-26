@@ -55,13 +55,13 @@ class AdProxyConnector(BaseConnector):
         self.app_id = getattr(settings, "AD_APP_ID", "CIAM")
 
     def _get_headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-        # Thai local time (+7) format with trailing 'Z' per ADAuthen.md & AD_SYNC_AGENT_CIAM_EXTENSION.md
-        thai_now = datetime.now(timezone(timedelta(hours=7))).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # ISO 8601 UTC timestamp format with trailing 'Z'
+        utc_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         headers = {
             "Content-Type": "application/json",
-            "X-Request-Timestamp": thai_now,
-            "X-Timestamp": thai_now,
-            "timestamp": thai_now,
+            "X-Request-Timestamp": utc_now,
+            "X-Timestamp": utc_now,
+            "timestamp": utc_now,
         }
         if self.origin_ip:
             headers["X-Forwarded-For"] = self.origin_ip
@@ -281,7 +281,8 @@ class AdProxyConnector(BaseConnector):
             )
 
     async def sync_inventory(self) -> dict:
-        thai_now = datetime.now(timezone(timedelta(hours=7))).strftime("%Y-%m-%dT%H:%M:%SZ")
+        utc_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        thai_now = utc_now
         candidate_keys = []
         for k in [self.api_key, "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823", "mgmt_ciam_key_9a88b1c0d2e3f4a5"]:
             if k and k.strip() and k.strip() not in candidate_keys:

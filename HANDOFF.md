@@ -78,6 +78,12 @@ docker compose up -d api web
   - `PATCH /api/v1/ad/users/:username/status` (สำหรับ Offboarding)
 - **Login ผ่าน AD ทำงานได้ตามปกติ** ผ่าน `POST /api/v2/login` ที่มีอยู่แล้ว (ไม่ต้องสร้างใหม่)
 
+### 5) การแก้ไข UTC Timestamp และหน้าประวัติการใช้งานแบบขยายเต็มจอ (Audit Log Inspector)
+- **การแก้ไข:**
+  - **UTC Timestamp Fix:** แก้ไขการสร้าง `timestamp` ให้ใช้ `datetime.now(timezone.utc)` ตามมาตรฐาน ISO 8601 สากล (เหมือน IRM) แทนการเอาเวลาไทยไปแปะ `Z` ซึ่งทำให้ Agent คิดว่าเวลาเพี้ยน 7 ชั่วโมงและ Reject ด้วย `HTTP 403 Expired`
+  - **Raw AD Probe Diagnostics:** บันทึกทุกคำขอและเนื้อหาดิบที่ AD Sync Agent ตอบกลับมาลงใน `IamAuditLog.details`
+  - **Full-Screen Audit Modal (`audit-logs/page.tsx`):** เพิ่มโหมดขยายเต็มหน้าจอ (Full Screen) สำหรับ Admin พร้อมการ์ดแสดงผลการเชื่อมต่อ AD Sync Agent (URL, App ID, HTTP Status Code, และ Raw Response Body) โดยเฉพาะ
+
 ---
 
 ## 4. กฎเหล็กและข้อกำหนดสำคัญ (Strict Architecture Rules)
@@ -95,26 +101,22 @@ docker compose up -d api web
 
 ## 5. แผนงานสำหรับพัฒนาต่อ (Next Steps)
 
-1. **ทดสอบ Login และ SAP B1 บน VPS:**
-   - อัปเดต Backend ด้วยคำสั่ง `docker compose build api && docker compose up -d api`
-   - ทดสอบล็อกอินด้วยบัญชี AD `Chaiwat.N` และบัญชีพนักงานทั่วไป
-   - ทดสอบการดึงข้อมูลบัญชีผู้ใช้สดในหน้า SAP B1 Spoke
+1. **Deploy ขึ้น VPS และทดสอบ Login AD:**
+   - รัน `docker compose build api web && docker compose up -d api web` บน VPS
+   - ทดสอบล็อกอินด้วยบัญชี AD `Chaiwat.N`
+   - ตรวจสอบผลลัพธ์ผ่านหน้าจอ Audit Logs แบบเต็มจอ
 2. **SSO Portal App Launcher & Single Sign-On:**
    - ทดสอบการกด Launch Application จากหน้า `/portal` ไปยังระบบต่างๆ เช่น IRM ด้วย OIDC Token
-   - ปรับแต่งหน้า Portal ให้แสดงเฉพาะ Application ที่ผู้ใช้ได้รับสิทธิ์ (Mapped Roles)
 3. **Deprovisioning / Offboarding Flow:**
    - ทดสอบการกด Offboard พนักงาน 1 คน และตรวจสอบว่าระบบส่งคำสั่ง deprovision ไปยัง AD, SAP B1, และ IRM ครบทุก Spoke หรือไม่
-4. **Audit Trail & Reporting:**
-   - ตรวจสอบหน้า Logs และบันทึกประวัติการเข้าใช้งาน (Login Events) และประวัติการเปลี่ยนแปลงสิทธิ์ (Sync/Deprovision Events)
 
 ---
 
-> 📌 **สรุปสถานะล่าสุด:** Code ทั้งหมดได้รับการ Commit และ Push ขึ้นสาขา `main` เรียบร้อยแล้ว (Latest Commit: `fdabed3`).  
-> **คำสั่ง Deploy บน VPS (`/var/www/Ciam`):**
+> 📌 **คำสั่ง Deploy บน VPS (`/var/www/Ciam`):**
 > ```bash
 > cd /var/www/Ciam
 > git pull
-> docker compose build api
-> docker compose up -d api
+> docker compose build api web
+> docker compose up -d api web
 > ```
 

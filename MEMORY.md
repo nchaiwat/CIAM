@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-09-26  
-**Version:** 1.8.0 (AD Gateway Auth Multi-Strategy, SAP B1 Service Layer Session Stabilization & Strict Spoke Isolation)  
+**Version:** 1.9.0 (AD Gateway UTC Timestamp Fix, Raw Probe Diagnostics in Audit Logs & Full-Screen Audit Detail UI)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  

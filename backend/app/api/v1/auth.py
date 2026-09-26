@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -142,8 +143,8 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                     seen_combos.add((a_id, s_key))
                     candidate_pairs.append((a_id, s_key))
 
-            tz_thai = timezone(timedelta(hours=7))
-            timestamp_str = datetime.now(tz_thai).strftime("%Y-%m-%dT%H:%M:%SZ")
+            timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            ad_probe_logs: list = []
 
             with httpx.Client(timeout=8.0) as client:
                 for ad_base_candidate in url_candidates:
@@ -171,9 +172,18 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                         }
                         try:
                             ad_resp = client.post(ad_url, json=payload, headers=headers)
+                            resp_text_preview = ad_resp.text[:500]
+                            ad_probe_logs.append({
+                                "url": ad_url,
+                                "app_id": cand_app_id,
+                                "user": clean_username,
+                                "status_code": ad_resp.status_code,
+                                "response": resp_text_preview,
+                                "timestamp": timestamp_str
+                            })
                             logger.info(
                                 "AD Gateway auth probe URL=%s app_id=%s user=%s → HTTP %s: %s",
-                                ad_url, cand_app_id, clean_username, ad_resp.status_code, ad_resp.text[:200]
+                                ad_url, cand_app_id, clean_username, ad_resp.status_code, resp_text_preview[:200]
                             )
                             if ad_resp.status_code == 200:
                                 try:
@@ -189,6 +199,7 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                                     or ("user" in resp_data and not resp_data.get("error"))
                                     or ("userData" in resp_data and not resp_data.get("error"))
                                     or ("sAMAccountName" in resp_data and not resp_data.get("error"))
+                                    or ("data" in resp_data and not resp_data.get("error"))
                                 )
                                 if is_auth_ok and not resp_data.get("error"):
                                     ad_auth_success = True
@@ -199,17 +210,24 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                                     if ad_resp.status_code == 200:
                                         break
                             else:
-                                ad_err_detail = f"AD Gateway HTTP {ad_resp.status_code} ({ad_resp.text[:80]})"
+                                ad_err_detail = f"AD Gateway HTTP {ad_resp.status_code}: {resp_text_preview}"
                         except Exception as probe_err:
-                            ad_err_detail = f"AD Gateway connection error ({ad_base_candidate}): {str(probe_err)[:80]}"
+                            err_str = str(probe_err)
+                            ad_probe_logs.append({
+                                "url": ad_url,
+                                "app_id": cand_app_id,
+                                "user": clean_username,
+                                "error": err_str,
+                                "timestamp": timestamp_str
+                            })
+                            ad_err_detail = f"AD Gateway connection error ({ad_base_candidate}): {err_str[:120]}"
                             logger.warning("AD Gateway probe exception URL=%s app_id=%s: %s", ad_url, cand_app_id, probe_err)
                     if ad_auth_success:
                         break  # stop trying other URLs
 
-
         except Exception as ad_err:
             logger.warning("Active Directory login verification exception: %s", ad_err)
-            ad_err_detail = str(ad_err)[:100]
+            ad_err_detail = str(ad_err)[:150]
 
         if ad_auth_success:
             is_valid = True
@@ -264,7 +282,15 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                     reason=f"Account locked for {LOCKOUT_MINUTES} minutes after {user.failed_login_attempts} failed attempts",
                     details=f"User-Agent: {user_agent}"
                 ))
-            else:
+            audit_details_obj = {
+                "user_agent": user_agent,
+                "ip": client_ip,
+                "ad_gateway_probes": locals().get("ad_probe_logs", []),
+                "ad_error": locals().get("ad_err_detail", None),
+            }
+            audit_details_json = json.dumps(audit_details_obj, ensure_ascii=False)
+
+            if user:
                 db.add(IamAuditLog(
                     actor_username=f"user:{user.username}",
                     action_type="ADMIN_LOGIN_FAILED",
@@ -273,21 +299,19 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                     ip_address=client_ip,
                     status="FAILED",
                     reason=f"Invalid credentials (AD/Local): {ad_err_detail or 'Password mismatch'} (Attempt {user.failed_login_attempts}/{MAX_FAILED_ATTEMPTS})",
-                    details=f"User-Agent: {user_agent}, IP: {client_ip}"
+                    details=audit_details_json
                 ))
-            db.commit()
-        else:
-            # Non-existent user
-            db.add(IamAuditLog(
-                actor_username=f"ip:{client_ip}",
-                action_type="ADMIN_LOGIN_FAILED",
-                target_username=login_req.username[:100],
-                execution_mode="PASSWORD_AUTH",
-                ip_address=client_ip,
-                status="FAILED",
-                reason=f"Authentication failed (AD/Local): {ad_err_detail or 'User not found in directory'}",
-                details=f"User-Agent: {user_agent}"
-            ))
+            else:
+                db.add(IamAuditLog(
+                    actor_username=f"ip:{client_ip}",
+                    action_type="ADMIN_LOGIN_FAILED",
+                    target_username=login_req.username[:100],
+                    execution_mode="PASSWORD_AUTH",
+                    ip_address=client_ip,
+                    status="FAILED",
+                    reason=f"Authentication failed (AD/Local): {ad_err_detail or 'User not found in directory'}",
+                    details=audit_details_json
+                ))
             db.commit()
 
         # ISO 27001 A.9.4.2: Generic error message to prevent username enumeration
@@ -318,6 +342,12 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
     user.failed_login_attempts = 0
     user.locked_until = None
     user.last_login_at = now
+    success_details_obj = {
+        "role": user.role,
+        "ip": client_ip,
+        "user_agent": user_agent,
+        "ad_gateway_probes": locals().get("ad_probe_logs", []),
+    }
     db.add(IamAuditLog(
         actor_username=f"user:{user.username}",
         action_type="ADMIN_LOGIN_SUCCESS",
@@ -326,7 +356,7 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
         ip_address=client_ip,
         status="SUCCESS",
         reason=f"User authenticated successfully ({auth_mode})",
-        details=f"Role: {user.role}, IP: {client_ip}, User-Agent: {user_agent}"
+        details=json.dumps(success_details_obj, ensure_ascii=False)
     ))
     db.commit()
 
