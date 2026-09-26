@@ -514,29 +514,19 @@ class SapB1Connector(BaseConnector):
             list(login_data.keys()) if login_data else []
         )
 
-        # Unset secure flag so cookies are sent over HTTP connections
-        for c in session.cookies:
-            c.secure = False
+        # Match Postman exactly: clear internal cookie jar and send explicit Cookie header
+        session.cookies.clear()
 
-        # Only inject into session.cookies if not already captured by requests.Session from Login response
-        has_b1session = any(c.name.upper() == "B1SESSION" for c in session.cookies)
-        if not has_b1session and session_id:
-            session.cookies.set("B1SESSION", session_id, path="/")
-        has_routeid = any(c.name.upper() == "ROUTEID" for c in session.cookies)
-        if not has_routeid and route_id:
-            session.cookies.set("ROUTEID", route_id, path="/")
+        cookie_header_val = f"B1SESSION={session_id}"
+        if route_id:
+            cookie_header_val += f"; ROUTEID={route_id}"
 
-        # Standard query headers (matching POS2Invoice pattern: NO Authorization header, NO Content-Type on GET)
         query_headers = {
             "Accept": "application/json",
-            "Prefer": "odata.maxpagesize=250"
+            "User-Agent": "PostmanRuntime/7.43.0",
+            "Prefer": "odata.maxpagesize=250",
+            "Cookie": cookie_header_val
         }
-        # If requests cookie jar has no cookies, supply fallback Cookie header
-        if not any(c.name.upper() == "B1SESSION" for c in session.cookies) and session_id:
-            fallback_parts = [f"B1SESSION={session_id}"]
-            if route_id:
-                fallback_parts.append(f"ROUTEID={route_id}")
-            query_headers["Cookie"] = "; ".join(fallback_parts)
 
         all_records = []
         is_employee_mode = False
