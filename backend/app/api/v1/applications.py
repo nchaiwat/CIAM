@@ -2,6 +2,7 @@ import secrets
 from typing import List
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.api.deps import get_current_admin
@@ -424,6 +425,38 @@ async def sync_application_inventory(
                 mapping.last_app_login_at = last_login_dt
 
         synced_count += 1
+
+    # Prune stale/orphaned mappings that no longer exist in the target spoke application
+    live_usernames = {
+        (item.get("username") or "").strip().lower()
+        for item in raw_accounts
+        if (item.get("username") or "").strip()
+    }
+
+    if live_usernames:
+        stale_mappings = (
+            db.query(AppAccountMapping)
+            .filter(
+                AppAccountMapping.application_id == app.id,
+                ~func.lower(AppAccountMapping.app_username).in_(live_usernames)
+            )
+            .all()
+        )
+        for stale in stale_mappings:
+            db.delete(stale)
+
+        # If syncing AD, mark MasterIdentity as inactive in AD if they are no longer in AD inventory
+        if app.app_code.lower() == "ad":
+            stale_identities = (
+                db.query(MasterIdentity)
+                .filter(
+                    MasterIdentity.is_active_in_ad == True,
+                    ~func.lower(MasterIdentity.username).in_(live_usernames)
+                )
+                .all()
+            )
+            for st_id in stale_identities:
+                st_id.is_active_in_ad = False
 
     app.last_sync_at = now
     app.health_status = "ONLINE"

@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.models.setting import SystemSetting
@@ -167,6 +168,36 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
                         mapping.last_app_login_at = last_login_dt
 
                 synced_for_app += 1
+
+            # Prune stale/orphaned mappings that no longer exist in the target spoke application
+            live_usernames = {
+                (item.get("username") or "").strip().lower()
+                for item in raw_accounts
+                if (item.get("username") or "").strip()
+            }
+            if live_usernames:
+                stale_mappings = (
+                    db.query(AppAccountMapping)
+                    .filter(
+                        AppAccountMapping.application_id == app.id,
+                        ~func.lower(AppAccountMapping.app_username).in_(live_usernames)
+                    )
+                    .all()
+                )
+                for stale in stale_mappings:
+                    db.delete(stale)
+
+                if app.app_code.lower() == "ad":
+                    stale_identities = (
+                        db.query(MasterIdentity)
+                        .filter(
+                            MasterIdentity.is_active_in_ad == True,
+                            ~func.lower(MasterIdentity.username).in_(live_usernames)
+                        )
+                        .all()
+                    )
+                    for st_id in stale_identities:
+                        st_id.is_active_in_ad = False
 
             app.last_sync_at = now_utc
             app.health_status = "ONLINE"
