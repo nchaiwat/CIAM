@@ -511,20 +511,21 @@ class SapB1Connector(BaseConnector):
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo"
         ]
 
-        from urllib.parse import urlparse
-        domain = urlparse(self.base_url).hostname
-        if session_id:
-            if domain:
-                session.cookies.set("B1SESSION", session_id, domain=domain, path="/")
-            session.cookies.set("B1SESSION", session_id, path="/")
-        if route_id:
-            if domain:
-                session.cookies.set("ROUTEID", route_id, domain=domain, path="/")
+        # Only inject cookies if completely absent from session.cookies (never duplicate existing cookies)
+        has_b1session = any(c.name.upper() == "B1SESSION" for c in session.cookies)
+        has_routeid = any(c.name.upper() == "ROUTEID" for c in session.cookies)
+
+        if not has_b1session and session_id:
+            session.cookies.set("B1SESSION", session_id, path=f"/b1s/{api_ver}")
+        if not has_routeid and route_id:
             session.cookies.set("ROUTEID", route_id, path="/")
 
-        cookie_str = f"B1SESSION={session_id}"
+        cookie_parts = []
+        if session_id:
+            cookie_parts.append(f"B1SESSION={session_id}")
         if route_id:
-            cookie_str += f"; ROUTEID={route_id}"
+            cookie_parts.append(f"ROUTEID={route_id}")
+        cookie_str = "; ".join(cookie_parts)
 
         all_records = []
         is_employee_mode = False
@@ -537,17 +538,24 @@ class SapB1Connector(BaseConnector):
             while url and page_count < 25:
                 page_count += 1
                 # Attempt 1: Standard session.get with native CookieJar (matching POS2Invoice)
-                resp = session.get(url, headers={"Accept": "application/json"}, timeout=20)
-                # Attempt 2: If 401 code 300, try explicit Cookie header via standalone requests.get
-                if resp.status_code == 401:
-                    resp_try = requests.get(
-                        url,
-                        headers={"Accept": "application/json", "Cookie": cookie_str},
-                        verify=False,
-                        timeout=20
-                    )
-                    if resp_try.status_code == 200:
-                        resp = resp_try
+                resp = session.get(url, headers={"Accept": "application/json"}, timeout=25)
+                # Attempt 2: If 401 code 300, try explicit clean Cookie header via standalone requests.get
+                if resp.status_code == 401 and cookie_str:
+                    try:
+                        resp_try = requests.get(
+                            url,
+                            headers={
+                                "Accept": "application/json",
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                                "Cookie": cookie_str
+                            },
+                            verify=False,
+                            timeout=25
+                        )
+                        if resp_try.status_code == 200:
+                            resp = resp_try
+                    except Exception as try_err:
+                        logger.warning("Retry with explicit cookie header failed: %s", try_err)
 
                 if resp.status_code == 200:
                     ep_ok = True

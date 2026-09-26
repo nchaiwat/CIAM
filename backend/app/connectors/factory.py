@@ -6,6 +6,7 @@ from app.connectors.sap_b1 import SapB1Connector
 from app.connectors.ad_proxy import AdProxyConnector
 from app.connectors.rpa.mock_legacy import MockLegacyErpRpaAdapter
 from app.connectors.m365_graph import M365GraphConnector
+from app.core.config import settings
 
 def get_connector_for_app(app: ConnectedApplication) -> BaseConnector:
     """Instantiate appropriate connector based on application connector_type and code."""

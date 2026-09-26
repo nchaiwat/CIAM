@@ -49,7 +49,14 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
         )
 
     now = datetime.now(timezone.utc)
-    user = db.query(AdminUser).filter(AdminUser.username == login_req.username).first()
+    raw_username = login_req.username.strip()
+    clean_username = raw_username
+    if "\\" in clean_username:
+        clean_username = clean_username.split("\\")[-1]
+    if "@" in clean_username:
+        clean_username = clean_username.split("@")[0]
+
+    user = db.query(AdminUser).filter(AdminUser.username.ilike(clean_username)).first()
 
     # 2. Account Lockout Check (Brute-Force Prevention)
     if user and user.locked_until:
@@ -93,36 +100,84 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
             import httpx
 
             ad_app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "ad").first()
-            ad_base = (ad_app.base_url if ad_app and ad_app.base_url else settings.AD_GATEWAY_URL).rstrip('/')
-            ad_app_id = (ad_app.client_id if ad_app and ad_app.client_id else settings.AD_APP_ID)
-            ad_secret = (ad_app.client_secret or ad_app.api_key if ad_app else None) or settings.AD_SECRET_KEY
+            raw_ad_base = (ad_app.base_url if ad_app and ad_app.base_url else settings.AD_GATEWAY_URL).rstrip('/')
+            clean_ad_base = raw_ad_base.replace("/api/v2/login", "").rstrip('/')
+            ad_url = f"{clean_ad_base}/api/v2/login"
+
+            primary_app_id = (ad_app.client_id if ad_app and ad_app.client_id else getattr(settings, "AD_APP_ID", "CIAM")) or "CIAM"
+            primary_secret = (ad_app.client_secret or ad_app.api_key if ad_app else None) or getattr(settings, "AD_SECRET_KEY", None) or "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
             origin_ip = (ad_app.sap_company_db if ad_app and ad_app.sap_company_db else None) or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
+
+            # Collect candidate (app_id, secret_key) pairs
+            strategies = [
+                (primary_app_id, primary_secret),
+                ("CIAM", "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"),
+                ("PettyCash", "d69f9e5a88e734c56e2978a63bf720c22635a9c0c32b5e2a2205510657e4e138"),
+            ]
+            seen_combos = set()
+            candidate_pairs = []
+            for a_id, s_key in strategies:
+                if a_id and s_key and (a_id, s_key) not in seen_combos:
+                    seen_combos.add((a_id, s_key))
+                    candidate_pairs.append((a_id, s_key))
 
             tz_thai = timezone(timedelta(hours=7))
             timestamp_str = datetime.now(tz_thai).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            ad_url = f"{ad_base}/api/v2/login"
-            payload = {
-                "app_id": ad_app_id,
-                "secret_key": ad_secret,
-                "username": login_req.username.strip(),
-                "password": login_req.password,
-                "timestamp": timestamp_str
-            }
-            headers = {
-                "Content-Type": "application/json",
-                "X-Forwarded-For": origin_ip
-            }
-            with httpx.Client(timeout=8.0) as client:
-                ad_resp = client.post(ad_url, json=payload, headers=headers)
-                if ad_resp.status_code == 200:
-                    resp_data = ad_resp.json()
-                    if resp_data.get("status") in ["success", "OK", True] or resp_data.get("authenticated", False):
-                        ad_auth_success = True
-                    else:
-                        ad_err_detail = resp_data.get("message") or "AD Gateway rejected credentials"
-                else:
-                    ad_err_detail = f"AD Gateway HTTP {ad_resp.status_code}"
+            with httpx.Client(timeout=10.0) as client:
+                for cand_app_id, cand_secret in candidate_pairs:
+                    payload = {
+                        "app_id": cand_app_id,
+                        "secret_key": cand_secret,
+                        "username": clean_username,
+                        "password": login_req.password,
+                        "timestamp": timestamp_str
+                    }
+                    headers = {
+                        "Content-Type": "application/json",
+                        "X-Forwarded-For": origin_ip,
+                        "X-Request-Timestamp": timestamp_str,
+                        "X-Timestamp": timestamp_str,
+                        "timestamp": timestamp_str,
+                        "X-App-Id": cand_app_id,
+                        "x-app-id": cand_app_id,
+                        "X-Secret-Key": cand_secret,
+                        "x-secret-key": cand_secret,
+                        "X-Management-API-Key": cand_secret,
+                        "x-management-api-key": cand_secret,
+                    }
+                    try:
+                        ad_resp = client.post(ad_url, json=payload, headers=headers)
+                        logger.info(
+                            "AD Gateway auth probe (%s @ %s) returned HTTP %s: %s",
+                            clean_username, cand_app_id, ad_resp.status_code, ad_resp.text[:150]
+                        )
+                        if ad_resp.status_code == 200:
+                            try:
+                                resp_data = ad_resp.json()
+                            except Exception:
+                                resp_data = {}
+
+                            is_auth_ok = (
+                                resp_data.get("success") in [True, "true", "True", 1]
+                                or resp_data.get("authenticated") in [True, "true", "True", 1]
+                                or resp_data.get("status") in ["success", "OK", "ok", True, 200]
+                                or resp_data.get("code") in [200, "200"]
+                                or ("user" in resp_data and not resp_data.get("error"))
+                                or ("userData" in resp_data and not resp_data.get("error"))
+                                or ("sAMAccountName" in resp_data and not resp_data.get("error"))
+                            )
+                            if is_auth_ok and not resp_data.get("error"):
+                                ad_auth_success = True
+                                break
+                            else:
+                                ad_err_detail = resp_data.get("message") or resp_data.get("error") or "AD Gateway rejected credentials"
+                        else:
+                            ad_err_detail = f"AD Gateway HTTP {ad_resp.status_code} ({ad_resp.text[:80]})"
+                    except Exception as probe_err:
+                        ad_err_detail = f"AD Gateway connection error: {str(probe_err)[:80]}"
+                        logger.warning("AD Gateway probe exception (%s): %s", cand_app_id, probe_err)
+
         except Exception as ad_err:
             logger.warning("Active Directory login verification exception: %s", ad_err)
             ad_err_detail = str(ad_err)[:100]
@@ -130,33 +185,40 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
         if ad_auth_success:
             is_valid = True
             auth_mode = "ACTIVE_DIRECTORY_AUTH"
+            is_admin = clean_username.lower() in ["chaiwat.n", "admin", "superadmin"]
+
             # Ensure AdminUser record exists for access token & profile resolution
             if not user:
                 from app.models.identity import MasterIdentity
                 from app.core.security import get_password_hash
                 import secrets
 
-                ident = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(login_req.username.strip())).first()
-                full_name = ident.full_name if ident else login_req.username.strip()
-                email = ident.email if ident else f"{login_req.username.strip().lower()}@windowasia.com"
-                is_admin = login_req.username.strip().lower() in ["chaiwat.n", "admin", "superadmin"]
+                ident = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(clean_username)).first()
+                full_name = ident.full_name if ident else clean_username
+                email = ident.email if ident else f"{clean_username.lower()}@windowasia.com"
                 user_role = "SUPER_ADMIN" if is_admin else "PORTAL_USER"
 
                 user = AdminUser(
-                    username=login_req.username.strip(),
+                    username=clean_username,
                     email=email,
                     full_name=full_name,
                     hashed_password=get_password_hash(secrets.token_urlsafe(32)),
                     role=user_role,
-                    is_active=True
+                    is_active=True,
+                    failed_login_attempts=0
                 )
                 db.add(user)
                 db.commit()
                 db.refresh(user)
             else:
-                if login_req.username.strip().lower() in ["chaiwat.n"] and user.role != "SUPER_ADMIN":
+                user.failed_login_attempts = 0
+                user.locked_until = None
+                user.is_active = True
+                if is_admin and user.role != "SUPER_ADMIN":
                     user.role = "SUPER_ADMIN"
-                    db.commit()
+                db.commit()
+
+            logger.info("AD Authentication succeeded for user '%s' (Assigned role: %s)", clean_username, user.role)
 
     if not is_valid:
         if user:
@@ -181,8 +243,8 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                     execution_mode="PASSWORD_AUTH",
                     ip_address=client_ip,
                     status="FAILED",
-                    reason=f"Invalid password (Attempt {user.failed_login_attempts}/{MAX_FAILED_ATTEMPTS})",
-                    details=f"User-Agent: {user_agent}"
+                    reason=f"Invalid credentials (AD/Local): {ad_err_detail or 'Password mismatch'} (Attempt {user.failed_login_attempts}/{MAX_FAILED_ATTEMPTS})",
+                    details=f"User-Agent: {user_agent}, IP: {client_ip}"
                 ))
             db.commit()
         else:

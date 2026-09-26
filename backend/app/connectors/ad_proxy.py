@@ -22,8 +22,8 @@ class AdProxyConnector(BaseConnector):
         allow_status_patch: bool = False,
         origin_ip: Optional[str] = None
     ):
-        self.app_code = "ad"
-        self.base_url = (base_url or settings.AD_GATEWAY_URL or "http://172.18.0.1:3100").rstrip("/")
+        raw_endpoint = base_url or settings.AD_GATEWAY_URL or "http://172.18.0.1:3100"
+        self.base_url = raw_endpoint.replace("/api/v2/login", "").rstrip("/")
         raw_key = api_key or getattr(settings, "AD_SECRET_KEY", None) or getattr(settings, "AD_MANAGEMENT_KEY", None)
         if not raw_key or raw_key.strip() in ["mgmt_ciam_key_9a88b1c0d2e3f4a5", ""]:
             raw_key = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
