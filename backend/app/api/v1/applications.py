@@ -378,15 +378,19 @@ async def sync_application_inventory(
             if (not identity.full_name or identity.full_name == identity.username) and item.get("full_name"):
                 identity.full_name = item.get("full_name")
 
-        # Check existing mapping
-        mapping = (
+        # Check existing mapping (case-insensitive to prevent duplicate rows)
+        existing_mappings = (
             db.query(AppAccountMapping)
             .filter(
                 AppAccountMapping.application_id == app.id,
-                AppAccountMapping.app_username == uname
+                func.lower(AppAccountMapping.app_username) == uname.lower()
             )
-            .first()
+            .all()
         )
+        mapping = existing_mappings[0] if existing_mappings else None
+        if len(existing_mappings) > 1:
+            for dup in existing_mappings[1:]:
+                db.delete(dup)
 
         is_active = bool(item.get("is_active", True))
         # Flag discrepancy: disabled in AD but active in app
@@ -416,7 +420,7 @@ async def sync_application_inventory(
             db.add(mapping)
         else:
             mapping.identity_id = identity.id
-            mapping.app_username = uname
+            mapping.app_username = uname  # Normalize casing to current live username
             mapping.app_user_id = str(item.get("id")) if item.get("id") is not None else mapping.app_user_id
             mapping.app_group_name = item.get("group_name")
             mapping.is_active_in_app = is_active
@@ -444,6 +448,23 @@ async def sync_application_inventory(
         )
         for stale in stale_mappings:
             db.delete(stale)
+
+        db.flush()
+
+        # Deduplicate any remaining mappings for this app that differ only by case
+        all_app_mappings = (
+            db.query(AppAccountMapping)
+            .filter(AppAccountMapping.application_id == app.id)
+            .order_by(AppAccountMapping.id.asc())
+            .all()
+        )
+        seen_lower = set()
+        for m in all_app_mappings:
+            low = m.app_username.strip().lower()
+            if low in seen_lower:
+                db.delete(m)
+            else:
+                seen_lower.add(low)
 
         # If syncing AD, mark MasterIdentity as inactive in AD if they are no longer in AD inventory
         if app.app_code.lower() == "ad":
