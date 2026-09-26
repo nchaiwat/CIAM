@@ -526,17 +526,20 @@ class SapB1Connector(BaseConnector):
 
         # Define headers matching proven clients
         headers_native = {
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "Prefer": "odata.maxpagesize=200"
         }
         headers_postman_cookie = {
             "Accept": "application/json",
             "User-Agent": "PostmanRuntime/7.43.0",
-            "Cookie": f"B1SESSION={session_id}"
+            "Cookie": f"B1SESSION={session_id}",
+            "Prefer": "odata.maxpagesize=200"
         }
         headers_postman_both = {
             "Accept": "application/json",
             "User-Agent": "PostmanRuntime/7.43.0",
-            "Cookie": cookie_header_val
+            "Cookie": cookie_header_val,
+            "Prefer": "odata.maxpagesize=200"
         }
 
         # Strategies to try in priority order
@@ -546,12 +549,11 @@ class SapB1Connector(BaseConnector):
             ("Postman-BothCookies", headers_postman_both),
         ]
 
-        # Prioritize exact endpoints proven in Postman
+        # Prioritize exact endpoints to fetch all records
         candidate_eps = [
-            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active&$top=10",
-            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active&$top=250",
+            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active",
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo",
-            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked&$top=250",
+            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked",
             f"{self.base_url}/b1s/{api_ver}/Users"
         ]
 
@@ -597,7 +599,7 @@ class SapB1Connector(BaseConnector):
 
                         # Follow pagination
                         next_link = data.get("@odata.nextLink") or data.get("odata.nextLink")
-                        while next_link and page_count < 25:
+                        while next_link and page_count < 100:
                             page_count += 1
                             if next_link.startswith("http"):
                                 next_url = next_link
