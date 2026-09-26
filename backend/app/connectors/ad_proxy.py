@@ -19,12 +19,12 @@ class AdProxyConnector(BaseConnector):
         self,
         base_url: Optional[str] = None,
         api_key: Optional[str] = None,
+        secret_key: Optional[str] = None,
         allow_status_patch: bool = False,
         origin_ip: Optional[str] = None
     ):
         # Docker bridge IP (172.18.0.1) is the correct host IP from inside Docker container on VPS.
         # It routes through the plink.exe SSH tunnel to reach the On-Prem AD Sync Agent on port 3100.
-        # Private IPs (192.168.x.x, 192.168.12.x) are NOT reachable from Docker unless explicitly tunnelled.
         raw_endpoint = (base_url or settings.AD_GATEWAY_URL or "http://172.18.0.1:3100").replace("/api/v2/login", "").rstrip("/")
 
         # Detect private subnet IP that won't work from Docker container
@@ -46,10 +46,10 @@ class AdProxyConnector(BaseConnector):
             self.base_url = raw_endpoint
             self.base_url_fallbacks = [DOCKER_BRIDGE] if raw_endpoint != DOCKER_BRIDGE else []
 
-        raw_key = api_key or getattr(settings, "AD_SECRET_KEY", None) or getattr(settings, "AD_MANAGEMENT_KEY", None)
-        if not raw_key or raw_key.strip() in ["mgmt_ciam_key_9a88b1c0d2e3f4a5", ""]:
-            raw_key = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
-        self.api_key = raw_key.strip()
+        # Management API key for ciam-extension (GET /api/v1/ad/users, PATCH /status)
+        self.api_key = (api_key or getattr(settings, "AD_MANAGEMENT_KEY", None) or "mgmt_ciam_key_9a88b1c0d2e3f4a5").strip()
+        # Secret key for registry.json (POST /api/v2/login)
+        self.secret_key = (secret_key or getattr(settings, "AD_SECRET_KEY", None) or "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823").strip()
         self.allow_status_patch = allow_status_patch
         self.origin_ip = origin_ip or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
         self.app_id = getattr(settings, "AD_APP_ID", "CIAM")
@@ -65,16 +65,15 @@ class AdProxyConnector(BaseConnector):
         }
         if self.origin_ip:
             headers["X-Forwarded-For"] = self.origin_ip
-        if self.api_key:
-            headers["x-management-api-key"] = self.api_key
-            headers["X-Management-API-Key"] = self.api_key
-            headers["x-api-key"] = self.api_key
-            headers["X-API-Key"] = self.api_key
-            headers["x-secret-key"] = self.api_key
-            headers["X-Secret-Key"] = self.api_key
-            headers["x-app-id"] = self.app_id
-            headers["X-App-Id"] = self.app_id
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        headers["x-management-api-key"] = self.api_key
+        headers["X-Management-API-Key"] = self.api_key
+        headers["x-secret-key"] = self.secret_key
+        headers["X-Secret-Key"] = self.secret_key
+        headers["x-api-key"] = self.api_key
+        headers["X-API-Key"] = self.api_key
+        headers["x-app-id"] = self.app_id
+        headers["X-App-Id"] = self.app_id
+        headers["Authorization"] = f"Bearer {self.api_key}"
         if extra:
             headers.update(extra)
         return headers
@@ -282,19 +281,15 @@ class AdProxyConnector(BaseConnector):
 
     async def sync_inventory(self) -> dict:
         utc_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        thai_now = utc_now
+
+        # Keys to try: Management key first (expected by ciam-extension verifyManagementKey), then secret key fallback
         candidate_keys = []
-        for k in [self.api_key, "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823", "mgmt_ciam_key_9a88b1c0d2e3f4a5"]:
+        for k in [self.api_key, "mgmt_ciam_key_9a88b1c0d2e3f4a5", self.secret_key, "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"]:
             if k and k.strip() and k.strip() not in candidate_keys:
                 candidate_keys.append(k.strip())
 
-        candidate_paths = ["/api/v1/ad/users", "/api/ad/users", "/api/v1/users", "/api/v2/users"]
-        last_err = ""
-        last_status = 0
-
-        # Build ordered list of base URLs to try: primary first, then fallbacks (Docker bridge etc.)
+        # Build ordered list of base URLs to try
         all_base_urls = [self.base_url] + getattr(self, "base_url_fallbacks", [])
-        # Deduplicate
         seen_urls: set = set()
         base_url_candidates: list = []
         for u in all_base_urls:
@@ -302,125 +297,91 @@ class AdProxyConnector(BaseConnector):
                 seen_urls.add(u)
                 base_url_candidates.append(u)
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        last_err = ""
+        last_status = 0
+
+        # Extended timeout: PowerShell Get-ADUser on Windows server can take 5-25 seconds
+        async with httpx.AsyncClient(timeout=45.0) as client:
             for base_candidate in base_url_candidates:
+                ep = f"{base_candidate}/api/v1/ad/users"
                 for key in candidate_keys:
                     headers = {
                         "Content-Type": "application/json",
-                        "X-Request-Timestamp": thai_now,
-                        "X-Timestamp": thai_now,
-                        "timestamp": thai_now,
+                        "X-Request-Timestamp": utc_now,
+                        "X-Timestamp": utc_now,
+                        "timestamp": utc_now,
                         "X-Forwarded-For": self.origin_ip,
-                        "X-Management-API-Key": key,
                         "x-management-api-key": key,
-                        "X-Secret-Key": key,
-                        "x-secret-key": key,
-                        "X-API-Key": key,
+                        "X-Management-API-Key": key,
+                        "x-secret-key": self.secret_key,
+                        "X-Secret-Key": self.secret_key,
                         "x-api-key": key,
-                        "X-App-Id": self.app_id,
+                        "X-API-Key": key,
                         "x-app-id": self.app_id,
-                        "Authorization": f"Bearer {key}",
+                        "X-App-Id": self.app_id,
                     }
-                    body_payload = {
-                        "app_id": self.app_id,
-                        "secret_key": key,
-                        "api_key": key,
-                        "timestamp": thai_now
-                    }
+                    try:
+                        res = await client.get(ep, headers=headers)
+                        if res.status_code == 200:
+                            data = res.json()
+                            normalized = self._normalize_ad_users(data)
+                            if normalized.get("total_accounts", 0) > 0:
+                                logger.info("AD sync_inventory success: fetched %d accounts via GET %s (key %s...)", normalized["total_accounts"], ep, key[:8])
+                                return normalized
+                        last_status = res.status_code
+                        last_err = res.text[:300]
+                        logger.warning("AD GET %s (key %s...) → HTTP %s: %s", ep, key[:8], res.status_code, last_err)
+                    except Exception as exc:
+                        last_err = str(exc)
+                        logger.warning("AD GET %s connection error: %s", ep, exc)
 
-                    for path in candidate_paths:
-                        base_ep = f"{base_candidate}{path}"
-
-                        # Attempt 1: GET with headers
-                        try:
-                            res = await client.get(base_ep, headers=headers)
-                            if res.status_code == 200:
-                                logger.info("AD sync_inventory success via GET %s (key prefix: %s...)", base_ep, key[:8])
-                                return self._normalize_ad_users(res.json())
-                            last_status = res.status_code
-                            last_err = res.text[:300]
-                            logger.debug("AD GET %s → HTTP %s: %s", base_ep, res.status_code, res.text[:100])
-                        except Exception as e:
-                            last_err = str(e)
-
-                        # Attempt 2: GET with query params
-                        try:
-                            q_url = f"{base_ep}?app_id={self.app_id}&secret_key={key}&api_key={key}&timestamp={thai_now}"
-                            res = await client.get(q_url, headers=headers)
-                            if res.status_code == 200:
-                                logger.info("AD sync_inventory success via GET+params %s", base_ep)
-                                return self._normalize_ad_users(res.json())
-                            last_status = res.status_code
-                            last_err = res.text[:300]
-                        except Exception as e:
-                            last_err = str(e)
-
-                        # Attempt 3: POST with JSON body (matching ADAuthen.md POST format)
-                        try:
-                            res = await client.post(base_ep, headers=headers, json=body_payload)
-                            if res.status_code == 200:
-                                logger.info("AD sync_inventory success via POST %s", base_ep)
-                                return self._normalize_ad_users(res.json())
-                            last_status = res.status_code
-                            last_err = res.text[:300]
-                        except Exception as e:
-                            last_err = str(e)
-
-        # If all candidates failed, check status code
+        # If Agent specifically rejected authentication or IP
         if last_status == 401:
-            raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 401): {last_err or 'Invalid Key'}")
+            raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 401): {last_err or 'Invalid Management Key'}")
         elif last_status == 403:
-            raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 403 IP Whitelist): ตรวจสอบ allowed_ips ({self.origin_ip}) บน AD Agent: {last_err}")
-        elif last_status == 404 or last_status == 0:
-            # 1. First Priority: Direct LDAP query to On-Premise Domain Controller (192.168.12.11:389)
-            logger.info("AD Agent endpoint /api/v1/ad/users returned 404 (extension pending). Querying live AD users via LDAP from Domain Controller...")
-            ldap_users = self._query_ldap_users()
-            if ldap_users:
-                return {
-                    "application_name": "Active Directory (DC wa.net)",
-                    "total_accounts": len(ldap_users),
-                    "accounts": ldap_users,
-                    "notice": f"ดึงข้อมูลสดจาก Active Directory Domain Controller (DC=wa,DC=net) สำเร็จ {len(ldap_users)} บัญชีผู้ใช้จริง"
-                }
+            raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 403 Forbidden): ตรวจสอบ allowed_ips ({self.origin_ip}) บน AD Agent: {last_err}")
+        elif last_status == 500:
+            raise RuntimeError(f"AD Agent ทำงานผิดพลาด (HTTP 500): {last_err}")
 
-            # 2. Second Priority: Retrieve existing MasterIdentities in Central IAM directory
-            try:
-                from app.core.database import SessionLocal
-                from app.models.identity import MasterIdentity
-                with SessionLocal() as db:
-                    identities = db.query(MasterIdentity).filter(MasterIdentity.is_active_in_ad == True).all()
-                    if identities:
-                        cached_accounts = [
-                            {
-                                "username": idt.username,
-                                "full_name": idt.full_name or idt.username,
-                                "email": idt.email or f"{idt.username.lower()}@windowasia.com",
-                                "department": idt.department or "Active Directory",
-                                "is_active": idt.is_active_in_ad,
-                                "group_name": "Domain Users"
-                            }
-                            for idt in identities
-                        ]
-                        return {
-                            "application_name": "Active Directory (Directory Sync)",
-                            "total_accounts": len(cached_accounts),
-                            "accounts": cached_accounts,
-                            "notice": f"AD Gateway ออนไลน์ (Port 3100) แต่ Agent ปลายทางยังไม่ได้เปิด Endpoint /api/v1/ad/users จึงแสดงรายชื่อที่บันทึกไว้ใน Central IAM ({len(cached_accounts)} บัญชี) ชั่วคราว — กรุณาเปิดใช้งาน ciam-extension.js บนเครื่อง AD Agent"
-                        }
-            except Exception as db_err:
-                logger.warning("Error fetching cached master identities: %s", db_err)
-
-            # 3. Direct LDAP is unreachable from VPS and no MasterIdentity records exist
+        # Fallback 1: Direct LDAP query to On-Premise Domain Controller (192.168.12.11:389)
+        logger.info("Attempting direct LDAP query to On-Premise Domain Controller...")
+        ldap_users = self._query_ldap_users()
+        if ldap_users:
             return {
-                "application_name": "Active Directory",
-                "total_accounts": 0,
-                "accounts": [],
-                "notice": "AD Gateway ออนไลน์ (Port 3100) แต่ยังไม่มี endpoint /api/v1/ad/users บน Agent ปลายทาง — กรุณาโหลด ciam-extension.js ใน index.js บนเซิร์ฟเวอร์ AD เพื่อเปิดใช้งานการดึงรายชื่อแบบสด"
+                "application_name": "Active Directory (DC wa.net)",
+                "total_accounts": len(ldap_users),
+                "accounts": ldap_users,
+                "notice": f"ดึงข้อมูลสดจาก Active Directory Domain Controller (DC=wa,DC=net) สำเร็จ {len(ldap_users)} บัญชีผู้ใช้จริง"
             }
 
-        raise RuntimeError(f"เกิดข้อผิดพลาดในการดึงข้อมูลจาก AD Agent (ลองทั้งหมด {len(base_url_candidates)} URLs): HTTP {last_status} - {last_err}")
+        # Fallback 2: Retrieve existing MasterIdentities in Central IAM directory
+        try:
+            from app.core.database import SessionLocal
+            from app.models.identity import MasterIdentity
+            with SessionLocal() as db:
+                identities = db.query(MasterIdentity).filter(MasterIdentity.is_active_in_ad == True).all()
+                if identities:
+                    cached_accounts = [
+                        {
+                            "username": idt.username,
+                            "full_name": idt.full_name or idt.username,
+                            "email": idt.email or f"{idt.username.lower()}@windowasia.com",
+                            "department": idt.department or "Active Directory",
+                            "is_active": idt.is_active_in_ad,
+                            "group_name": "Domain Users"
+                        }
+                        for idt in identities
+                    ]
+                    return {
+                        "application_name": "Active Directory (Directory Sync)",
+                        "total_accounts": len(cached_accounts),
+                        "accounts": cached_accounts,
+                        "notice": f"AD Gateway ออนไลน์แต่ Endpoint /api/v1/ad/users ส่งผลลัพธ์ว่างหรือล้มเหลว ({last_err or f'HTTP {last_status}'}) จึงแสดงรายชื่อที่มีในระบบ ({len(cached_accounts)} บัญชี)"
+                    }
+        except Exception as db_err:
+            logger.warning("Error fetching cached master identities: %s", db_err)
 
-
+        raise RuntimeError(f"ไม่สามารถดึงรายชื่อผู้ใช้จาก AD Agent ได้ (HTTP {last_status}): {last_err or 'Connection failed'}")
 
     def _query_ldap_users(self) -> Optional[list]:
         """
@@ -446,7 +407,6 @@ class AdProxyConnector(BaseConnector):
                 try:
                     server = ldap3.Server(host, port=389, connect_timeout=3)
                     conn = ldap3.Connection(server, user=bind_user, password=bind_pass, auto_bind=True, auto_referrals=False)
-                    # Search person users, excluding computers (ending with $) and built-in service accounts
                     search_filter = "(&(objectCategory=person)(objectClass=user)(!(sAMAccountName=*$)))"
                     conn.search(
                         search_base=base_dn,
@@ -488,19 +448,51 @@ class AdProxyConnector(BaseConnector):
         return None
 
     def _normalize_ad_users(self, data: Any) -> dict:
+        raw_list = []
         if isinstance(data, list):
-            return {"application_name": "Active Directory", "total_accounts": len(data), "accounts": data}
+            raw_list = data
         elif isinstance(data, dict):
-            if "accounts" not in data:
-                if "value" in data and isinstance(data["value"], list):
-                    data["accounts"] = data["value"]
-                elif "data" in data and isinstance(data["data"], list):
-                    data["accounts"] = data["data"]
-                elif "users" in data and isinstance(data["users"], list):
-                    data["accounts"] = data["users"]
-                else:
-                    data["accounts"] = []
-            data.setdefault("application_name", "Active Directory")
-            data.setdefault("total_accounts", len(data.get("accounts", [])))
-            return data
-        return {"application_name": "Active Directory", "total_accounts": 0, "accounts": []}
+            for key in ["accounts", "users", "data", "value"]:
+                if key in data and isinstance(data[key], list):
+                    raw_list = data[key]
+                    break
+
+        normalized = []
+        for u in raw_list:
+            if not isinstance(u, dict):
+                continue
+            uname = u.get("username") or u.get("sAMAccountName") or u.get("name")
+            if not uname:
+                continue
+            uname = str(uname).strip()
+            if uname.lower() in ["krbtgt", "guest", "defaultaccount"]:
+                continue
+
+            fname = u.get("full_name") or u.get("DisplayName") or u.get("display_name") or uname
+            mail = u.get("email") or u.get("EmailAddress") or u.get("mail") or f"{uname.lower()}@windowasia.com"
+            dept = u.get("department") or u.get("Department") or "Active Directory"
+            emp_id = u.get("employee_id") or u.get("EmployeeID") or None
+
+            is_act = True
+            if "is_active" in u:
+                is_act = bool(u["is_active"])
+            elif "Enabled" in u:
+                is_act = bool(u["Enabled"])
+            elif "enabled" in u:
+                is_act = bool(u["enabled"])
+
+            normalized.append({
+                "username": uname,
+                "full_name": str(fname).strip(),
+                "email": str(mail).strip(),
+                "department": str(dept).strip(),
+                "employee_id": str(emp_id).strip() if emp_id else None,
+                "is_active": is_act,
+                "group_name": "Domain Users"
+            })
+
+        return {
+            "application_name": "Active Directory",
+            "total_accounts": len(normalized),
+            "accounts": normalized
+        }
