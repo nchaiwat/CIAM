@@ -1,9 +1,12 @@
+import logging
 import secrets
 from typing import List
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger("ciam.applications")
 from app.core.database import get_db
 from app.api.deps import get_current_admin
 from app.models.user import AdminUser
@@ -337,166 +340,178 @@ async def sync_application_inventory(
     synced_count = 0
     now = datetime.now(timezone.utc)
 
-    for item in raw_accounts:
-        uname = (item.get("username") or "").strip()
-        if not uname:
-            continue
+    try:
+        for item in raw_accounts:
+            uname = (item.get("username") or "").strip()
+            if not uname:
+                continue
 
-        # Look for existing identity in AD (Master Identity)
-        identity = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(uname)).first()
-        if not identity and item.get("email"):
-            identity = db.query(MasterIdentity).filter(MasterIdentity.email.ilike(item.get("email").strip())).first()
-        if not identity and item.get("full_name") and item.get("full_name").strip() != uname:
-            identity = db.query(MasterIdentity).filter(MasterIdentity.full_name.ilike(item.get("full_name").strip())).first()
+            # Look for existing identity in AD (Master Identity)
+            identity = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(uname)).first()
+            if not identity and item.get("email"):
+                identity = db.query(MasterIdentity).filter(MasterIdentity.email.ilike(item.get("email").strip())).first()
+            if not identity and item.get("full_name") and item.get("full_name").strip() != uname:
+                identity = db.query(MasterIdentity).filter(MasterIdentity.full_name.ilike(item.get("full_name").strip())).first()
 
-        is_ad_item = app.app_code.lower() == "ad"
-        is_active = bool(item.get("is_active", True))
+            is_ad_item = app.app_code.lower() == "ad"
+            is_active = bool(item.get("is_active", True))
 
-        if not identity:
-            # Create identity if user doesn't exist yet
-            identity = MasterIdentity(
-                username=uname,
-                full_name=item.get("full_name") or uname,
-                email=item.get("email"),
-                department=item.get("department"),
-                employee_id=item.get("employee_id"),
-                is_active_in_ad=is_active if is_ad_item else True,
-                created_at=now
-            )
-            db.add(identity)
-            db.flush()
-        else:
-            if is_ad_item:
-                identity.is_active_in_ad = is_active
-                if item.get("employee_id"):
-                    identity.employee_id = item.get("employee_id")
-            # Enrich existing identity if empty
-            if not identity.email and item.get("email"):
-                identity.email = item.get("email")
-            if not identity.department and item.get("department"):
-                identity.department = item.get("department")
-            if (not identity.full_name or identity.full_name == identity.username) and item.get("full_name"):
-                identity.full_name = item.get("full_name")
-
-        # Check existing mapping (case-insensitive to prevent duplicate rows)
-        existing_mappings = (
-            db.query(AppAccountMapping)
-            .filter(
-                AppAccountMapping.application_id == app.id,
-                func.lower(AppAccountMapping.app_username) == uname.lower()
-            )
-            .all()
-        )
-        mapping = existing_mappings[0] if existing_mappings else None
-        if len(existing_mappings) > 1:
-            for dup in existing_mappings[1:]:
-                db.delete(dup)
-
-        is_active = bool(item.get("is_active", True))
-        # Flag discrepancy: disabled in AD but active in app
-        sync_status = "DISCREPANCY" if (not identity.is_active_in_ad and is_active) else "IN_SYNC"
-
-        # Parse last login if provided
-        last_login_dt = None
-        raw_last_login = item.get("last_login_at")
-        if raw_last_login:
-            try:
-                last_login_dt = datetime.fromisoformat(raw_last_login.replace("Z", "+00:00"))
-            except Exception:
-                pass
-
-        if not mapping:
-            mapping = AppAccountMapping(
-                identity_id=identity.id,
-                application_id=app.id,
-                app_username=uname,
-                app_user_id=str(item.get("id")) if item.get("id") is not None else None,
-                app_group_name=item.get("group_name"),
-                is_active_in_app=is_active,
-                last_sync_status=sync_status,
-                last_app_login_at=last_login_dt,
-                created_at=now
-            )
-            db.add(mapping)
-        else:
-            mapping.identity_id = identity.id
-            mapping.app_username = uname  # Normalize casing to current live username
-            mapping.app_user_id = str(item.get("id")) if item.get("id") is not None else mapping.app_user_id
-            mapping.app_group_name = item.get("group_name")
-            mapping.is_active_in_app = is_active
-            mapping.last_sync_status = sync_status
-            if last_login_dt:
-                mapping.last_app_login_at = last_login_dt
-
-        synced_count += 1
-
-    # Prune stale/orphaned mappings that no longer exist in the target spoke application
-    live_usernames = {
-        (item.get("username") or "").strip().lower()
-        for item in raw_accounts
-        if (item.get("username") or "").strip()
-    }
-
-    if live_usernames:
-        stale_mappings = (
-            db.query(AppAccountMapping)
-            .filter(
-                AppAccountMapping.application_id == app.id,
-                ~func.trim(func.lower(AppAccountMapping.app_username)).in_(live_usernames)
-            )
-            .all()
-        )
-        for stale in stale_mappings:
-            db.delete(stale)
-
-        db.flush()
-
-        # Deduplicate any remaining mappings for this app that differ only by case or duplicate identity
-        all_app_mappings = (
-            db.query(AppAccountMapping)
-            .filter(AppAccountMapping.application_id == app.id)
-            .order_by(AppAccountMapping.id.asc())
-            .all()
-        )
-        seen_lower = set()
-        seen_identity_ids = set()
-        for m in all_app_mappings:
-            low = (m.app_username or "").strip().lower()
-            if low in seen_lower or (m.identity_id and m.identity_id in seen_identity_ids):
-                db.delete(m)
+            if not identity:
+                # Create identity if user doesn't exist yet
+                identity = MasterIdentity(
+                    username=uname,
+                    full_name=item.get("full_name") or uname,
+                    email=item.get("email"),
+                    department=item.get("department"),
+                    employee_id=item.get("employee_id"),
+                    is_active_in_ad=is_active if is_ad_item else True,
+                    created_at=now
+                )
+                db.add(identity)
+                db.flush()
             else:
-                seen_lower.add(low)
-                if m.identity_id:
-                    seen_identity_ids.add(m.identity_id)
+                if is_ad_item:
+                    identity.is_active_in_ad = is_active
+                    if item.get("employee_id"):
+                        identity.employee_id = item.get("employee_id")
+                # Enrich existing identity if empty
+                if not identity.email and item.get("email"):
+                    identity.email = item.get("email")
+                if not identity.department and item.get("department"):
+                    identity.department = item.get("department")
+                if (not identity.full_name or identity.full_name == identity.username) and item.get("full_name"):
+                    identity.full_name = item.get("full_name")
 
-        # If syncing AD, mark MasterIdentity as inactive in AD if they are no longer in AD inventory
-        if app.app_code.lower() == "ad":
-            stale_identities = (
-                db.query(MasterIdentity)
+            # Check existing mapping (case-insensitive to prevent duplicate rows)
+            existing_mappings = (
+                db.query(AppAccountMapping)
                 .filter(
-                    MasterIdentity.is_active_in_ad == True,
-                    ~func.lower(MasterIdentity.username).in_(live_usernames)
+                    AppAccountMapping.application_id == app.id,
+                    func.lower(AppAccountMapping.app_username) == uname.lower()
                 )
                 .all()
             )
-            for st_id in stale_identities:
-                st_id.is_active_in_ad = False
+            if existing_mappings:
+                exact_match = next((m for m in existing_mappings if m.app_username == uname), None)
+                mapping = exact_match or existing_mappings[0]
+                if len(existing_mappings) > 1:
+                    for dup in existing_mappings:
+                        if dup.id != mapping.id:
+                            db.delete(dup)
+                    db.flush()
+            else:
+                mapping = None
 
-    app.last_sync_at = now
-    app.health_status = "ONLINE"
+            is_active = bool(item.get("is_active", True))
+            # Flag discrepancy: disabled in AD but active in app
+            sync_status = "DISCREPANCY" if (not identity.is_active_in_ad and is_active) else "IN_SYNC"
 
-    # Audit log
-    db.add(IamAuditLog(
-        actor_username=current_admin.username,
-        action_type="SYNC",
-        target_username=f"INVENTORY_{app.app_code.upper()}",
-        affected_app_code=app.app_code,
-        execution_mode=app.connector_type,
-        reason=f"Manual inventory sync triggered: synced {synced_count} accounts from {app.app_name}",
-        status="SUCCESS"
-    ))
+            # Parse last login if provided
+            last_login_dt = None
+            raw_last_login = item.get("last_login_at")
+            if raw_last_login:
+                try:
+                    last_login_dt = datetime.fromisoformat(raw_last_login.replace("Z", "+00:00"))
+                except Exception:
+                    pass
 
-    db.commit()
+            if not mapping:
+                mapping = AppAccountMapping(
+                    identity_id=identity.id,
+                    application_id=app.id,
+                    app_username=uname,
+                    app_user_id=str(item.get("id")) if item.get("id") is not None else None,
+                    app_group_name=item.get("group_name"),
+                    is_active_in_app=is_active,
+                    last_sync_status=sync_status,
+                    last_app_login_at=last_login_dt,
+                    created_at=now
+                )
+                db.add(mapping)
+            else:
+                mapping.identity_id = identity.id
+                mapping.app_username = uname  # Normalize casing to current live username
+                mapping.app_user_id = str(item.get("id")) if item.get("id") is not None else mapping.app_user_id
+                mapping.app_group_name = item.get("group_name")
+                mapping.is_active_in_app = is_active
+                mapping.last_sync_status = sync_status
+                if last_login_dt:
+                    mapping.last_app_login_at = last_login_dt
+
+            synced_count += 1
+
+        # Prune stale/orphaned mappings that no longer exist in the target spoke application
+        live_usernames = {
+            (item.get("username") or "").strip().lower()
+            for item in raw_accounts
+            if (item.get("username") or "").strip()
+        }
+
+        if live_usernames:
+            stale_mappings = (
+                db.query(AppAccountMapping)
+                .filter(
+                    AppAccountMapping.application_id == app.id,
+                    ~func.trim(func.lower(AppAccountMapping.app_username)).in_(live_usernames)
+                )
+                .all()
+            )
+            for stale in stale_mappings:
+                db.delete(stale)
+
+            db.flush()
+
+            # Deduplicate any remaining mappings for this app that differ only by case
+            all_app_mappings = (
+                db.query(AppAccountMapping)
+                .filter(AppAccountMapping.application_id == app.id)
+                .order_by(AppAccountMapping.id.asc())
+                .all()
+            )
+            seen_lower = set()
+            for m in all_app_mappings:
+                low = (m.app_username or "").strip().lower()
+                if low in seen_lower:
+                    db.delete(m)
+                else:
+                    seen_lower.add(low)
+            db.flush()
+
+            # If syncing AD, mark MasterIdentity as inactive in AD if they are no longer in AD inventory
+            if app.app_code.lower() == "ad":
+                stale_identities = (
+                    db.query(MasterIdentity)
+                    .filter(
+                        MasterIdentity.is_active_in_ad == True,
+                        ~func.lower(MasterIdentity.username).in_(live_usernames)
+                    )
+                    .all()
+                )
+                for st_id in stale_identities:
+                    st_id.is_active_in_ad = False
+
+        app.last_sync_at = now
+        app.health_status = "ONLINE"
+
+        # Audit log
+        db.add(IamAuditLog(
+            actor_username=current_admin.username,
+            action_type="SYNC",
+            target_username=f"INVENTORY_{app.app_code.upper()}",
+            affected_app_code=app.app_code,
+            execution_mode=app.connector_type,
+            reason=f"Manual inventory sync triggered: synced {synced_count} accounts from {app.app_name}",
+            status="SUCCESS"
+        ))
+
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Sync database operation failed for %s (%s): %s", app.app_code, app.id, exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"ข้อผิดพลาดขณะบันทึกข้อมูลซิงก์ ({app.app_code}): {str(exc)}"
+        )
 
     return {
         "success": True,

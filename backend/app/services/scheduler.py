@@ -137,10 +137,16 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
                     )
                     .all()
                 )
-                mapping = existing_mappings[0] if existing_mappings else None
-                if len(existing_mappings) > 1:
-                    for dup in existing_mappings[1:]:
-                        db.delete(dup)
+                if existing_mappings:
+                    exact_match = next((m for m in existing_mappings if m.app_username == uname), None)
+                    mapping = exact_match or existing_mappings[0]
+                    if len(existing_mappings) > 1:
+                        for dup in existing_mappings:
+                            if dup.id != mapping.id:
+                                db.delete(dup)
+                        db.flush()
+                else:
+                    mapping = None
 
                 is_active = bool(item.get("is_active", True))
                 sync_status = "DISCREPANCY" if (not identity.is_active_in_ad and is_active) else "IN_SYNC"
@@ -198,7 +204,7 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
 
                 db.flush()
 
-                # Deduplicate any remaining mappings for this app that differ only by case or duplicate identity
+                # Deduplicate any remaining mappings for this app that differ only by case
                 all_app_mappings = (
                     db.query(AppAccountMapping)
                     .filter(AppAccountMapping.application_id == app.id)
@@ -206,15 +212,13 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
                     .all()
                 )
                 seen_lower = set()
-                seen_identity_ids = set()
                 for m in all_app_mappings:
                     low = (m.app_username or "").strip().lower()
-                    if low in seen_lower or (m.identity_id and m.identity_id in seen_identity_ids):
+                    if low in seen_lower:
                         db.delete(m)
                     else:
                         seen_lower.add(low)
-                        if m.identity_id:
-                            seen_identity_ids.add(m.identity_id)
+                db.flush()
 
                 if app.app_code.lower() == "ad":
                     stale_identities = (
