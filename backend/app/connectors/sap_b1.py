@@ -550,10 +550,10 @@ class SapB1Connector(BaseConnector):
         )
 
         candidate_eps = [
-            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked&$top=250",
-            f"{self.base_url}/b1s/{api_ver}/Users",
             f"{self.base_url}/b1s/{api_ver}/EmployeesInfo?$select=EmployeeID,FirstName,LastName,eMail,Department,Active&$top=250",
-            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo"
+            f"{self.base_url}/b1s/{api_ver}/EmployeesInfo",
+            f"{self.base_url}/b1s/{api_ver}/Users?$select=UserCode,UserName,eMail,Department,Locked&$top=250",
+            f"{self.base_url}/b1s/{api_ver}/Users"
         ]
 
         for ep in candidate_eps:
@@ -628,11 +628,17 @@ class SapB1Connector(BaseConnector):
 
         accounts = []
         if is_employee_mode:
+            titles = ["น.ส.", "นาย", "นาง", "ด.ช.", "ด.ญ.", "Mr.", "Mrs.", "Ms.", "Miss"]
             for emp in all_records:
                 eid = str(emp.get("EmployeeID") or "")
-                first = emp.get("FirstName") or ""
-                last = emp.get("LastName") or ""
-                fullname = f"{first} {last}".strip() or eid
+                first = (emp.get("FirstName") or "").strip()
+                last = (emp.get("LastName") or "").strip()
+                if last in titles:
+                    fullname = f"{last} {first}".strip()
+                else:
+                    fullname = f"{first} {last}".strip()
+                if not fullname:
+                    fullname = f"Employee {eid}"
                 email = emp.get("eMail")
                 accounts.append({
                     "username": email.split("@")[0] if email and "@" in email else f"emp_{eid}",
