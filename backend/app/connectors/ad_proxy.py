@@ -66,13 +66,8 @@ class AdProxyConnector(BaseConnector):
         if self.origin_ip:
             headers["X-Forwarded-For"] = self.origin_ip
         headers["x-management-api-key"] = self.api_key
-        headers["X-Management-API-Key"] = self.api_key
         headers["x-secret-key"] = self.secret_key
-        headers["X-Secret-Key"] = self.secret_key
-        headers["x-api-key"] = self.api_key
-        headers["X-API-Key"] = self.api_key
         headers["x-app-id"] = self.app_id
-        headers["X-App-Id"] = self.app_id
         headers["Authorization"] = f"Bearer {self.api_key}"
         if extra:
             headers.update(extra)
@@ -312,14 +307,9 @@ class AdProxyConnector(BaseConnector):
                         "timestamp": utc_now,
                         "X-Forwarded-For": self.origin_ip,
                         "x-management-api-key": key,
-                        "X-Management-API-Key": key,
                         "x-secret-key": self.secret_key,
-                        "X-Secret-Key": self.secret_key,
-                        "x-api-key": key,
-                        "X-API-Key": key,
                         "Authorization": f"Bearer {key}",
                         "x-app-id": self.app_id,
-                        "X-App-Id": self.app_id,
                     }
                     # Send key both in Header and in Query string (in case reverse proxy strips custom x- headers)
                     q_ep = f"{ep}?api_key={key}&management_key={key}&secret_key={self.secret_key}&app_id={self.app_id}"

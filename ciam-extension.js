@@ -12,7 +12,7 @@ const VALID_KEYS = [
 
 function verifyManagementKey(req, res, next) {
     // ดึง Key จากทุกช่องทาง: Headers, Authorization Bearer, Query Parameters และ Body
-    const apiKey = (
+    const rawKey = (
         req.headers['x-management-api-key'] ||
         req.headers['x-api-key'] ||
         req.headers['x-secret-key'] ||
@@ -24,14 +24,21 @@ function verifyManagementKey(req, res, next) {
         req.body?.secret_key
     );
 
-    const clientIp = req.ip || req.socket.remoteAddress || req.connection.remoteAddress;
-    console.log(`[CIAM AD] Incoming ${req.method} ${req.originalUrl || req.url} | Key: ${apiKey ? apiKey.substring(0, 10) + '...' : 'NONE'} | IP: ${clientIp}`);
+    // Node.js Express จะรวม Header ที่ส่งมาซ้ำด้วยลูกน้ำ (เช่น 'key, key') -> ตัดเอา token ตัวแรก
+    const firstToken = rawKey ? rawKey.toString().split(',')[0].trim() : '';
+    const fullKeyStr = rawKey ? rawKey.toString().trim() : '';
 
-    if (!apiKey || !VALID_KEYS.includes(apiKey.toString().trim())) {
-        console.log(`[CIAM AD REJECTED 401] Invalid Key received: '${apiKey}'`);
+    const clientIp = req.ip || req.socket?.remoteAddress || req.connection?.remoteAddress;
+    console.log(`[CIAM AD] Incoming ${req.method} ${req.originalUrl || req.url} | Key: ${firstToken ? firstToken.substring(0, 10) + '...' : 'NONE'} | IP: ${clientIp}`);
+
+    // ตรวจสอบว่าคีย์ตรงกับหนึ่งใน Valid Keys หรือมี Valid Key บรรจุอยู่
+    const isValid = VALID_KEYS.some(k => fullKeyStr.includes(k) || firstToken === k);
+
+    if (!isValid) {
+        console.log(`[CIAM AD REJECTED 401] Invalid Key received: '${rawKey}'`);
         return res.status(401).json({
             error: 'Unauthorized: Invalid Management API Key',
-            received_key: apiKey ? `${apiKey.substring(0, 8)}...` : null
+            received_key: firstToken ? `${firstToken.substring(0, 8)}...` : null
         });
     }
     next();
