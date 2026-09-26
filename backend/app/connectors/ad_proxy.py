@@ -282,11 +282,11 @@ class AdProxyConnector(BaseConnector):
     async def sync_inventory(self) -> dict:
         utc_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Keys to try: Management key first (expected by ciam-extension verifyManagementKey), then secret key fallback
-        candidate_keys = []
-        for k in [self.api_key, "mgmt_ciam_key_9a88b1c0d2e3f4a5", self.secret_key, "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"]:
-            if k and k.strip() and k.strip() not in candidate_keys:
-                candidate_keys.append(k.strip())
+        # Keys to try: Management key MUST be strictly first to match ciam-extension.js verifyManagementKey
+        mgmt_key = "mgmt_ciam_key_9a88b1c0d2e3f4a5"
+        candidate_keys = [mgmt_key]
+        if self.api_key and self.api_key.strip() and self.api_key.strip() not in candidate_keys:
+            candidate_keys.append(self.api_key.strip())
 
         # Build ordered list of base URLs to try
         all_base_urls = [self.base_url] + getattr(self, "base_url_fallbacks", [])
@@ -328,6 +328,16 @@ class AdProxyConnector(BaseConnector):
                             if normalized.get("total_accounts", 0) > 0:
                                 logger.info("AD sync_inventory success: fetched %d accounts via GET %s (key %s...)", normalized["total_accounts"], ep, key[:8])
                                 return normalized
+                            # If Agent returned HTTP 200 but accounts are empty or null (old ciam-extension.js bug)
+                            raw_accs = data if isinstance(data, list) else data.get("accounts", [])
+                            if raw_accs and len(raw_accs) > 0:
+                                return {
+                                    "application_name": "Active Directory",
+                                    "total_accounts": len(raw_accs),
+                                    "accounts": [],
+                                    "notice": f"AD Agent ตอบกลับ {len(raw_accs)} บัญชี แต่ข้อมูลเป็นค่าว่าง (null) ทั้งหมด เนื่องจาก ciam-extension.js บนเครื่อง AD Agent ยังใช้โค้ดเดิม — โปรดนำไฟล์ ciam-extension.js ที่แก้ไขแล้วไปวางทับบนเครื่อง On-Premise"
+                                }
+                            return normalized
                         last_status = res.status_code
                         last_err = res.text[:300]
                         logger.warning("AD GET %s (key %s...) → HTTP %s: %s", ep, key[:8], res.status_code, last_err)
@@ -337,7 +347,7 @@ class AdProxyConnector(BaseConnector):
 
         # If Agent specifically rejected authentication or IP
         if last_status == 401:
-            raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 401): {last_err or 'Invalid Management Key'}")
+            raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 401): {last_err or 'Invalid Management Key'} (โปรดตรวจสอบ x-management-api-key ใน ciam-extension.js)")
         elif last_status == 403:
             raise RuntimeError(f"AD Agent ปฏิเสธการเข้าถึง (HTTP 403 Forbidden): ตรวจสอบ allowed_ips ({self.origin_ip}) บน AD Agent: {last_err}")
         elif last_status == 500:

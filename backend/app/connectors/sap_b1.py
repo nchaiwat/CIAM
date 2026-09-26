@@ -64,14 +64,12 @@ class SapB1Connector(BaseConnector):
             headers["Cookie"] = "; ".join(cookie_parts)
 
         # Reverse proxies / API Gateways require an explicit Authorization header
-        if self.b1_session_id:
-            headers["Authorization"] = f"Bearer {self.b1_session_id}"
-        elif self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-        elif self.sap_username and self.sap_password:
+        if self.sap_username and self.sap_password:
             import base64
             b64_user = base64.b64encode(f"{self.sap_username}:{self.sap_password}".encode()).decode()
             headers["Authorization"] = f"Basic {b64_user}"
+        elif self.api_key:
+            headers["Authorization"] = f"Basic {self.api_key}"
 
         return headers
 
@@ -597,15 +595,24 @@ class SapB1Connector(BaseConnector):
                     break
 
         # Header strategies to satisfy all proxy and SAP configuration modes
+        import base64
+        b64_basic_user = base64.b64encode(f"{self.sap_username}:{self.sap_password}".encode()).decode() if (self.sap_username and self.sap_password) else ""
+        b64_basic_db_user = base64.b64encode(f"{self.company_db};{self.sap_username}:{self.sap_password}".encode()).decode() if (self.company_db and self.sap_username and self.sap_password) else ""
+        b64_basic_db_colon = base64.b64encode(f"{self.company_db}:{self.sap_username}:{self.sap_password}".encode()).decode() if (self.company_db and self.sap_username and self.sap_password) else ""
+
         header_strategies = [
-            # Strategy 1: Pure native session cookie jar (like POS2Invoice, no manual header override)
-            {"Accept": "application/json", "Content-Type": "application/json"},
-            # Strategy 2: Explicit Cookie header (both B1SESSION and ROUTEID)
+            # Strategy 1: Explicit Cookie + Basic Auth (UserName:Password)
+            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": cookie_str, "Authorization": f"Basic {b64_basic_user}"} if (b64_basic_user and cookie_str) else None,
+            # Strategy 2: Explicit Cookie + Basic Auth (CompanyDB;UserName:Password)
+            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": cookie_str, "Authorization": f"Basic {b64_basic_db_user}"} if (b64_basic_db_user and cookie_str) else None,
+            # Strategy 3: Explicit Cookie + Basic Auth (CompanyDB:UserName:Password)
+            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": cookie_str, "Authorization": f"Basic {b64_basic_db_colon}"} if (b64_basic_db_colon and cookie_str) else None,
+            # Strategy 4: Pure Basic Auth only (without cookie)
+            {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Basic {b64_basic_user}"} if b64_basic_user else None,
+            # Strategy 5: Explicit Cookie header (both B1SESSION and ROUTEID)
             {"Accept": "application/json", "Content-Type": "application/json", "Cookie": cookie_str} if cookie_str else None,
-            # Strategy 3: Pure B1SESSION only
-            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": f"B1SESSION={session_id}"} if session_id else None,
-            # Strategy 4: Bearer SessionId
-            {"Accept": "application/json", "Content-Type": "application/json", "Cookie": cookie_str, "Authorization": f"Bearer {session_id}"} if (session_id and cookie_str) else None,
+            # Strategy 6: Pure native session cookie jar
+            {"Accept": "application/json", "Content-Type": "application/json"},
         ]
         header_strategies = [s for s in header_strategies if s is not None]
 
