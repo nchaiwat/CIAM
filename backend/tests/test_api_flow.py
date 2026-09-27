@@ -151,7 +151,21 @@ def test_create_provision_and_lifecycle():
     uid = uuid.uuid4().hex[:6]
     test_username = f"test.user.{uid}"
 
-    first_app = apps[0]
+    # Register an isolated mock spoke application for lifecycle test so it never hits external production
+    mock_app_res = client.post(
+        "/api/v1/applications",
+        json={
+            "app_code": f"test_mock_{uid}",
+            "app_name": f"Test Mock Spoke {uid}",
+            "connector_type": "REST_API",
+            "base_url": "mock://internal-test-spoke",
+            "api_key": "sec_test_mock_key"
+        },
+        headers=headers
+    )
+    assert mock_app_res.status_code == 200
+    mock_app = mock_app_res.json()
+
     payload = {
         "employee_id": f"EMP-{uid.upper()}",
         "username": test_username,
@@ -161,7 +175,7 @@ def test_create_provision_and_lifecycle():
         "create_in_ad": True,
         "target_spokes": [
             {
-                "application_id": first_app["id"],
+                "application_id": mock_app["id"],
                 "group_name": "QA Tester"
             }
         ]
@@ -223,6 +237,7 @@ def test_create_provision_and_lifecycle():
         db.delete(ident)
         db.commit()
     db.close()
+    client.delete(f"/api/v1/applications/{mock_app['id']}", headers=headers)
 
 def test_audit_logs_and_csv_export():
     # Check audit logs list

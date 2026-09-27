@@ -46,6 +46,7 @@ def get_connector_for_app(app: ConnectedApplication) -> BaseConnector:
         return RestApiConnector(
             app_code=app.app_code,
             base_url=app.base_url or "",
-            api_key=app.api_key or ""
+            api_key=app.api_key or "",
+            origin_ip=app.sap_company_db or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
         )
 

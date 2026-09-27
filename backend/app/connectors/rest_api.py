@@ -9,10 +9,25 @@ from app.core.config import settings
 logger = logging.getLogger("ciam.connectors.rest")
 
 class RestApiConnector(BaseConnector):
-    def __init__(self, app_code: str, base_url: str, api_key: str):
+    def __init__(self, app_code: str, base_url: str, api_key: str, origin_ip: Optional[str] = None):
         self.app_code = app_code
         self.base_url = (base_url or "").rstrip("/")
         self.api_key = api_key or ""
+        # The central identity server IP (VPS 157.173.219.153) must always be sent as X-Forwarded-For
+        # so target Spoke systems (IRM, QMS, etc.) verify against CIAM server IP, not the end user's personal IP.
+        self.origin_ip = origin_ip or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153") or "157.173.219.153"
+
+    def _get_headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        headers = {
+            "Content-Type": "application/json",
+            "X-Management-API-Key": self.api_key,
+            "X-Request-Timestamp": str(int(datetime.now(timezone.utc).timestamp())),
+            "X-Forwarded-For": self.origin_ip,
+            "x-forwarded-for": self.origin_ip,
+        }
+        if extra:
+            headers.update(extra)
+        return headers
 
     async def set_account_status(
         self,
@@ -23,11 +38,7 @@ class RestApiConnector(BaseConnector):
     ) -> ConnectorResult:
         start_time = time.time()
         endpoint = f"{self.base_url}/api/v1/directory/accounts/{username}/status"
-        headers = {
-            "Content-Type": "application/json",
-            "X-Management-API-Key": self.api_key,
-            "X-Request-Timestamp": str(int(datetime.now(timezone.utc).timestamp()))
-        }
+        headers = self._get_headers()
         payload = {
             "is_active": is_active,
             "reason": reason,
@@ -114,11 +125,7 @@ class RestApiConnector(BaseConnector):
         """Create/provision new user account according to Spec Section 3.3."""
         start_time = time.time()
         endpoint = f"{self.base_url}/api/v1/directory/accounts"
-        headers = {
-            "Content-Type": "application/json",
-            "X-Management-API-Key": self.api_key,
-            "X-Request-Timestamp": str(int(datetime.now(timezone.utc).timestamp()))
-        }
+        headers = self._get_headers()
         payload = {
             "username": account_data.get("username"),
             "full_name": account_data.get("full_name"),
@@ -215,11 +222,7 @@ class RestApiConnector(BaseConnector):
         if search:
             params["search"] = search
 
-        headers = {
-            "Accept": "application/json",
-            "X-Management-API-Key": self.api_key,
-            "X-Request-Timestamp": str(int(datetime.now(timezone.utc).timestamp()))
-        }
+        headers = self._get_headers({"Accept": "application/json"})
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(endpoint, headers=headers, params=params)
             if response.status_code == 200:
@@ -229,10 +232,7 @@ class RestApiConnector(BaseConnector):
     async def health_check(self) -> ConnectorHealth:
         start_time = time.time()
         endpoint = f"{self.base_url}/api/v1/directory/accounts?status=active"
-        headers = {
-            "X-Management-API-Key": self.api_key,
-            "X-Request-Timestamp": str(int(datetime.now(timezone.utc).timestamp()))
-        }
+        headers = self._get_headers()
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(endpoint, headers=headers)
