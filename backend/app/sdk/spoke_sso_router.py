@@ -76,7 +76,7 @@ def get_sso_client() -> CiamSsoClient:
         ciam_base_url=getattr(settings, "CIAM_BASE_URL", "http://127.0.0.1:8001"),
         client_id=getattr(settings, "CIAM_CLIENT_ID", "irm-spoke-client"),
         client_secret=getattr(settings, "CIAM_CLIENT_SECRET", "sec_irm_oauth_secret_2026"),
-        ad_gateway_url=getattr(settings, "CIAM_AD_GATEWAY_URL", "http://192.168.12.11:3100"),
+        ad_gateway_url=getattr(settings, "CIAM_AD_GATEWAY_URL", "http://172.18.0.1:3100"),
     )
 
 

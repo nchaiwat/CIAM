@@ -11,7 +11,7 @@ logger = logging.getLogger("ciam.connectors.ad_proxy")
 class AdProxyConnector(BaseConnector):
     """
     Connector for Active Directory via In-House AD Sync Agent (AD Proxy).
-    The AD Sync Agent runs as a security proxy (e.g. at 192.168.12.11:3100)
+    The AD Sync Agent runs as a security proxy (http://172.18.0.1:3100)
     protecting Domain Controllers from direct external access.
     """
 
@@ -39,9 +39,9 @@ class AdProxyConnector(BaseConnector):
                 return False
 
         DOCKER_BRIDGE = "http://172.18.0.1:3100"
-        if _is_unreachable_private(raw_endpoint):
+        if _is_unreachable_private(raw_endpoint) or "192.168." in raw_endpoint:
             self.base_url = DOCKER_BRIDGE
-            self.base_url_fallbacks: list = [raw_endpoint]
+            self.base_url_fallbacks: list = []
         else:
             self.base_url = raw_endpoint
             self.base_url_fallbacks = [DOCKER_BRIDGE] if raw_endpoint != DOCKER_BRIDGE else []
@@ -367,8 +367,8 @@ class AdProxyConnector(BaseConnector):
         elif last_status == 500:
             raise RuntimeError(f"AD Agent ทำงานผิดพลาด (HTTP 500): {last_err}")
 
-        # Fallback 1: Direct LDAP query to On-Premise Domain Controller (192.168.12.11:389)
-        logger.info("Attempting direct LDAP query to On-Premise Domain Controller...")
+        # Fallback 1: Direct LDAP query to Domain Controller (172.18.0.1:389)
+        logger.info("Attempting direct LDAP query to Domain Controller...")
         ldap_users = self._query_ldap_users()
         if ldap_users:
             return {
@@ -409,7 +409,7 @@ class AdProxyConnector(BaseConnector):
 
     def _query_ldap_users(self) -> Optional[list]:
         """
-        Direct LDAP query to On-Premise Domain Controller at 192.168.12.11 / 172.18.0.1.
+        Direct LDAP query to Domain Controller at 172.18.0.1 / host.docker.internal.
         Fetches 100% real domain accounts directly from DC=wa,DC=net.
         """
         try:
@@ -417,9 +417,9 @@ class AdProxyConnector(BaseConnector):
             ldap_hosts = []
             if "://" in self.base_url:
                 host_part = self.base_url.split("://")[1].split(":")[0]
-                if host_part not in ldap_hosts and host_part not in ["localhost", "127.0.0.1"]:
+                if host_part not in ldap_hosts and host_part not in ["localhost", "127.0.0.1"] and not host_part.startswith("192.168."):
                     ldap_hosts.append(host_part)
-            for h in ["192.168.12.11", "172.18.0.1", "host.docker.internal"]:
+            for h in ["172.18.0.1", "host.docker.internal"]:
                 if h not in ldap_hosts:
                     ldap_hosts.append(h)
 

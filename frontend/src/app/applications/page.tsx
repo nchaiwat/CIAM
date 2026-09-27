@@ -1116,7 +1116,7 @@ export default function ApplicationsPage() {
 
                     <pre className="text-[10px] font-mono overflow-x-auto text-emerald-400 p-2 bg-slate-950 rounded border border-slate-800 max-h-40 leading-relaxed">
                       {snippetLang === "python"
-                        ? `# 1. ติดตั้งหรือนำ ciam_sso_client.py ไปวางในโปรเจกต์ระบบลูก\nfrom app.sdk.ciam_sso_client import CiamSsoClient\n\nclient = CiamSsoClient(\n    ciam_base_url="http://127.0.0.1:8001",\n    client_id="${editClientId || editApp.app_code + "-spoke-client"}",\n    client_secret="${editClientSecret || "<CLIENT_SECRET>"}",\n    ad_gateway_url="http://192.168.12.11:3100"\n)\n\n# 2. ขอ Authorize URL พร้อม PKCE\nverifier, challenge = client.generate_pkce()\nlogin_url = client.get_authorize_url(\n    redirect_uri="${(editRedirectUris.split(",")[0] || "").trim() || "https://spoke.windowasia.com/api/auth/callback"}",\n    code_challenge=challenge\n)\n\n# 3. แลก Token และ Verify RS256 Signature อัตโนมัติ\ntokens = client.exchange_code_for_tokens(code, redirect_uri, verifier)\nclaims = client.verify_id_token(tokens["id_token"])`
+                        ? `# 1. ติดตั้งหรือนำ ciam_sso_client.py ไปวางในโปรเจกต์ระบบลูก\nfrom app.sdk.ciam_sso_client import CiamSsoClient\n\nclient = CiamSsoClient(\n    ciam_base_url="http://127.0.0.1:8001",\n    client_id="${editClientId || editApp.app_code + "-spoke-client"}",\n    client_secret="${editClientSecret || "<CLIENT_SECRET>"}",\n    ad_gateway_url="http://172.18.0.1:3100"\n)\n\n# 2. ขอ Authorize URL พร้อม PKCE\nverifier, challenge = client.generate_pkce()\nlogin_url = client.get_authorize_url(\n    redirect_uri="${(editRedirectUris.split(",")[0] || "").trim() || "https://spoke.windowasia.com/api/auth/callback"}",\n    code_challenge=challenge\n)\n\n# 3. แลก Token และ Verify RS256 Signature อัตโนมัติ\ntokens = client.exchange_code_for_tokens(code, redirect_uri, verifier)\nclaims = client.verify_id_token(tokens["id_token"])`
                         : `// Frontend Redirect to Central IAM SSO\nconst ciamUrl = "http://localhost:3000/oauth/authorize?" + new URLSearchParams({\n  response_type: "code",\n  client_id: "${editClientId || editApp.app_code + "-spoke-client"}",\n  redirect_uri: "${(editRedirectUris.split(",")[0] || "").trim() || "https://spoke.windowasia.com/api/auth/callback"}",\n  code_challenge: challenge,\n  code_challenge_method: "S256",\n  scope: "openid profile email"\n});\nwindow.location.href = ciamUrl;`}
                     </pre>
                   </div>
@@ -1471,7 +1471,7 @@ export default function ApplicationsPage() {
                           className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono font-bold text-xs focus:outline-none focus:border-purple-600"
                         />
                         <span className="text-[10px] text-slate-500 mt-1 block">
-                          VPS Docker ใช้: <code>http://172.18.0.1:3100</code> | เครื่อง Local LAN ใช้: <code>http://192.168.12.11:3100</code>
+                          URL เชื่อมต่อเกตเวย์ AD บนเซิร์ฟเวอร์: <code>http://172.18.0.1:3100</code>
                         </span>
                       </div>
 

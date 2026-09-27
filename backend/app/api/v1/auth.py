@@ -115,20 +115,35 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
             cfg_base = _norm(settings.AD_GATEWAY_URL)
             docker_base = "http://172.18.0.1:3100"
 
+            # Auto-heal legacy on-prem IP (192.168.x.x) in database or config
+            if db_base and "192.168." in db_base:
+                db_base = docker_base
+                if ad_app:
+                    ad_app.base_url = docker_base
+                    try:
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+            if cfg_base and "192.168." in cfg_base:
+                cfg_base = docker_base
+
             # Priority: DB value first, then Docker bridge (most reliable in container), then config
             url_candidates_raw = [db_base, docker_base, cfg_base]
             seen_urls: set = set()
             url_candidates: list = []
             for u in url_candidates_raw:
-                if u and u not in seen_urls:
+                if u and "192.168." not in u and u not in seen_urls:
                     seen_urls.add(u)
                     url_candidates.append(u)
+
+            if not url_candidates:
+                url_candidates = [docker_base]
 
             primary_app_id = (ad_app.client_id if ad_app and ad_app.client_id else None) or getattr(settings, "AD_APP_ID", "CIAM") or "CIAM"
             primary_secret = (
                 (ad_app.client_secret or ad_app.api_key) if ad_app else None
             ) or getattr(settings, "AD_SECRET_KEY", None) or "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
-            origin_ip = getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
+            origin_ip = (ad_app.sap_company_db if ad_app and ad_app.sap_company_db else None) or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
 
             # Collect candidate (app_id, secret_key) pairs — tries all registered app credentials
             strategies = [
@@ -143,90 +158,98 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                     seen_combos.add((a_id, s_key))
                     candidate_pairs.append((a_id, s_key))
 
-            timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            # AD Gateway Timestamp requirement (per ADAuthen.md Rule 3):
+            # AD Agent compares against Thailand local time (+07:00) with 'Z' suffix and no millis.
+            # Pure UTC without +7 is rejected as 'Expired' (> 5 mins drift).
+            tz_thai = timezone(timedelta(hours=7))
+            thai_timestamp = datetime.now(tz_thai).strftime("%Y-%m-%dT%H:%M:%SZ")
+            utc_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            timestamp_candidates = [thai_timestamp, utc_timestamp]
+
             ad_probe_logs: list = []
 
             with httpx.Client(timeout=8.0) as client:
                 for ad_base_candidate in url_candidates:
                     ad_url = f"{ad_base_candidate}/api/v2/login"
-                    for cand_app_id, cand_secret in candidate_pairs:
-                        payload = {
-                            "app_id": cand_app_id,
-                            "app_name": cand_app_id,
-                            "secret_key": cand_secret,
-                            "username": clean_username,
-                            "password": login_req.password,
-                            "timestamp": timestamp_str
-                        }
-                        headers = {
-                            "Content-Type": "application/json",
-                            "X-Forwarded-For": origin_ip,
-                            "X-Request-Timestamp": timestamp_str,
-                            "X-Timestamp": timestamp_str,
-                            "timestamp": timestamp_str,
-                            "X-App-Id": cand_app_id,
-                            "x-app-id": cand_app_id,
-                            "X-App-Name": cand_app_id,
-                            "x-app-name": cand_app_id,
-                            "X-Secret-Key": cand_secret,
-                            "x-secret-key": cand_secret,
-                            "X-Management-API-Key": cand_secret,
-                            "x-management-api-key": cand_secret,
-                        }
-                        try:
-                            ad_resp = client.post(ad_url, json=payload, headers=headers)
-                            resp_text_preview = ad_resp.text[:500]
-                            ad_probe_logs.append({
-                                "url": ad_url,
+                    for timestamp_str in timestamp_candidates:
+                        for cand_app_id, cand_secret in candidate_pairs:
+                            payload = {
                                 "app_id": cand_app_id,
                                 "app_name": cand_app_id,
-                                "user": clean_username,
-                                "status_code": ad_resp.status_code,
-                                "response": resp_text_preview,
+                                "secret_key": cand_secret,
+                                "username": clean_username,
+                                "password": login_req.password,
                                 "timestamp": timestamp_str
-                            })
-                            logger.info(
-                                "AD Gateway auth probe URL=%s app_id=%s user=%s → HTTP %s: %s",
-                                ad_url, cand_app_id, clean_username, ad_resp.status_code, resp_text_preview[:200]
-                            )
-                            if ad_resp.status_code == 200:
-                                try:
-                                    resp_data = ad_resp.json()
-                                except Exception:
-                                    resp_data = {}
-
-                                is_auth_ok = (
-                                    resp_data.get("success") in [True, "true", "True", 1]
-                                    or resp_data.get("authenticated") in [True, "true", "True", 1]
-                                    or resp_data.get("status") in ["success", "OK", "ok", True, 200]
-                                    or resp_data.get("code") in [200, "200"]
-                                    or ("user" in resp_data and not resp_data.get("error"))
-                                    or ("userData" in resp_data and not resp_data.get("error"))
-                                    or ("sAMAccountName" in resp_data and not resp_data.get("error"))
-                                    or ("data" in resp_data and not resp_data.get("error"))
+                            }
+                            headers = {
+                                "Content-Type": "application/json",
+                                "X-Forwarded-For": origin_ip,
+                                "x-forwarded-for": origin_ip,
+                                "X-Request-Timestamp": timestamp_str,
+                                "X-Timestamp": timestamp_str,
+                                "timestamp": timestamp_str,
+                                "X-App-Id": cand_app_id,
+                                "x-app-id": cand_app_id,
+                                "X-App-Name": cand_app_id,
+                                "x-app-name": cand_app_id,
+                                "X-Secret-Key": cand_secret,
+                                "x-secret-key": cand_secret,
+                                "X-Management-API-Key": cand_secret,
+                                "x-management-api-key": cand_secret,
+                            }
+                            try:
+                                ad_resp = client.post(ad_url, json=payload, headers=headers)
+                                resp_text_preview = ad_resp.text[:500]
+                                ad_probe_logs.append({
+                                    "url": ad_url,
+                                    "app_id": cand_app_id,
+                                    "app_name": cand_app_id,
+                                    "user": clean_username,
+                                    "status_code": ad_resp.status_code,
+                                    "response": resp_text_preview,
+                                    "timestamp": timestamp_str
+                                })
+                                logger.info(
+                                    "AD Gateway auth probe URL=%s app_id=%s user=%s ts=%s → HTTP %s: %s",
+                                    ad_url, cand_app_id, clean_username, timestamp_str, ad_resp.status_code, resp_text_preview[:200]
                                 )
-                                if is_auth_ok and not resp_data.get("error"):
-                                    ad_auth_success = True
-                                    break  # success — stop trying credentials
+                                if ad_resp.status_code == 200:
+                                    try:
+                                        resp_data = ad_resp.json()
+                                    except Exception:
+                                        resp_data = {}
+
+                                    is_auth_ok = (
+                                        resp_data.get("success") in [True, "true", "True", 1]
+                                        or resp_data.get("authenticated") in [True, "true", "True", 1]
+                                        or resp_data.get("status") in ["success", "OK", "ok", True, 200]
+                                        or resp_data.get("code") in [200, "200"]
+                                        or ("user" in resp_data and not resp_data.get("error"))
+                                        or ("userData" in resp_data and not resp_data.get("error"))
+                                        or ("sAMAccountName" in resp_data and not resp_data.get("error"))
+                                        or ("data" in resp_data and not resp_data.get("error"))
+                                    )
+                                    if is_auth_ok and not resp_data.get("error"):
+                                        ad_auth_success = True
+                                        break  # success — stop trying credentials
+                                    else:
+                                        ad_err_detail = resp_data.get("message") or resp_data.get("error") or "AD Gateway rejected credentials"
                                 else:
-                                    ad_err_detail = resp_data.get("message") or resp_data.get("error") or "AD Gateway rejected credentials"
-                                    # If AD explicitly rejected creds (not a connection issue), stop trying other app_ids
-                                    if ad_resp.status_code == 200:
-                                        break
-                            else:
-                                ad_err_detail = f"AD Gateway HTTP {ad_resp.status_code}: {resp_text_preview}"
-                        except Exception as probe_err:
-                            err_str = str(probe_err)
-                            ad_probe_logs.append({
-                                "url": ad_url,
-                                "app_id": cand_app_id,
-                                "app_name": cand_app_id,
-                                "user": clean_username,
-                                "error": err_str,
-                                "timestamp": timestamp_str
-                            })
-                            ad_err_detail = f"AD Gateway connection error ({ad_base_candidate}): {err_str[:120]}"
-                            logger.warning("AD Gateway probe exception URL=%s app_id=%s: %s", ad_url, cand_app_id, probe_err)
+                                    ad_err_detail = f"AD Gateway HTTP {ad_resp.status_code}: {resp_text_preview}"
+                            except Exception as probe_err:
+                                err_str = str(probe_err)
+                                ad_probe_logs.append({
+                                    "url": ad_url,
+                                    "app_id": cand_app_id,
+                                    "app_name": cand_app_id,
+                                    "user": clean_username,
+                                    "error": err_str,
+                                    "timestamp": timestamp_str
+                                })
+                                ad_err_detail = f"AD Gateway connection error ({ad_base_candidate}): {err_str[:120]}"
+                                logger.warning("AD Gateway probe exception URL=%s app_id=%s: %s", ad_url, cand_app_id, probe_err)
+                        if ad_auth_success:
+                            break
                     if ad_auth_success:
                         break  # stop trying other URLs
 

@@ -54,7 +54,7 @@ Application ทุกตัวที่พัฒนาขึ้นในอง�
 
 ### 2.2 IP Whitelisting (Defense-in-Depth)
 * Application ปลายทางต้องมีระบบตรวจเช็ค Client IP Address
-* รับคำขอเฉพาะ IP ของเครื่อง **Central Management Server** ที่กำหนดไว้เท่านั้น (เช่น `157.173.219.153`, `192.168.12.11`)
+* รับคำขอเฉพาะ IP ของเครื่อง **Central Management Server** ที่กำหนดไว้เท่านั้น (เช่น `157.173.219.153`, `172.18.0.1`)
 * หากมี Reverse Proxy คั่นกลาง ต้องอ่านค่าจาก Header `X-Forwarded-For` อย่างปลอดภัย
 
 ### 2.3 Least Privilege & Zero Data Leakage

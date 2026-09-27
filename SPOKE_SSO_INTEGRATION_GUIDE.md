@@ -91,7 +91,7 @@ sso_client = CiamSsoClient(
     ciam_base_url="http://127.0.0.1:8001",           # หรือ https://ciam.windowasia.com
     client_id="irm-spoke-client",
     client_secret="sec_irm_oauth_secret_2026",
-    ad_gateway_url="http://192.168.12.11:3100"       # สำหรับ Break-Glass Fallback
+    ad_gateway_url="http://172.18.0.1:3100"       # สำหรับ Break-Glass Fallback
 )
 
 # 2. เมื่อผู้ใช้กดปุ่ม SSO: สร้าง PKCE และ Authorize URL

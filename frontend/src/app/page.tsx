@@ -98,7 +98,7 @@ export default function DashboardPage() {
           <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-medium">
             <span>แหล่งข้อมูลหลัก:</span>
             <span className="font-mono text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-              192.168.12.11
+              172.18.0.1:3100
             </span>
           </div>
         </div>

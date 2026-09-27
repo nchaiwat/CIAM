@@ -8,7 +8,7 @@
 
 ระบบยิงคำขอล็อกอิน (LDAP Bind) ไปยังปลายทาง Gateway ดังนี้:
 - **Method**: `POST`
-- **URL**: `http://192.168.12.8:3100/api/v2/login` (หรือใช้ตาม Env `AD_GATEWAY_URL`)
+- **URL**: `http://172.18.0.1:3100/api/v2/login` (หรือใช้ตาม Env `AD_GATEWAY_URL`)
 
 ---
 
@@ -71,7 +71,7 @@
 ---
 
 ## 6. คอนฟิกูเรชัน Environment Variables ในหน้า System Setting (User เปลี่ยนแปลงได้ทีหลัง)
-- **`AD_GATEWAY_URL`**: URL ไปยังจุดรับ Authen (ค่าเริ่มต้น: `http://192.168.12.8:3100/api/v2/login`)
+- **`AD_GATEWAY_URL`**: URL ไปยังจุดรับ Authen (ค่าเริ่มต้น: `http://172.18.0.1:3100/api/v2/login`)
 - **`AD_APP_ID`**: ตัวระบุแอปสำหรับ AD (ค่าเริ่มต้น: `PettyCash`)
 - **`AD_SECRET_KEY`**: คีย์ลับเชื่อมต่อ (ค่าเริ่มต้น: `d69f9e5a88e734c56e2978a63bf720c22635a9c0c32b5e2a2205510657e4e138`)
 

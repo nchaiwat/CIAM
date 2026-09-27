@@ -212,7 +212,7 @@ export default function Sidebar({
               <div className="space-y-1">
                 {/* Active Directory Gateway Info */}
                 <div
-                  title={collapsed ? "Active Directory Gateway: 192.168.12.11" : undefined}
+                  title={collapsed ? "Active Directory Gateway: 172.18.0.1:3100" : undefined}
                   className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 bg-slate-900/60 border border-slate-800 ${
                     collapsed ? "justify-center px-2" : ""
                   }`}
@@ -225,7 +225,7 @@ export default function Sidebar({
                         <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-xs shadow-emerald-400"></span>
                       </div>
                       <span className="text-[11px] text-emerald-400 font-mono">
-                        192.168.12.11:3100
+                        172.18.0.1:3100
                       </span>
                     </div>
                   )}

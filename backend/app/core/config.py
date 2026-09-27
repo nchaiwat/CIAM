@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     AD_APP_ID: str = "CIAM"
     AD_SECRET_KEY: str = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
     AD_MANAGEMENT_KEY: str = "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"
-    AD_HOST: str = "192.168.12.11"
+    AD_HOST: str = "172.18.0.1"
     AD_BASE_DN: str = "DC=wa,DC=net"
     AD_BIND_DN: str = "ldapbind@wa.net"
     AD_BIND_PASSWORD: str = "Abcd@1234"

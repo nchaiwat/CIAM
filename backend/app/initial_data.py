@@ -158,8 +158,14 @@ def init_db():
                 )
                 db.add(app)
                 db.flush()
-                logger.info("Seeded connected application: %s (%s)", app.app_name, app.connector_type)
             else:
+                # Auto-heal legacy 192.168 base_urls on existing applications
+                if app.base_url and "192.168." in app.base_url:
+                    if app.app_code == "ad":
+                        app.base_url = "http://172.18.0.1:3100"
+                    else:
+                        app.base_url = app.base_url.replace("192.168.12.11", "172.18.0.1")
+                    logger.info("Auto-healed legacy 192.168 IP for %s to %s", app.app_code, app.base_url)
                 # Update client credentials if not already populated
                 if not app.client_id:
                     app.client_id = item.get("client_id")

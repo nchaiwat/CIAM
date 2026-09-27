@@ -15,7 +15,7 @@
 | **Frontend Web App** | Next.js 16 (Turbopack) | `0.0.0.0` / `localhost` | **3000** | [http://localhost:3000](http://localhost:3000) | IRM-Style Left Sidebar Layout (Deep Navy `#0b1329` sidebar, White header, Slate-100 canvas, Thai menu) |
 | **Backend API Core** | FastAPI + Uvicorn | `0.0.0.0` | **8001** | [http://localhost:8001](http://localhost:8001)<br>Docs: [http://localhost:8001/docs](http://localhost:8001/docs) | **Note:** Port 8000 is occupied by `mtpulse-api-1`. Always use 8001. |
 | **Primary Database** | PostgreSQL 16 Alpine | Docker Container `ciam-postgres` | **5435** | `127.0.0.1:5435/central_iam` | Port mapped: `0.0.0.0:5435->5432/tcp` (5432 is occupied by `mtpulse-db-1`) |
-| **Active Directory Agent** | Windows Domain Controller | Internal Network | **3100** | `http://192.168.12.11:3100` | Gateway for AD user verification & deprovisioning |
+| **Active Directory Agent** | Windows Domain Controller | Internal Network | **3100** | `http://172.18.0.1:3100` | Gateway for AD user verification & deprovisioning |
 
 ---
 
@@ -69,7 +69,7 @@
 
 ### 2.5 pfSense 2.7.2-RELEASE (FreeBSD 14.0-CURRENT) — FIREWALL & OPENVPN
 * **Architecture Mode:** Dual-integration:
-  1. **Native AD/LDAPS Auth Server:** Direct link to `192.168.12.11` (Ports 389/636) for WebGUI and OpenVPN authentication.
+  1. **Native AD/LDAPS Auth Server:** Direct link to `172.18.0.1` (Ports 389/636) for WebGUI and OpenVPN authentication.
   2. **REST API Spoke Connector:** Community package `pfSense-API` (by Jared Hendrickson) installed via FreeBSD `pkg-static`.
 * **Installation Command:**
   `fetch -o + https://github.com/jaredhendrickson13/pfsense-api/releases/latest/download/pfSense-2.7.2-pkg-RESTAPI.txz && pkg-static install -y pfSense-2.7.2-pkg-RESTAPI.txz && rm pfSense-2.7.2-pkg-RESTAPI.txz`
@@ -103,7 +103,7 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=480
 
 # Active Directory Gateway
-AD_GATEWAY_URL=http://192.168.12.11:3100
+AD_GATEWAY_URL=http://172.18.0.1:3100
 AD_SYNC_ENABLED=False
 
 # Frontend URL for CORS
@@ -185,7 +185,7 @@ FRONTEND_URL=http://localhost:3000
 * **Break-Glass Fallback Plan (Emergency Outage):**
   1. Spoke apps maintain local break-glass admin route (`/login?mode=breakglass`) or local fallback credentials in local DB.
   2. Spoke admin toggle: `SSO Enforcement [ON/OFF]` via `/api/auth/sso/break-glass-toggle`.
-  3. Dynamic Failover: Spoke apps can fallback directly to AD Gateway (`http://192.168.12.11:3100/api/v2/login` per `ADAuthen.md`) if CIAM health check fails.
+  3. Dynamic Failover: Spoke apps can fallback directly to AD Gateway (`http://172.18.0.1:3100/api/v2/login` per `ADAuthen.md`) if CIAM health check fails.
   4. Real-time Telegram/LINE alert triggered on break-glass activation.
 
 ---

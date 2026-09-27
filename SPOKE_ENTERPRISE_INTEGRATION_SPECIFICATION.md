@@ -49,7 +49,7 @@ CREATE INDEX idx_system_settings_key ON system_settings(key);
 | `ciam_client_secret` | encrypted | `sec_irm_oauth_secret_2026` | รหัสลับเฉพาะของระบบลูก (ห้ามส่งคืนค่าเต็มผ่าน GET API) |
 | `ciam_sso_enabled` | boolean | `true` | สวิตช์หลักเปิด/ปิดการเข้าใช้งานด้วย Central IAM SSO |
 | `ciam_break_glass_active` | boolean | `false` | โหมดปลดระบบฉุกเฉิน (สลับไปล็อกอินตรงด้วย AD Gateway) |
-| `ciam_ad_gateway_url` | string | `http://192.168.12.11:3100` | URL เซิร์ฟเวอร์ AD Gateway ภายในองค์กร |
+| `ciam_ad_gateway_url` | string | `http://172.18.0.1:3100` | URL เซิร์ฟเวอร์ AD Gateway ภายในองค์กร |
 | `ciam_auto_provision_group`| string | `PU Staff` | ชื่อกลุ่มสิทธิ์เริ่มต้นสำหรับพนักงานใหม่ที่ล็อกอินผ่าน SSO ครั้งแรก |
 | `ciam_session_ttl_minutes` | integer | `480` | อายุ Access Token ของระบบลูก (ค่าแนะนำ: 8 ชั่วโมง / 480 นาที) |
 
@@ -113,7 +113,7 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
     "ciam_client_secret_masked": "sec_****_2026",
     "ciam_sso_enabled": true,
     "ciam_break_glass_active": false,
-    "ciam_ad_gateway_url": "http://192.168.12.11:3100",
+    "ciam_ad_gateway_url": "http://172.18.0.1:3100",
     "ciam_auto_provision_group": "PU Staff",
     "ciam_session_ttl_minutes": 480,
     "updated_at": "2026-09-11T07:15:30Z"
@@ -138,7 +138,7 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
   "ciam_client_id": "irm-spoke-client",
   "ciam_client_secret": "sec_irm_oauth_new_secret_2026", // ใส่เฉพาะเมื่อต้องการเปลี่ยน
   "ciam_sso_enabled": true,
-  "ciam_ad_gateway_url": "http://192.168.12.11:3100",
+  "ciam_ad_gateway_url": "http://172.18.0.1:3100",
   "ciam_auto_provision_group": "PU Staff",
   "ciam_session_ttl_minutes": 480
 }
@@ -288,7 +288,7 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 | **SSO-03** | `ciam_sso` | `auto_provision_user` | `info` | สร้างบัญชีผู้ใช้ใหม่อัตโนมัติจาก Central IAM: '{username}' | `system:ciam` | `{"username":"...", "email":"...", "group_assigned":"PU Staff", "claims":{...}}` |
 | **SSO-04** | `ciam_sso` | `account_deactivated` | `warning` | ปฏิเสธการเข้าสู่ระบบ: บัญชีพนักงาน '{username}' ถูกระงับสิทธิ์ในระบบนี้ | `user:{username}` | `{"username":"...", "ip":"...", "reason":"is_active is false"}` |
 | **BG-01** | `security_break_glass` | `toggle_break_glass` | `warning` / `success` | สลับสถานะระบบ Break-Glass: {ENABLED/DISABLED} | `user:{admin_user}` | `{"break_glass_active":true, "reason":"...", "ip":"...", "prev_state":false}` |
-| **BG-02** | `security_break_glass` | `fallback_ad_login` | `success` | เข้าสู่ระบบผ่าน AD Gateway สำรองในช่วง Break-Glass: '{username}' | `user:{username}` | `{"username":"...", "gateway":"http://192.168.12.11:3100", "ip":"..."}` |
+| **BG-02** | `security_break_glass` | `fallback_ad_login` | `success` | เข้าสู่ระบบผ่าน AD Gateway สำรองในช่วง Break-Glass: '{username}' | `user:{username}` | `{"username":"...", "gateway":"http://172.18.0.1:3100", "ip":"..."}` |
 | **CFG-01**| `system_setting` | `update_ciam_settings`| `success` | แก้ไขการตั้งค่าระบบ Central IAM SSO | `user:{admin_user}` | `{"changed_fields":["ciam_base_url","ciam_session_ttl_minutes"], "ip":"..."}` |
 
 ---
@@ -305,7 +305,7 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
    * `Central IAM Base URL` (Text Input, เช่น `https://ciam.windowasia.com`)
    * `OIDC Client ID` (Text Input, เช่น `irm-spoke-client`)
    * `OIDC Client Secret` (Password Input มีปุ่มคลิกเพื่อเปิดดู และปุ่มสลับเพื่อกรอก Secret ใหม่)
-   * `Active Directory Gateway URL` (Text Input, ค่าเริ่มต้น `http://192.168.12.11:3100`)
+   * `Active Directory Gateway URL` (Text Input, ค่าเริ่มต้น `http://172.18.0.1:3100`)
    * `กลุ่มสิทธิ์เริ่มต้น (Default Group)` (Dropdown รายชื่อ Group เช่น PU Staff, User)
    * `สวิตช์เปิด/ปิด SSO (Enforce SSO Toggle)`
 3. **การ์ดสวิตช์ฉุกเฉิน (Break-Glass Emergency Panel):**

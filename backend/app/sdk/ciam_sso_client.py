@@ -31,7 +31,7 @@ class CiamSsoClient:
         ciam_base_url: str = "http://127.0.0.1:8001",
         client_id: str = "irm-spoke-client",
         client_secret: Optional[str] = None,
-        ad_gateway_url: str = "http://192.168.12.11:3100",
+        ad_gateway_url: str = "http://172.18.0.1:3100",
         jwks_cache_ttl_seconds: int = 3600,
         timeout_seconds: float = 3.0,
         http_client: Optional[Any] = None,

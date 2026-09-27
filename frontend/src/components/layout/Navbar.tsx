@@ -101,7 +101,7 @@ export default function Navbar() {
             <div className="flex items-center space-x-2 px-3 py-1.5 rounded-md bg-slate-800 border border-slate-700 text-xs text-slate-300">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
               <span className="font-semibold text-slate-200">AD:</span>
-              <span className="font-mono text-emerald-300 font-bold">192.168.12.11</span>
+              <span className="font-mono text-emerald-300 font-bold">172.18.0.1:3100</span>
             </div>
 
             <div className="flex items-center space-x-2.5 pl-2.5 border-l border-slate-700">
@@ -168,7 +168,7 @@ export default function Navbar() {
           <div className="pt-3 border-t border-slate-800 mt-2 flex items-center justify-between text-xs text-slate-400">
             <div className="flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <span className="text-slate-300 font-medium">AD Gateway: 192.168.12.11</span>
+              <span className="text-slate-300 font-medium">AD Gateway: 172.18.0.1:3100</span>
             </div>
             <span className="font-bold text-white">ผู้ดูแลระบบ IT</span>
           </div>
