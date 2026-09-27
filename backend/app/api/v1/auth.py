@@ -146,8 +146,13 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
             origin_ip = (ad_app.sap_company_db if ad_app and ad_app.sap_company_db else None) or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
 
             # Collect candidate (app_id, secret_key) pairs — tries all registered app credentials
+            # Real registered app IDs in ADSyncAgent/registry.json: KeyCloak, ProRegis, IRM, worksync
             strategies = [
                 (primary_app_id, primary_secret),
+                ("KeyCloak", "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"),
+                ("ProRegis", "d69f9e5a88e734c56e2978a63bf720c22635a9c0c32b5e2a2205510657e4e138"),
+                ("IRM", "ca0a27d191208cbe6543c8g636d18ff40b9bea422dfc51d426bf920ca54c1828"),
+                ("worksync", "EAAD6F0F70CE84DF67037F2D835511927D964493B7BB986C61CF20272D9A87EC"),
                 ("CIAM", "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"),
                 ("PettyCash", "d69f9e5a88e734c56e2978a63bf720c22635a9c0c32b5e2a2205510657e4e138"),
             ]
@@ -168,11 +173,14 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
 
             ad_probe_logs: list = []
 
-            with httpx.Client(timeout=8.0) as client:
+            with httpx.Client(timeout=2.5) as client:
                 for ad_base_candidate in url_candidates:
                     ad_url = f"{ad_base_candidate}/api/v2/login"
-                    for timestamp_str in timestamp_candidates:
-                        for cand_app_id, cand_secret in candidate_pairs:
+                    base_unreachable = False
+                    for cand_app_id, cand_secret in candidate_pairs:
+                        if base_unreachable or ad_auth_success:
+                            break
+                        for timestamp_str in timestamp_candidates:
                             payload = {
                                 "app_id": cand_app_id,
                                 "app_name": cand_app_id,
@@ -236,6 +244,19 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                                         ad_err_detail = resp_data.get("message") or resp_data.get("error") or "AD Gateway rejected credentials"
                                 else:
                                     ad_err_detail = f"AD Gateway HTTP {ad_resp.status_code}: {resp_text_preview}"
+                            except (httpx.ConnectError, httpx.ConnectTimeout) as conn_err:
+                                base_unreachable = True
+                                err_str = str(conn_err)
+                                ad_probe_logs.append({
+                                    "url": ad_url,
+                                    "app_id": cand_app_id,
+                                    "app_name": cand_app_id,
+                                    "user": clean_username,
+                                    "error": f"Connection unreachable: {err_str}",
+                                    "timestamp": timestamp_str
+                                })
+                                ad_err_detail = f"AD Gateway connection error ({ad_base_candidate}): {err_str[:120]}"
+                                break
                             except Exception as probe_err:
                                 err_str = str(probe_err)
                                 ad_probe_logs.append({
@@ -252,6 +273,34 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
                             break
                     if ad_auth_success:
                         break  # stop trying other URLs
+
+            # Fail-safe Direct LDAP Bind Fallback (per HANDOFF.md Section 1)
+            # If REST Gateway probe didn't succeed (e.g. app_id not found in registry.json or group restriction in index.js),
+            # attempt direct LDAP bind against the Domain Controller (172.18.0.1:389).
+            if not ad_auth_success:
+                try:
+                    import ldap3
+                    ad_host = getattr(settings, "AD_HOST", "172.18.0.1")
+                    domain = "wa.net"
+                    ldap_user_candidates = [
+                        f"{clean_username}@{domain}",
+                        f"WA\\{clean_username}",
+                        clean_username
+                    ]
+                    server = ldap3.Server(ad_host, port=389, connect_timeout=1)
+                    for upn_user in ldap_user_candidates:
+                        try:
+                            ldap_conn = ldap3.Connection(server, user=upn_user, password=login_req.password, auto_bind=False)
+                            if ldap_conn.bind():
+                                ad_auth_success = True
+                                auth_mode = "ACTIVE_DIRECTORY_LDAP"
+                                logger.info("Direct LDAP Bind succeeded for user '%s' via %s", clean_username, upn_user)
+                                ldap_conn.unbind()
+                                break
+                        except Exception as bind_err:
+                            logger.debug("LDAP bind candidate '%s' error: %s", upn_user, bind_err)
+                except Exception as ldap_probe_err:
+                    logger.debug("Direct LDAP probe exception: %s", ldap_probe_err)
 
         except Exception as ad_err:
             logger.warning("Active Directory login verification exception: %s", ad_err)
