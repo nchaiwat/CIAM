@@ -650,4 +650,236 @@ router.get('/inventory', verifyCiamAuth, async (req, res) => {
 module.exports = router;
 ```
 
+---
+
+### 10.3 ตัวอย่างการทำ SSO Client ฝั่งระบบลูก (Python FastAPI / Backend)
+
+ตัวอย่างโค้ดที่ระบบลูกนำไปใช้สำหรับ:
+1. สร้าง PKCE และส่ง User ไปหน้า Login ของ Central IAM
+2. รับ Callback แลก Token และตรวจสอบสิทธิ์พนักงานจาก Active Directory
+
+```python
+import hashlib
+import base64
+import secrets
+import httpx
+import jwt # pip install pyjwt cryptography
+from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+
+router = APIRouter(prefix="/api/auth/sso", tags=["SSO Client"])
+
+CIAM_BASE_URL = "https://ciam.windowasia.com"
+CLIENT_ID = "irm-spoke-client"                  # ดึงจาก system_settings
+CLIENT_SECRET = "sec_irm_oauth_secret_2026"     # ดึงจาก system_settings
+REDIRECT_URI = "https://irm.windowasia.com/auth/callback"
+
+# เก็บ code_verifier ชั่วคราว (ใน Production ควรเก็บใน Redis หรือ Encrypted Session Cookie)
+pkce_sessions = {}
+
+def base64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode('utf-8').replace('=', '')
+
+@router.get("/login")
+def sso_login():
+    """Step 1: สร้าง PKCE S256 Challenge และ Redirect ผู้ใช้ไปที่ Central IAM"""
+    # 1. สร้าง Code Verifier & Challenge
+    verifier = base64url_encode(secrets.token_bytes(32))
+    challenge = base64url_encode(hashlib.sha256(verifier.encode('utf-8')).digest())
+    state = secrets.token_hex(16)
+
+    pkce_sessions[state] = verifier
+
+    # 2. สร้าง Authorize URL
+    auth_url = (
+        f"{CIAM_BASE_URL}/oauth/authorize?"
+        f"response_type=code&"
+        f"client_id={CLIENT_ID}&"
+        f"redirect_uri={REDIRECT_URI}&"
+        f"scope=openid+profile+email&"
+        f"state={state}&"
+        f"code_challenge={challenge}&"
+        f"code_challenge_method=S256"
+    )
+    return RedirectResponse(url=auth_url)
+
+class CallbackPayload(BaseModel):
+    code: str
+    state: str
+
+@router.post("/callback")
+async def sso_callback(payload: CallbackPayload):
+    """Step 2: รับ Code จาก Central IAM แลกเปลี่ยน Token และดึง Claims จาก AD"""
+    verifier = pkce_sessions.pop(payload.state, None)
+    if not verifier:
+        raise HTTPException(status_code=400, detail="Invalid state session or CSRF detected")
+
+    # 1. แลก Authorization Code เป็น Tokens
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        token_res = await client.post(
+            f"{CIAM_BASE_URL}/api/v1/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+                "code": payload.code,
+                "redirect_uri": REDIRECT_URI,
+                "code_verifier": verifier
+            }
+        )
+
+        if token_res.status_code != 200:
+            raise HTTPException(status_code=401, detail=f"Token exchange failed: {token_res.text}")
+
+        token_data = token_res.json()
+        id_token = token_data.get("id_token")
+
+        # 2. ดึง JWKS Public Keys เพื่อตรวจสอบ Asymmetric Signature (RS256)
+        jwks_res = await client.get(f"{CIAM_BASE_URL}/.well-known/jwks.json")
+        jwks = jwks_res.json()
+
+    # 3. ตรวจสอบ Signature และอ่าน Claims จาก AD
+    jwks_client = jwt.PyJWKClient(f"{CIAM_BASE_URL}/.well-known/jwks.json")
+    signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+
+    claims = jwt.decode(
+        id_token,
+        signing_key.key,
+        algorithms=["RS256"],
+        audience=CLIENT_ID,
+        issuer=CIAM_BASE_URL
+    )
+
+    # 4. ข้อมูลพนักงานที่ผ่านการตรวจสอบจาก Active Directory เรียบร้อยแล้ว:
+    username = claims.get("preferred_username") # sAMAccountName เช่น somchai.p
+    full_name = claims.get("name")              # ชื่อ-นามสกุล เช่น นายสมชาย พร้อมพงษ์
+    email = claims.get("email")                 # อีเมลบริษัท
+    department = claims.get("department")       # แผนก เช่น Purchasing
+    employee_id = claims.get("employee_id")     # รหัสพนักงาน เช่น WA-1029
+    groups = claims.get("groups", [])           # AD Security Groups
+
+    # 5. ออก Session หรือ JWT ของระบบลูก และอนุญาตให้เข้าใช้งาน Dashboard ได้ทันที
+    return {
+        "status": "success",
+        "message": f"เข้าสู่ระบบสำเร็จ ยินดีต้อนรับ {full_name}",
+        "user": {
+            "username": username,
+            "full_name": full_name,
+            "email": email,
+            "department": department,
+            "employee_id": employee_id,
+            "groups": groups
+        },
+        "spoke_token": "your_app_session_jwt_token_here"
+    }
+```
+
+---
+
+### 10.4 ตัวอย่างการทำ SSO Client ฝั่งระบบลูก (Node.js / Express / Next.js)
+
+```javascript
+const express = require('express');
+const axios = require('axios');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+const jwksClient = require('jwks-rsa');
+
+const router = express.Router();
+
+const CIAM_BASE_URL = "https://ciam.windowasia.com";
+const CLIENT_ID = "irm-spoke-client";
+const CLIENT_SECRET = "sec_irm_oauth_secret_2026";
+const REDIRECT_URI = "https://irm.windowasia.com/auth/callback";
+
+// JWKS Client สำหรับดึง Public Key ของ CIAM
+const jwks = jwksClient({
+  jwksUri: `${CIAM_BASE_URL}/.well-known/jwks.json`,
+  cache: true,
+  rateLimit: true
+});
+
+function getKey(header, callback) {
+  jwks.getSigningKey(header.kid, function (err, key) {
+    const signingKey = key?.publicKey || key?.rsaPublicKey;
+    callback(null, signingKey);
+  });
+}
+
+function base64url(buffer) {
+  return buffer.toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+// 1. Endpoint ส่ง User ไปล็อกอินที่ Central IAM
+router.get('/login', (req, res) => {
+  const verifier = base64url(crypto.randomBytes(32));
+  const challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
+  const state = crypto.randomBytes(16).toString('hex');
+
+  // บันทึก verifier ใน Session หรือ Cookie
+  res.cookie('sso_verifier', verifier, { httpOnly: true, secure: true, maxAge: 300000 });
+
+  const authUrl = `${CIAM_BASE_URL}/oauth/authorize?response_type=code` +
+    `&client_id=${encodeURIComponent(CLIENT_ID)}` +
+    `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+    `&scope=openid+profile+email` +
+    `&state=${state}` +
+    `&code_challenge=${challenge}` +
+    `&code_challenge_method=S256`;
+
+  res.redirect(authUrl);
+});
+
+// 2. Endpoint รับ Callback และดึงข้อมูลพนักงานจาก AD
+router.post('/callback', async (req, res) => {
+  const { code } = req.body;
+  const verifier = req.cookies['sso_verifier'];
+
+  try {
+    // 2.1 แลก Authorization Code เป็น Tokens
+    const tokenRes = await axios.post(`${CIAM_BASE_URL}/api/v1/oauth/token`, new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      code: code,
+      redirect_uri: REDIRECT_URI,
+      code_verifier: verifier
+    }).toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    const { id_token } = tokenRes.data;
+
+    // 2.2 ตรวจสอบ Signature ของ ID Token ด้วย JWKS
+    jwt.verify(id_token, getKey, {
+      algorithms: ['RS256'],
+      audience: CLIENT_ID,
+      issuer: CIAM_BASE_URL
+    }, (err, claims) => {
+      if (err) {
+        return res.status(401).json({ status: "FAILED", message: "Invalid ID Token Signature" });
+      }
+
+      // 2.3 อ่านข้อมูลพนักงานจาก AD
+      const { preferred_username, name, email, department, employee_id, groups } = claims;
+
+      // TODO: ออก Session Token ของระบบลูก และส่งกลับให้ Frontend
+      res.json({
+        status: "SUCCESS",
+        user: { username: preferred_username, name, email, department, employee_id, groups }
+      });
+    });
+  } catch (error) {
+    res.status(500).json({ status: "FAILED", message: error.response?.data || error.message });
+  }
+});
+
+module.exports = router;
+```
+
+
 
