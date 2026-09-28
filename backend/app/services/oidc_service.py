@@ -126,77 +126,55 @@ def verify_employee_credentials(
         primary_secret = (ad_app.client_secret or ad_app.api_key if ad_app else None) or settings.AD_SECRET_KEY
         origin_ip = (ad_app.sap_company_db if ad_app and ad_app.sap_company_db else None) or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
 
-        # 2. ISO 8601 UTC+7 Thai local time format with Z (per ADAuthen.md rule #3) + UTC fallback
-        tz_thai = timezone(timedelta(hours=7))
-        thai_timestamp = datetime.now(tz_thai).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Standard ISO 8601 UTC timestamp per AD Gateway requirements
         utc_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        timestamp_candidates = [thai_timestamp, utc_timestamp]
-
-        strategies = [
-            (primary_app_id, primary_secret),
-            ("KeyCloak", "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"),
-            ("ProRegis", "d69f9e5a88e734c56e2978a63bf720c22635a9c0c32b5e2a2205510657e4e138"),
-            ("IRM", "ca0a27d191208cbe6543c8g636d18ff40b9bea422dfc51d426bf920ca54c1828"),
-            ("worksync", "EAAD6F0F70CE84DF67037F2D835511927D964493B7BB986C61CF20272D9A87EC"),
-            ("CIAM", "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823"),
-            ("PettyCash", "d69f9e5a88e734c56e2978a63bf720c22635a9c0c32b5e2a2205510657e4e138"),
-        ]
-        seen_combos: set = set()
-        candidate_pairs: list = []
-        for a_id, s_key in strategies:
-            if a_id and s_key and (a_id, s_key) not in seen_combos:
-                seen_combos.add((a_id, s_key))
-                candidate_pairs.append((a_id, s_key))
 
         ad_url = f"{ad_base}/api/v2/login"
         ad_auth_success = False
         ad_err_msg = ""
 
         try:
-            with httpx.Client(timeout=8.0) as client:
-                for timestamp_str in timestamp_candidates:
-                    for cand_app_id, cand_secret in candidate_pairs:
-                        payload = {
-                            "app_id": cand_app_id,
-                            "app_name": cand_app_id,
-                            "secret_key": cand_secret,
-                            "username": username,
-                            "password": password,
-                            "timestamp": timestamp_str
-                        }
-                        headers = {
-                            "Content-Type": "application/json",
-                            "X-Forwarded-For": origin_ip,
-                            "x-forwarded-for": origin_ip,
-                            "X-Request-Timestamp": timestamp_str,
-                            "X-Timestamp": timestamp_str,
-                            "timestamp": timestamp_str,
-                            "X-App-Id": cand_app_id,
-                            "x-app-id": cand_app_id,
-                            "X-Secret-Key": cand_secret,
-                            "x-secret-key": cand_secret,
-                        }
+            with httpx.Client(timeout=4.0) as client:
+                payload = {
+                    "app_id": primary_app_id,
+                    "app_name": primary_app_id,
+                    "secret_key": primary_secret,
+                    "username": username,
+                    "password": password,
+                    "timestamp": utc_timestamp
+                }
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-Forwarded-For": origin_ip,
+                    "x-forwarded-for": origin_ip,
+                    "X-Request-Timestamp": utc_timestamp,
+                    "X-Timestamp": utc_timestamp,
+                    "timestamp": utc_timestamp,
+                    "X-App-Id": primary_app_id,
+                    "x-app-id": primary_app_id,
+                    "X-Secret-Key": primary_secret,
+                    "x-secret-key": primary_secret,
+                    "X-Management-API-Key": primary_secret,
+                    "x-management-api-key": primary_secret,
+                }
+                try:
+                    resp = client.post(ad_url, json=payload, headers=headers)
+                    if resp.status_code == 200:
+                        resp_data = resp.json()
+                        is_ok = (
+                            resp_data.get("status") in ["success", "OK", True]
+                            or resp_data.get("authenticated", False)
+                            or ("data" in resp_data and not resp_data.get("error"))
+                        )
+                        if is_ok:
+                            ad_auth_success = True
+                    else:
                         try:
-                            resp = client.post(ad_url, json=payload, headers=headers)
-                            if resp.status_code == 200:
-                                resp_data = resp.json()
-                                is_ok = (
-                                    resp_data.get("status") in ["success", "OK", True]
-                                    or resp_data.get("authenticated", False)
-                                    or ("data" in resp_data and not resp_data.get("error"))
-                                )
-                                if is_ok:
-                                    ad_auth_success = True
-                                    break
-                            else:
-                                try:
-                                    ad_err_msg = resp.json().get("message", f"HTTP {resp.status_code}")
-                                except Exception:
-                                    ad_err_msg = f"HTTP {resp.status_code}"
-                        except Exception as probe_ex:
-                            ad_err_msg = str(probe_ex)
-                    if ad_auth_success:
-                        break
+                            ad_err_msg = resp.json().get("message", f"HTTP {resp.status_code}")
+                        except Exception:
+                            ad_err_msg = f"HTTP {resp.status_code}"
+                except Exception as probe_ex:
+                    ad_err_msg = str(probe_ex)
         except Exception as e:
             logger.error("Failed to connect to AD Gateway at %s: %s", ad_url, e)
 
