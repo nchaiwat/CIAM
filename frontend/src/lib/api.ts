@@ -588,6 +588,8 @@ export interface AdminUserOut {
   email: string | null;
   role: string;
   is_active: boolean;
+  department?: string | null;
+  employee_id?: string | null;
 }
 
 export interface AdminTokenResponse {

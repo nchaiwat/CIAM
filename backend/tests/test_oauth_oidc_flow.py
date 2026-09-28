@@ -301,3 +301,108 @@ def test_invalid_credentials_fails():
         }
     )
     assert auth_resp.status_code in [401, 403]
+
+
+def test_portal_apps_authorization_filtering_and_launch():
+    """Verify that employee portal filters apps by authorization and issues token for employee."""
+    from app.core.database import SessionLocal
+    from app.core.security import create_access_token, hash_password
+    from app.models.user import AdminUser
+    from app.models.identity import MasterIdentity
+    from app.models.application import ConnectedApplication
+    from app.models.mapping import AppAccountMapping
+
+    db = SessionLocal()
+    try:
+        # Create an employee user
+        emp_user = db.query(AdminUser).filter(AdminUser.username == "test.employee").first()
+        if not emp_user:
+            emp_user = AdminUser(
+                username="test.employee",
+                full_name="Test Employee",
+                email="test.emp@windowasia.com",
+                hashed_password=hash_password("Pass123!"),
+                role="PORTAL_USER",
+                is_active=True
+            )
+            db.add(emp_user)
+            db.commit()
+            db.refresh(emp_user)
+
+        # Create MasterIdentity
+        ident = db.query(MasterIdentity).filter(MasterIdentity.username == "test.employee").first()
+        if not ident:
+            ident = MasterIdentity(
+                username="test.employee",
+                full_name="Test Employee",
+                email="test.emp@windowasia.com",
+                department="Purchasing",
+                is_active_in_ad=True
+            )
+            db.add(ident)
+            db.commit()
+            db.refresh(ident)
+
+        # Map ONLY to 'irm' app
+        irm_app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "irm").first()
+        assert irm_app is not None
+
+        mapping = db.query(AppAccountMapping).filter(
+            AppAccountMapping.identity_id == ident.id,
+            AppAccountMapping.application_id == irm_app.id
+        ).first()
+        if not mapping:
+            mapping = AppAccountMapping(
+                identity_id=ident.id,
+                application_id=irm_app.id,
+                app_username="test.employee",
+                is_active_in_app=True
+            )
+            db.add(mapping)
+            db.commit()
+
+        # Generate token for employee
+        emp_token = create_access_token(subject="test.employee")
+        headers = {"Authorization": f"Bearer {emp_token}"}
+
+        # 1. Employee should ONLY see IRM app in /portal/apps
+        res = client.get("/api/v1/oauth/portal/apps", headers=headers)
+        assert res.status_code == 200
+        apps_data = res.json()
+        app_codes = [a["app_code"] for a in apps_data]
+        assert "irm" in app_codes
+        # Should not see apps they don't have access to (e.g. qms, qol, sap_b1)
+        assert "qms" not in app_codes
+
+        # 2. Employee launches IRM (authorized) -> Success, token issued for test.employee
+        launch_res = client.post(
+            "/api/v1/oauth/portal/launch",
+            headers=headers,
+            json={"client_id": irm_app.client_id}
+        )
+        assert launch_res.status_code == 200
+        launch_data = launch_res.json()
+        assert "code" in launch_data
+        assert "launch_url" in launch_data
+
+        # 3. Employee attempts to launch QMS (unauthorized) -> 403 Forbidden
+        qms_app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "qms").first()
+        if qms_app:
+            unauth_res = client.post(
+                "/api/v1/oauth/portal/launch",
+                headers=headers,
+                json={"client_id": qms_app.client_id}
+            )
+            assert unauth_res.status_code == 403
+
+        # 4. Admin sees ALL apps
+        admin_token = create_access_token(subject="admin")
+        admin_headers = {"Authorization": f"Bearer {admin_token}"}
+        admin_res = client.get("/api/v1/oauth/portal/apps", headers=admin_headers)
+        assert admin_res.status_code == 200
+        admin_app_codes = [a["app_code"] for a in admin_res.json()]
+        assert "irm" in admin_app_codes
+        assert "qms" in admin_app_codes
+    finally:
+        db.close()
+

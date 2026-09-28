@@ -78,6 +78,25 @@ docker compose up -d api web
 
 ---
 
+### 3) การปรับปรุงระบบ Login & Employee Portal (Completed & Verified)
+- **โจทย์และความต้องการ:**
+  1. แยกหน้า Login ออกจากกันอย่างชัดเจน:
+     - `/login`: สำหรับ **พนักงานทั่วไป (Employee Portal)** — สไตล์ Clean & Modern สบายตา เป็นมิตร แบรนดิ้ง Window Asia Single Sign-On เข้าสู่ระบบด้วย Active Directory Username & Password แล้วพาเข้า `/portal` ทันที
+     - `/admin/login`: สำหรับ **ผู้ดูแลระบบ (Admin Console)** — สไตล์ High-Security Dark Cyber Theme คงระบบ Honeypot, คำเตือน พ.ร.บ. คอมพิวเตอร์, Brute-Force lockout และเข้าสู่หน้า Admin Dashboard
+  2. ปรับปรุงหน้า **`/portal` (App Launcher)** ให้ **Simple & Minimal**:
+     - ตัด Technical noise ทั้งหมดออก (latency ms, REST_API / OData badges, client_id, dropdown เลือกลิงก์ simulator, กล่องข้อความและ footer เตือนกฎหมาย)
+     - คงเหลือเฉพาะ: ส่วนต้อนรับและแสดงชื่อพนักงาน-แผนก, ช่องค้นหาระบบงาน, และการ์ดแอปพลิเคชันที่คลีนพร้อมปุ่ม "เข้าใช้งานระบบ" (1-Click Launch)
+  3. **Authorization-based Filtering:**
+     - ตรวจสอบสิทธิ์ของพนักงานจาก `AppAccountMapping` (`is_active_in_app == True`)
+     - **ซ่อนระบบที่พนักงานไม่ได้รับสิทธิ์ออกทั้งหมด** (แสดงเฉพาะระบบที่มีสิทธิ์เท่านั้น)
+     - สำหรับ Admin สามารถมองเห็นทุกระบบ พร้อมปุ่มสลับกลับไป Admin Console
+  4. **Backend Security & Token Enforcement:**
+     - ปรับ `/api/v1/oauth/portal/apps` ให้รับ token และ filter แอปตาม mapping ของ employee
+     - ปรับ `/api/v1/oauth/portal/launch` ให้ออก SSO Authorization Code ภายใต้ `username` จริงของพนักงาน (ยกเลิกการ hardcode "admin") และตรวจ 403 Forbidden หากพนักงานพยายาม launch ระบบที่ตนเองไม่มีสิทธิ์
+     - ปรับ `AppShell.tsx` ให้มี Role Guard ป้องกันไม่ให้พนักงาน (`PORTAL_USER`) เข้าถึงหน้า Admin Console (`/`, `/directory`, `/applications`, etc.)
+
+---
+
 ## 4. สถานะ Git ล่าสุด (Current Git State)
 - **Branch:** `main`
 - **Head Commit:** [`8fd9a5d`](https://github.com/nchaiwat/CIAM/commit/8fd9a5d) - `fix(sync): immediate flush on duplicate deletion to prevent unique constraint conflict on update`

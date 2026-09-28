@@ -15,23 +15,64 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isStandalone =
     pathname?.startsWith("/oauth/authorize") ||
     pathname?.startsWith("/portal") ||
-    pathname === "/login";
+    pathname === "/login" ||
+    pathname?.startsWith("/admin/login");
 
   useEffect(() => {
     const token = localStorage.getItem("ciam_token");
+    const storedUserStr = localStorage.getItem("ciam_user");
+    let userRole = "";
+    if (storedUserStr) {
+      try {
+        const u = JSON.parse(storedUserStr);
+        userRole = u.role || "";
+      } catch {}
+    }
 
-    if (!isStandalone && !token) {
-      router.replace("/login");
-    } else if (pathname === "/login" && token) {
-      router.replace("/");
+    if (pathname?.startsWith("/portal")) {
+      // Portal requires authentication
+      if (!token) {
+        router.replace("/login?redirect=/portal");
+        return;
+      }
+      setAuthChecked(true);
+    } else if (pathname === "/login") {
+      // If already logged in, redirect to portal or dashboard
+      if (token) {
+        if (userRole === "PORTAL_USER") {
+          router.replace("/portal");
+        } else {
+          router.replace("/portal");
+        }
+        return;
+      }
+      setAuthChecked(true);
+    } else if (pathname?.startsWith("/admin/login")) {
+      if (token && userRole !== "PORTAL_USER") {
+        router.replace("/");
+        return;
+      }
+      setAuthChecked(true);
+    } else if (!isStandalone) {
+      // Protected Admin Console routes (/, /directory, /applications, /offboarding, /audit-logs)
+      if (!token) {
+        router.replace(`/admin/login?redirect=${encodeURIComponent(pathname || "/")}`);
+        return;
+      }
+      if (userRole === "PORTAL_USER") {
+        // Regular employees must not access admin console
+        router.replace("/portal");
+        return;
+      }
+      setAuthChecked(true);
     } else {
       setAuthChecked(true);
     }
   }, [pathname, isStandalone, router]);
 
-  // Standalone pages (Login & SSO authorization portal) render without admin sidebar & header
+  // Standalone pages (Employee Login, Admin Login, Portal, OIDC Authorize) render without admin sidebar & header
   if (isStandalone) {
-    return <main className="min-h-screen bg-[#070d1e]">{children}</main>;
+    return <main className="min-h-screen">{children}</main>;
   }
 
   // Prevent flashing protected admin dashboard before token check completes

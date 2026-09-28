@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, LogOut, User, Shield, PanelLeft } from "lucide-react";
+import Link from "next/link";
+import { Menu, LogOut, User, Shield, PanelLeft, Rocket } from "lucide-react";
 import { AdminUserOut } from "@/lib/api";
 
 interface HeaderProps {
@@ -68,6 +69,16 @@ export default function Header({
 
       {/* Right section: User Profile + Logout */}
       <div className="flex items-center space-x-4">
+        {/* Quick App Portal Switcher */}
+        <Link
+          href="/portal"
+          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 text-xs font-bold transition-all shadow-2xs"
+          title="ไปยังหน้า App Portal (Single Sign-On สำหรับพนักงาน)"
+        >
+          <Rocket className="w-3.5 h-3.5 text-sky-600" />
+          <span className="hidden md:inline">App Portal</span>
+        </Link>
+
         {/* User Profile Card */}
         <div className="flex items-center space-x-2.5 pl-2">
           <div className="w-9 h-9 rounded-full bg-blue-100 border-2 border-blue-300 flex items-center justify-center text-blue-700 font-bold shadow-2xs">
@@ -87,7 +98,7 @@ export default function Header({
         {/* Logout Button */}
         <button
           onClick={handleLogout}
-          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border-2 border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 text-slate-600 text-xs font-bold transition-all shadow-2xs"
+          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border-2 border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 text-slate-600 text-xs font-bold transition-all shadow-2xs cursor-pointer"
           title="ออกจากระบบ"
         >
           <LogOut className="w-3.5 h-3.5" />

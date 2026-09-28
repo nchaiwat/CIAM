@@ -8,7 +8,9 @@ from app.core.security import verify_password, create_access_token
 from app.models.user import AdminUser
 from app.models.audit import IamAuditLog
 from app.schemas.auth import LoginRequest, TokenResponse, AdminUserOut
-from app.api.deps import get_current_admin
+from app.api.deps import get_current_admin, get_current_user
+from app.models.identity import MasterIdentity
+from sqlalchemy import func
 
 logger = logging.getLogger("ciam.auth")
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -418,6 +420,16 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
     )
 
 @router.get("/me", response_model=AdminUserOut)
-def get_current_user_profile(current_user: AdminUser = Depends(get_current_admin)):
-    """Return currently logged in Admin profile."""
-    return AdminUserOut.model_validate(current_user)
+def get_current_user_profile(
+    current_user: AdminUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Return currently logged in user profile with MasterIdentity details."""
+    out = AdminUserOut.model_validate(current_user)
+    ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == current_user.username.lower()).first()
+    if ident:
+        out.department = ident.department
+        out.employee_id = ident.employee_id
+        if ident.full_name and ident.full_name != current_user.username:
+            out.full_name = ident.full_name
+    return out

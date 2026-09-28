@@ -22,6 +22,11 @@ from app.schemas.oauth import (
 )
 from app.models.application import ConnectedApplication
 from app.models.oauth import OAuthAuthorizationCode
+from app.models.identity import MasterIdentity
+from app.models.mapping import AppAccountMapping
+from app.models.user import AdminUser
+from app.api.deps import get_current_user_optional, get_current_user
+from sqlalchemy import func
 from app.core.security import get_public_base_url
 from app.services.oidc_service import (
     validate_client_and_redirect_uri,
@@ -238,15 +243,37 @@ def userinfo_endpoint(
 
 @router.get("/portal/apps", response_model=List[PortalAppItem])
 def get_portal_apps(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[AdminUser] = Depends(get_current_user_optional)
 ):
     """
     Returns enterprise spoke applications available for SSO launch on the Employee Portal.
+    Filters applications based on the authenticated user's authorization:
+    - Admins see all active SSO-enabled applications.
+    - Regular employees only see applications where they have an active account mapping.
     """
-    apps = db.query(ConnectedApplication).filter(
+    base_query = db.query(ConnectedApplication).filter(
         ConnectedApplication.is_active == True,
         ConnectedApplication.sso_enabled == True
-    ).all()
+    )
+
+    if current_user and current_user.role not in ["SUPER_ADMIN", "ADMIN"]:
+        # Find employee's MasterIdentity
+        ident = db.query(MasterIdentity).filter(
+            func.lower(MasterIdentity.username) == current_user.username.lower()
+        ).first()
+
+        if ident:
+            active_mappings = db.query(AppAccountMapping).filter(
+                AppAccountMapping.identity_id == ident.id,
+                AppAccountMapping.is_active_in_app == True
+            ).all()
+            authorized_app_ids = {m.application_id for m in active_mappings}
+            apps = base_query.filter(ConnectedApplication.id.in_(authorized_app_ids)).all()
+        else:
+            apps = []
+    else:
+        apps = base_query.all()
 
     category_map = {
         "irm": "คลังสินค้าและผลิต (Warehouse & Production)",
@@ -296,10 +323,12 @@ def get_portal_apps(
 @router.post("/portal/launch", response_model=PortalLaunchResponse)
 def launch_portal_app(
     payload: PortalLaunchRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[AdminUser] = Depends(get_current_user_optional)
 ):
     """
     Generates a single-use authorization code for 1-Click SSO Launch from the Employee Portal.
+    Uses the authenticated employee identity to issue tokens.
     """
     app = db.query(ConnectedApplication).filter(
         ConnectedApplication.client_id == payload.client_id
@@ -332,6 +361,32 @@ def launch_portal_app(
             detail=f"Application '{app.app_name}' is not currently available for SSO"
         )
 
+    # Validate authorization for normal employees
+    launch_username = "admin"
+    if current_user:
+        if current_user.role not in ["SUPER_ADMIN", "ADMIN"]:
+            ident = db.query(MasterIdentity).filter(
+                func.lower(MasterIdentity.username) == current_user.username.lower()
+            ).first()
+            if not ident:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"ไม่พบข้อมูลตัวตนของบัญชี '{current_user.username}' ในระบบ Central IAM"
+                )
+            mapping = db.query(AppAccountMapping).filter(
+                AppAccountMapping.identity_id == ident.id,
+                AppAccountMapping.application_id == app.id,
+                AppAccountMapping.is_active_in_app == True
+            ).first()
+            if not mapping:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"ท่านไม่ได้รับสิทธิ์เข้าใช้งานระบบ '{app.app_name}' กรุณาติดต่อฝ่ายเทคโนโลยีสารสนเทศ"
+                )
+            launch_username = mapping.app_username or current_user.username
+        else:
+            launch_username = current_user.username
+
     # Determine callback URI
     redirect_uri = None
     if payload.target_redirect_uri:
@@ -359,7 +414,7 @@ def launch_portal_app(
     code = create_authorization_code(
         db=db,
         client_id=payload.client_id,
-        username="admin",
+        username=launch_username,
         redirect_uri=redirect_uri,
         scope="openid profile email",
         code_challenge=None,

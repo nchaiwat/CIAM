@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
-**Last Updated:** 2026-09-26  
-**Version:** 1.9.2 (SAP B1 Robust Redirect & Session Diagnostic Probe, AD MasterIdentity Notice Fallback & Non-Truncated Audit Trail UI)  
+**Last Updated:** 2026-09-28  
+**Version:** 1.9.3 (Minimal Employee App Launcher, Authorize-based App Filtering, Dual Clean Employee / Secure Admin Login Separation)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -157,6 +157,20 @@ FRONTEND_URL=http://localhost:3000
 3. Invokes `connector.deprovision()` across spokes in parallel (REST PATCH, SAP B1 Locked, RPA)
 4. Generates certificate code: `CERT-YYYYMMDD-XXXXXX`
 5. Records immutable audit trails in `IamAuditLog`
+
+### 4.8 Dual Login Architecture & Minimal Employee Portal (Version 1.9.3)
+* **Separated Login Routes:**
+  * **Employee Portal Login (`/login`):** Dedicated, welcoming, and clean corporate login interface for general employees. Uses standard Windows/AD credentials and directs users to `/portal`.
+  * **Admin Console Login (`/admin/login`):** Dedicated high-security console for IT Administrators and security officers with honeypot decoys, legal notices, and lockout protection.
+* **Role-Based Guards ([AppShell.tsx](file:///d:/Python/Central-IAM/frontend/src/components/layout/AppShell.tsx)):**
+  * Prevents regular employees (`role: PORTAL_USER`) from accessing administrative management views (`/`, `/directory`, `/applications`, `/offboarding`, `/audit-logs`), redirecting them smoothly to `/portal`.
+  * Enforces token authentication before viewing `/portal`.
+* **Minimalist & Clean App Launcher ([portal/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/portal/page.tsx)):**
+  * Stripped of all technical clutter (no latency ms, no raw connector types, no client-ids, no simulator menus).
+  * Prominent, high-contrast, responsive app cards with 1-Click Launch.
+* **Strict Authorize-based App Filtering ([oauth.py](file:///d:/Python/Central-IAM/backend/app/api/v1/oauth.py)):**
+  * `GET /api/v1/oauth/portal/apps`: Queries `AppAccountMapping` for the logged-in user and returns **only** active authorized applications (unauthorized apps are completely hidden). Admins view all active SSO apps.
+  * `POST /api/v1/oauth/portal/launch`: Enforces authorization check on launch and issues SSO token under the employee's genuine username instead of static admin.
 
 ---
 

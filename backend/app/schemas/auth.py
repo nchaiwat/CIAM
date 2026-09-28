@@ -20,6 +20,8 @@ class AdminUserOut(BaseModel):
     email: Optional[str] = None
     role: str
     is_active: bool
+    department: Optional[str] = None
+    employee_id: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
