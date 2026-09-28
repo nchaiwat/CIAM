@@ -286,3 +286,33 @@ def test_delete_application_lifecycle():
     # 3. Confirm it's gone
     get_res = client.get(f"/api/v1/applications/{dummy_id}/credentials", headers=headers)
     assert get_res.status_code == 404
+
+def test_admin_roles_and_power_user_assignment():
+    login_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. List admins
+    admins_res = client.get("/api/v1/auth/admins", headers=headers)
+    assert admins_res.status_code == 200
+    admins = admins_res.json()
+    assert isinstance(admins, list)
+    assert any(a["username"] == "admin" for a in admins)
+
+    # 2. Update a test employee role to Power User (ADMIN)
+    update_res = client.patch(
+        "/api/v1/auth/admins/Thanaphat.C/role",
+        json={"role": "ADMIN"},
+        headers=headers
+    )
+    assert update_res.status_code == 200
+    data = update_res.json()
+    assert data["username"] == "Thanaphat.C"
+    assert data["role"] == "ADMIN"
+
+    # 3. Verify role in admin list
+    admins_check = client.get("/api/v1/auth/admins", headers=headers).json()
+    thanaphat = next((a for a in admins_check if a["username"] == "Thanaphat.C"), None)
+    assert thanaphat is not None
+    assert thanaphat["role"] == "ADMIN"
+

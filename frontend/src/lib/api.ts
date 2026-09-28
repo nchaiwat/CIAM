@@ -490,6 +490,14 @@ export const ciamApi = {
     }),
 
   getAdminMe: () => fetchApi<AdminUserOut>("/auth/me"),
+
+  getAdminUsers: () => fetchApi<AdminUserOut[]>("/auth/admins"),
+
+  updateUserRole: (username: string, role: string) =>
+    fetchApi<AdminUserOut>(`/auth/admins/${encodeURIComponent(username)}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
 };
 
 export const api = ciamApi;

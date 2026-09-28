@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.core.security import verify_password, create_access_token
 from app.models.user import AdminUser
 from app.models.audit import IamAuditLog
-from app.schemas.auth import LoginRequest, TokenResponse, AdminUserOut
+from app.schemas.auth import LoginRequest, TokenResponse, AdminUserOut, AdminRoleUpdateRequest
 from app.api.deps import get_current_admin, get_current_user
 from app.models.identity import MasterIdentity
 from sqlalchemy import func
@@ -432,4 +432,90 @@ def get_current_user_profile(
         out.employee_id = ident.employee_id
         if ident.full_name and ident.full_name != current_user.username:
             out.full_name = ident.full_name
+    return out
+
+
+@router.get("/admins", response_model=list[AdminUserOut])
+def list_admin_users(
+    current_admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """List all registered administrators and power users."""
+    users = db.query(AdminUser).order_by(AdminUser.role, AdminUser.username).all()
+    results = []
+    for u in users:
+        out = AdminUserOut.model_validate(u)
+        ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == u.username.lower()).first()
+        if ident:
+            out.department = ident.department
+            out.employee_id = ident.employee_id
+            if ident.full_name and ident.full_name != u.username:
+                out.full_name = ident.full_name
+        results.append(out)
+    return results
+
+
+@router.patch("/admins/{username}/role", response_model=AdminUserOut)
+def update_user_role(
+    username: str,
+    payload: AdminRoleUpdateRequest,
+    current_admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Assign or update Administrator / Power User role for a user.
+    Permitted roles: SUPER_ADMIN, ADMIN (Power User), IT_HELPDESK, AUDITOR, PORTAL_USER.
+    """
+    allowed_roles = ["SUPER_ADMIN", "ADMIN", "IT_HELPDESK", "AUDITOR", "PORTAL_USER"]
+    target_role = payload.role.upper().strip()
+    if target_role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role '{payload.role}'. Allowed: {', '.join(allowed_roles)}"
+        )
+
+    # Only SUPER_ADMIN can grant SUPER_ADMIN or change other admins
+    if current_admin.role != "SUPER_ADMIN" and target_role in ["SUPER_ADMIN", "ADMIN"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Super Administrators can assign Admin/Power User privileges"
+        )
+
+    user = db.query(AdminUser).filter(func.lower(AdminUser.username) == username.lower().strip()).first()
+    if not user:
+        # Check if user exists in MasterIdentity, then create AdminUser record
+        ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == username.lower().strip()).first()
+        import secrets
+        from app.core.security import hash_password
+        full_name = ident.full_name if ident else username
+        email = ident.email if ident else f"{username.lower()}@windowasia.com"
+        user = AdminUser(
+            username=ident.username if ident else username,
+            email=email,
+            full_name=full_name,
+            hashed_password=hash_password(secrets.token_urlsafe(32)),
+            role=target_role,
+            is_active=True
+        )
+        db.add(user)
+    else:
+        user.role = target_role
+
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="USER_ROLE_UPDATED",
+        target_username=user.username,
+        execution_mode="ADMIN_MANAGEMENT",
+        status="SUCCESS",
+        reason=f"Role updated to '{target_role}' by {current_admin.username}",
+        details=f"Target: {user.username}, New Role: {target_role}"
+    ))
+    db.commit()
+    db.refresh(user)
+
+    out = AdminUserOut.model_validate(user)
+    ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == user.username.lower()).first()
+    if ident:
+        out.department = ident.department
+        out.employee_id = ident.employee_id
     return out

@@ -57,7 +57,7 @@ export default function Sidebar({
     },
     {
       name: "Offboarding",
-      labelTh: "ระงับสิทธิ์พนักงาน",
+      labelTh: "ศูนย์ระงับสิทธิ์",
       href: "/offboarding",
       icon: UserX,
       isDanger: true,
@@ -190,63 +190,6 @@ export default function Sidebar({
                 </Link>
               );
             })}
-          </div>
-
-          {/* Admin & Integration Section */}
-          <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
-            {!collapsed && (
-              <button
-                onClick={() => setAdminOpen(!adminOpen)}
-                className="w-full flex items-center justify-between px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-200"
-              >
-                <span>ระบบและเชื่อมต่อ (Admin)</span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform ${
-                    adminOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-            )}
-
-            {(adminOpen || collapsed) && (
-              <div className="space-y-1">
-                {/* Active Directory Gateway Info */}
-                <div
-                  title={collapsed ? "Active Directory Gateway: 172.18.0.1:3100" : undefined}
-                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 bg-slate-900/60 border border-slate-800 ${
-                    collapsed ? "justify-center px-2" : ""
-                  }`}
-                >
-                  <Server className="w-4 h-4 text-emerald-400 shrink-0" />
-                  {!collapsed && (
-                    <div className="flex-1 truncate">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-200">AD Gateway</span>
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-xs shadow-emerald-400"></span>
-                      </div>
-                      <span className="text-[11px] text-emerald-400 font-mono">
-                        172.18.0.1:3100
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Spoke API Specs link */}
-                <Link
-                  href="/applications"
-                  onClick={() => setMobileOpen(false)}
-                  title={collapsed ? "M2M Spoke API Spec" : undefined}
-                  className={`flex items-center space-x-3 px-3.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors ${
-                    collapsed ? "justify-center px-2" : ""
-                  }`}
-                >
-                  <FileCode className="w-4 h-4 text-blue-400 shrink-0" />
-                  {!collapsed && (
-                    <span className="truncate">สเปกเชื่อมต่อ (Spoke API)</span>
-                  )}
-                </Link>
-              </div>
-            )}
           </div>
         </div>
 

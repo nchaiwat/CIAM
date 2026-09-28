@@ -25,4 +25,7 @@ class AdminUserOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class AdminRoleUpdateRequest(BaseModel):
+    role: str # SUPER_ADMIN, ADMIN, IT_HELPDESK, AUDITOR, PORTAL_USER
+
 TokenResponse.model_rebuild()

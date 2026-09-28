@@ -18,6 +18,10 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  ExternalLink,
+  ShieldAlert,
+  Crown,
+  Zap,
 } from "lucide-react";
 import {
   ciamApi,
@@ -31,6 +35,7 @@ import { formatDate, formatDateTime } from "@/lib/date";
 export default function DirectoryPage() {
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [apps, setApps] = useState<ConnectedApp[]>([]);
+  const [adminRoles, setAdminRoles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("active");
@@ -38,6 +43,11 @@ export default function DirectoryPage() {
 
   const [ghostOnly, setGhostOnly] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
+
+  // Role Management State
+  const [selectedRole, setSelectedRole] = useState("PORTAL_USER");
+  const [roleSaving, setRoleSaving] = useState(false);
+  const [roleSaveMessage, setRoleSaveMessage] = useState<string | null>(null);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -83,6 +93,19 @@ export default function DirectoryPage() {
     }
   };
 
+  const fetchAdminUsers = async () => {
+    try {
+      const admins = await ciamApi.getAdminUsers();
+      const roleMap: Record<string, string> = {};
+      admins.forEach((a) => {
+        roleMap[a.username.toLowerCase()] = a.role;
+      });
+      setAdminRoles(roleMap);
+    } catch (err) {
+      console.error("Error fetching admin roles:", err);
+    }
+  };
+
   const fetchApplications = async () => {
     try {
       const appList = await ciamApi.getApplications();
@@ -102,6 +125,7 @@ export default function DirectoryPage() {
 
   useEffect(() => {
     fetchApplications();
+    fetchAdminUsers();
   }, []);
 
   useEffect(() => {
@@ -113,6 +137,34 @@ export default function DirectoryPage() {
     e.preventDefault();
     setCurrentPage(1);
     fetchUsers();
+  };
+
+  // When selectedUser changes, initialize selectedRole
+  useEffect(() => {
+    if (selectedUser) {
+      const currentRole = adminRoles[selectedUser.username.toLowerCase()] || "PORTAL_USER";
+      setSelectedRole(currentRole);
+      setRoleSaveMessage(null);
+    }
+  }, [selectedUser, adminRoles]);
+
+  const handleSaveRole = async () => {
+    if (!selectedUser) return;
+    try {
+      setRoleSaving(true);
+      setRoleSaveMessage(null);
+      await ciamApi.updateUserRole(selectedUser.username, selectedRole);
+      setAdminRoles((prev) => ({
+        ...prev,
+        [selectedUser.username.toLowerCase()]: selectedRole,
+      }));
+      setRoleSaveMessage("อัปเดตสิทธิ์สำเร็จแล้ว");
+      setTimeout(() => setRoleSaveMessage(null), 3000);
+    } catch (err: any) {
+      alert(`อัปเดตสิทธิ์ล้มเหลว: ${err.message}`);
+    } finally {
+      setRoleSaving(false);
+    }
   };
 
   // Calculate Pagination
@@ -175,6 +227,7 @@ export default function DirectoryPage() {
 
       setCreateResult(res);
       await fetchUsers();
+      await fetchAdminUsers();
     } catch (err: any) {
       setCreateError(err.message || "เกิดข้อผิดพลาดในการสร้างบัญชีผู้ใช้");
     } finally {
@@ -206,10 +259,52 @@ export default function DirectoryPage() {
     }
   };
 
+  // Metrics
+  const activeAdCount = users.filter((u) => u.is_active_in_ad).length;
+  const ghostCount = users.filter((u) => u.has_discrepancy).length;
+  const powerUserCount = Object.values(adminRoles).filter((r) => r === "SUPER_ADMIN" || r === "ADMIN").length;
+
+  const renderRoleBadge = (username: string) => {
+    const role = adminRoles[username.toLowerCase()];
+    if (!role || role === "PORTAL_USER") return null;
+
+    if (role === "SUPER_ADMIN") {
+      return (
+        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-300">
+          <Crown className="w-2.5 h-2.5 text-purple-700" />
+          <span>Super Admin</span>
+        </span>
+      );
+    }
+    if (role === "ADMIN") {
+      return (
+        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-blue-100 text-blue-900 border border-blue-300">
+          <Zap className="w-2.5 h-2.5 text-blue-700" />
+          <span>Power User</span>
+        </span>
+      );
+    }
+    if (role === "IT_HELPDESK") {
+      return (
+        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-300">
+          <span>Helpdesk</span>
+        </span>
+      );
+    }
+    if (role === "AUDITOR") {
+      return (
+        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+          <span>Auditor</span>
+        </span>
+      );
+    }
+    return null;
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3 border-b-2 border-slate-300">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b-2 border-slate-300">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
@@ -220,14 +315,14 @@ export default function DirectoryPage() {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
-            ข้อมูลตัวตนพนักงานหลักใน Active Directory และสิทธิ์การเข้าถึงระบบต่างๆ ในองค์กร
+            ข้อมูลตัวตนพนักงานใน Active Directory, สิทธิ์ระบบลูก (Spokes), และการกำหนดสิทธิ์ Power User ใน CIAM
           </p>
         </div>
 
         <div className="flex items-center space-x-2">
           <button
             onClick={handleOpenCreateModal}
-            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold transition-colors shadow-sm"
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold transition-colors shadow-sm cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
             <span>+ เพิ่มผู้ใช้ใหม่</span>
@@ -240,6 +335,43 @@ export default function DirectoryPage() {
             <UserX className="w-4 h-4" />
             <span>ศูนย์ระงับสิทธิ์</span>
           </Link>
+        </div>
+      </div>
+
+      {/* KPI Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white p-4 rounded-lg border-2 border-slate-300 shadow-xs">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">ผู้ใช้ทั้งหมด</span>
+          <div className="text-2xl font-black text-slate-900 mt-1">{totalUsers}</div>
+          <span className="text-[11px] text-slate-500 font-medium">ครอบคลุมทั้ง AD และระบบลูก</span>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg border-2 border-slate-300 shadow-xs">
+          <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">Active ใน AD</span>
+          <div className="text-2xl font-black text-emerald-700 mt-1">{activeAdCount}</div>
+          <span className="text-[11px] text-slate-500 font-medium">เปิดใช้งานใน Active Directory</span>
+        </div>
+
+        <div
+          onClick={() => setGhostOnly(!ghostOnly)}
+          className={`p-4 rounded-lg border-2 cursor-pointer transition-colors shadow-xs ${
+            ghostOnly
+              ? "bg-amber-100 border-amber-500"
+              : "bg-white border-slate-300 hover:border-amber-400"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider block">บัญชีผี / ตกค้าง</span>
+            {ghostOnly && <span className="text-[10px] font-black bg-amber-400 text-amber-950 px-1.5 py-0.2 rounded">กรองอยู่</span>}
+          </div>
+          <div className="text-2xl font-black text-amber-700 mt-1">{ghostCount}</div>
+          <span className="text-[11px] text-slate-500 font-medium">คลิกเพื่อกรองเฉพาะรายการตกค้าง</span>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg border-2 border-slate-300 shadow-xs">
+          <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider block">Power User & Admin</span>
+          <div className="text-2xl font-black text-blue-700 mt-1">{powerUserCount}</div>
+          <span className="text-[11px] text-slate-500 font-medium">มีสิทธิ์จัดการข้อมูลใน CIAM</span>
         </div>
       </div>
 
@@ -272,7 +404,6 @@ export default function DirectoryPage() {
               <option value="all">แสดงทั้งหมด (All Accounts)</option>
             </select>
 
-
             <select
               value={appFilter}
               onChange={(e) => setAppFilter(e.target.value)}
@@ -289,19 +420,19 @@ export default function DirectoryPage() {
             <button
               type="button"
               onClick={() => setGhostOnly(!ghostOnly)}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-md text-xs font-bold transition-all border-2 ${
+              className={`flex items-center space-x-1.5 px-3 py-2 rounded-md text-xs font-bold transition-all border-2 cursor-pointer ${
                 ghostOnly
                   ? "bg-amber-400 text-amber-950 border-amber-500 shadow-2xs"
                   : "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200"
               }`}
             >
               <AlertTriangle className={`w-4 h-4 ${ghostOnly ? "text-amber-950" : "text-slate-500"}`} />
-              <span>เฉพาะบัญชีตกค้าง (Ghost)</span>
+              <span>เฉพาะบัญชีตกค้าง</span>
             </button>
 
             <button
               type="submit"
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-bold transition-colors shadow-xs"
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-bold transition-colors shadow-xs cursor-pointer"
             >
               ค้นหา
             </button>
@@ -309,18 +440,18 @@ export default function DirectoryPage() {
         </form>
       </div>
 
-      {/* Directory Table - High Contrast Structure */}
+      {/* Directory Table */}
       <div className="bg-white rounded-lg border-2 border-slate-300 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs sm:text-sm text-slate-800">
             <thead className="bg-slate-100 border-b-2 border-slate-300 text-xs font-extrabold text-slate-800 uppercase tracking-wider">
               <tr>
-                <th className="py-3.5 px-4">พนักงาน / บัญชีผู้ใช้</th>
-                <th className="py-3.5 px-4">แผนก</th>
-                <th className="py-3.5 px-4">สถานะใน Active Directory</th>
-                <th className="py-3.5 px-4">สิทธิ์ในระบบลูก (Spokes)</th>
-                <th className="py-3.5 px-4">ประวัติการใช้งาน (Activity)</th>
-                <th className="py-3.5 px-4 text-right">การจัดการ</th>
+                <th className="py-3 px-4">พนักงาน / บัญชีผู้ใช้</th>
+                <th className="py-3 px-4">แผนก</th>
+                <th className="py-3 px-4">สถานะ AD</th>
+                <th className="py-3 px-4">สิทธิ์ระบบลูก (Spokes)</th>
+                <th className="py-3 px-4">การเข้าใช้งาน</th>
+                <th className="py-3 px-4 text-right">การจัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -340,19 +471,20 @@ export default function DirectoryPage() {
                 paginatedUsers.map((user) => (
                   <tr
                     key={user.id}
-                    className={`hover:bg-blue-50/40 transition-colors ${
+                    className={`hover:bg-blue-50/50 transition-colors ${
                       user.has_discrepancy ? "bg-amber-50/80 border-l-4 border-l-amber-500" : ""
                     }`}
                   >
                     {/* Identity Details */}
-                    <td className="py-3.5 px-4">
+                    <td className="py-3 px-4">
                       <div className="flex items-center space-x-3">
-                        <div className="w-9 h-9 rounded-full bg-blue-100 border border-blue-300 flex items-center justify-center font-bold text-sm text-blue-800 shadow-2xs">
+                        <div className="w-9 h-9 rounded-full bg-blue-100 border border-blue-300 flex items-center justify-center font-bold text-sm text-blue-800 shrink-0">
                           {user.full_name.charAt(0)}
                         </div>
                         <div>
                           <div className="font-bold text-slate-900 flex items-center space-x-2">
                             <span>{user.full_name}</span>
+                            {renderRoleBadge(user.username)}
                             {user.is_ad_account === false && (
                               <span className="bg-slate-200 text-slate-700 border border-slate-300 px-1.5 py-0.2 rounded text-[10px] font-bold">
                                 ระบบลูก
@@ -376,41 +508,42 @@ export default function DirectoryPage() {
                     </td>
 
                     {/* Department */}
-                    <td className="py-3.5 px-4 text-xs font-semibold text-slate-700">
-                      {user.department || "ทั่วไป"}
+                    <td className="py-3 px-4 text-xs font-semibold text-slate-700">
+                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-800 text-xs">
+                        {user.department || "ทั่วไป"}
+                      </span>
                     </td>
 
                     {/* AD Status */}
-                    <td className="py-3.5 px-4">
+                    <td className="py-3 px-4">
                       {user.is_ad_account === false ? (
-                        <span className="bg-slate-100 text-slate-600 border border-slate-300 px-2.5 py-1 rounded-md text-xs font-bold inline-flex items-center space-x-1.5 shadow-2xs">
-                          <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-                          <span>เฉพาะระบบลูก (ไม่มีใน AD)</span>
+                        <span className="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                          <span>ระบบลูกเท่านั้น</span>
                         </span>
                       ) : user.is_active_in_ad ? (
-                        <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 px-2.5 py-1 rounded-md text-xs font-bold inline-flex items-center space-x-1.5 shadow-2xs">
-                          <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                          <span>เปิดใช้งานใน AD</span>
+                        <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                          <span>Active</span>
                         </span>
                       ) : (
-                        <span className="bg-rose-100 text-rose-900 border border-rose-300 px-2.5 py-1 rounded-md text-xs font-bold inline-flex items-center space-x-1.5 shadow-2xs">
-                          <span className="w-2 h-2 rounded-full bg-rose-600"></span>
-                          <span>ปิดใช้งานใน AD</span>
+                        <span className="bg-rose-100 text-rose-900 border border-rose-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+                          <span>Inactive</span>
                         </span>
                       )}
                     </td>
 
                     {/* Connected Apps Badges */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex flex-wrap gap-1.5">
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-1">
                         {user.connected_apps.length === 0 ? (
-                          <span className="text-xs text-slate-400 font-medium">ไม่มีบัญชีในระบบลูก</span>
+                          <span className="text-xs text-slate-400 font-medium">-</span>
                         ) : (
                           user.connected_apps.map((app) => (
                             <div
                               key={`${app.application_id}-${app.app_username}`}
-                              className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center space-x-1.5 border shadow-2xs ${
-
+                              className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center space-x-1 border ${
                                 !user.is_active_in_ad && app.is_active_in_app
                                   ? "bg-amber-200 text-amber-950 border-amber-400"
                                   : app.is_active_in_app
@@ -419,98 +552,56 @@ export default function DirectoryPage() {
                               }`}
                             >
                               <span
-                                className={`w-2 h-2 rounded-full ${
+                                className={`w-1.5 h-1.5 rounded-full ${
                                   app.is_active_in_app ? "bg-emerald-600" : "bg-rose-600"
                                 }`}
                               ></span>
                               <span className="uppercase">{app.app_code}</span>
-                              {app.app_group_name && (
-                                <span className="text-[10px] text-slate-600 font-normal">({app.app_group_name})</span>
-                              )}
                             </div>
                           ))
                         )}
                       </div>
                     </td>
 
-                    {/* Activity: Created Date, Last Access, and Days Ago */}
-                    <td className="py-3.5 px-4">
-                      <div className="space-y-1.5">
-                        {/* Days Ago Badge */}
-                        <div>
-                          {user.days_since_last_access !== null && user.days_since_last_access !== undefined ? (
-                            user.days_since_last_access === 0 ? (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                                <span>ใช้งานวันนี้</span>
-                              </span>
-                            ) : user.days_since_last_access <= 7 ? (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                                <span>{user.days_since_last_access} วันที่แล้ว</span>
-                              </span>
-                            ) : user.days_since_last_access <= 30 ? (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
-                                <span>{user.days_since_last_access} วันที่แล้ว</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs">
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
-                                <span>ไม่ได้ใช้ {user.days_since_last_access} วัน</span>
-                              </span>
-                            )
+                    {/* Activity */}
+                    <td className="py-3 px-4 text-xs">
+                      <div>
+                        {user.days_since_last_access !== null && user.days_since_last_access !== undefined ? (
+                          user.days_since_last_access === 0 ? (
+                            <span className="text-emerald-700 font-bold">วันนี้</span>
                           ) : (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                              <span>ไม่เคยเข้าใช้งาน</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Last Access Details */}
-                        <div className="text-[11px] text-slate-600 space-y-0.5">
-                          <div className="flex items-center space-x-1">
-                            <span className="text-slate-400 font-medium">เข้าใช้ล่าสุด:</span>
-                            <span className="font-semibold text-slate-800">
-                              {formatDate(user.last_access_at)}
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-1 text-slate-500">
-                            <span>สร้างเมื่อ:</span>
-                            <span>
-                              {formatDate(user.created_at)}
-                            </span>
-                          </div>
-                        </div>
+                            <span className="text-slate-600 font-medium">{user.days_since_last_access} วันที่แล้ว</span>
+                          )
+                        ) : (
+                          <span className="text-slate-400">ไม่เคยเข้าใช้</span>
+                        )}
                       </div>
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3.5 px-4 text-right">
+                    <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end space-x-1.5">
                         {(!user.is_active_in_ad || user.connected_apps.some((a) => !a.is_active_in_app)) && (
                           <button
                             onClick={() => handleOpenActivateModal(user)}
                             title="เปิดใช้งานสิทธิ์คืน"
-                            className="px-2.5 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center space-x-1 transition-colors shadow-2xs"
+                            className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer"
                           >
-                            <UserCheck className="w-3.5 h-3.5" />
-                            <span>คืนสิทธิ์</span>
+                            คืนสิทธิ์
                           </button>
                         )}
                         <button
                           onClick={() => setSelectedUser(user)}
-                          className="px-3 py-1.5 rounded-md bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                          className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 text-xs font-bold transition-colors cursor-pointer"
                         >
-                          ดูสิทธิ์
+                          ดูสิทธิ์ & ตั้งค่า
                         </button>
                         <Link
                           href={`/offboarding?username=${user.username}`}
-                          className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center space-x-1 transition-colors shadow-2xs"
-                          title="ไปที่หน้าศูนย์ระงับสิทธิ์พนักงานท่านนี้"
+                          className="px-2 py-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 text-xs font-bold transition-colors"
+                          title="ไปที่หน้าศูนย์ระงับสิทธิ์"
                         >
-                          <UserX className="w-3.5 h-3.5" />
-                          <span>ระงับสิทธิ์</span>
+                          ระงับสิทธิ์
                         </Link>
                       </div>
                     </td>
@@ -524,7 +615,6 @@ export default function DirectoryPage() {
         {/* Pagination Controls */}
         {!loading && totalUsers > 0 && (
           <div className="bg-slate-50 px-4 py-3 border-t-2 border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-700">
-            {/* Info & Page Size Selector */}
             <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
               <span className="font-medium text-slate-600">
                 แสดง <strong className="text-slate-900 font-bold">{startIndex} - {endIndex}</strong> จากทั้งหมด{" "}
@@ -549,84 +639,42 @@ export default function DirectoryPage() {
               </div>
             </div>
 
-            {/* Navigation Buttons */}
             {totalPages > 1 && (
               <div className="flex items-center space-x-1">
-                {/* First Page */}
                 <button
                   type="button"
                   onClick={() => handlePageChange(1)}
                   disabled={safeCurrentPage <= 1}
-                  className="p-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-700 font-bold transition-colors cursor-pointer disabled:cursor-not-allowed"
-                  title="หน้าแรก"
+                  className="p-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 font-bold cursor-pointer disabled:cursor-not-allowed"
                 >
                   <ChevronsLeft className="w-4 h-4" />
                 </button>
-
-                {/* Prev Page */}
                 <button
                   type="button"
                   onClick={() => handlePageChange(safeCurrentPage - 1)}
                   disabled={safeCurrentPage <= 1}
-                  className="p-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-700 font-bold transition-colors flex items-center space-x-0.5 cursor-pointer disabled:cursor-not-allowed"
-                  title="หน้าก่อนหน้า"
+                  className="p-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 font-bold cursor-pointer disabled:cursor-not-allowed"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                  <span className="hidden md:inline pr-1">ก่อนหน้า</span>
                 </button>
 
-                {/* Page Number Chips */}
-                <div className="flex items-center space-x-1 px-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - safeCurrentPage) <= 2)
-                    .reduce<(number | string)[]>((acc, p, idx, arr) => {
-                      if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) {
-                        acc.push("...");
-                      }
-                      acc.push(p);
-                      return acc;
-                    }, [])
-                    .map((item, idx) =>
-                      typeof item === "string" ? (
-                        <span key={`dots-${idx}`} className="px-1 text-slate-400 font-bold select-none">
-                          ...
-                        </span>
-                      ) : (
-                        <button
-                          key={`page-${item}`}
-                          type="button"
-                          onClick={() => handlePageChange(item)}
-                          className={`min-w-[28px] h-7 px-1.5 rounded text-xs font-bold transition-colors cursor-pointer ${
-                            item === safeCurrentPage
-                              ? "bg-blue-600 text-white shadow-2xs"
-                              : "bg-white border border-slate-300 text-slate-700 hover:bg-slate-100"
-                          }`}
-                        >
-                          {item}
-                        </button>
-                      )
-                    )}
-                </div>
+                <span className="px-2 font-bold text-slate-800">
+                  หน้า {safeCurrentPage} / {totalPages}
+                </span>
 
-                {/* Next Page */}
                 <button
                   type="button"
                   onClick={() => handlePageChange(safeCurrentPage + 1)}
                   disabled={safeCurrentPage >= totalPages}
-                  className="p-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-700 font-bold transition-colors flex items-center space-x-0.5 cursor-pointer disabled:cursor-not-allowed"
-                  title="หน้าถัดไป"
+                  className="p-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 font-bold cursor-pointer disabled:cursor-not-allowed"
                 >
-                  <span className="hidden md:inline pl-1">ถัดไป</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
-
-                {/* Last Page */}
                 <button
                   type="button"
                   onClick={() => handlePageChange(totalPages)}
                   disabled={safeCurrentPage >= totalPages}
-                  className="p-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-700 font-bold transition-colors cursor-pointer disabled:cursor-not-allowed"
-                  title="หน้าสุดท้าย"
+                  className="p-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 font-bold cursor-pointer disabled:cursor-not-allowed"
                 >
                   <ChevronsRight className="w-4 h-4" />
                 </button>
@@ -636,13 +684,13 @@ export default function DirectoryPage() {
         )}
       </div>
 
-      {/* Inspect Modal Drawer */}
+      {/* Inspect Modal Drawer & Role Assignment */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white max-w-lg w-full p-6 space-y-5 rounded-lg border-2 border-slate-300 shadow-2xl relative">
+          <div className="bg-white max-w-lg w-full p-6 space-y-4 rounded-lg border-2 border-slate-300 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between pb-3 border-b-2 border-slate-200">
               <div className="flex items-center space-x-3">
-                <div className="w-11 h-11 rounded-full bg-blue-100 border-2 border-blue-300 flex items-center justify-center text-blue-800 font-extrabold text-lg shadow-2xs">
+                <div className="w-11 h-11 rounded-full bg-blue-100 border-2 border-blue-300 flex items-center justify-center text-blue-800 font-extrabold text-lg">
                   {selectedUser.full_name.charAt(0)}
                 </div>
                 <div>
@@ -663,8 +711,53 @@ export default function DirectoryPage() {
               </button>
             </div>
 
+            {/* Central-IAM Power User / Administrator Assignment */}
+            <div className="p-4 rounded-lg bg-blue-50/80 border-2 border-blue-300 text-xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Shield className="w-4 h-4 text-blue-700" />
+                  <span className="font-extrabold text-slate-900">กำหนดสิทธิ์ใน Central-IAM (Power User)</span>
+                </div>
+                <span className="text-[10px] text-blue-800 font-bold px-1.5 py-0.5 bg-blue-100 rounded border border-blue-200">
+                  สิทธิ์ผู้ดูแลระบบ
+                </span>
+              </div>
+              <p className="text-slate-600 text-[11px] leading-relaxed">
+                กำหนดว่าผู้ใช้นี้สามารถล็อกอินเข้า Admin Console เพื่อจัดการผู้ใช้, สิทธิ์ระบบลูก, และระงับสิทธิ์ได้หรือไม่
+              </p>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                  className="w-full sm:flex-1 px-3 py-2 bg-white border-2 border-slate-300 rounded font-bold text-slate-900 text-xs focus:outline-none focus:border-blue-600"
+                >
+                  <option value="PORTAL_USER">👤 PORTAL_USER (พนักงานทั่วไป - เข้าได้เฉพาะ App Portal / SSO)</option>
+                  <option value="ADMIN">⚡ ADMIN / Power User (ผู้ดูแลระบบ - จัดการข้อมูลและระงับสิทธิ์ได้)</option>
+                  <option value="SUPER_ADMIN">👑 SUPER_ADMIN (ผู้ดูแลระบบสูงสุด - จัดการได้ทุกฟังก์ชัน)</option>
+                  <option value="IT_HELPDESK">🛠️ IT_HELPDESK (เจ้าหน้าที่ซัพพอร์ต)</option>
+                  <option value="AUDITOR">📋 AUDITOR (ดู Audit Trail อย่างเดียว)</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleSaveRole}
+                  disabled={roleSaving}
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded font-bold text-xs shrink-0 cursor-pointer shadow-sm"
+                >
+                  {roleSaving ? "กำลังบันทึก..." : "บันทึกบทบาท"}
+                </button>
+              </div>
+
+              {roleSaveMessage && (
+                <div className="text-[11px] text-emerald-800 font-bold flex items-center space-x-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{roleSaveMessage}</span>
+                </div>
+              )}
+            </div>
+
             {/* AD & Identity Activity Details */}
-            <div className="p-4 rounded-lg bg-slate-50 border-2 border-slate-300 text-xs space-y-2.5">
+            <div className="p-4 rounded-lg bg-slate-50 border-2 border-slate-300 text-xs space-y-2">
               <div className="flex justify-between">
                 <span className="text-slate-600 font-medium">รหัสพนักงาน:</span>
                 <span className="font-mono text-slate-900 font-bold">{selectedUser.employee_id || "N/A"}</span>
@@ -685,87 +778,55 @@ export default function DirectoryPage() {
                   </span>
                 )}
               </div>
-              <div className="pt-2 border-t border-slate-200 space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-600 font-medium">วันที่ลงทะเบียน / สร้างบัญชี:</span>
-                  <span className="font-semibold text-slate-800 font-mono text-xs">
-                    {selectedUser.created_at
-                      ? formatDateTime(selectedUser.created_at)
-                      : "ไม่ระบุ"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-600 font-medium">เข้าใช้งานระบบองค์กรล่าสุด:</span>
-                  <div className="flex items-center space-x-1.5">
-                    <span className="font-semibold text-slate-800 font-mono text-xs">
-                      {selectedUser.last_access_at
-                        ? formatDateTime(selectedUser.last_access_at)
-                        : "ไม่เคยเข้าใช้งาน"}
-                    </span>
-                    {selectedUser.days_since_last_access !== null && selectedUser.days_since_last_access !== undefined && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-200">
-                        {selectedUser.days_since_last_access === 0
-                          ? "วันนี้"
-                          : `${selectedUser.days_since_last_access} วันที่แล้ว`}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Cross-App Access Matrix */}
             <div>
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                สิทธิ์การเข้าถึงระบบต่างๆ
+                สิทธิ์การเข้าถึงระบบลูก (Spokes)
               </h4>
               <div className="space-y-2">
-                {selectedUser.connected_apps.map((app) => (
-                  <div
-                    key={`${app.application_id}-${app.app_username}`}
-                    className="p-3 rounded-lg bg-slate-50 border-2 border-slate-200 flex items-center justify-between"
-                  >
-
-                    <div className="flex items-center space-x-2.5">
-                      <div
-                        className={`w-2.5 h-2.5 rounded-full ${
-                          app.is_active_in_app ? "bg-emerald-600" : "bg-rose-600"
-                        }`}
-                      ></div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                          <span>{app.app_name}</span>
-                          <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-blue-100 text-blue-800 border border-blue-200 font-bold">
-                            {app.connector_type}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-600 font-medium">
-                          บทบาท: <strong className="text-slate-800">{app.app_group_name || "Standard User"}</strong>
-                        </div>
-                        {app.last_app_login_at && (
-                          <div className="text-[10px] text-slate-500 mt-0.5">
-                            เข้าใช้ล่าสุด: <span className="font-mono">{formatDate(app.last_app_login_at)}</span>
-                            {app.days_since_last_login !== null && app.days_since_last_login !== undefined && (
-                              <span className="ml-1 text-slate-600 font-bold">
-                                ({app.days_since_last_login === 0 ? "วันนี้" : `${app.days_since_last_login} วันที่แล้ว`})
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <span
-                      className={`px-2.5 py-0.5 rounded text-xs font-bold ${
-                        app.is_active_in_app
-                          ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                          : "bg-rose-100 text-rose-900 border border-rose-300"
-                      }`}
-                    >
-                      {app.is_active_in_app ? "เปิดใช้งาน" : "ถูกระงับ"}
-                    </span>
+                {selectedUser.connected_apps.length === 0 ? (
+                  <div className="p-3 text-center text-slate-400 text-xs bg-slate-50 rounded border border-slate-200">
+                    ไม่มีบัญชีในระบบลูก
                   </div>
-                ))}
+                ) : (
+                  selectedUser.connected_apps.map((app) => (
+                    <div
+                      key={`${app.application_id}-${app.app_username}`}
+                      className="p-3 rounded-lg bg-slate-50 border-2 border-slate-200 flex items-center justify-between"
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <div
+                          className={`w-2.5 h-2.5 rounded-full ${
+                            app.is_active_in_app ? "bg-emerald-600" : "bg-rose-600"
+                          }`}
+                        ></div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                            <span>{app.app_name}</span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-blue-100 text-blue-800 border border-blue-200 font-bold">
+                              {app.connector_type}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-600 font-medium">
+                            บทบาท: <strong className="text-slate-800">{app.app_group_name || "Standard User"}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs font-bold ${
+                          app.is_active_in_app
+                            ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                            : "bg-rose-100 text-rose-900 border border-rose-300"
+                        }`}
+                      >
+                        {app.is_active_in_app ? "เปิดใช้งาน" : "ถูกระงับ"}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -773,7 +834,7 @@ export default function DirectoryPage() {
             <div className="pt-3 border-t-2 border-slate-200 flex items-center justify-between">
               <button
                 onClick={() => setSelectedUser(null)}
-                className="px-4 py-2 rounded-md bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold shadow-2xs"
+                className="px-4 py-2 rounded-md bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold cursor-pointer"
               >
                 ปิด
               </button>
@@ -786,7 +847,7 @@ export default function DirectoryPage() {
                       setSelectedUser(null);
                       handleOpenActivateModal(u);
                     }}
-                    className="flex items-center space-x-1.5 px-3.5 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm"
+                    className="flex items-center space-x-1.5 px-3.5 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm cursor-pointer"
                   >
                     <UserCheck className="w-4 h-4" />
                     <span>เปิดสิทธิ์คืน</span>
@@ -818,14 +879,14 @@ export default function DirectoryPage() {
                 <div>
                   <h3 className="text-base font-bold text-slate-900">เพิ่มและแจกจ่ายสิทธิ์ผู้ใช้ใหม่</h3>
                   <p className="text-xs text-slate-600 font-medium">
-                    บันทึกข้อมูลตัวตนหลักและส่งคำสั่งสร้างบัญชีไปยัง Active Directory และระบบลูก
+                    สร้างบัญชีใน Active Directory และส่งคำขอสร้างไปยังระบบลูก
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold"
+                className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold text-xs"
               >
                 ✕
               </button>
@@ -833,57 +894,19 @@ export default function DirectoryPage() {
 
             {createResult ? (
               <div className="space-y-4">
-                <div className="p-4 rounded-lg bg-emerald-50 border-2 border-emerald-400 text-emerald-950 space-y-1">
-                  <div className="font-bold flex items-center space-x-2 text-sm">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    <span>สร้างและแจกจ่ายสิทธิ์ผู้ใช้สำเร็จเรียบร้อย</span>
+                <div className="p-4 rounded-md bg-emerald-50 border-2 border-emerald-300 text-emerald-950 text-xs">
+                  <div className="font-bold flex items-center space-x-1.5 mb-2 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>สร้างบัญชีผู้ใช้สำเร็จเรียบร้อย</span>
                   </div>
-                  <p className="text-xs text-emerald-800 font-medium">
-                    บัญชี <span className="font-mono font-bold text-slate-950">{createResult.username}</span> บันทึกเข้าสู่ระบบเรียบร้อยแล้ว
-                  </p>
+                  <div>Username: <strong className="font-mono text-emerald-900">{createResult.username}</strong></div>
+                  <div>สถานะใน AD: <strong>{createResult.ad_status}</strong></div>
                 </div>
 
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    ผลการดำเนินการแยกรายระบบ
-                  </h4>
-
-                  <div className="p-3 rounded-lg bg-slate-50 border-2 border-slate-200 flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-slate-900">Active Directory (ผ่าน AD Proxy)</div>
-                      <div className="text-[11px] text-slate-600 font-mono">sAMAccountName: {createResult.username}</div>
-                    </div>
-                    <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                      {createResult.ad_status === "ACTIVE" ? "สร้างสำเร็จ" : createResult.ad_status}
-                    </span>
-                  </div>
-
-                  {createResult.spoke_results.map((spoke, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 rounded-lg bg-slate-50 border-2 border-slate-200 flex items-center justify-between text-xs"
-                    >
-                      <div>
-                        <div className="font-bold text-slate-900">{spoke.app_name}</div>
-                        <div className="text-[11px] text-slate-600">{spoke.message}</div>
-                      </div>
-                      <span
-                        className={`px-2.5 py-0.5 rounded text-xs font-bold ${
-                          spoke.success
-                            ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                            : "bg-rose-100 text-rose-900 border border-rose-300"
-                        }`}
-                      >
-                        {spoke.success ? "สำเร็จ" : "ล้มเหลว"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-3 border-t-2 border-slate-200 flex justify-end">
+                <div className="pt-2 flex justify-end">
                   <button
                     onClick={() => setIsCreateModalOpen(false)}
-                    className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm"
+                    className="px-5 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm"
                   >
                     เสร็จสิ้น
                   </button>
@@ -892,9 +915,8 @@ export default function DirectoryPage() {
             ) : (
               <form onSubmit={handleCreateSubmit} className="space-y-4">
                 {createError && (
-                  <div className="p-3 rounded-md bg-rose-50 border-2 border-rose-400 text-xs text-rose-900 font-bold flex items-center space-x-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>{createError}</span>
+                  <div className="p-3 rounded-md bg-rose-50 border-2 border-rose-400 text-rose-900 text-xs font-bold">
+                    {createError}
                   </div>
                 )}
 
@@ -1049,14 +1071,14 @@ export default function DirectoryPage() {
                   <button
                     type="button"
                     onClick={() => setIsCreateModalOpen(false)}
-                    className="px-4 py-2 rounded-md bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold"
+                    className="px-4 py-2 rounded-md bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold cursor-pointer"
                   >
                     ยกเลิก
                   </button>
                   <button
                     type="submit"
                     disabled={createLoading}
-                    className="flex items-center space-x-1.5 px-5 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm disabled:opacity-50"
+                    className="flex items-center space-x-1.5 px-5 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm disabled:opacity-50 cursor-pointer"
                   >
                     {createLoading ? (
                       <>
@@ -1114,7 +1136,7 @@ export default function DirectoryPage() {
                 <div className="pt-2 flex justify-end">
                   <button
                     onClick={() => setIsActivateModalOpen(false)}
-                    className="px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm"
+                    className="px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm cursor-pointer"
                   >
                     เสร็จสิ้น
                   </button>
@@ -1146,14 +1168,14 @@ export default function DirectoryPage() {
                 <div className="pt-2 border-t-2 border-slate-200 flex items-center justify-end space-x-2.5">
                   <button
                     onClick={() => setIsActivateModalOpen(false)}
-                    className="px-4 py-2 rounded-md bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold"
+                    className="px-4 py-2 rounded-md bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold cursor-pointer"
                   >
                     ยกเลิก
                   </button>
                   <button
                     onClick={handleActivateSubmit}
                     disabled={activateLoading}
-                    className="flex items-center space-x-1.5 px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm disabled:opacity-50"
+                    className="flex items-center space-x-1.5 px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm disabled:opacity-50 cursor-pointer"
                   >
                     {activateLoading ? (
                       <>
