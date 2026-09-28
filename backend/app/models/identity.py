@@ -14,6 +14,7 @@ class MasterIdentity(Base):
     email = Column(String(150), nullable=True)
     department = Column(String(100), nullable=True)
     telephone = Column(String(50), nullable=True)
+    telegram_id = Column(String(100), nullable=True) # Telegram username or user ID (e.g. @chaiwat_n)
     is_active_in_ad = Column(Boolean, default=True, nullable=False)
     last_login_ad_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

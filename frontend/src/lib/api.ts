@@ -65,6 +65,7 @@ export interface UserCreatePayload {
   email?: string;
   department?: string;
   telephone?: string;
+  telegram_id?: string;
   create_in_ad: boolean;
   target_spokes: SpokeProvisionTarget[];
 }
@@ -120,6 +121,7 @@ export interface UserListItem {
   email: string | null;
   department: string | null;
   telephone: string | null;
+  telegram_id?: string | null;
   is_active_in_ad: boolean;
   last_login_ad_at: string | null;
   created_at?: string | null;

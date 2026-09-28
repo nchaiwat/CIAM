@@ -316,3 +316,40 @@ def test_admin_roles_and_power_user_assignment():
     assert thanaphat is not None
     assert thanaphat["role"] == "ADMIN"
 
+def test_download_spoke_spec():
+    res = client.get("/api/v1/applications/spec/download")
+    assert res.status_code == 200
+    assert "text/markdown" in res.headers["content-type"]
+    assert "Central IAM" in res.text
+
+def test_user_create_with_telegram_id():
+    login_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    import uuid
+    rand_user = f"user_{uuid.uuid4().hex[:6]}"
+    create_res = client.post(
+        "/api/v1/directory/users",
+        json={
+            "username": rand_user,
+            "full_name": f"Test Employee {rand_user}",
+            "email": f"{rand_user}@windowasia.com",
+            "department": "IT",
+            "telephone": "089-999-9999",
+            "telegram_id": "@windowasia_dev",
+            "create_in_ad": False,
+            "target_spokes": []
+        },
+        headers=headers
+    )
+    assert create_res.status_code == 201
+
+    # Check detail
+    identity_id = create_res.json()["identity_id"]
+    detail_res = client.get(f"/api/v1/directory/users/{identity_id}", headers=headers)
+    assert detail_res.status_code == 200
+    user_data = detail_res.json()["user"]
+    assert user_data["telegram_id"] == "@windowasia_dev"
+
+

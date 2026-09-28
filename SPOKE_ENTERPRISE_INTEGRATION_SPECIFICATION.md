@@ -79,20 +79,21 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 ## 3. ช่องทาง API มาตรฐานที่ระบบลูกต้องพัฒนา (Required API Channels)
 
-ระบบลูก (เช่น IRM) ต้องเปิด Endpoint ตามโครงสร้างมาตรฐาน 2 กลุ่ม ดังต่อไปนี้:
+ระบบลูก (เช่น IRM, QMS, QOL, SAP B1 Service) ต้องเปิด Endpoint ตามโครงสร้างมาตรฐาน **3 กลุ่มหลัก** ดังต่อไปนี้:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       SPOKE APPLICATION API CHANNELS                        │
-├──────────────────────────────────────┬──────────────────────────────────────┤
-│  Group A: System Setting Channel     │  Group B: SSO Execution Channel      │
-│  (สิทธิ์เฉพาะ Administrator)         │  (ระบบยืนยันตัวตนและการเข้าสู่ระบบ)   │
-├──────────────────────────────────────┼──────────────────────────────────────┤
-│ • GET  /api/settings/ciam-sso        │ • GET  /api/auth/sso/config          │
-│ • PUT  /api/settings/ciam-sso        │ • POST /api/auth/sso/authorize-url   │
-│ • POST /api/settings/ciam-sso/test   │ • POST /api/auth/sso/callback        │
-│                                      │ • POST /api/auth/sso/break-glass     │
-└──────────────────────────────────────┴──────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 SPOKE APPLICATION API CHANNELS                                    │
+├──────────────────────────────┬──────────────────────────────────┬─────────────────────────────────┤
+│ Group A: Settings Channel    │ Group B: SSO Authentication Flow │ Group C: CIAM Governance Webhook│
+│ (สิทธิ์เฉพาะ Admin ของระบบ)   │ (ยืนยันตัวตนกับ AD ผ่าน CIAM)     │ (CIAM สั่งการเข้ามาแบบ M2M)     │
+├──────────────────────────────┼──────────────────────────────────┼─────────────────────────────────┤
+│ • GET  /api/settings/ciam-sso│ • GET  /api/auth/sso/config      │ • GET  /api/v1/ciam/health      │
+│ • PUT  /api/settings/ciam-sso│ • POST /api/auth/sso/authorize   │ • POST /api/v1/ciam/provision   │
+│ • POST /api/settings/test    │ • POST /api/auth/sso/callback    │ • POST /api/v1/ciam/suspend     │
+│                              │ • POST /api/auth/sso/break-glass │ • POST /api/v1/ciam/reactivate  │
+│                              │                                  │ • GET  /api/v1/ciam/inventory   │
+└──────────────────────────────┴──────────────────────────────────┴─────────────────────────────────┘
 ```
 
 ---
@@ -277,6 +278,143 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 ---
 
+### หมวด C: CIAM Governance & Provisioning Inbound Channel (CIAM สั่งการเข้ามาแบบ M2M)
+
+> [!IMPORTANT]
+> **ความปลอดภัยระดับองค์กร (Enterprise Security Constraints):**
+> 1. **IP Whitelist:** ไฟร์วอลล์และ Reverse Proxy ของระบบลูกต้องอนุญาตเฉพาะ IP VPS ของ Central IAM: **`157.173.219.153`**
+> 2. **Authentication:** ทุก Endpoint ในหมวด C ต้องส่ง HTTP Header: `Authorization: Bearer <SPOKE_API_KEY>` (สร้างจากหน้า Central IAM Console)
+> 3. **Idempotent:** ทุก Endpoint ต้องรองรับการเรียกซ้ำได้โดยไม่เกิด Error (Idempotent Execution)
+
+---
+
+#### C.1 `GET /api/v1/ciam/health` (Ping & Health Check)
+* **วัตถุประสงค์:** Central IAM ใช้ตรวจสอบว่าระบบลูก Online พร้อมรับคำสั่งหรือไม่ และวัด Latency แบบ Real-time
+* **Response Example (200 OK):**
+```json
+{
+  "status": "ONLINE",
+  "app_code": "irm",
+  "app_name": "Incoming Raw Material",
+  "version": "1.0.0",
+  "timestamp": "2026-09-28T17:20:00Z"
+}
+```
+
+---
+
+#### C.2 `POST /api/v1/ciam/provision-user` (สร้างบัญชีและมอบหมายบทบาท)
+* **วัตถุประสงค์:** เรียกใช้เมื่อ Super Admin สร้างบัญชีพนักงานใหม่ หรือแจกจ่ายสิทธิ์จาก Central IAM
+* **Request Body:**
+```json
+{
+  "username": "somchai.p",
+  "full_name": "นายสมชาย พร้อมพงษ์",
+  "email": "somchai.p@windowasia.com",
+  "department": "Purchasing",
+  "telephone": "081-234-5678",
+  "telegram_id": "@somchai_p",
+  "group_name": "PU Staff"
+}
+```
+* **พฤติกรรมระบบลูก:**
+  1. ค้นหา `username` ในตาราง `users`
+  2. หากยังไม่มี ให้ Insert สร้างบัญชีใหม่ โดยกำหนดกลุ่มสิทธิ์ตาม `group_name` และตั้ง `is_active = true`
+  3. หากมีอยู่แล้ว ให้อัปเดตชื่อ แผนก และสิทธิ์ให้ตรงกัน
+* **Response Example (200 OK):**
+```json
+{
+  "status": "SUCCESS",
+  "message": "User provisioned successfully in IRM",
+  "app_username": "somchai.p",
+  "group_assigned": "PU Staff"
+}
+```
+
+---
+
+#### C.3 `POST /api/v1/ciam/suspend-user` (1-Click Offboarding: ตัดสิทธิ์และระงับบัญชีทันที)
+* **วัตถุประสงค์:** เรียกใช้จาก **ศูนย์ระงับสิทธิ์ (1-Click Offboarding Hub)** เพื่อตัดสิทธิ์พนักงานที่ลาออกหรือพ้นสภาพ
+* **Request Body:**
+```json
+{
+  "username": "somchai.p",
+  "status": "TERMINATED",
+  "reason": "Resigned",
+  "effective_date": "2026-09-28",
+  "actor": "admin"
+}
+```
+* **พฤติกรรมระบบลูก (CRITICAL):**
+  1. ตั้งค่า `is_active = false` ทันที
+  2. **Revoke Active Sessions:** ล้าง Refresh Token และยกเลิก Session ของผู้ใช้นี้ทันที เพื่อให้หลุดจากระบบแบบ Real-time
+  3. บันทึก `transaction_logs` หมวด `ciam_sso` ระบุเหตุการณ์ระงับสิทธิ์
+* **Response Example (200 OK):**
+```json
+{
+  "status": "SUCCESS",
+  "message": "User account deactivated and all active sessions revoked immediately",
+  "username": "somchai.p",
+  "revoked_at": "2026-09-28T17:20:00Z"
+}
+```
+
+---
+
+#### C.4 `POST /api/v1/ciam/reactivate-user` (คืนสิทธิ์การใช้งาน)
+* **วัตถุประสงค์:** เรียกใช้เมื่อ HR อนุมัติคืนสิทธิ์พนักงานที่กลับมาปฏิบัติงาน
+* **Request Body:**
+```json
+{
+  "username": "somchai.p",
+  "reason": "Employee reinstated by HR"
+}
+```
+* **พฤติกรรมระบบลูก:**
+  1. ตั้งค่า `is_active = true`
+  2. บันทึก `transaction_logs`
+* **Response Example (200 OK):**
+```json
+{
+  "status": "SUCCESS",
+  "message": "User account reactivated successfully",
+  "username": "somchai.p"
+}
+```
+
+---
+
+#### C.5 `GET /api/v1/ciam/inventory` (ดึงทะเบียนบัญชีเพื่อตรวจจับบัญชีผี / Ghost Account Reconciliation)
+* **วัตถุประสงค์:** Central IAM เรียกใช้ทุกวันเวลา 04:00 น. เพื่อนำรายชื่อมาเปรียบเทียบกับ Active Directory หากใน AD ปิดไปแล้วแต่ในระบบลูกยังเปิดอยู่ ระบบจะแจ้งเตือนเป็น **"บัญชีผี (Discrepancy)"**
+* **Response Example (200 OK):**
+```json
+{
+  "status": "success",
+  "app_code": "irm",
+  "total": 3,
+  "users": [
+    {
+      "username": "somchai.p",
+      "full_name": "นายสมชาย พร้อมพงษ์",
+      "email": "somchai.p@windowasia.com",
+      "group_name": "PU Staff",
+      "is_active": true,
+      "last_login_at": "2026-09-28T08:30:00Z"
+    },
+    {
+      "username": "patcha.s",
+      "full_name": "นางสาวพัชรา สุขใจ",
+      "email": "patcha.s@windowasia.com",
+      "group_name": "PU Manager",
+      "is_active": true,
+      "last_login_at": "2026-09-27T16:10:00Z"
+    }
+  ]
+}
+```
+
+---
+
 ## 4. มาตรฐานการบันทึก Audit Logs ในระบบลูก (Log Matrix Specification)
 
 ระบบลูกทุกระบบต้องบันทึกเหตุการณ์ลงในตาราง `transaction_logs` ตามเงื่อนไขดังต่อไปนี้อย่างครบถ้วน:
@@ -382,4 +520,134 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 3. **การตัดสิทธิ์เฉพาะระบบลูก (Targeted Spoke Deprovisioning):**
    * หน้าที่สำคัญของ Central IAM คือการเป็น **Governance & Reconciliation Hub**
    * เมื่อตรวจพบว่าบัญชีบน AD ถูกปิดใช้งาน (`userAccountControl` = 514) แต่ในระบบลูก (เช่น IRM, QOL, SAP B1) ยังเปิดค้างอยู่ ระบบจะระบุเป็น **"บัญชีผี (Discrepancy)"** และส่งคำสั่งระงับสิทธิ์ (Deprovision) ไปยังระบบลูกเป้าหมายเพื่อปิดความเสี่ยงทันที โดยไม่รบกวน AD DC
+
+---
+
+## 9. สรุปความสัมพันธ์ด้านการยืนยันตัวตนกับ Active Directory (AD Authentication Clarification)
+
+> [!NOTE]
+> **คำถามพบบ่อย: ทำไมนักพัฒนาระบบลูกถึงไม่ต้องเชื่อมต่อกับ Active Directory / LDAP โดยตรง?**
+> 
+> ในสถาปัตยกรรม Central IAM บริษัท วินโดว์ เอเชีย จำกัด (มหาชน):
+> 1. **Central IAM ทำหน้าที่เป็น Identity Provider (IdP) กลางเพียงจุดเดียว:**
+>    * เมื่อผู้ใช้คลิก *"เข้าสู่ระบบด้วย Central IAM (SSO)"* ระบบลูกจะ Redirect ผู้ใช้มายังหน้าล็อกอินของ Central IAM
+>    * Central IAM จะทำการตรวจสอบชื่อผู้ใช้และรหัสผ่านกับ Domain Controller (ผ่าน AD Proxy Service ภายใน) โดยตรง
+> 2. **ความปลอดภัยระดับสูงสุด (Zero Domain Exposure):**
+>    * ระบบลูก **ไม่ต้องเปิด Port 389/636 (LDAP) ข้ามเครือข่าย**
+>    * ระบบลูก **ไม่ต้องเก็บ Service Account หรือรหัสผ่านของ Domain Controller ไว้ในซอร์สโค้ด**
+>    * ระบบลูกเพียงแค่รอรับ JWT Token (RS256) ที่ผ่านการพิสูจน์ตัวตนจาก AD แล้วเท่านั้น
+> 3. **โหมดสำรองฉุกเฉิน (Break-Glass Mode):**
+>    * เฉพาะในกรณีที่ระบบคลาวด์หรือเน็ตเวิร์กของ Central IAM ขัดข้อง ระบบลูกสามารถเปิดใช้งาน `ciam_break_glass_active = true` เพื่อสลับไปยืนยันตัวตนตรงกับ Local AD Gateway (`http://172.18.0.1:3100`) ผ่าน API ได้ทันที
+
+---
+
+## 10. โค้ดตัวอย่างพร้อมใช้งานสำหรับทีม Developer (Implementation Boilerplate)
+
+### 10.1 ตัวอย่าง Python (FastAPI): Group C Inbound Webhook
+
+```python
+from fastapi import APIRouter, Header, HTTPException, Depends
+from pydantic import BaseModel
+from typing import Optional, List
+
+router = APIRouter(prefix="/api/v1/ciam", tags=["CIAM Webhooks"])
+EXPECTED_API_KEY = "sec_your_app_mgmt_key_here" # หรือดึงจากตาราง system_settings
+
+def verify_ciam_auth(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Bearer token")
+    token = authorization.split(" ")[1]
+    if token != EXPECTED_API_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid CIAM API Key")
+
+class ProvisionRequest(BaseModel):
+    username: str
+    full_name: str
+    email: Optional[str] = None
+    department: Optional[str] = None
+    telephone: Optional[str] = None
+    telegram_id: Optional[str] = None
+    group_name: Optional[str] = "Standard User"
+
+class SuspendRequest(BaseModel):
+    username: str
+    status: str = "TERMINATED"
+    reason: Optional[str] = None
+
+@router.get("/health", dependencies=[Depends(verify_ciam_auth)])
+def ciam_health():
+    return {"status": "ONLINE", "app_code": "my_spoke", "version": "1.0.0"}
+
+@router.post("/provision-user", dependencies=[Depends(verify_ciam_auth)])
+def ciam_provision_user(payload: ProvisionRequest):
+    # TODO: ค้นหาหรือสร้างผู้ใช้ในฐานข้อมูลของระบบลูก และกำหนดบทบาทตาม payload.group_name
+    return {"status": "SUCCESS", "message": f"User {payload.username} provisioned successfully"}
+
+@router.post("/suspend-user", dependencies=[Depends(verify_ciam_auth)])
+def ciam_suspend_user(payload: SuspendRequest):
+    # TODO: ตั้งค่า user.is_active = False และเตะ session / revoke refresh tokens ทันที
+    return {"status": "SUCCESS", "message": f"User {payload.username} suspended and all sessions revoked"}
+
+@router.post("/reactivate-user", dependencies=[Depends(verify_ciam_auth)])
+def ciam_reactivate_user(payload: dict):
+    # TODO: ตั้งค่า user.is_active = True
+    return {"status": "SUCCESS", "message": f"User {payload.get('username')} reactivated"}
+
+@router.get("/inventory", dependencies=[Depends(verify_ciam_auth)])
+def ciam_inventory():
+    # TODO: คืนค่ารายชื่อผู้ใช้ทั้งหมดในระบบลูกเพื่อใช้ในกระบวนการ Auto Reconciliation 04:00 น.
+    return {
+        "status": "success",
+        "total": 1,
+        "users": [
+            {"username": "somchai.p", "full_name": "Somchai P.", "is_active": True}
+        ]
+    }
+```
+
+### 10.2 ตัวอย่าง Node.js (Express.js): Group C Inbound Webhook
+
+```javascript
+const express = require('express');
+const router = express.Router();
+
+const CIAM_API_KEY = process.env.CIAM_API_KEY || "sec_your_app_mgmt_key_here";
+
+// Middleware ตรวจสอบความปลอดภัย
+function verifyCiamAuth(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ status: "FAILED", message: "Missing Bearer token" });
+  }
+  const token = authHeader.split(' ')[1];
+  if (token !== CIAM_API_KEY) {
+    return res.status(403).json({ status: "FAILED", message: "Invalid CIAM API Key" });
+  }
+  next();
+}
+
+router.get('/health', verifyCiamAuth, (req, res) => {
+  res.json({ status: "ONLINE", app_code: "node_spoke", version: "1.0.0" });
+});
+
+router.post('/provision-user', verifyCiamAuth, async (req, res) => {
+  const { username, full_name, email, group_name } = req.body;
+  // TODO: Upsert User และกำหนด Role ในฐานข้อมูลของระบบลูก
+  res.json({ status: "SUCCESS", message: `User ${username} provisioned`, app_username: username });
+});
+
+router.post('/suspend-user', verifyCiamAuth, async (req, res) => {
+  const { username } = req.body;
+  // TODO: ตั้งค่า is_active = false และยกเลิก JWT Session ทั้งหมดทันที
+  res.json({ status: "SUCCESS", message: `User ${username} suspended and sessions cleared` });
+});
+
+router.get('/inventory', verifyCiamAuth, async (req, res) => {
+  // TODO: ดึงข้อมูลพนักงานทั้งหมดเพื่อส่งกลับให้ CIAM ทำ Auto-Sync
+  res.json({ status: "success", total: 0, users: [] });
+});
+
+module.exports = router;
+```
+
 

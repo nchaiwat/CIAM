@@ -30,6 +30,9 @@ import {
   Clock,
   Calendar,
   Cloud,
+  Download,
+  BookOpen,
+  FileText,
 } from "lucide-react";
 import { ciamApi, ConnectedApp, SyncSchedule, SyncAllResult } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
@@ -60,6 +63,35 @@ export default function ApplicationsPage() {
   const [sapPassword, setSapPassword] = useState("");
   const [showNewSapPassword, setShowNewSapPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showSpecModal, setShowSpecModal] = useState(false);
+
+  const handleDownloadSpec = () => {
+    const token = localStorage.getItem("ciam_token") || "";
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://ciam.windowasia.com";
+    const downloadUrl = `${apiUrl}/api/v1/applications/spec/download`;
+
+    fetch(downloadUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Download failed");
+        return res.blob();
+      })
+      .then((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        // Fallback to direct navigation
+        window.open(downloadUrl, "_blank");
+      });
+  };
   const [copiedNewKey, setCopiedNewKey] = useState(false);
 
   // Delete App states
@@ -463,6 +495,26 @@ export default function ApplicationsPage() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Download Spoke Spec Button */}
+          <button
+            onClick={handleDownloadSpec}
+            className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-850 border border-emerald-300 rounded-md text-xs sm:text-sm font-bold transition-colors shadow-2xs cursor-pointer"
+            title="ดาวน์โหลดเอกสารมาตรฐานการเชื่อมต่อระบบลูก (Markdown) เพื่อส่งต่อให้ทีม Developer"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            <span>📥 สเปกเชื่อมต่อ (.md)</span>
+          </button>
+
+          {/* Dev Guide Modal Button */}
+          <button
+            onClick={() => setShowSpecModal(true)}
+            className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-md text-xs sm:text-sm font-bold transition-colors shadow-2xs cursor-pointer"
+            title="ดูสรุปเงื่อนไขและโค้ดตัวอย่างสำหรับนักพัฒนา"
+          >
+            <BookOpen className="w-4 h-4 text-slate-600" />
+            <span>📋 คู่มือสำหรับ Dev</span>
+          </button>
+
           {/* Scheduled Sync Settings Button */}
           <button
             onClick={handleOpenScheduleModal}
@@ -2237,6 +2289,152 @@ export default function ApplicationsPage() {
           >
             <X className="w-3.5 h-3.5" />
           </button>
+        </div>
+      )}
+
+      {/* Developer Integration Spec Modal */}
+      {showSpecModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white max-w-4xl w-full p-6 space-y-4 rounded-xl border-2 border-slate-300 shadow-2xl relative max-h-[90vh] flex flex-col">
+            <div className="flex items-start justify-between border-b-2 border-slate-200 pb-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-lg bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 font-bold">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    ข้อกำหนดและคู่มือการเชื่อมต่อระบบลูก (Spoke Integration Standard)
+                  </h3>
+                  <p className="text-xs text-slate-600 font-medium">
+                    สำหรับทีม Developer ในการพัฒนา API ให้รองรับทั้ง Inbound Webhook และ OIDC SSO
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSpecModal(false)}
+                className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-4 text-xs pr-1">
+              {/* Important Callout */}
+              <div className="p-3.5 rounded-lg bg-blue-50 border-2 border-blue-200 text-blue-950 space-y-1">
+                <div className="font-bold flex items-center space-x-1.5 text-sm text-blue-900">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" />
+                  <span>หลักการสถาปัตยกรรม (Two-Way Integration):</span>
+                </div>
+                <p className="leading-relaxed">
+                  1. <strong>Inbound Webhooks (CIAM ➔ Spoke):</strong> ระบบลูกต้องเปิด API ให้ CIAM ยิงเข้ามาเพื่อเช็คสถานะ, สร้างบัญชี, ระงับสิทธิ์ (1-Click Offboard), และดึง Inventory ไปหาบัญชีผี
+                </p>
+                <p className="leading-relaxed">
+                  2. <strong>SSO Authentication (User ➔ CIAM ➔ AD):</strong> ระบบลูก<strong>ไม่ต้องเชื่อมต่อกับ Active Directory (LDAP) โดยตรง</strong> ให้ใช้ OIDC PKCE มายัง CIAM แล้ว CIAM จะไป Authen กับ AD ให้เองอย่างปลอดภัย
+                </p>
+              </div>
+
+              {/* Network Security */}
+              <div className="p-3.5 rounded-lg bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-1.5">
+                <div className="font-bold flex items-center space-x-1.5 text-xs text-amber-900">
+                  <Lock className="w-4 h-4 text-amber-700" />
+                  <span>ความปลอดภัยเครือข่าย (Network IP Whitelist):</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-slate-600 font-medium">Public IP ของ Central IAM VPS ที่ระบบลูกต้อง Whitelist:</span>
+                  <code className="bg-white border border-amber-400 text-amber-950 font-bold px-2 py-0.5 rounded font-mono">
+                    157.173.219.153
+                  </code>
+                </div>
+              </div>
+
+              {/* Required Endpoints Table */}
+              <div className="space-y-2">
+                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-xs">
+                  1. Endpoint ที่ระบบลูกต้องเปิดให้ CIAM เรียกใช้งาน (Group C Webhooks)
+                </h4>
+                <div className="border-2 border-slate-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-100 border-b border-slate-200 text-[11px] font-bold text-slate-700">
+                      <tr>
+                        <th className="p-2.5">Method</th>
+                        <th className="p-2.5">Endpoint</th>
+                        <th className="p-2.5">คำอธิบาย</th>
+                        <th className="p-2.5">ผลลัพธ์ที่ต้องการ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-[11px]">
+                      <tr>
+                        <td className="p-2.5 font-bold text-blue-700 font-mono">GET</td>
+                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/ciam/health</td>
+                        <td className="p-2.5 text-slate-600">Health Check & Latency Ping</td>
+                        <td className="p-2.5 font-mono text-emerald-800 font-bold">{`{"status": "ONLINE"}`}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-700 font-mono">POST</td>
+                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/ciam/provision-user</td>
+                        <td className="p-2.5 text-slate-600">สร้างหรือแก้ไขบัญชีพนักงานและมอบหมายสิทธิ์</td>
+                        <td className="p-2.5 font-mono text-slate-700">Upsert User & Set Role</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-rose-700 font-mono">POST</td>
+                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/ciam/suspend-user</td>
+                        <td className="p-2.5 text-slate-600 font-bold text-rose-900">1-Click Offboard: ตัดสิทธิ์และเตะ Session ทันที</td>
+                        <td className="p-2.5 font-mono text-rose-800 font-bold">is_active=false, clear tokens</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-700 font-mono">POST</td>
+                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/ciam/reactivate-user</td>
+                        <td className="p-2.5 text-slate-600">คืนสิทธิ์พนักงานที่กลับมาทำงาน</td>
+                        <td className="p-2.5 font-mono text-emerald-800">is_active=true</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-blue-700 font-mono">GET</td>
+                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/ciam/inventory</td>
+                        <td className="p-2.5 text-slate-600">คืนรายชื่อบัญชีทั้งหมดเพื่อ Auto-Reconciliation 04:00 น.</td>
+                        <td className="p-2.5 font-mono text-slate-700">{`{"total": N, "users": [...]}`}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* SSO Flow Summary */}
+              <div className="space-y-1.5">
+                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-xs">
+                  2. การยืนยันตัวตน SSO และ Active Directory
+                </h4>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1 text-slate-700">
+                  <p>• <strong>Authorize URL:</strong> <code className="font-mono bg-white px-1.5 py-0.5 border rounded">https://ciam.windowasia.com/oauth/authorize</code></p>
+                  <p>• <strong>Token Endpoint:</strong> <code className="font-mono bg-white px-1.5 py-0.5 border rounded">https://ciam.windowasia.com/api/v1/oauth/token</code></p>
+                  <p>• <strong>JWKS URI:</strong> <code className="font-mono bg-white px-1.5 py-0.5 border rounded">https://ciam.windowasia.com/.well-known/jwks.json</code></p>
+                  <p className="text-[11px] text-slate-500 pt-1">
+                    * เมื่อพนักงาน Login ผ่าน SSO ทาง Central IAM จะไปตรวจสอบกับ Active Directory Domain Controller ให้เรียบร้อย แล้วส่ง Claims (ชื่อ, แผนก, กลุ่มสิทธิ์) กลับมาใน JWT ID Token
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="pt-3 border-t-2 border-slate-200 flex items-center justify-between">
+              <button
+                onClick={() => setShowSpecModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-md text-xs cursor-pointer"
+              >
+                ปิด
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowSpecModal(false);
+                  handleDownloadSpec();
+                }}
+                className="flex items-center space-x-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md text-xs shadow-sm cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>ดาวน์โหลดเอกสารฉบับเต็ม (.md) ส่งให้ Dev</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

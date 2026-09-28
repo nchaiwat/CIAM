@@ -62,6 +62,7 @@ export default function DirectoryPage() {
     email: "",
     department: "",
     telephone: "",
+    telegram_id: "",
     create_in_ad: true,
   });
   const [selectedSpokes, setSelectedSpokes] = useState<Record<number, { selected: boolean; group_name: string }>>({});
@@ -191,6 +192,7 @@ export default function DirectoryPage() {
       email: "",
       department: "",
       telephone: "",
+      telegram_id: "",
       create_in_ad: true,
     });
     setIsCreateModalOpen(true);
@@ -221,6 +223,7 @@ export default function DirectoryPage() {
         email: createForm.email.trim() || undefined,
         department: createForm.department.trim() || undefined,
         telephone: createForm.telephone.trim() || undefined,
+        telegram_id: createForm.telegram_id.trim() || undefined,
         create_in_ad: createForm.create_in_ad,
         target_spokes,
       });
@@ -766,6 +769,14 @@ export default function DirectoryPage() {
                 <span className="text-slate-600 font-medium">อีเมล:</span>
                 <span className="text-slate-900 font-bold">{selectedUser.email || "N/A"}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600 font-medium">เบอร์โทรศัพท์:</span>
+                <span className="text-slate-900 font-bold">{selectedUser.telephone || "N/A"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600 font-medium">Telegram ID:</span>
+                <span className="font-mono text-blue-700 font-bold">{selectedUser.telegram_id || "N/A"}</span>
+              </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-600 font-medium">สถานะใน Active Directory:</span>
                 {selectedUser.is_ad_account === false ? (
@@ -985,6 +996,17 @@ export default function DirectoryPage() {
                       placeholder="เช่น 081-234-5678"
                       value={createForm.telephone}
                       onChange={(e) => setCreateForm({ ...createForm, telephone: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-blue-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 mb-1 font-bold">Telegram ID</label>
+                    <input
+                      type="text"
+                      placeholder="เช่น @somchai หรือ 123456789"
+                      value={createForm.telegram_id}
+                      onChange={(e) => setCreateForm({ ...createForm, telegram_id: e.target.value })}
                       className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-blue-600"
                     />
                   </div>

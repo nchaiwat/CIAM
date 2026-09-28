@@ -23,6 +23,7 @@ class UserListItem(BaseModel):
     email: Optional[str] = None
     department: Optional[str] = None
     telephone: Optional[str] = None
+    telegram_id: Optional[str] = None
     is_active_in_ad: bool
     last_login_ad_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
@@ -51,6 +52,7 @@ class UserCreateRequest(BaseModel):
     email: Optional[str] = None
     department: Optional[str] = None
     telephone: Optional[str] = None
+    telegram_id: Optional[str] = None
     create_in_ad: bool = True
     target_spokes: List[SpokeProvisionTarget] = []
 

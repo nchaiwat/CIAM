@@ -43,6 +43,7 @@ async def execute_user_creation(
         email=request.email.strip() if request.email else None,
         department=request.department.strip() if request.department else None,
         telephone=request.telephone.strip() if request.telephone else None,
+        telegram_id=request.telegram_id.strip() if request.telegram_id else None,
         is_active_in_ad=request.create_in_ad
     )
     db.add(identity)

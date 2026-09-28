@@ -1,8 +1,10 @@
 import logging
+import os
 import secrets
 from typing import List
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -564,3 +566,23 @@ def delete_application(
         "deleted_app_code": app_code,
         "removed_mappings": total_mappings
     }
+
+
+@router.get("/spec/download")
+def download_spoke_spec():
+    """Download Spoke Enterprise Integration Specification markdown document for developers."""
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    possible_paths = [
+        os.path.join(base_dir, "SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md"),
+        "/app/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md",
+        os.path.join(os.getcwd(), "SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md")
+    ]
+    for p in possible_paths:
+        if os.path.exists(p):
+            return FileResponse(
+                path=p,
+                media_type="text/markdown; charset=utf-8",
+                filename="CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md"
+            )
+    raise HTTPException(status_code=404, detail="Specification file not found.")
+

@@ -108,13 +108,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         />
 
         {/* Page Content */}
-        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-6">
           {children}
         </main>
 
         {/* Footer */}
         <footer className="border-t border-slate-300 bg-white py-4 text-center text-xs text-slate-600 font-medium shadow-inner">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="w-full px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
             <p>© 2026 บริษัท วินโดว์ เอเชีย จำกัด (มหาชน). สงวนลิขสิทธิ์ทั้งหมด</p>
             <p className="flex items-center space-x-2">
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
