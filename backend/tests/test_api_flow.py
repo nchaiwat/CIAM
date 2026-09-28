@@ -102,12 +102,17 @@ def test_applications_and_ping():
     apps = response.json()
     assert len(apps) >= 2
 
-    # Test ping on first app
-    first_app = apps[0]
-    first_app_id = first_app["id"]
-    ping_resp = client.post(f"/api/v1/applications/{first_app_id}/ping", headers=headers)
-    assert ping_resp.status_code == 200
-    assert ping_resp.json()["status"] in ["ONLINE", "OFFLINE"]
+    # Test ping on first app (mock connector health_check to avoid hitting external production IRM during tests)
+    from unittest.mock import patch, AsyncMock
+    from app.connectors.base import ConnectorHealth
+
+    with patch("app.connectors.rest_api.RestApiConnector.health_check", new_callable=AsyncMock) as mock_health:
+        mock_health.return_value = ConnectorHealth(is_online=True, latency_ms=12, message="Mocked Online")
+        first_app = apps[0]
+        first_app_id = first_app["id"]
+        ping_resp = client.post(f"/api/v1/applications/{first_app_id}/ping", headers=headers)
+        assert ping_resp.status_code == 200
+        assert ping_resp.json()["status"] in ["ONLINE", "OFFLINE"]
 
     # Test get credentials
     cred_resp = client.get(f"/api/v1/applications/{first_app_id}/credentials", headers=headers)
