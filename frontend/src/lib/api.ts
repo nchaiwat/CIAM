@@ -500,6 +500,48 @@ export const ciamApi = {
       method: "PATCH",
       body: JSON.stringify({ role }),
     }),
+
+  updateAdminProfile: (payload: {
+    full_name?: string;
+    email?: string;
+    telegram_id?: string;
+    new_password?: string;
+  }) =>
+    fetchApi<AdminUserOut>("/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  getHealthMonitorStatus: () =>
+    fetchApi<{
+      config: HealthMonitorConfig;
+      live_health: LiveHealthSnapshot;
+    }>("/dashboard/health-monitor"),
+
+  updateHealthMonitor: (payload: Partial<HealthMonitorConfig>) =>
+    fetchApi<{
+      status: string;
+      message: string;
+      config: HealthMonitorConfig;
+    }>("/dashboard/health-monitor", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  triggerTestHealthAlert: (payload?: { bot_token?: string; chat_id?: string }) =>
+    fetchApi<{
+      success: boolean;
+      summary: string;
+      health: LiveHealthSnapshot;
+      recipients_count: number;
+      success_deliveries: number;
+      errors: string[];
+      timestamp: string;
+      error?: string;
+    }>("/dashboard/health-monitor/test-alert", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    }),
 };
 
 export const api = ciamApi;
@@ -600,12 +642,48 @@ export interface AdminUserOut {
   is_active: boolean;
   department?: string | null;
   employee_id?: string | null;
+  telegram_id?: string | null;
 }
 
 export interface AdminTokenResponse {
   access_token: string;
   token_type: string;
   user: AdminUserOut;
+}
+
+export interface HealthMonitorConfig {
+  enabled: boolean;
+  start_time: string;
+  interval_hours: number;
+  bot_token?: string;
+  chat_id?: string;
+  notify_admins_enabled: boolean;
+  last_run_at?: string | null;
+  last_status?: string;
+  last_summary?: string | null;
+  last_error?: string | null;
+  next_run_at?: string | null;
+}
+
+export interface LiveHealthSnapshot {
+  timestamp_bkk: string;
+  all_healthy: boolean;
+  database: {
+    is_connected: boolean;
+    latency_ms: number;
+    engine: string;
+  };
+  ad_sync_agent: {
+    is_online: boolean;
+    latency_ms: number;
+    message: string;
+    base_url: string;
+  };
+  connected_apps: {
+    total: number;
+    online: number;
+    offline: number;
+  };
 }
 
 

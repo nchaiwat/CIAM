@@ -12,6 +12,7 @@ class AdminUser(Base):
     email = Column(String(150), nullable=True)
     role = Column(String(50), default="SUPER_ADMIN", nullable=False) # SUPER_ADMIN, AUDITOR, IT_HELPDESK
     is_active = Column(Boolean, default=True, nullable=False)
+    telegram_id = Column(String(100), nullable=True) # Telegram username or user ID (e.g. @chaiwat_n)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     last_login_at = Column(DateTime(timezone=True), nullable=True)
     failed_login_attempts = Column(Integer, default=0, nullable=False)

@@ -22,10 +22,17 @@ class AdminUserOut(BaseModel):
     is_active: bool
     department: Optional[str] = None
     employee_id: Optional[str] = None
+    telegram_id: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
 class AdminRoleUpdateRequest(BaseModel):
     role: str # SUPER_ADMIN, ADMIN, IT_HELPDESK, AUDITOR, PORTAL_USER
+
+class AdminProfileUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    telegram_id: Optional[str] = None
+    new_password: Optional[str] = None
 
 TokenResponse.model_rebuild()

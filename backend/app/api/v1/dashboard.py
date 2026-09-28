@@ -68,3 +68,76 @@ def get_dashboard_summary(
         discrepancies=discrepancies,
         recent_activities=activities
     )
+
+
+# ---------------------------------------------------------
+# Telegram System & AD Sync Agent Health Monitor Endpoints
+# ---------------------------------------------------------
+from pydantic import BaseModel
+from typing import Optional
+from app.services.telegram_service import (
+    get_health_monitor_config,
+    save_health_monitor_config,
+    check_full_system_health,
+    send_health_report
+)
+
+class HealthMonitorUpdateRequest(BaseModel):
+    enabled: Optional[bool] = None
+    start_time: Optional[str] = None
+    interval_hours: Optional[int] = None
+    bot_token: Optional[str] = None
+    chat_id: Optional[str] = None
+    notify_admins_enabled: Optional[bool] = None
+
+class HealthMonitorTestRequest(BaseModel):
+    bot_token: Optional[str] = None
+    chat_id: Optional[str] = None
+
+
+@router.get("/health-monitor")
+async def get_health_monitor_status(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Retrieve Telegram Health Monitor configuration and live system health snapshot."""
+    config = get_health_monitor_config(db)
+    health = await check_full_system_health(db)
+    return {
+        "config": config,
+        "live_health": health
+    }
+
+
+@router.put("/health-monitor")
+def update_health_monitor(
+    payload: HealthMonitorUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Update Telegram Health Monitor schedule and credentials."""
+    updated = save_health_monitor_config(db, payload.model_dump(exclude_unset=True))
+    return {
+        "status": "success",
+        "message": "บันทึกการตั้งค่าการแจ้งเตือน Telegram สำเร็จ",
+        "config": updated
+    }
+
+
+@router.post("/health-monitor/test-alert")
+async def trigger_test_health_alert(
+    payload: Optional[HealthMonitorTestRequest] = None,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Trigger an immediate real-time health check and send report to Telegram."""
+    bot_tok = payload.bot_token if payload and payload.bot_token else None
+    c_id = payload.chat_id if payload and payload.chat_id else None
+    result = await send_health_report(
+        db=db,
+        triggered_by=f"MANUAL_TEST_{current_admin.username}",
+        custom_bot_token=bot_tok,
+        custom_chat_id=c_id
+    )
+    return result
+

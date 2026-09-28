@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Menu, LogOut, User, Shield, PanelLeft, Rocket } from "lucide-react";
 import { AdminUserOut } from "@/lib/api";
+import AdminProfileModal from "@/components/profile/AdminProfileModal";
 
 interface HeaderProps {
   collapsed: boolean;
@@ -19,6 +20,7 @@ export default function Header({
 }: HeaderProps) {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<AdminUserOut | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -79,21 +81,30 @@ export default function Header({
           <span className="hidden md:inline">App Portal</span>
         </Link>
 
-        {/* User Profile Card */}
-        <div className="flex items-center space-x-2.5 pl-2">
-          <div className="w-9 h-9 rounded-full bg-blue-100 border-2 border-blue-300 flex items-center justify-center text-blue-700 font-bold shadow-2xs">
+        {/* User Profile Card (Clickable to open Profile & Telegram Alert Settings) */}
+        <button
+          onClick={() => setProfileModalOpen(true)}
+          className="flex items-center space-x-2.5 pl-2 pr-3 py-1 rounded-xl hover:bg-slate-100/90 border border-transparent hover:border-slate-200 transition-all text-left group cursor-pointer"
+          title="คลิกเพื่อแก้ไขโปรไฟล์ & ตั้งค่าแจ้งเตือน Telegram"
+        >
+          <div className="w-9 h-9 rounded-full bg-blue-100 border-2 border-blue-300 flex items-center justify-center text-blue-700 font-bold shadow-2xs group-hover:scale-105 transition-transform relative">
             <User className="w-4 h-4" />
+            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
           </div>
-          <div className="text-left leading-tight hidden md:block">
-            <div className="text-xs font-extrabold text-slate-900">
-              {currentUser?.full_name || "Chaiwat Nilawan"}
+          <div className="leading-tight hidden md:block">
+            <div className="text-xs font-extrabold text-slate-900 group-hover:text-blue-700 transition-colors flex items-center gap-1.5">
+              <span>{currentUser?.full_name || "Chaiwat Nilawan"}</span>
             </div>
-            <div className="text-[11px] font-semibold text-blue-600 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              {currentUser?.role || "SUPER_ADMIN"}
+            <div className="text-[11px] font-semibold text-blue-600 flex items-center gap-1.5">
+              <span>{currentUser?.role || "SUPER_ADMIN"}</span>
+              {currentUser?.telegram_id && (
+                <span className="text-[10px] text-sky-700 font-mono font-bold bg-sky-100/80 px-1.5 py-0.2 rounded">
+                  {currentUser.telegram_id}
+                </span>
+              )}
             </div>
           </div>
-        </div>
+        </button>
 
         {/* Logout Button */}
         <button
@@ -105,6 +116,14 @@ export default function Header({
           <span className="hidden sm:inline">ออกจากระบบ</span>
         </button>
       </div>
+
+      {/* Admin Profile & Telegram Health Monitor Modal */}
+      <AdminProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        currentUser={currentUser}
+        onUserUpdated={(updated) => setCurrentUser(updated)}
+      />
     </header>
   );
 }

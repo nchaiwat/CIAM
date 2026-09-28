@@ -315,6 +315,36 @@ async def run_scheduler_worker():
                 if current_hm == target_time and last_run_date != today_str:
                     logger.info("Executing scheduled sync at %s (Asia/Bangkok)", current_hm)
                     await execute_sync_all(db, actor_username="Auto-Scheduler-04:00")
+
+                # Telegram System & AD Sync Agent Health Monitor Check
+                try:
+                    from app.services.telegram_service import get_health_monitor_config, send_health_report
+                    health_cfg = get_health_monitor_config(db)
+                    if health_cfg.get("enabled", False):
+                        start_time = health_cfg.get("start_time", "08:00")
+                        interval = max(1, min(24, int(health_cfg.get("interval_hours", 4))))
+                        parts = start_time.split(":")
+                        start_h = int(parts[0])
+                        start_m = int(parts[1]) if len(parts) > 1 else 0
+
+                        is_target_minute = (now_bkk.minute == start_m)
+                        is_target_hour = ((now_bkk.hour - start_h) % interval == 0)
+
+                        last_run_iso = health_cfg.get("last_run_at")
+                        already_ran_in_this_window = False
+                        if last_run_iso:
+                            try:
+                                last_dt = datetime.fromisoformat(last_run_iso)
+                                if (now_bkk - last_dt.astimezone(BANGKOK_TZ)).total_seconds() < 300:
+                                    already_ran_in_this_window = True
+                            except Exception:
+                                pass
+
+                        if is_target_minute and is_target_hour and not already_ran_in_this_window:
+                            logger.info("Executing scheduled Telegram health report at %s", current_hm)
+                            await send_health_report(db, triggered_by=f"AUTO_SCHEDULED_{current_hm}")
+                except Exception as health_err:
+                    logger.warning("Error running scheduled health monitor: %s", health_err)
             finally:
                 db.close()
         except asyncio.CancelledError:

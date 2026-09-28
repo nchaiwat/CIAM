@@ -223,4 +223,35 @@ FRONTEND_URL=http://localhost:3000
 > - If updating **Backend only**: `docker compose build api && docker compose up -d api`
 > - If updating **Frontend only**: `docker compose build web && docker compose up -d web`
 
+---
+
+## 8. Admin User Profile & Telegram Health Monitor Schedule
+
+### 8.1 Admin User Profile & Telegram ID (`central_iam_admins`)
+* **Database Schema:** `central_iam_admins` contains column `telegram_id VARCHAR(100)` (Telegram username `@username` or numeric Chat ID `123456789`).
+* **Auto-Migration:** `initial_data.py` automatically runs `ALTER TABLE central_iam_admins ADD COLUMN telegram_id VARCHAR(100);` if not present.
+* **APIs:**
+  * `GET /api/v1/auth/me`: Returns profile of logged-in admin (includes `telegram_id`).
+  * `PUT /api/v1/auth/profile`: Updates `full_name`, `email`, `telegram_id`, and `new_password` for the active admin, syncing with `MasterIdentity` if present.
+  * `GET /api/v1/auth/admins`: Lists all system admins with their `telegram_id`.
+
+### 8.2 System Health & AD Sync Agent Periodic Telegram Alert
+* **Monitored Services:**
+  1. **Central IAM Engine & PostgreSQL Database:** Real-time query execution & latency (ms).
+  2. **Active Directory Sync Agent (Gateway):** Dual probe to `http://172.18.0.1:3100` (`/health` and `/api/v2/login`), checking port 3100 connectivity, DC `wa.net` status, and latency (ms).
+  3. **Connected Spoke Applications:** Counts active & online applications.
+* **Configurable Schedule (`SystemSetting: health_monitor_schedule`):**
+  * `enabled`: boolean toggle.
+  * `start_time`: Time string in Bangkok timezone (e.g. `08:00`).
+  * `interval_hours`: Frequency dropdown (`1`, `2`, `4`, `6`, `8`, `12`, `24` hours).
+  * `bot_token`: Telegram Bot API Token.
+  * `chat_id`: Telegram Channel / Group / Admin Chat ID.
+  * `notify_admins_enabled`: Automatically distributes alert to all active admins with configured `telegram_id`.
+* **Scheduler Engine:** `app/services/scheduler.py` checks target interval every minute and triggers `send_health_report(db, triggered_by="AUTO_SCHEDULED")`.
+* **Manual Immediate Testing:** `POST /api/v1/dashboard/health-monitor/test-alert` allows instant test delivery to verify Bot credentials and Telegram connectivity.
+* **UI Component:** `frontend/src/components/profile/AdminProfileModal.tsx` accessible via:
+  1. Clicking User Profile Card in the Header (`Header.tsx`).
+  2. Clicking "🔔 แจ้งเตือน Telegram & AD Agent" in the main Dashboard action bar (`app/page.tsx`).
+
+
 

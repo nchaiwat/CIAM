@@ -352,4 +352,74 @@ def test_user_create_with_telegram_id():
     user_data = detail_res.json()["user"]
     assert user_data["telegram_id"] == "@windowasia_dev"
 
+def test_admin_profile_telegram_id():
+    login_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Update profile with telegram_id
+    update_res = client.put(
+        "/api/v1/auth/profile",
+        json={
+            "full_name": "Somchai N. (IT Security Lead)",
+            "telegram_id": "@chaiwat_admin",
+            "email": "chaiwat.n@windowasia.com"
+        },
+        headers=headers
+    )
+    assert update_res.status_code == 200
+    data = update_res.json()
+    assert data["telegram_id"] == "@chaiwat_admin"
+    assert "Somchai N." in data["full_name"]
+
+    # Verify /me returns telegram_id
+    me_res = client.get("/api/v1/auth/me", headers=headers)
+    assert me_res.status_code == 200
+    assert me_res.json()["telegram_id"] == "@chaiwat_admin"
+
+def test_health_monitor_schedule_and_alert():
+    login_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Get health monitor config and live health
+    get_res = client.get("/api/v1/dashboard/health-monitor", headers=headers)
+    assert get_res.status_code == 200
+    res_data = get_res.json()
+    assert "config" in res_data
+    assert "live_health" in res_data
+    assert "ad_sync_agent" in res_data["live_health"]
+
+    # 2. Update health monitor schedule (e.g. 08:00, every 4 hours)
+    put_res = client.put(
+        "/api/v1/dashboard/health-monitor",
+        json={
+            "enabled": True,
+            "start_time": "08:00",
+            "interval_hours": 4,
+            "bot_token": "123456:FAKE_TELEGRAM_BOT_TOKEN_FOR_TEST",
+            "chat_id": "-1001234567890",
+            "notify_admins_enabled": True
+        },
+        headers=headers
+    )
+    assert put_res.status_code == 200
+    saved_cfg = put_res.json()["config"]
+    assert saved_cfg["enabled"] is True
+    assert saved_cfg["start_time"] == "08:00"
+    assert saved_cfg["interval_hours"] == 4
+    assert saved_cfg["chat_id"] == "-1001234567890"
+
+    # 3. Test triggering alert (will simulate attempt and report delivery details)
+    alert_res = client.post(
+        "/api/v1/dashboard/health-monitor/test-alert",
+        json={},
+        headers=headers
+    )
+    assert alert_res.status_code == 200
+    alert_data = alert_res.json()
+    assert "health" in alert_data
+    assert "summary" in alert_data
+
+
 

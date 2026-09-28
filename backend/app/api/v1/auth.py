@@ -4,10 +4,10 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.security import verify_password, create_access_token
+from app.core.security import verify_password, create_access_token, hash_password
 from app.models.user import AdminUser
 from app.models.audit import IamAuditLog
-from app.schemas.auth import LoginRequest, TokenResponse, AdminUserOut, AdminRoleUpdateRequest
+from app.schemas.auth import LoginRequest, TokenResponse, AdminUserOut, AdminRoleUpdateRequest, AdminProfileUpdateRequest
 from app.api.deps import get_current_admin, get_current_user
 from app.models.identity import MasterIdentity
 from sqlalchemy import func
@@ -432,6 +432,60 @@ def get_current_user_profile(
         out.employee_id = ident.employee_id
         if ident.full_name and ident.full_name != current_user.username:
             out.full_name = ident.full_name
+        if not out.telegram_id and ident.telegram_id:
+            out.telegram_id = ident.telegram_id
+    return out
+
+
+@router.put("/profile", response_model=AdminUserOut)
+def update_current_user_profile(
+    payload: AdminProfileUpdateRequest,
+    current_user: AdminUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update logged in Admin's profile (Full Name, Email, Telegram ID, Password)."""
+    if payload.full_name is not None and payload.full_name.strip():
+        current_user.full_name = payload.full_name.strip()
+    if payload.email is not None:
+        current_user.email = str(payload.email).strip() or None
+    if payload.telegram_id is not None:
+        t_id = payload.telegram_id.strip()
+        current_user.telegram_id = t_id if t_id else None
+    if payload.new_password:
+        if len(payload.new_password) < 6:
+            raise HTTPException(status_code=400, detail="รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร")
+        current_user.hashed_password = hash_password(payload.new_password)
+
+    # Also sync to MasterIdentity if exists
+    ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == current_user.username.lower()).first()
+    if ident:
+        if payload.full_name is not None and payload.full_name.strip():
+            ident.full_name = payload.full_name.strip()
+        if payload.email is not None:
+            ident.email = str(payload.email).strip() or None
+        if payload.telegram_id is not None:
+            t_id = payload.telegram_id.strip()
+            ident.telegram_id = t_id if t_id else None
+
+    db.commit()
+    db.refresh(current_user)
+
+    # Audit log
+    db.add(IamAuditLog(
+        actor_username=current_user.username,
+        action_type="UPDATE_ADMIN_PROFILE",
+        target_username=current_user.username,
+        affected_app_code="CIAM",
+        execution_mode="PORTAL_ADMIN",
+        reason=f"อัปเดตข้อมูลโปรไฟล์ผู้ดูแลระบบ (Telegram ID: {current_user.telegram_id or 'N/A'})",
+        status="SUCCESS"
+    ))
+    db.commit()
+
+    out = AdminUserOut.model_validate(current_user)
+    if ident:
+        out.department = ident.department
+        out.employee_id = ident.employee_id
     return out
 
 
@@ -451,6 +505,8 @@ def list_admin_users(
             out.employee_id = ident.employee_id
             if ident.full_name and ident.full_name != u.username:
                 out.full_name = ident.full_name
+            if not out.telegram_id and ident.telegram_id:
+                out.telegram_id = ident.telegram_id
         results.append(out)
     return results
 

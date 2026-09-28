@@ -13,14 +13,25 @@ import {
   RefreshCw,
   Server,
   Zap,
+  Bell,
 } from "lucide-react";
-import { ciamApi, DashboardSummary } from "@/lib/api";
+import { ciamApi, DashboardSummary, AdminUserOut } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
+import AdminProfileModal from "@/components/profile/AdminProfileModal";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AdminUserOut | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("ciam_user");
+      if (stored) setCurrentUser(JSON.parse(stored));
+    } catch {}
+  }, []);
 
   const fetchDashboard = async () => {
     try {
@@ -58,7 +69,15 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center space-x-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setProfileModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-md bg-sky-50 border-2 border-sky-300 text-sky-800 text-xs sm:text-sm font-bold hover:bg-sky-100 hover:border-sky-400 transition-colors shadow-xs"
+            title="ตั้งค่าแจ้งเตือน Telegram & ตรวจสอบสถานะ AD Sync Agent"
+          >
+            <Bell className="w-4 h-4 text-sky-600" />
+            <span>แจ้งเตือน Telegram & AD Agent</span>
+          </button>
           <button
             onClick={fetchDashboard}
             disabled={refreshing}
@@ -376,6 +395,14 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Admin Profile & Telegram Health Monitor Modal */}
+      <AdminProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        currentUser={currentUser}
+        onUserUpdated={(updated) => setCurrentUser(updated)}
+      />
     </div>
   );
 }
