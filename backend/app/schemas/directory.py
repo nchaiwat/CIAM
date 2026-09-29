@@ -3,6 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 class AppAccountSummary(BaseModel):
+    mapping_id: Optional[int] = None
     application_id: int
     app_code: str
     app_name: str
@@ -14,6 +15,11 @@ class AppAccountSummary(BaseModel):
     last_app_login_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     days_since_last_login: Optional[int] = None
+    is_approved_exception: bool = False
+    exception_type: Optional[str] = None
+    exception_reason: Optional[str] = None
+    exception_approved_by: Optional[str] = None
+    exception_approved_at: Optional[datetime] = None
 
 class UserListItem(BaseModel):
     id: int
@@ -32,8 +38,26 @@ class UserListItem(BaseModel):
     connected_apps: List[AppAccountSummary] = []
     has_discrepancy: bool = False
     is_ad_account: bool = True
+    is_approved_exception: bool = False
+    exception_type: Optional[str] = None
+    exception_reason: Optional[str] = None
+    exception_approved_by: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+class AccountLinkRequest(BaseModel):
+    target_identity_id: int
+    reason: str
+
+class AccountExceptionRequest(BaseModel):
+    exception_type: str = "NAME_MISMATCH" # 'NAME_MISMATCH', 'SERVICE_ACCOUNT', 'EXTERNAL_VENDOR', 'LEGACY_EXCEPTION', 'OTHER'
+    reason: str
+    expires_at: Optional[datetime] = None
+
+class AccountActionResponse(BaseModel):
+    status: str
+    message: str
+    details: Optional[dict] = None
 
 
 class UserDetailResponse(BaseModel):

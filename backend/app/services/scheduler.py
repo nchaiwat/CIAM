@@ -102,8 +102,34 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
                 if not uname:
                     continue
 
-                # Match MasterIdentity by username, fallback to email, fallback to full_name
-                identity = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(uname)).first()
+                # 1. Match existing AppAccountMapping (case-insensitive to prevent duplicate rows)
+                existing_mappings = (
+                    db.query(AppAccountMapping)
+                    .filter(
+                        AppAccountMapping.application_id == app.id,
+                        func.lower(AppAccountMapping.app_username) == uname.lower()
+                    )
+                    .all()
+                )
+                mapping = None
+                if existing_mappings:
+                    exact_match = next((m for m in existing_mappings if m.app_username == uname), None)
+                    mapping = exact_match or existing_mappings[0]
+                    if len(existing_mappings) > 1:
+                        for dup in existing_mappings:
+                            if dup.id != mapping.id:
+                                db.delete(dup)
+                        db.flush()
+
+                # 2. Match MasterIdentity:
+                # If mapping was already manually linked to an identity by Admin, preserve it!
+                identity = None
+                if mapping and mapping.identity_id:
+                    identity = db.query(MasterIdentity).filter_by(id=mapping.identity_id).first()
+
+                # Fallback matching: username -> email -> full_name
+                if not identity:
+                    identity = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(uname)).first()
                 if not identity and item.get("email"):
                     identity = db.query(MasterIdentity).filter(MasterIdentity.email.ilike(item.get("email").strip())).first()
                 if not identity and item.get("full_name") and item.get("full_name").strip() != uname:
@@ -128,28 +154,17 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
                     if (not identity.full_name or identity.full_name == identity.username) and item.get("full_name"):
                         identity.full_name = item.get("full_name")
 
-                # Match AppAccountMapping (case-insensitive to prevent duplicate rows)
-                existing_mappings = (
-                    db.query(AppAccountMapping)
-                    .filter(
-                        AppAccountMapping.application_id == app.id,
-                        func.lower(AppAccountMapping.app_username) == uname.lower()
-                    )
-                    .all()
-                )
-                if existing_mappings:
-                    exact_match = next((m for m in existing_mappings if m.app_username == uname), None)
-                    mapping = exact_match or existing_mappings[0]
-                    if len(existing_mappings) > 1:
-                        for dup in existing_mappings:
-                            if dup.id != mapping.id:
-                                db.delete(dup)
-                        db.flush()
-                else:
-                    mapping = None
-
                 is_active = bool(item.get("is_active", True))
-                sync_status = "DISCREPANCY" if (not identity.is_active_in_ad and is_active) else "IN_SYNC"
+                is_exception = bool(
+                    getattr(mapping, "is_approved_exception", False) or getattr(identity, "is_approved_exception", False)
+                )
+
+                if is_exception:
+                    sync_status = "APPROVED_EXCEPTION"
+                elif not identity.is_active_in_ad and is_active:
+                    sync_status = "DISCREPANCY"
+                else:
+                    sync_status = "IN_SYNC"
 
                 last_login_dt = None
                 raw_login = item.get("last_login_at")

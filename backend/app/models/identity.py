@@ -17,6 +17,11 @@ class MasterIdentity(Base):
     telegram_id = Column(String(100), nullable=True) # Telegram username or user ID (e.g. @chaiwat_n)
     is_active_in_ad = Column(Boolean, default=True, nullable=False)
     last_login_ad_at = Column(DateTime(timezone=True), nullable=True)
+    is_approved_exception = Column(Boolean, default=False, nullable=False)
+    exception_type = Column(String(50), nullable=True)
+    exception_reason = Column(String(255), nullable=True)
+    exception_approved_by = Column(String(100), nullable=True)
+    exception_approved_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

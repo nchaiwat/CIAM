@@ -22,6 +22,7 @@ import {
   ShieldAlert,
   Crown,
   Zap,
+  Link2 as LinkIcon,
 } from "lucide-react";
 import {
   ciamApi,
@@ -29,6 +30,7 @@ import {
   ConnectedApp,
   UserCreateResponse,
   UserActivateResponse,
+  AppAccountSummary,
 } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/date";
 
@@ -76,6 +78,38 @@ export default function DirectoryPage() {
   const [activateReason, setActivateReason] = useState("พนักงานกลับมาปฏิบัติงาน / HR อนุมัติคืนสิทธิ์");
   const [activateLoading, setActivateLoading] = useState(false);
   const [activateResult, setActivateResult] = useState<UserActivateResponse | null>(null);
+
+  // Identity Link Modal State
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [linkTargetAccount, setLinkTargetAccount] = useState<{
+    mapping_id?: number;
+    source_user_id?: number;
+    app_name: string;
+    app_username: string;
+    current_identity_name: string;
+  } | null>(null);
+  const [linkTargetIdentityId, setLinkTargetIdentityId] = useState<number | "">("");
+  const [linkReason, setLinkReason] = useState("ชื่อสะกดไม่ตรงกันในระบบลูก (Spelling mismatch) - ขอผูกเข้ากับตัวตนหลักใน AD");
+  const [linkSearchAd, setLinkSearchAd] = useState("");
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkSuccessMsg, setLinkSuccessMsg] = useState<string | null>(null);
+
+  // Exception Modal State
+  const [isExceptionModalOpen, setIsExceptionModalOpen] = useState(false);
+  const [exceptionTarget, setExceptionTarget] = useState<{
+    mapping_id?: number;
+    identity_id?: number;
+    name: string;
+    app_name?: string;
+    current_type?: string;
+    current_reason?: string;
+  } | null>(null);
+  const [exceptionType, setExceptionType] = useState("NAME_MISMATCH");
+  const [exceptionReason, setExceptionReason] = useState("");
+  const [exceptionLoading, setExceptionLoading] = useState(false);
+  const [exceptionError, setExceptionError] = useState<string | null>(null);
+  const [exceptionSuccessMsg, setExceptionSuccessMsg] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -261,6 +295,183 @@ export default function DirectoryPage() {
       setActivateLoading(false);
     }
   };
+
+  // Link & Exception Handlers
+  const handleOpenLinkModalForAccount = (app: AppAccountSummary, user: UserListItem) => {
+    setLinkTargetAccount({
+      mapping_id: app.mapping_id,
+      source_user_id: user.id,
+      app_name: app.app_name,
+      app_username: app.app_username,
+      current_identity_name: user.full_name,
+    });
+    setLinkTargetIdentityId("");
+    setLinkSearchAd("");
+    setLinkReason(`ชื่อสะกดไม่ตรงกันใน ${app.app_name} (${app.app_username}) ผูกเข้ากับตัวตนหลักใน AD`);
+    setLinkError(null);
+    setLinkSuccessMsg(null);
+    setIsLinkModalOpen(true);
+  };
+
+  const handleOpenLinkModalForUser = (user: UserListItem) => {
+    const firstMapping = user.connected_apps[0];
+    setLinkTargetAccount({
+      mapping_id: firstMapping?.mapping_id,
+      source_user_id: user.id,
+      app_name: firstMapping ? firstMapping.app_name : "ระบบลูก",
+      app_username: firstMapping ? firstMapping.app_username : user.username,
+      current_identity_name: user.full_name,
+    });
+    setLinkTargetIdentityId("");
+    setLinkSearchAd("");
+    setLinkReason(`ชื่อสะกดไม่ตรงกัน หรือเป็นบัญชีระบบลูก (${user.username}) ผูกเข้ากับตัวตนหลักใน AD`);
+    setLinkError(null);
+    setLinkSuccessMsg(null);
+    setIsLinkModalOpen(true);
+  };
+
+  const handleLinkSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linkTargetAccount || !linkTargetIdentityId) {
+      setLinkError("กรุณาเลือกตัวตนหลักใน Active Directory ที่ต้องการผูก");
+      return;
+    }
+    if (!linkReason.trim()) {
+      setLinkError("กรุณาระบุเหตุผลการผูกบัญชี");
+      return;
+    }
+
+    try {
+      setLinkLoading(true);
+      setLinkError(null);
+      let res;
+      if (linkTargetAccount.mapping_id) {
+        res = await ciamApi.linkAccountToIdentity(linkTargetAccount.mapping_id, {
+          target_identity_id: Number(linkTargetIdentityId),
+          reason: linkReason.trim(),
+        });
+      } else if (linkTargetAccount.source_user_id) {
+        res = await ciamApi.mergeIdentityToTarget(linkTargetAccount.source_user_id, Number(linkTargetIdentityId), {
+          target_identity_id: Number(linkTargetIdentityId),
+          reason: linkReason.trim(),
+        });
+      } else {
+        throw new Error("ไม่พบข้อมูลบัญชีต้นทาง");
+      }
+
+      setLinkSuccessMsg(res.message);
+      await fetchUsers();
+      if (selectedUser) {
+        setSelectedUser(null);
+      }
+    } catch (err: any) {
+      setLinkError(err.message || "เกิดข้อผิดพลาดในการผูกบัญชี");
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const handleOpenExceptionModalForAccount = (app: AppAccountSummary, user: UserListItem) => {
+    setExceptionTarget({
+      mapping_id: app.mapping_id,
+      identity_id: user.id,
+      name: `${app.app_name} (${app.app_username})`,
+      app_name: app.app_name,
+      current_type: app.exception_type || undefined,
+      current_reason: app.exception_reason || undefined,
+    });
+    setExceptionType(app.exception_type || "NAME_MISMATCH");
+    setExceptionReason(app.exception_reason || "ชื่อผู้ใช้สะกดไม่ตรงกับ Active Directory (เป็นคนเดียวกัน ได้รับการรับรองแล้ว)");
+    setExceptionError(null);
+    setExceptionSuccessMsg(null);
+    setIsExceptionModalOpen(true);
+  };
+
+  const handleOpenExceptionModalForUser = (user: UserListItem) => {
+    setExceptionTarget({
+      identity_id: user.id,
+      name: `${user.full_name} (${user.username})`,
+      current_type: user.exception_type || undefined,
+      current_reason: user.exception_reason || undefined,
+    });
+    setExceptionType(user.exception_type || "NAME_MISMATCH");
+    setExceptionReason(user.exception_reason || "ชื่อผู้ใช้สะกดไม่ตรงกับ Active Directory (เป็นคนเดียวกัน ได้รับการรับรองแล้ว)");
+    setExceptionError(null);
+    setExceptionSuccessMsg(null);
+    setIsExceptionModalOpen(true);
+  };
+
+  const handleExceptionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!exceptionTarget) return;
+    if (!exceptionReason.trim()) {
+      setExceptionError("กรุณาระบุเหตุผลการอนุมัติข้อยกเว้น");
+      return;
+    }
+
+    try {
+      setExceptionLoading(true);
+      setExceptionError(null);
+      let res;
+      if (exceptionTarget.mapping_id) {
+        res = await ciamApi.approveAccountException(exceptionTarget.mapping_id, {
+          exception_type: exceptionType,
+          reason: exceptionReason.trim(),
+        });
+      } else if (exceptionTarget.identity_id) {
+        res = await ciamApi.approveUserException(exceptionTarget.identity_id, {
+          exception_type: exceptionType,
+          reason: exceptionReason.trim(),
+        });
+      }
+      setExceptionSuccessMsg(res?.message || "อนุมัติข้อยกเว้นสำเร็จ");
+      await fetchUsers();
+      if (selectedUser) {
+        const refreshed = await ciamApi.getUserDetail(selectedUser.id);
+        setSelectedUser(refreshed.user);
+      }
+    } catch (err: any) {
+      setExceptionError(err.message || "เกิดข้อผิดพลาดในการอนุมัติข้อยกเว้น");
+    } finally {
+      setExceptionLoading(false);
+    }
+  };
+
+  const handleRevokeException = async (user: UserListItem, mappingId?: number) => {
+    const confirmMsg = mappingId
+      ? "คุณต้องการยกเลิกข้อยกเว้นของบัญชีนี้ใช่หรือไม่?"
+      : `คุณต้องการยกเลิกข้อยกเว้นของ ${user.full_name} (${user.username}) ใช่หรือไม่?`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      if (mappingId) {
+        await ciamApi.revokeAccountException(mappingId);
+      } else {
+        await ciamApi.revokeUserException(user.id);
+      }
+      alert("ยกเลิกข้อยกเว้นเรียบร้อยแล้ว");
+      await fetchUsers();
+      if (selectedUser) {
+        const refreshed = await ciamApi.getUserDetail(selectedUser.id);
+        setSelectedUser(refreshed.user);
+      }
+    } catch (err: any) {
+      alert(`ยกเลิกข้อยกเว้นไม่สำเร็จ: ${err.message}`);
+    }
+  };
+
+  const adCandidates = users.filter((u) => {
+    if (u.is_ad_account === false) return false;
+    if (linkTargetAccount?.source_user_id && u.id === linkTargetAccount.source_user_id) return false;
+    if (!linkSearchAd.trim()) return true;
+    const q = linkSearchAd.toLowerCase();
+    return (
+      u.username.toLowerCase().includes(q) ||
+      u.full_name.toLowerCase().includes(q) ||
+      (u.department && u.department.toLowerCase().includes(q)) ||
+      (u.employee_id && u.employee_id.toLowerCase().includes(q))
+    );
+  });
 
   // Metrics
   const activeAdCount = users.filter((u) => u.is_active_in_ad).length;
@@ -493,11 +704,18 @@ export default function DirectoryPage() {
                                 ระบบลูก
                               </span>
                             )}
-                            {user.has_discrepancy && (
+                            {user.is_approved_exception ? (
+                              <span
+                                title={`ข้อยกเว้นที่อนุมัติแล้ว: ${user.exception_type || ""} - ${user.exception_reason || ""}`}
+                                className="bg-purple-100 text-purple-900 border border-purple-300 px-1.5 py-0.2 rounded text-[10px] font-bold flex items-center space-x-1"
+                              >
+                                <span>🛡️ ข้อยกเว้น</span>
+                              </span>
+                            ) : user.has_discrepancy ? (
                               <span className="bg-amber-300 text-amber-950 border border-amber-500 px-1.5 py-0.2 rounded text-[10px] font-black">
                                 บัญชีผี
                               </span>
-                            )}
+                            ) : null}
                           </div>
                           <div className="text-xs text-slate-600 font-medium flex items-center space-x-1.5 mt-0.5">
                             <span className="font-mono text-blue-700 font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
@@ -546,8 +764,15 @@ export default function DirectoryPage() {
                           user.connected_apps.map((app) => (
                             <div
                               key={`${app.application_id}-${app.app_username}`}
+                              title={
+                                app.is_approved_exception
+                                  ? `ข้อยกเว้น: ${app.exception_type} (${app.exception_reason})`
+                                  : undefined
+                              }
                               className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center space-x-1 border ${
-                                !user.is_active_in_ad && app.is_active_in_app
+                                app.is_approved_exception
+                                  ? "bg-purple-100 text-purple-950 border-purple-300"
+                                  : !user.is_active_in_ad && app.is_active_in_app
                                   ? "bg-amber-200 text-amber-950 border-amber-400"
                                   : app.is_active_in_app
                                   ? "bg-slate-100 text-slate-800 border-slate-300"
@@ -556,10 +781,15 @@ export default function DirectoryPage() {
                             >
                               <span
                                 className={`w-1.5 h-1.5 rounded-full ${
-                                  app.is_active_in_app ? "bg-emerald-600" : "bg-rose-600"
+                                  app.is_approved_exception
+                                    ? "bg-purple-600"
+                                    : app.is_active_in_app
+                                    ? "bg-emerald-600"
+                                    : "bg-rose-600"
                                 }`}
                               ></span>
                               <span className="uppercase">{app.app_code}</span>
+                              {app.is_approved_exception && <span className="text-[9px]">🛡️</span>}
                             </div>
                           ))
                         )}
@@ -584,6 +814,36 @@ export default function DirectoryPage() {
                     {/* Actions */}
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end space-x-1.5">
+                        {/* Quick link to AD button for spoke-only or discrepancy */}
+                        {(user.is_ad_account === false || user.has_discrepancy) && (
+                          <button
+                            onClick={() => handleOpenLinkModalForUser(user)}
+                            title="ผูกบัญชีระบบลูกนี้เข้ากับตัวตนหลักใน AD (เช่น สะกดชื่อต่างกัน)"
+                            className="px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 text-xs font-bold transition-colors cursor-pointer flex items-center space-x-1"
+                          >
+                            <LinkIcon className="w-3 h-3" />
+                            <span>ผูกกับ AD</span>
+                          </button>
+                        )}
+
+                        {user.is_approved_exception ? (
+                          <button
+                            onClick={() => handleRevokeException(user)}
+                            title="ยกเลิกข้อยกเว้น"
+                            className="px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            ยกเลิกยกเว้น
+                          </button>
+                        ) : (user.is_ad_account === false || user.has_discrepancy) ? (
+                          <button
+                            onClick={() => handleOpenExceptionModalForUser(user)}
+                            title="อนุมัติเป็นข้อยกเว้น (ไม่นับเป็นบัญชีผี)"
+                            className="px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            อนุมัติยกเว้น
+                          </button>
+                        ) : null}
+
                         {(!user.is_active_in_ad || user.connected_apps.some((a) => !a.is_active_in_app)) && (
                           <button
                             onClick={() => handleOpenActivateModal(user)}
@@ -714,6 +974,61 @@ export default function DirectoryPage() {
               </button>
             </div>
 
+            {/* Reconciliation / Exception Banner */}
+            {(selectedUser.is_ad_account === false || selectedUser.has_discrepancy || selectedUser.is_approved_exception) && (
+              <div
+                className={`p-3.5 rounded-lg border-2 text-xs space-y-2.5 ${
+                  selectedUser.is_approved_exception
+                    ? "bg-purple-50 border-purple-300 text-purple-950"
+                    : "bg-amber-50 border-amber-400 text-amber-950"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 font-black">
+                    <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      {selectedUser.is_approved_exception
+                        ? `ได้รับการอนุมัติข้อยกเว้น (${selectedUser.exception_type})`
+                        : "ตรวจพบบัญชีที่ไม่ตรงกับ AD (Spoke Account Discrepancy)"}
+                    </span>
+                  </div>
+                  {selectedUser.is_approved_exception && (
+                    <button
+                      onClick={() => handleRevokeException(selectedUser)}
+                      className="text-[11px] text-rose-700 hover:text-rose-900 font-bold underline cursor-pointer"
+                    >
+                      ยกเลิกข้อยกเว้น
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] leading-relaxed text-slate-700">
+                  {selectedUser.is_approved_exception
+                    ? `เหตุผล: ${selectedUser.exception_reason || "ไม่ได้ระบุ"} (อนุมัติโดย: ${selectedUser.exception_approved_by || "Admin"})`
+                    : "บัญชีนี้สร้างขึ้นจากระบบลูก (Spoke) หรือชื่อ Username สะกดไม่ตรงกับ Active Directory ทำให้ระบบตรวจเป็นบัญชีผี คุณสามารถผูกเข้ากับตัวตนหลักใน AD หรือบันทึกยอมรับเป็นข้อยกเว้นได้"}
+                </p>
+
+                {!selectedUser.is_approved_exception && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      onClick={() => handleOpenLinkModalForUser(selectedUser)}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-xs cursor-pointer shadow-xs"
+                    >
+                      <LinkIcon className="w-3.5 h-3.5" />
+                      <span>ผูกบัญชีเข้ากับตัวตนใน AD</span>
+                    </button>
+                    <button
+                      onClick={() => handleOpenExceptionModalForUser(selectedUser)}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border-2 border-amber-400 hover:bg-amber-100 text-amber-900 rounded font-bold text-xs cursor-pointer shadow-xs"
+                    >
+                      <Shield className="w-3.5 h-3.5 text-amber-700" />
+                      <span>ยอมรับเป็นข้อยกเว้น (Accept Exception)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Central-IAM Power User / Administrator Assignment */}
             <div className="p-4 rounded-lg bg-blue-50/80 border-2 border-blue-300 text-xs space-y-2.5">
               <div className="flex items-center justify-between">
@@ -805,36 +1120,92 @@ export default function DirectoryPage() {
                   selectedUser.connected_apps.map((app) => (
                     <div
                       key={`${app.application_id}-${app.app_username}`}
-                      className="p-3 rounded-lg bg-slate-50 border-2 border-slate-200 flex items-center justify-between"
+                      className={`p-3 rounded-lg border-2 ${
+                        app.is_approved_exception
+                          ? "bg-purple-50/60 border-purple-200"
+                          : "bg-slate-50 border-slate-200"
+                      } space-y-2`}
                     >
-                      <div className="flex items-center space-x-2.5">
-                        <div
-                          className={`w-2.5 h-2.5 rounded-full ${
-                            app.is_active_in_app ? "bg-emerald-600" : "bg-rose-600"
-                          }`}
-                        ></div>
-                        <div>
-                          <div className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                            <span>{app.app_name}</span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-blue-100 text-blue-800 border border-blue-200 font-bold">
-                              {app.connector_type}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2.5">
+                          <div
+                            className={`w-2.5 h-2.5 rounded-full ${
+                              app.is_active_in_app ? "bg-emerald-600" : "bg-rose-600"
+                            }`}
+                          ></div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                              <span>{app.app_name}</span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-blue-100 text-blue-800 border border-blue-200 font-bold">
+                                {app.connector_type}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-600 font-medium">
+                              Username ในระบบ:{" "}
+                              <strong className="font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-300">
+                                {app.app_username}
+                              </strong>
+                              {app.app_username.toLowerCase() !== selectedUser.username.toLowerCase() && (
+                                <span className="ml-1 text-[10px] text-amber-800 bg-amber-100 px-1 rounded border border-amber-300 font-bold">
+                                  ต่างจาก AD ({selectedUser.username})
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-600 font-medium mt-0.5">
+                              บทบาท: <strong className="text-slate-800">{app.app_group_name || "Standard User"}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-bold ${
+                              app.is_active_in_app
+                                ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                                : "bg-rose-100 text-rose-900 border border-rose-300"
+                            }`}
+                          >
+                            {app.is_active_in_app ? "เปิดใช้งาน" : "ถูกระงับ"}
+                          </span>
+
+                          {app.is_approved_exception && (
+                            <span className="text-[10px] bg-purple-100 text-purple-900 border border-purple-300 font-bold px-1.5 py-0.5 rounded">
+                              🛡️ ข้อยกเว้น ({app.exception_type})
                             </span>
-                          </div>
-                          <div className="text-[11px] text-slate-600 font-medium">
-                            บทบาท: <strong className="text-slate-800">{app.app_group_name || "Standard User"}</strong>
-                          </div>
+                          )}
                         </div>
                       </div>
 
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-bold ${
-                          app.is_active_in_app
-                            ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                            : "bg-rose-100 text-rose-900 border border-rose-300"
-                        }`}
-                      >
-                        {app.is_active_in_app ? "เปิดใช้งาน" : "ถูกระงับ"}
-                      </span>
+                      {/* App Action Buttons */}
+                      <div className="pt-2 border-t border-slate-200/80 flex items-center justify-end space-x-2">
+                        {app.mapping_id && (
+                          <>
+                            <button
+                              onClick={() => handleOpenLinkModalForAccount(app, selectedUser)}
+                              className="px-2.5 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 text-[11px] font-bold transition-colors cursor-pointer flex items-center space-x-1"
+                            >
+                              <LinkIcon className="w-3 h-3" />
+                              <span>ย้าย/ผูกกับ AD</span>
+                            </button>
+
+                            {app.is_approved_exception ? (
+                              <button
+                                onClick={() => handleRevokeException(selectedUser, app.mapping_id)}
+                                className="px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 text-[11px] font-bold transition-colors cursor-pointer"
+                              >
+                                ยกเลิกยกเว้น
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleOpenExceptionModalForAccount(app, selectedUser)}
+                                className="px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-bold transition-colors cursor-pointer"
+                              >
+                                อนุมัติข้อยกเว้น
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))
                 )}
@@ -1213,6 +1584,282 @@ export default function DirectoryPage() {
                   </button>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Identity Link Modal */}
+      {isLinkModalOpen && linkTargetAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white max-w-lg w-full p-6 space-y-4 rounded-lg border-2 border-slate-300 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between border-b-2 border-slate-200 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-10 h-10 rounded-lg bg-indigo-100 border border-indigo-300 flex items-center justify-center text-indigo-700 font-bold">
+                  <LinkIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">ผูกบัญชีเข้ากับตัวตนหลักใน AD</h3>
+                  <p className="text-xs text-slate-600 font-medium">
+                    แก้ปัญหาชื่อสะกดไม่ตรงกัน (เช่น Nattcha.S vs Natcha.S) หรือรวมบัญชีระบบลูก
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsLinkModalOpen(false)}
+                className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {linkSuccessMsg ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-md bg-emerald-50 border-2 border-emerald-300 text-emerald-950 text-xs space-y-1">
+                  <div className="font-bold flex items-center space-x-1.5 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>ผูกบัญชีเรียบร้อยแล้ว</span>
+                  </div>
+                  <p className="font-medium text-slate-700">{linkSuccessMsg}</p>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    onClick={() => setIsLinkModalOpen(false)}
+                    className="px-5 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm cursor-pointer"
+                  >
+                    เสร็จสิ้น
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleLinkSubmit} className="space-y-4">
+                {linkError && (
+                  <div className="p-3 rounded-md bg-rose-50 border-2 border-rose-400 text-rose-900 text-xs font-bold">
+                    {linkError}
+                  </div>
+                )}
+
+                {/* Source Account Info */}
+                <div className="p-3 bg-slate-50 border-2 border-slate-300 rounded-md text-xs space-y-1">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase block">บัญชีระบบลูกที่ต้องการผูก:</span>
+                  <div className="font-bold text-slate-900 flex items-center space-x-2">
+                    <span className="bg-slate-200 px-2 py-0.5 rounded text-slate-800">{linkTargetAccount.app_name}</span>
+                    <span className="font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                      {linkTargetAccount.app_username}
+                    </span>
+                    <span className="text-slate-500">({linkTargetAccount.current_identity_name})</span>
+                  </div>
+                </div>
+
+                {/* Target AD Identity Selection */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-700">
+                    เลือกตัวตนหลักใน Active Directory ที่ต้องการผูกเข้า *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="พิมพ์ค้นหาชื่อ หรือ Username ใน AD เช่น Natcha..."
+                    value={linkSearchAd}
+                    onChange={(e) => setLinkSearchAd(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:border-indigo-600"
+                  />
+
+                  <div className="max-h-48 overflow-y-auto border-2 border-slate-300 rounded-md divide-y divide-slate-200 bg-white">
+                    {adCandidates.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-slate-500">ไม่พบตัวตนใน AD ที่ตรงกับคำค้นหา</div>
+                    ) : (
+                      adCandidates.map((cand) => (
+                        <div
+                          key={cand.id}
+                          onClick={() => setLinkTargetIdentityId(cand.id)}
+                          className={`p-2.5 flex items-center justify-between cursor-pointer transition-colors text-xs ${
+                            linkTargetIdentityId === cand.id
+                              ? "bg-indigo-50 border-l-4 border-l-indigo-600 font-bold"
+                              : "hover:bg-slate-50"
+                          }`}
+                        >
+                          <div>
+                            <div className="text-slate-900 font-bold">{cand.full_name}</div>
+                            <div className="text-[11px] text-slate-600 flex items-center space-x-2">
+                              <span className="font-mono text-indigo-700">{cand.username}</span>
+                              <span>•</span>
+                              <span>{cand.department || "ทั่วไป"}</span>
+                            </div>
+                          </div>
+                          {linkTargetIdentityId === cand.id && (
+                            <span className="bg-indigo-600 text-white p-1 rounded-full">
+                              <Check className="w-3 h-3" />
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Reason */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    เหตุผลในการผูกบัญชี (Audit Justification) *
+                  </label>
+                  <textarea
+                    rows={2}
+                    required
+                    value={linkReason}
+                    onChange={(e) => setLinkReason(e.target.value)}
+                    placeholder="เช่น สะกดชื่อต่างกันใน SAP B1 (Nattcha.S) ตรงกับ AD (Natcha.S)"
+                    className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-medium focus:outline-none focus:border-indigo-600"
+                  />
+                </div>
+
+                <div className="pt-2 border-t-2 border-slate-200 flex items-center justify-end space-x-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsLinkModalOpen(false)}
+                    className="px-4 py-2 rounded-md bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold cursor-pointer"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={linkLoading || !linkTargetIdentityId}
+                    className="flex items-center space-x-1.5 px-5 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm disabled:opacity-50 cursor-pointer"
+                  >
+                    {linkLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>กำลังดำเนินการ...</span>
+                      </>
+                    ) : (
+                      <>
+                        <LinkIcon className="w-4 h-4" />
+                        <span>ยืนยันการผูกบัญชี</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Exception Modal */}
+      {isExceptionModalOpen && exceptionTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white max-w-md w-full p-6 space-y-4 rounded-lg border-2 border-slate-300 shadow-2xl relative">
+            <div className="flex items-start justify-between border-b-2 border-slate-200 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-10 h-10 rounded-lg bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 font-bold">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">อนุมัติข้อยกเว้นบัญชี (Exception Approval)</h3>
+                  <p className="text-xs text-slate-600 font-medium">
+                    ยอมรับการคงอยู่ของบัญชี พร้อมระบุเหตุผลเพื่อไม่ให้นับเป็นบัญชีผี
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsExceptionModalOpen(false)}
+                className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {exceptionSuccessMsg ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-md bg-emerald-50 border-2 border-emerald-300 text-emerald-950 text-xs space-y-1">
+                  <div className="font-bold flex items-center space-x-1.5 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>บันทึกข้อยกเว้นเรียบร้อยแล้ว</span>
+                  </div>
+                  <p className="font-medium text-slate-700">{exceptionSuccessMsg}</p>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    onClick={() => setIsExceptionModalOpen(false)}
+                    className="px-5 py-2 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm cursor-pointer"
+                  >
+                    เสร็จสิ้น
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleExceptionSubmit} className="space-y-4">
+                {exceptionError && (
+                  <div className="p-3 rounded-md bg-rose-50 border-2 border-rose-400 text-rose-900 text-xs font-bold">
+                    {exceptionError}
+                  </div>
+                )}
+
+                <div className="p-3 bg-slate-50 border-2 border-slate-300 rounded-md text-xs space-y-1">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase block">บัญชีที่ต้องการอนุมัติ:</span>
+                  <div className="font-bold text-slate-900">{exceptionTarget.name}</div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    ประเภทข้อยกเว้น (Exception Type) *
+                  </label>
+                  <select
+                    value={exceptionType}
+                    onChange={(e) => setExceptionType(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-bold focus:outline-none focus:border-amber-600"
+                  >
+                    <option value="NAME_MISMATCH">🔤 NAME_MISMATCH - ชื่อสะกดต่างกันในระบบเดิม (เช่น Nattcha.S vs Natcha.S)</option>
+                    <option value="SERVICE_ACCOUNT">⚙️ SERVICE_ACCOUNT - บัญชีระบบ หรือ งานประมวลผลอัตโนมัติ (Batch / RPA)</option>
+                    <option value="EXTERNAL_VENDOR">🏢 EXTERNAL_VENDOR - ที่ปรึกษา หรือ บัญชีคู่ค้าภายนอก</option>
+                    <option value="LEGACY_EXCEPTION">📁 LEGACY_EXCEPTION - บัญชีเฉพาะระบบเก่าที่ยกเว้นการมีตัวตนใน AD</option>
+                    <option value="OTHER">📝 OTHER - อื่นๆ (ตามเหตุผลแนบ)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    เหตุผลความจำเป็นทางธุรกิจ (Business Justification) *
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={exceptionReason}
+                    onChange={(e) => setExceptionReason(e.target.value)}
+                    placeholder="ระบุเหตุผล เช่น สะกดชื่อเพิ่ม 't' ใน SAP B1 เพื่อใช้งานต่อเนื่อง ได้รับการตรวจสอบและรับรองแล้ว"
+                    className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-medium focus:outline-none focus:border-amber-600"
+                  />
+                </div>
+
+                <div className="pt-2 border-t-2 border-slate-200 flex items-center justify-end space-x-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsExceptionModalOpen(false)}
+                    className="px-4 py-2 rounded-md bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold cursor-pointer"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={exceptionLoading}
+                    className="flex items-center space-x-1.5 px-5 py-2 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm disabled:opacity-50 cursor-pointer"
+                  >
+                    {exceptionLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>กำลังดำเนินการ...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="w-4 h-4" />
+                        <span>อนุมัติข้อยกเว้น</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         </div>

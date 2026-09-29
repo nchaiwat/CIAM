@@ -23,6 +23,10 @@ def find_account_discrepancies(db: Session) -> List[DiscrepancyItem]:
     )
 
     for mapping, identity, app in active_app_accounts:
+        # Exception Rule: Accounts approved as exceptions by Admin are legitimately allowed
+        if getattr(mapping, "is_approved_exception", False) or getattr(identity, "is_approved_exception", False):
+            continue
+
         # Ghost Account Rule: Employee is inactive/disabled in Active Directory
         if not identity.is_active_in_ad:
             results.append(

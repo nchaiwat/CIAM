@@ -34,6 +34,31 @@ def init_db():
             identity_columns = [c["name"] for c in inspector.get_columns("master_identities")]
             if "telegram_id" not in identity_columns:
                 conn.execute(text("ALTER TABLE master_identities ADD COLUMN telegram_id VARCHAR(100);"))
+            if "is_approved_exception" not in identity_columns:
+                conn.execute(text("ALTER TABLE master_identities ADD COLUMN is_approved_exception BOOLEAN DEFAULT FALSE;"))
+            if "exception_type" not in identity_columns:
+                conn.execute(text("ALTER TABLE master_identities ADD COLUMN exception_type VARCHAR(50);"))
+            if "exception_reason" not in identity_columns:
+                conn.execute(text("ALTER TABLE master_identities ADD COLUMN exception_reason VARCHAR(255);"))
+            if "exception_approved_by" not in identity_columns:
+                conn.execute(text("ALTER TABLE master_identities ADD COLUMN exception_approved_by VARCHAR(100);"))
+            if "exception_approved_at" not in identity_columns:
+                conn.execute(text("ALTER TABLE master_identities ADD COLUMN exception_approved_at TIMESTAMP;"))
+
+            # Safe auto-migration for app_account_mappings
+            mapping_columns = [c["name"] for c in inspector.get_columns("app_account_mappings")]
+            if "is_approved_exception" not in mapping_columns:
+                conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN is_approved_exception BOOLEAN DEFAULT FALSE;"))
+            if "exception_type" not in mapping_columns:
+                conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN exception_type VARCHAR(50);"))
+            if "exception_reason" not in mapping_columns:
+                conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN exception_reason VARCHAR(255);"))
+            if "exception_approved_by" not in mapping_columns:
+                conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN exception_approved_by VARCHAR(100);"))
+            if "exception_approved_at" not in mapping_columns:
+                conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN exception_approved_at TIMESTAMP;"))
+            if "exception_expires_at" not in mapping_columns:
+                conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN exception_expires_at TIMESTAMP;"))
 
             conn.commit()
     except Exception as e:

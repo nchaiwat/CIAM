@@ -39,6 +39,7 @@ export interface DashboardSummary {
 }
 
 export interface AppAccountSummary {
+  mapping_id?: number;
   application_id: number;
   app_code: string;
   app_name: string;
@@ -50,6 +51,11 @@ export interface AppAccountSummary {
   last_app_login_at: string | null;
   created_at?: string | null;
   days_since_last_login?: number | null;
+  is_approved_exception?: boolean;
+  exception_type?: string | null;
+  exception_reason?: string | null;
+  exception_approved_by?: string | null;
+  exception_approved_at?: string | null;
 }
 
 export interface SpokeProvisionTarget {
@@ -130,6 +136,27 @@ export interface UserListItem {
   connected_apps: AppAccountSummary[];
   has_discrepancy: boolean;
   is_ad_account?: boolean;
+  is_approved_exception?: boolean;
+  exception_type?: string | null;
+  exception_reason?: string | null;
+  exception_approved_by?: string | null;
+}
+
+export interface AccountLinkPayload {
+  target_identity_id: number;
+  reason: string;
+}
+
+export interface AccountExceptionPayload {
+  exception_type: "NAME_MISMATCH" | "SERVICE_ACCOUNT" | "EXTERNAL_VENDOR" | "LEGACY_EXCEPTION" | "OTHER" | string;
+  reason: string;
+  expires_at?: string | null;
+}
+
+export interface AccountActionResponse {
+  status: string;
+  message: string;
+  details?: Record<string, any>;
 }
 
 
@@ -331,6 +358,41 @@ export const ciamApi = {
     fetchApi<UserActivateResponse>(`/directory/users/${userId}/activate`, {
       method: "POST",
       body: JSON.stringify({ reason }),
+    }),
+
+  // Account Linking & Approved Exceptions
+  linkAccountToIdentity: (mappingId: number, payload: AccountLinkPayload) =>
+    fetchApi<AccountActionResponse>(`/directory/accounts/${mappingId}/link-identity`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  mergeIdentityToTarget: (sourceIdentityId: number, targetIdentityId: number, payload: AccountLinkPayload) =>
+    fetchApi<AccountActionResponse>(`/directory/users/${sourceIdentityId}/link-to/${targetIdentityId}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  approveAccountException: (mappingId: number, payload: AccountExceptionPayload) =>
+    fetchApi<AccountActionResponse>(`/directory/accounts/${mappingId}/exception`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  revokeAccountException: (mappingId: number) =>
+    fetchApi<AccountActionResponse>(`/directory/accounts/${mappingId}/exception`, {
+      method: "DELETE",
+    }),
+
+  approveUserException: (identityId: number, payload: AccountExceptionPayload) =>
+    fetchApi<AccountActionResponse>(`/directory/users/${identityId}/exception`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  revokeUserException: (identityId: number) =>
+    fetchApi<AccountActionResponse>(`/directory/users/${identityId}/exception`, {
+      method: "DELETE",
     }),
 
 

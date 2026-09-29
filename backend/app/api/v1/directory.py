@@ -9,6 +9,7 @@ from app.models.user import AdminUser
 from app.models.identity import MasterIdentity
 from app.models.mapping import AppAccountMapping
 from app.models.application import ConnectedApplication
+from app.models.audit import IamAuditLog
 from app.schemas.directory import (
     UserListItem,
     AppAccountSummary,
@@ -16,7 +17,10 @@ from app.schemas.directory import (
     UserCreateRequest,
     UserCreateResponse,
     UserActivateRequest,
-    UserActivateResponse
+    UserActivateResponse,
+    AccountLinkRequest,
+    AccountExceptionRequest,
+    AccountActionResponse
 )
 from app.services.provisioning import execute_user_creation
 from app.services.deprovisioning import execute_user_activation
@@ -57,6 +61,7 @@ def _build_app_summaries(mappings: list, now=None):
         m_created = getattr(m, "created_at", None) or getattr(m, "updated_at", None)
         summaries.append(
             AppAccountSummary(
+                mapping_id=m.id,
                 application_id=app.id,
                 app_code=app.app_code,
                 app_name=app.app_name,
@@ -67,7 +72,12 @@ def _build_app_summaries(mappings: list, now=None):
                 last_sync_status=m.last_sync_status,
                 last_app_login_at=m.last_app_login_at,
                 created_at=m_created,
-                days_since_last_login=days_login
+                days_since_last_login=days_login,
+                is_approved_exception=bool(getattr(m, "is_approved_exception", False)),
+                exception_type=getattr(m, "exception_type", None),
+                exception_reason=getattr(m, "exception_reason", None),
+                exception_approved_by=getattr(m, "exception_approved_by", None),
+                exception_approved_at=getattr(m, "exception_approved_at", None),
             )
         )
     return summaries
@@ -144,8 +154,13 @@ def list_users(
             elif stat in ("terminated", "all_inactive") and is_overall_active:
                 continue
 
-        # Check discrepancy (Inactive in AD but active in child app)
-        has_disc = (not identity.is_active_in_ad) and has_active_spoke
+        # Check approved exception
+        is_identity_exception = bool(getattr(identity, "is_approved_exception", False))
+        has_approved_mapping_exception = any(getattr(m, "is_approved_exception", False) for m, _ in mappings)
+        is_exception = is_identity_exception or has_approved_mapping_exception
+
+        # Check discrepancy (Inactive in AD but active in child app, unless approved as exception)
+        has_disc = (not identity.is_active_in_ad) and has_active_spoke and not is_exception
 
         # Apply app_code filter if requested
         if app_code:
@@ -165,6 +180,10 @@ def list_users(
             or (identity.department and identity.department in corporate_depts)
         )
 
+        exc_type = getattr(identity, "exception_type", None) or next((getattr(m, "exception_type", None) for m, _ in mappings if getattr(m, "is_approved_exception", False)), None)
+        exc_reason = getattr(identity, "exception_reason", None) or next((getattr(m, "exception_reason", None) for m, _ in mappings if getattr(m, "is_approved_exception", False)), None)
+        exc_approved_by = getattr(identity, "exception_approved_by", None) or next((getattr(m, "exception_approved_by", None) for m, _ in mappings if getattr(m, "is_approved_exception", False)), None)
+
         results.append(UserListItem(
             id=identity.id,
             employee_id=identity.employee_id,
@@ -181,7 +200,11 @@ def list_users(
             days_since_last_access=days_since_access,
             connected_apps=app_summaries,
             has_discrepancy=has_disc,
-            is_ad_account=is_ad
+            is_ad_account=is_ad,
+            is_approved_exception=is_exception,
+            exception_type=exc_type,
+            exception_reason=exc_reason,
+            exception_approved_by=exc_approved_by
         ))
 
     return results
@@ -280,4 +303,357 @@ async def activate_user(
         raise HTTPException(status_code=404, detail=str(ve))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Activation error: {str(exc)}")
+
+
+# -------------------------------------------------------------
+# Enterprise Identity Linking & Approved Exception Endpoints
+# -------------------------------------------------------------
+
+@router.post("/accounts/{mapping_id}/link-identity", response_model=AccountActionResponse)
+def link_account_to_identity(
+    mapping_id: int,
+    payload: AccountLinkRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """
+    Link a spoke application account (e.g. Nattcha.S in SAP B1) to a master Active Directory identity (Natcha.S).
+    Resolves ghost accounts caused by spelling discrepancies in legacy child applications.
+    """
+    mapping = db.query(AppAccountMapping).filter_by(id=mapping_id).first()
+    if not mapping:
+        raise HTTPException(status_code=404, detail="ไม่พบบัญชีระบบลูกที่ระบุ (AppAccountMapping not found)")
+
+    target_identity = db.query(MasterIdentity).filter_by(id=payload.target_identity_id).first()
+    if not target_identity:
+        raise HTTPException(status_code=404, detail="ไม่พบตัวตนหลักปลายทาง (Target MasterIdentity not found)")
+
+    old_identity = db.query(MasterIdentity).filter_by(id=mapping.identity_id).first()
+    old_identity_id = mapping.identity_id
+    old_username = old_identity.username if old_identity else "Unknown"
+
+    # Check if target already has an account mapping for this application
+    existing_target_mapping = (
+        db.query(AppAccountMapping)
+        .filter(
+            AppAccountMapping.identity_id == target_identity.id,
+            AppAccountMapping.application_id == mapping.application_id,
+            AppAccountMapping.id != mapping.id
+        )
+        .first()
+    )
+    if existing_target_mapping:
+        # Merge or replace existing target mapping
+        db.delete(existing_target_mapping)
+        db.flush()
+
+    # Re-link mapping to target identity
+    mapping.identity_id = target_identity.id
+    mapping.last_sync_status = "IN_SYNC" if target_identity.is_active_in_ad else "DISCREPANCY"
+    db.flush()
+
+    # If the previous identity was an orphaned spoke placeholder with no AD presence and no other accounts, remove it
+    orphaned_cleaned = False
+    if old_identity and old_identity.id != target_identity.id:
+        remaining_mappings_count = db.query(AppAccountMapping).filter_by(identity_id=old_identity_id).count()
+        if remaining_mappings_count == 0 and not old_identity.is_active_in_ad and not old_identity.ad_guid:
+            db.delete(old_identity)
+            orphaned_cleaned = True
+
+    # Audit log
+    audit_reason = f"ผูกบัญชี '{mapping.app_username}' ({mapping.application.app_name if mapping.application else 'App'}) เข้ากับตัวตน '{target_identity.username}' ({target_identity.full_name}): {payload.reason}"
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="LINK_APP_ACCOUNT",
+        target_username=target_identity.username,
+        affected_app_code=mapping.application.app_code if mapping.application else "SPOKE",
+        execution_mode="PORTAL_ADMIN",
+        reason=audit_reason,
+        status="SUCCESS"
+    ))
+
+    db.commit()
+
+    return AccountActionResponse(
+        status="SUCCESS",
+        message=f"ผูกบัญชี {mapping.app_username} เข้ากับตัวตน {target_identity.full_name} ({target_identity.username}) สำเร็จเรียบร้อย",
+        details={
+            "app_username": mapping.app_username,
+            "target_username": target_identity.username,
+            "target_identity_id": target_identity.id,
+            "cleaned_orphaned_identity": orphaned_cleaned
+        }
+    )
+
+
+@router.post("/users/{source_identity_id}/link-to/{target_identity_id}", response_model=AccountActionResponse)
+def merge_and_link_identity(
+    source_identity_id: int,
+    target_identity_id: int,
+    payload: AccountLinkRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """
+    Merge an entire spoke-only placeholder identity into an existing Active Directory MasterIdentity.
+    """
+    source_identity = db.query(MasterIdentity).filter_by(id=source_identity_id).first()
+    if not source_identity:
+        raise HTTPException(status_code=404, detail="ไม่พบตัวตนต้นทาง (Source Identity not found)")
+
+    target_identity = db.query(MasterIdentity).filter_by(id=target_identity_id).first()
+    if not target_identity:
+        raise HTTPException(status_code=404, detail="ไม่พบตัวตนปลายทาง (Target Identity not found)")
+
+    if source_identity.id == target_identity.id:
+        raise HTTPException(status_code=400, detail="ไม่สามารถรวมตัวตนเข้ากับตัวเองได้")
+
+    source_mappings = db.query(AppAccountMapping).filter_by(identity_id=source_identity.id).all()
+    reassigned_count = 0
+
+    for m in source_mappings:
+        # Check if target already has an account mapping for this application
+        existing_target_mapping = (
+            db.query(AppAccountMapping)
+            .filter(
+                AppAccountMapping.identity_id == target_identity.id,
+                AppAccountMapping.application_id == m.application_id,
+                AppAccountMapping.id != m.id
+            )
+            .first()
+        )
+        if existing_target_mapping:
+            db.delete(existing_target_mapping)
+            db.flush()
+
+        m.identity_id = target_identity.id
+        m.last_sync_status = "IN_SYNC" if target_identity.is_active_in_ad else "DISCREPANCY"
+        reassigned_count += 1
+
+    db.flush()
+
+    # Delete source identity if it is not in AD
+    cleaned = False
+    if not source_identity.is_active_in_ad and not source_identity.ad_guid:
+        db.delete(source_identity)
+        cleaned = True
+
+    # Audit log
+    audit_reason = f"รวมตัวตน '{source_identity.username}' ({reassigned_count} บัญชี) เข้ากับตัวตนหลัก '{target_identity.username}': {payload.reason}"
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="MERGE_IDENTITY",
+        target_username=target_identity.username,
+        affected_app_code="ALL_SPOKES",
+        execution_mode="PORTAL_ADMIN",
+        reason=audit_reason,
+        status="SUCCESS"
+    ))
+
+    db.commit()
+
+    return AccountActionResponse(
+        status="SUCCESS",
+        message=f"รวมบัญชี {reassigned_count} รายการ เข้ากับตัวตน {target_identity.full_name} ({target_identity.username}) สำเร็จ",
+        details={
+            "reassigned_accounts_count": reassigned_count,
+            "target_username": target_identity.username,
+            "cleaned_source_identity": cleaned
+        }
+    )
+
+
+@router.post("/accounts/{mapping_id}/exception", response_model=AccountActionResponse)
+def approve_account_exception(
+    mapping_id: int,
+    payload: AccountExceptionRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """
+    Approve an exception for a spoke account (e.g. Service Account, Known Name Mismatch, Outsource).
+    Suppresses Ghost Account warnings for ISO 27001 audit compliance.
+    """
+    mapping = db.query(AppAccountMapping).filter_by(id=mapping_id).first()
+    if not mapping:
+        raise HTTPException(status_code=404, detail="ไม่พบบัญชีที่ระบุ")
+
+    now = datetime.now(timezone.utc)
+    mapping.is_approved_exception = True
+    mapping.exception_type = payload.exception_type.upper().strip()
+    mapping.exception_reason = payload.reason.strip()
+    mapping.exception_approved_by = current_admin.username
+    mapping.exception_approved_at = now
+    mapping.exception_expires_at = payload.expires_at
+    mapping.last_sync_status = "APPROVED_EXCEPTION"
+
+    # Also set on parent identity if standalone
+    if mapping.identity:
+        mapping.identity.is_approved_exception = True
+        mapping.identity.exception_type = payload.exception_type.upper().strip()
+        mapping.identity.exception_reason = payload.reason.strip()
+        mapping.identity.exception_approved_by = current_admin.username
+        mapping.identity.exception_approved_at = now
+
+    audit_msg = f"อนุมัติข้อยกเว้นบัญชี '{mapping.app_username}' ({payload.exception_type}): {payload.reason}"
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="APPROVE_EXCEPTION",
+        target_username=mapping.app_username,
+        affected_app_code=mapping.application.app_code if mapping.application else "SPOKE",
+        execution_mode="PORTAL_ADMIN",
+        reason=audit_msg,
+        status="SUCCESS"
+    ))
+
+    db.commit()
+
+    return AccountActionResponse(
+        status="SUCCESS",
+        message=f"อนุมัติข้อยกเว้นสำหรับบัญชี {mapping.app_username} เรียบร้อยแล้ว (ไม่นับเป็นบัญชีผี)",
+        details={
+            "app_username": mapping.app_username,
+            "exception_type": mapping.exception_type,
+            "exception_reason": mapping.exception_reason
+        }
+    )
+
+
+@router.delete("/accounts/{mapping_id}/exception", response_model=AccountActionResponse)
+def revoke_account_exception(
+    mapping_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """
+    Revoke an approved exception for an account mapping.
+    """
+    mapping = db.query(AppAccountMapping).filter_by(id=mapping_id).first()
+    if not mapping:
+        raise HTTPException(status_code=404, detail="ไม่พบบัญชีที่ระบุ")
+
+    mapping.is_approved_exception = False
+    mapping.exception_type = None
+    mapping.exception_reason = None
+    mapping.exception_approved_by = None
+    mapping.exception_approved_at = None
+    mapping.exception_expires_at = None
+    mapping.last_sync_status = "DISCREPANCY" if not (mapping.identity and mapping.identity.is_active_in_ad) else "IN_SYNC"
+
+    if mapping.identity:
+        mapping.identity.is_approved_exception = False
+        mapping.identity.exception_type = None
+        mapping.identity.exception_reason = None
+        mapping.identity.exception_approved_by = None
+        mapping.identity.exception_approved_at = None
+
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="REVOKE_EXCEPTION",
+        target_username=mapping.app_username,
+        affected_app_code=mapping.application.app_code if mapping.application else "SPOKE",
+        execution_mode="PORTAL_ADMIN",
+        reason=f"ยกเลิกข้อยกเว้นสำหรับบัญชี '{mapping.app_username}'",
+        status="SUCCESS"
+    ))
+
+    db.commit()
+
+    return AccountActionResponse(
+        status="SUCCESS",
+        message=f"ยกเลิกข้อยกเว้นสำหรับบัญชี {mapping.app_username} เรียบร้อยแล้ว"
+    )
+
+
+@router.post("/users/{identity_id}/exception", response_model=AccountActionResponse)
+def approve_user_exception(
+    identity_id: int,
+    payload: AccountExceptionRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """
+    Approve an exception for an entire identity and all its connected child accounts.
+    """
+    identity = db.query(MasterIdentity).filter_by(id=identity_id).first()
+    if not identity:
+        raise HTTPException(status_code=404, detail="ไม่พบตัวตนที่ระบุ")
+
+    now = datetime.now(timezone.utc)
+    identity.is_approved_exception = True
+    identity.exception_type = payload.exception_type.upper().strip()
+    identity.exception_reason = payload.reason.strip()
+    identity.exception_approved_by = current_admin.username
+    identity.exception_approved_at = now
+
+    for m in identity.accounts:
+        m.is_approved_exception = True
+        m.exception_type = payload.exception_type.upper().strip()
+        m.exception_reason = payload.reason.strip()
+        m.exception_approved_by = current_admin.username
+        m.exception_approved_at = now
+        m.last_sync_status = "APPROVED_EXCEPTION"
+
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="APPROVE_EXCEPTION",
+        target_username=identity.username,
+        affected_app_code="ALL_SPOKES",
+        execution_mode="PORTAL_ADMIN",
+        reason=f"อนุมัติข้อยกเว้นตัวตน '{identity.username}' ({payload.exception_type}): {payload.reason}",
+        status="SUCCESS"
+    ))
+
+    db.commit()
+
+    return AccountActionResponse(
+        status="SUCCESS",
+        message=f"อนุมัติข้อยกเว้นสำหรับ {identity.full_name} ({identity.username}) เรียบร้อยแล้ว"
+    )
+
+
+@router.delete("/users/{identity_id}/exception", response_model=AccountActionResponse)
+def revoke_user_exception(
+    identity_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """
+    Revoke approved exception for an identity and all its accounts.
+    """
+    identity = db.query(MasterIdentity).filter_by(id=identity_id).first()
+    if not identity:
+        raise HTTPException(status_code=404, detail="ไม่พบตัวตนที่ระบุ")
+
+    identity.is_approved_exception = False
+    identity.exception_type = None
+    identity.exception_reason = None
+    identity.exception_approved_by = None
+    identity.exception_approved_at = None
+
+    for m in identity.accounts:
+        m.is_approved_exception = False
+        m.exception_type = None
+        m.exception_reason = None
+        m.exception_approved_by = None
+        m.exception_approved_at = None
+        m.last_sync_status = "DISCREPANCY" if not identity.is_active_in_ad else "IN_SYNC"
+
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="REVOKE_EXCEPTION",
+        target_username=identity.username,
+        affected_app_code="ALL_SPOKES",
+        execution_mode="PORTAL_ADMIN",
+        reason=f"ยกเลิกข้อยกเว้นสำหรับตัวตน '{identity.username}'",
+        status="SUCCESS"
+    ))
+
+    db.commit()
+
+    return AccountActionResponse(
+        status="SUCCESS",
+        message=f"ยกเลิกข้อยกเว้นสำหรับ {identity.username} เรียบร้อยแล้ว"
+    )
+
 

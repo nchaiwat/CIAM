@@ -15,6 +15,12 @@ class AppAccountMapping(Base):
     is_active_in_app = Column(Boolean, default=True, nullable=False)
     last_sync_status = Column(String(50), default="IN_SYNC", nullable=False) # 'IN_SYNC', 'DISCREPANCY'
     last_app_login_at = Column(DateTime(timezone=True), nullable=True)
+    is_approved_exception = Column(Boolean, default=False, nullable=False)
+    exception_type = Column(String(50), nullable=True) # 'NAME_MISMATCH', 'SERVICE_ACCOUNT', 'EXTERNAL_VENDOR', 'LEGACY_EXCEPTION', 'OTHER'
+    exception_reason = Column(String(255), nullable=True)
+    exception_approved_by = Column(String(100), nullable=True)
+    exception_approved_at = Column(DateTime(timezone=True), nullable=True)
+    exception_expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
