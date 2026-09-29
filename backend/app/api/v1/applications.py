@@ -569,16 +569,21 @@ def delete_application(
 
 
 @router.get("/spec/download")
+@router.get("/api/v1/applications/spec/download")
 def download_spoke_spec():
     """Download Spoke Enterprise Integration Specification markdown document for developers."""
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    app_dir = os.path.dirname(os.path.abspath(__file__))
     possible_paths = [
-        os.path.join(base_dir, "SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md"),
         "/app/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md",
-        os.path.join(os.getcwd(), "SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md")
+        os.path.abspath(os.path.join(app_dir, "..", "..", "..", "SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md")),
+        os.path.abspath(os.path.join(app_dir, "..", "..", "..", "..", "SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md")),
+        os.path.join(os.getcwd(), "SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md"),
+        os.path.join(os.getcwd(), "backend", "SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md"),
+        "/var/www/Ciam/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md",
+        "/var/www/Ciam/backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md",
     ]
     for p in possible_paths:
-        if os.path.exists(p):
+        if os.path.exists(p) and os.path.isfile(p):
             return FileResponse(
                 path=p,
                 media_type="text/markdown; charset=utf-8",

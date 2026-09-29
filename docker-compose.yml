@@ -49,6 +49,7 @@ services:
       - KEYS_DIR=/app/keys
     volumes:
       - ./backend:/app
+      - ./SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md:/app/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md:ro
       - ciam_keys:/app/keys
     labels:
       - "traefik.enable=true"

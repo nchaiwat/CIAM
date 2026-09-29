@@ -75,3 +75,9 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "HEALTHY"}
+
+# Double-prefix compatibility route (guards against reverse-proxy / client path duplication)
+@app.get("/api/v1/api/v1/applications/spec/download")
+def download_spec_double_prefix_fallback():
+    from app.api.v1.applications import download_spoke_spec
+    return download_spoke_spec()

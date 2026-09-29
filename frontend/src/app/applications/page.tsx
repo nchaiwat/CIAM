@@ -67,14 +67,15 @@ export default function ApplicationsPage() {
 
   const handleDownloadSpec = () => {
     const token = localStorage.getItem("ciam_token") || "";
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://ciam.windowasia.com";
-    const downloadUrl = `${apiUrl}/api/v1/applications/spec/download`;
+    const rawApi = (process.env.NEXT_PUBLIC_API_URL || "/api/v1").replace(/\/+$/, "");
+    const baseApi = rawApi.endsWith("/api/v1") ? rawApi : `${rawApi}/api/v1`;
+    const downloadUrl = `${baseApi}/applications/spec/download`;
 
     fetch(downloadUrl, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then((res) => {
-        if (!res.ok) throw new Error("Download failed");
+        if (!res.ok) throw new Error(`Download failed with status ${res.status}`);
         return res.blob();
       })
       .then((blob) => {
@@ -87,7 +88,8 @@ export default function ApplicationsPage() {
         a.remove();
         window.URL.revokeObjectURL(url);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Spec download error:", err);
         // Fallback to direct navigation
         window.open(downloadUrl, "_blank");
       });
