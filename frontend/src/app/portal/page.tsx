@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Search,
   ExternalLink,
   ShieldCheck,
   RefreshCw,
@@ -34,8 +33,6 @@ export default function PortalPage() {
   const [apps, setApps] = useState<PortalAppItem[]>([]);
   const [currentUser, setCurrentUser] = useState<AdminUserOut | null>(null);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [launchingAppCode, setLaunchingAppCode] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -141,33 +138,6 @@ export default function PortalPage() {
     }
   };
 
-  const categories = useMemo(() => {
-    const cats = new Set<string>();
-    apps.forEach((a) => {
-      if (a.category) {
-        // Strip english suffix in parentheses for clean presentation
-        const cleanCat = a.category.split(" (")[0];
-        cats.add(cleanCat);
-      }
-    });
-    return ["ALL", ...Array.from(cats)];
-  }, [apps]);
-
-  const filteredApps = useMemo(() => {
-    return apps.filter((app) => {
-      const q = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        q === "" ||
-        app.app_name.toLowerCase().includes(q) ||
-        app.app_code.toLowerCase().includes(q) ||
-        (app.description && app.description.toLowerCase().includes(q));
-
-      const cleanCat = app.category ? app.category.split(" (")[0] : "";
-      const matchesCat = selectedCategory === "ALL" || cleanCat === selectedCategory;
-
-      return matchesSearch && matchesCat;
-    });
-  }, [apps, searchQuery, selectedCategory]);
 
   const getAppTheme = (appCode: string) => {
     switch (appCode.toLowerCase()) {
@@ -296,40 +266,6 @@ export default function PortalPage() {
           </p>
         </div>
 
-        {/* Search & Simple Filter */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          {/* Search Box */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ค้นหาระบบงาน (เช่น IRM, QMS, SAP, ใบเสนอราคา)..."
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs transition-all"
-            />
-          </div>
-
-          {/* Clean Category Pills */}
-          {categories.length > 2 && (
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                    selectedCategory === cat
-                      ? "bg-blue-600 text-white shadow-2xs"
-                      : "bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80"
-                  }`}
-                >
-                  {cat === "ALL" ? "ทั้งหมด" : cat}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
         {/* Error Alert */}
         {errorMsg && (
           <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center justify-between">
@@ -368,7 +304,7 @@ export default function PortalPage() {
         {/* ─── App Cards Grid ─────────────────────────────────────────────── */}
         {!loading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredApps.map((app) => {
+            {apps.map((app) => {
               const theme = getAppTheme(app.app_code);
               const isLaunching = launchingAppCode === app.app_code;
 
@@ -390,21 +326,41 @@ export default function PortalPage() {
                         <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                           {app.app_code}
                         </div>
-                        <h2 className="font-bold text-slate-900 text-base leading-snug group-hover:text-blue-600 transition-colors line-clamp-1">
+                        <h2 className="font-bold text-slate-900 text-base leading-snug group-hover:text-blue-600 transition-colors">
                           {app.app_name}
                         </h2>
                         {app.category && (
-                          <span className="text-[11px] text-slate-500 font-medium">
+                          <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
                             {app.category.split(" (")[0]}
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* App Description */}
-                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
-                      {app.description || "แอปพลิเคชันสำหรับบุคลากรภายในองค์กร"}
-                    </p>
+                    {/* App Description (Thai on line 1, English on line 2) */}
+                    {(() => {
+                      const desc = app.description || "แอปพลิเคชันสำหรับบุคลากรภายในองค์กร";
+                      const match = desc.match(/^(.*?)\s*\((.*?)\)$/);
+                      if (match) {
+                        const thaiText = match[1].trim();
+                        const engText = match[2].trim();
+                        return (
+                          <div className="space-y-1 min-h-[3.25rem]">
+                            <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                              {thaiText}
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-normal leading-normal">
+                              {engText}
+                            </p>
+                          </div>
+                        );
+                      }
+                      return (
+                        <p className="text-xs text-slate-600 leading-relaxed min-h-[3.25rem]">
+                          {desc}
+                        </p>
+                      );
+                    })()}
                   </div>
 
                   {/* Bottom: Single Launch Button */}
@@ -434,29 +390,19 @@ export default function PortalPage() {
         )}
 
         {/* ─── Empty State: No Authorized Apps ────────────────────────────── */}
-        {!loading && filteredApps.length === 0 && (
+        {!loading && apps.length === 0 && (
           <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-slate-300 p-8 space-y-4 shadow-2xs">
             <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
               <Inbox className="w-8 h-8" />
             </div>
             <div className="max-w-md mx-auto space-y-1.5">
               <h2 className="text-base font-bold text-slate-900">
-                {searchQuery ? "ไม่พบระบบงานที่ตรงกับคำค้นหา" : "ยังไม่มีระบบงานที่ได้รับสิทธิ์"}
+                ยังไม่มีระบบงานที่ได้รับสิทธิ์
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed">
-                {searchQuery
-                  ? "ลองเปลี่ยนคำค้นหาใหม่อีกครั้ง"
-                  : "บัญชีของท่านยังไม่ได้รับสิทธิ์เข้าใช้งานระบบงานใดในขณะนี้ หากต้องการขอสิทธิ์เข้าใช้งาน กรุณาติดต่อฝ่ายเทคโนโลยีสารสนเทศ (IT Support โทร. 1234)"}
+                บัญชีของท่านยังไม่ได้รับสิทธิ์เข้าใช้งานระบบงานใดในขณะนี้ หากต้องการขอสิทธิ์เข้าใช้งาน กรุณาติดต่อฝ่ายเทคโนโลยีสารสนเทศ (IT Support)
               </p>
             </div>
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-colors"
-              >
-                ล้างคำค้นหา
-              </button>
-            )}
           </div>
         )}
       </main>
