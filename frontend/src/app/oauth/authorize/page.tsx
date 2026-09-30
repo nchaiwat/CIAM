@@ -35,7 +35,7 @@ function AuthorizeContent() {
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Form states
-  const [username, setUsername] = useState("admin");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -229,14 +229,15 @@ function AuthorizeContent() {
                     <span className="text-[11px] text-slate-500 font-normal">เช่น admin, Patcha.S</span>
                   </label>
                   <div className="relative">
-                    <Fingerprint className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Fingerprint className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder="กรอกชื่อผู้ใช้..."
+                      placeholder="กรอกชื่อผู้ใช้ (AD Username)..."
                       required
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-950/70 border border-slate-700 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all"
+                      autoComplete="username"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-950/70 border border-slate-700 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all [color-scheme:dark]"
                     />
                   </div>
                 </div>
@@ -256,8 +257,8 @@ function AuthorizeContent() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="กรอกรหัสผ่านของคุณ..."
                       required
-                      autoFocus
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-950/70 border border-slate-700 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all"
+                      autoComplete="current-password"
+                      className="w-full pl-10 pr-11 py-2.5 bg-slate-950/70 border border-slate-700 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all [color-scheme:dark]"
                     />
                     <button
                       type="button"

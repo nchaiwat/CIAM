@@ -308,7 +308,11 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
         localStorage.removeItem("ciam_token");
         localStorage.removeItem("ciam_user");
         const currentPath = window.location.pathname;
-        if (!currentPath.includes("/login") && !currentPath.includes("/portal/callback")) {
+        if (
+          !currentPath.includes("/login") &&
+          !currentPath.includes("/portal/callback") &&
+          !currentPath.includes("/oauth/authorize")
+        ) {
           window.location.href = `/login?expired=1&redirect=${encodeURIComponent(currentPath + window.location.search)}`;
           return Promise.reject(new Error("เซสชันการใช้งานของคุณหมดอายุแล้ว กำลังนำทางไปหน้าเข้าสู่ระบบ...")) as any;
         }
