@@ -2335,69 +2335,94 @@ export default function ApplicationsPage() {
                 </p>
               </div>
 
-              {/* Network Security */}
-              <div className="p-3.5 rounded-lg bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-1.5">
-                <div className="font-bold flex items-center space-x-1.5 text-xs text-amber-900">
-                  <Lock className="w-4 h-4 text-amber-700" />
-                  <span>ความปลอดภัยเครือข่าย (Network IP Whitelist):</span>
+              {/* Network Security & Header Callout */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-1">
+                  <div className="font-bold flex items-center space-x-1.5 text-xs text-amber-900">
+                    <Lock className="w-4 h-4 text-amber-700" />
+                    <span>ความปลอดภัยเครือข่าย (Network IP Whitelist):</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-slate-600 font-medium">Public IP VPS ของ Central IAM:</span>
+                    <code className="bg-white border border-amber-400 text-amber-950 font-bold px-2 py-0.5 rounded font-mono">
+                      157.173.219.153
+                    </code>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-slate-600 font-medium">Public IP ของ Central IAM VPS ที่ระบบลูกต้อง Whitelist:</span>
-                  <code className="bg-white border border-amber-400 text-amber-950 font-bold px-2 py-0.5 rounded font-mono">
-                    157.173.219.153
-                  </code>
+
+                <div className="p-3 rounded-lg bg-emerald-50 border-2 border-emerald-300 text-emerald-950 space-y-1">
+                  <div className="font-bold flex items-center space-x-1.5 text-xs text-emerald-900">
+                    <Key className="w-4 h-4 text-emerald-700" />
+                    <span>Authentication Header (M2M Key):</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-slate-600 font-medium">Header ที่ CIAM ส่งเข้ามา:</span>
+                    <code className="bg-white border border-emerald-400 text-emerald-900 font-bold px-2 py-0.5 rounded font-mono">
+                      X-Management-API-Key: &lt;KEY&gt;
+                    </code>
+                  </div>
                 </div>
               </div>
 
               {/* Required Endpoints Table */}
               <div className="space-y-2">
-                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-xs">
-                  1. Endpoint ที่ระบบลูกต้องเปิดให้ CIAM เรียกใช้งาน (Group C Webhooks)
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800 uppercase tracking-wider text-xs">
+                    1. Endpoint มาตรฐานที่ระบบลูกต้องเปิดให้ CIAM เรียกใช้งาน (Group C Inbound Channel)
+                  </h4>
+                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    ✓ ทดสอบและใช้งานจริงแล้วกับระบบ IRM
+                  </span>
+                </div>
                 <div className="border-2 border-slate-200 rounded-lg overflow-hidden">
                   <table className="w-full text-left">
                     <thead className="bg-slate-100 border-b border-slate-200 text-[11px] font-bold text-slate-700">
                       <tr>
                         <th className="p-2.5">Method</th>
-                        <th className="p-2.5">Endpoint</th>
-                        <th className="p-2.5">คำอธิบาย</th>
+                        <th className="p-2.5">Endpoint มาตรฐาน</th>
+                        <th className="p-2.5">คำอธิบายการทำงาน</th>
                         <th className="p-2.5">ผลลัพธ์ที่ต้องการ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-[11px]">
                       <tr>
                         <td className="p-2.5 font-bold text-blue-700 font-mono">GET</td>
-                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/ciam/health</td>
-                        <td className="p-2.5 text-slate-600">Health Check & Latency Ping</td>
-                        <td className="p-2.5 font-mono text-emerald-800 font-bold">{`{"status": "ONLINE"}`}</td>
+                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/directory/accounts</td>
+                        <td className="p-2.5 text-slate-600">
+                          <strong>Ping, Health Check & 04:00 AM Reconciliation:</strong> ดึงรายชื่อบัญชีเพื่อวัดสถานะออนไลน์และตรวจสอบบัญชีผี
+                        </td>
+                        <td className="p-2.5 font-mono text-emerald-800 font-bold">{`{"total_accounts": N, "accounts": [...]}`}</td>
                       </tr>
                       <tr>
                         <td className="p-2.5 font-bold text-emerald-700 font-mono">POST</td>
-                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/ciam/provision-user</td>
-                        <td className="p-2.5 text-slate-600">สร้างหรือแก้ไขบัญชีพนักงานและมอบหมายสิทธิ์</td>
-                        <td className="p-2.5 font-mono text-slate-700">Upsert User & Set Role</td>
+                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/directory/accounts</td>
+                        <td className="p-2.5 text-slate-600">
+                          <strong>Remote User Provisioning:</strong> สร้างบัญชีพนักงานใหม่หรือแจกจ่ายสิทธิ์จาก Central IAM (ส่งกลับ 409 หากมีอยู่แล้ว)
+                        </td>
+                        <td className="p-2.5 font-mono text-slate-700">201 Created (หรือ 409 Conflict)</td>
                       </tr>
                       <tr>
-                        <td className="p-2.5 font-bold text-rose-700 font-mono">POST</td>
-                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/ciam/suspend-user</td>
-                        <td className="p-2.5 text-slate-600 font-bold text-rose-900">1-Click Offboard: ตัดสิทธิ์และเตะ Session ทันที</td>
-                        <td className="p-2.5 font-mono text-rose-800 font-bold">is_active=false, clear tokens</td>
-                      </tr>
-                      <tr>
-                        <td className="p-2.5 font-bold text-emerald-700 font-mono">POST</td>
-                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/ciam/reactivate-user</td>
-                        <td className="p-2.5 text-slate-600">คืนสิทธิ์พนักงานที่กลับมาทำงาน</td>
-                        <td className="p-2.5 font-mono text-emerald-800">is_active=true</td>
-                      </tr>
-                      <tr>
-                        <td className="p-2.5 font-bold text-blue-700 font-mono">GET</td>
-                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/ciam/inventory</td>
-                        <td className="p-2.5 text-slate-600">คืนรายชื่อบัญชีทั้งหมดเพื่อ Auto-Reconciliation 04:00 น.</td>
-                        <td className="p-2.5 font-mono text-slate-700">{`{"total": N, "users": [...]}`}</td>
+                        <td className="p-2.5 font-bold text-rose-700 font-mono">PATCH</td>
+                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/directory/accounts/{`{user}`}/status</td>
+                        <td className="p-2.5 text-slate-600 font-bold text-rose-900">
+                          <strong>1-Click Offboarding & Reactivate:</strong> ปรับสถานะ <code>is_active=false</code> ตัดสิทธิ์และล้าง Session ทันที (หรือ <code>true</code> เพื่อคืนสิทธิ์)
+                        </td>
+                        <td className="p-2.5 font-mono text-rose-800 font-bold">200 OK + Revoke Active Tokens</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              {/* Non-AD Local Accounts Callout */}
+              <div className="p-3 bg-purple-50 border-2 border-purple-200 rounded-lg space-y-1.5 text-purple-950">
+                <div className="font-bold flex items-center space-x-1.5 text-xs text-purple-900">
+                  <ShieldCheck className="w-4 h-4 text-purple-600" />
+                  <span>การรองรับบัญชี Local Account (Non-AD Users) เช่น Supplier ในระบบ IRM:</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-purple-900">
+                  ในกรณีที่ระบบลูกมีบัญชีที่ไม่ได้มาจาก Active Directory (เช่น Supplier ใน IRM หรือ User เฉพาะทาง) ให้ระบบลูกส่งฟิลด์ <code>"use_ad_auth": false</code> มาในรายการบัญชี Central IAM จะบันทึกเป็น Local Spoke Account และเปิดให้ตั้งค่ารหัสผ่านเข้า <strong>App Portal</strong> ได้เฉพาะระบบที่ตนเองมีสิทธิ์เท่านั้น
+                </p>
               </div>
 
               {/* SSO Flow Summary */}

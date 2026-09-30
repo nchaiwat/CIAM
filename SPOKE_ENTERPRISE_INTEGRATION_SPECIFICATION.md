@@ -1,6 +1,6 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Version:** 2.1.0 (Seamless True SSO, Single-Button UX & Return-to-Portal Edition)  
+**Version:** 2.2.0 (Production-Verified IRM Standard & Non-AD Exception Handling Edition)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
 **Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
 **Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636)
@@ -85,14 +85,15 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                 SPOKE APPLICATION API CHANNELS                                    │
 ├──────────────────────────────┬──────────────────────────────────┬─────────────────────────────────┤
-│ Group A: Settings Channel    │ Group B: SSO Authentication Flow │ Group C: CIAM Governance Webhook│
+│ Group A: Settings Channel    │ Group B: SSO Authentication Flow │ Group C: Directory & Governance │
 │ (สิทธิ์เฉพาะ Admin ของระบบ)   │ (ยืนยันตัวตนกับ AD ผ่าน CIAM)     │ (CIAM สั่งการเข้ามาแบบ M2M)     │
 ├──────────────────────────────┼──────────────────────────────────┼─────────────────────────────────┤
-│ • GET  /api/settings/ciam-sso│ • GET  /api/auth/sso/config      │ • GET  /api/v1/ciam/health      │
-│ • PUT  /api/settings/ciam-sso│ • POST /api/auth/sso/authorize   │ • POST /api/v1/ciam/provision   │
-│ • POST /api/settings/test    │ • POST /api/auth/sso/callback    │ • POST /api/v1/ciam/suspend     │
-│                              │ • POST /api/auth/sso/break-glass │ • POST /api/v1/ciam/reactivate  │
-│                              │                                  │ • GET  /api/v1/ciam/inventory   │
+│ • GET  /api/settings/ciam-sso│ • GET  /api/auth/sso/config      │ • GET   /api/v1/directory/      │
+│ • PUT  /api/settings/ciam-sso│ • POST /api/auth/sso/            │         accounts                │
+│ • POST /api/settings/ciam-sso│         authorize-url            │ • POST  /api/v1/directory/      │
+│        /test-connection      │ • POST /api/auth/sso/callback    │         accounts                │
+│                              │ • POST /api/auth/sso/            │ • PATCH /api/v1/directory/      │
+│                              │         break-glass-toggle       │         accounts/{user}/status  │
 └──────────────────────────────┴──────────────────────────────────┴─────────────────────────────────┘
 ```
 
@@ -278,33 +279,69 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 ---
 
-### หมวด C: CIAM Governance & Provisioning Inbound Channel (CIAM สั่งการเข้ามาแบบ M2M)
+### หมวด C: Directory Governance & Remote Provisioning Channel (CIAM สั่งการเข้ามาแบบ M2M)
 
 > [!IMPORTANT]
 > **ความปลอดภัยระดับองค์กร (Enterprise Security Constraints):**
-> 1. **IP Whitelist:** ไฟร์วอลล์และ Reverse Proxy ของระบบลูกต้องอนุญาตเฉพาะ IP VPS ของ Central IAM: **`157.173.219.153`**
-> 2. **Authentication:** ทุก Endpoint ในหมวด C ต้องส่ง HTTP Header: `Authorization: Bearer <SPOKE_API_KEY>` (สร้างจากหน้า Central IAM Console)
-> 3. **Idempotent:** ทุก Endpoint ต้องรองรับการเรียกซ้ำได้โดยไม่เกิด Error (Idempotent Execution)
+> 1. **IP Whitelist:** ไฟร์วอลล์และ Reverse Proxy ของระบบลูกต้องอนุญาตเฉพาะ IP VPS ของ Central IAM: **`157.173.219.153`** (ระบบ CIAM จะแนบ Header `X-Forwarded-For: 157.173.219.153` มาด้วยเสมอ)
+> 2. **Authentication Header:** ทุก Endpoint ในหมวด C ต้องส่ง HTTP Header: **`X-Management-API-Key: <SPOKE_API_KEY>`** (นำมาจากปุ่ม `🔑 M2M Key` ในหน้าทะเบียนระบบลูกของ Central IAM)
+> 3. **Timestamp Verification:** CIAM จะส่ง `X-Request-Timestamp` เพื่อตรวจสอบและป้องกัน Replay Attacks
+> 4. **Idempotent:** ทุก Endpoint ต้องรองรับการเรียกซ้ำได้โดยไม่เกิด Error ซ้ำซ้อน (Idempotent Execution)
 
 ---
 
-#### C.1 `GET /api/v1/ciam/health` (Ping & Health Check)
-* **วัตถุประสงค์:** Central IAM ใช้ตรวจสอบว่าระบบลูก Online พร้อมรับคำสั่งหรือไม่ และวัด Latency แบบ Real-time
+#### C.1 `GET /api/v1/directory/accounts` (Ping, Health Check & 04:00 AM Reconciliation)
+* **วัตถุประสงค์:** 
+  1. ใช้เป็น **Health Check & Latency Ping** แบบ Real-Time เมื่อ Central IAM ทดสอบสถานะระบบลูก
+  2. ใช้สำหรับ **Auto-Reconciliation ประจำวันเวลา 04:00 น.** เพื่อดึงบัญชีผู้ใช้ทั้งหมดมาตรวจสอบ Ghost Account เปรียบเทียบกับ Active Directory
+* **Query Parameters ที่รองรับ:**
+  * `status`: กรองสถานะ เช่น `all` (ค่าเริ่มต้น), `active`, `inactive`
+  * `department`: กรองตามแผนก (Optional)
+  * `search`: ค้นหาชื่อหรือ username (Optional)
 * **Response Example (200 OK):**
 ```json
 {
-  "status": "ONLINE",
-  "app_code": "irm",
-  "app_name": "Incoming Raw Material",
-  "version": "1.0.0",
-  "timestamp": "2026-09-28T17:20:00Z"
+  "application_name": "IRM (Incoming Raw Material)",
+  "total_accounts": 2,
+  "active_accounts": 2,
+  "inactive_accounts": 0,
+  "accounts": [
+    {
+      "id": 1,
+      "username": "somchai.p",
+      "full_name": "นายสมชาย พร้อมพงษ์",
+      "email": "somchai.p@windowasia.com",
+      "department": "Purchasing",
+      "telegram_chat_id": "@somchai_p",
+      "group_name": "PU User",
+      "use_ad_auth": true,
+      "is_active": true,
+      "last_login_at": "2026-09-30T08:30:00Z",
+      "created_at": "2026-09-20T10:00:00Z",
+      "updated_at": "2026-09-30T08:30:00Z"
+    },
+    {
+      "id": 2,
+      "username": "local_supplier_01",
+      "full_name": "Supplier Partner User",
+      "email": "supplier01@partner.com",
+      "department": "External Partner",
+      "telegram_chat_id": null,
+      "group_name": "Supplier Portal",
+      "use_ad_auth": false,
+      "is_active": true,
+      "last_login_at": null,
+      "created_at": "2026-09-25T14:20:00Z",
+      "updated_at": "2026-09-25T14:20:00Z"
+    }
+  ]
 }
 ```
 
 ---
 
-#### C.2 `POST /api/v1/ciam/provision-user` (สร้างบัญชีและมอบหมายบทบาท)
-* **วัตถุประสงค์:** เรียกใช้เมื่อ Super Admin สร้างบัญชีพนักงานใหม่ หรือแจกจ่ายสิทธิ์จาก Central IAM
+#### C.2 `POST /api/v1/directory/accounts` (Remote User Provisioning)
+* **วัตถุประสงค์:** เรียกใช้เมื่อ Super Admin สร้างหรือแจกจ่ายบัญชีผู้ใช้ใหม่จาก Central IAM ไปยังระบบลูก
 * **Request Body:**
 ```json
 {
@@ -312,106 +349,71 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
   "full_name": "นายสมชาย พร้อมพงษ์",
   "email": "somchai.p@windowasia.com",
   "department": "Purchasing",
-  "telephone": "081-234-5678",
-  "telegram_id": "@somchai_p",
-  "group_name": "PU Staff"
+  "group_name": "PU User",
+  "use_ad_auth": true,
+  "created_by": "Central-IAM-Service"
 }
 ```
 * **พฤติกรรมระบบลูก:**
   1. ค้นหา `username` ในตาราง `users`
-  2. หากยังไม่มี ให้ Insert สร้างบัญชีใหม่ โดยกำหนดกลุ่มสิทธิ์ตาม `group_name` และตั้ง `is_active = true`
-  3. หากมีอยู่แล้ว ให้อัปเดตชื่อ แผนก และสิทธิ์ให้ตรงกัน
-* **Response Example (200 OK):**
+  2. หากยังไม่มี ให้บันทึกสร้างบัญชีใหม่ โดยกำหนดกลุ่มสิทธิ์ตาม `group_name` และตั้ง `is_active = true`
+  3. หากมีอยู่แล้ว ให้คืนสถานะ `409 Conflict` (Central IAM จะถือว่ามีบัญชีอยู่แล้วและทำการ Link เข้าสู่ระบบ)
+  4. บันทึกเหตุการณ์ลงใน `transaction_logs`
+* **Response Example (201 Created):**
 ```json
 {
-  "status": "SUCCESS",
-  "message": "User provisioned successfully in IRM",
-  "app_username": "somchai.p",
-  "group_assigned": "PU Staff"
+  "success": true,
+  "id": 15,
+  "username": "somchai.p",
+  "message": "Account 'somchai.p' created successfully.",
+  "group_name": "PU User",
+  "is_active": true,
+  "created_at": "2026-09-30T22:00:00Z"
 }
 ```
 
 ---
 
-#### C.3 `POST /api/v1/ciam/suspend-user` (1-Click Offboarding: ตัดสิทธิ์และระงับบัญชีทันที)
-* **วัตถุประสงค์:** เรียกใช้จาก **ศูนย์ระงับสิทธิ์ (1-Click Offboarding Hub)** เพื่อตัดสิทธิ์พนักงานที่ลาออกหรือพ้นสภาพ
+#### C.3 `PATCH /api/v1/directory/accounts/{username}/status` (1-Click Offboarding & Reactivate)
+* **วัตถุประสงค์:** 
+  1. **1-Click Offboarding:** ตัดสิทธิ์และระงับบัญชีทันทีเมื่อพนักงานลาออกหรือพ้นสภาพ
+  2. **Reactivate:** คืนสิทธิ์การใช้งานเมื่อพนักงานกลับมาปฏิบัติหน้าที่
 * **Request Body:**
 ```json
 {
-  "username": "somchai.p",
-  "status": "TERMINATED",
-  "reason": "Resigned",
-  "effective_date": "2026-09-28",
-  "actor": "admin"
+  "is_active": false,
+  "reason": "1-Click Offboarding via Central Identity Management",
+  "updated_by": "Central-IAM-Service"
 }
 ```
 * **พฤติกรรมระบบลูก (CRITICAL):**
-  1. ตั้งค่า `is_active = false` ทันที
-  2. **Revoke Active Sessions:** ล้าง Refresh Token และยกเลิก Session ของผู้ใช้นี้ทันที เพื่อให้หลุดจากระบบแบบ Real-time
-  3. บันทึก `transaction_logs` หมวด `ciam_sso` ระบุเหตุการณ์ระงับสิทธิ์
+  1. อัปเดต `is_active = false` (หรือ `true` กรณีคืนสิทธิ์)
+  2. **Revoke Active Sessions ทันที (เมื่อ is_active = false):** ล้าง Refresh Token และยกเลิก Session ของผู้ใช้นี้ทันที เพื่อให้หลุดจากระบบแบบ Real-time
+  3. บันทึก `transaction_logs` หมวด `ciam_sso` ระบุเหตุการณ์ระงับสิทธิ์หรือคืนสิทธิ์
 * **Response Example (200 OK):**
 ```json
 {
-  "status": "SUCCESS",
-  "message": "User account deactivated and all active sessions revoked immediately",
   "username": "somchai.p",
-  "revoked_at": "2026-09-28T17:20:00Z"
+  "is_active": false,
+  "message": "Account status updated successfully",
+  "updated_at": "2026-09-30T22:00:00Z"
 }
 ```
 
 ---
 
-#### C.4 `POST /api/v1/ciam/reactivate-user` (คืนสิทธิ์การใช้งาน)
-* **วัตถุประสงค์:** เรียกใช้เมื่อ HR อนุมัติคืนสิทธิ์พนักงานที่กลับมาปฏิบัติงาน
-* **Request Body:**
-```json
-{
-  "username": "somchai.p",
-  "reason": "Employee reinstated by HR"
-}
-```
-* **พฤติกรรมระบบลูก:**
-  1. ตั้งค่า `is_active = true`
-  2. บันทึก `transaction_logs`
-* **Response Example (200 OK):**
-```json
-{
-  "status": "SUCCESS",
-  "message": "User account reactivated successfully",
-  "username": "somchai.p"
-}
-```
-
----
-
-#### C.5 `GET /api/v1/ciam/inventory` (ดึงทะเบียนบัญชีเพื่อตรวจจับบัญชีผี / Ghost Account Reconciliation)
-* **วัตถุประสงค์:** Central IAM เรียกใช้ทุกวันเวลา 04:00 น. เพื่อนำรายชื่อมาเปรียบเทียบกับ Active Directory หากใน AD ปิดไปแล้วแต่ในระบบลูกยังเปิดอยู่ ระบบจะแจ้งเตือนเป็น **"บัญชีผี (Discrepancy)"**
-* **Response Example (200 OK):**
-```json
-{
-  "status": "success",
-  "app_code": "irm",
-  "total": 3,
-  "users": [
-    {
-      "username": "somchai.p",
-      "full_name": "นายสมชาย พร้อมพงษ์",
-      "email": "somchai.p@windowasia.com",
-      "group_name": "PU Staff",
-      "is_active": true,
-      "last_login_at": "2026-09-28T08:30:00Z"
-    },
-    {
-      "username": "patcha.s",
-      "full_name": "นางสาวพัชรา สุขใจ",
-      "email": "patcha.s@windowasia.com",
-      "group_name": "PU Manager",
-      "is_active": true,
-      "last_login_at": "2026-09-27T16:10:00Z"
-    }
-  ]
-}
-```
+#### C.4 การจัดการผู้ใช้ Local Account (Non-AD Users) และข้อยกเว้นการใช้งาน App Portal
+* **ที่มาและความจำเป็น:**
+  * ในองค์กรจริง อาจมีผู้ใช้บางกลุ่มที่**ไม่ได้อยู่ใน Active Directory** แต่ถูกสร้างขึ้นโดยตรงในระบบลูก เช่น ผู้ใช้งานชั่วคราว, ช่างภายนอก หรือ Supplier ในระบบ IRM
+  * บัญชีเหล่านี้จะมีแฟล็ก `use_ad_auth: false` ในตาราง `users`
+* **มาตรฐานการเชื่อมต่อ:**
+  1. เมื่อ Central IAM สั่ง Sync ผ่าน `GET /api/v1/directory/accounts` ระบบลูกจะส่งฟิลด์ `use_ad_auth: false` กลับมาในรายการบัญชี
+  2. ฝั่ง Central IAM จะระบุบัญชีนี้เป็น **"Local Account ใน Spoke"** โดยอัตโนมัติ
+  3. ผู้ดูแลระบบสามารถตั้งรหัสผ่าน Portal Password หรือสร้าง **"ข้อยกเว้นการเชื่อมโยงตัวตน (Identity Exception)"** ในหน้า Portal & Directory ให้กับผู้ใช้รายนี้ได้
+  4. เมื่อผู้ใช้ดังกล่าวล็อกอินเข้า Central IAM Portal ด้วยรหัสผ่าน Portal:
+     * **หน้า App Portal จะแสดงเฉพาะแอปที่เขามีสิทธิ์ (เช่น IRM) เท่านั้น** และซ่อนระบบอื่นที่ไม่มีสิทธิ์ออกไปโดยอัตโนมัติ
+     * ผู้ใช้สามารถคลิกเข้าสู่ระบบลูกผ่าน Single Sign-On ได้อย่างราบรื่น
+  5. หากผู้ใช้รายเดียวกันมีบัญชีใน 2 ระบบลูกที่ไม่ได้ใช้ AD ทั้งคู่ และรหัสผ่านไม่ตรงกัน ผู้ดูแลระบบสามารถใช้ฟังก์ชัน **"รวมตัวตน (Unified Identity Link)"** ในหน้าบัญชีผู้ใช้ Central IAM เพื่อผูกบัญชีทั้งสองเข้ากับ Portal Identity เดียวกันได้อย่างปลอดภัย
 
 ---
 
@@ -562,108 +564,175 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 ## 10. โค้ดตัวอย่างพร้อมใช้งานสำหรับทีม Developer (Implementation Boilerplate)
 
-### 10.1 ตัวอย่าง Python (FastAPI): Group C Inbound Webhook
+### 10.1 ตัวอย่าง Python (FastAPI): Group C Inbound Directory & Governance Channel (ตามมาตรฐาน IRM)
 
 ```python
-from fastapi import APIRouter, Header, HTTPException, Depends
-from pydantic import BaseModel
+from datetime import datetime
 from typing import Optional, List
+from fastapi import APIRouter, Header, HTTPException, Depends, Request, status
+from pydantic import BaseModel
 
-router = APIRouter(prefix="/api/v1/ciam", tags=["CIAM Webhooks"])
-EXPECTED_API_KEY = "sec_your_app_mgmt_key_here" # หรือดึงจากตาราง system_settings
+router = APIRouter(prefix="/api/v1/directory", tags=["Central Management"])
 
-def verify_ciam_auth(authorization: Optional[str] = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Bearer token")
-    token = authorization.split(" ")[1]
-    if token != EXPECTED_API_KEY:
-        raise HTTPException(status_code=403, detail="Forbidden: Invalid CIAM API Key")
+# ดึงค่า M2M Key จากตาราง system_settings (key: ciam_m2m_key) หรือค่าคงที่
+EXPECTED_M2M_KEY = "sec_your_app_mgmt_key_here"
+ALLOWED_CIAM_IP = "157.173.219.153" # IP ของเซิร์ฟเวอร์ Central IAM
 
-class ProvisionRequest(BaseModel):
+def verify_ciam_management_access(
+    request: Request,
+    x_management_api_key: Optional[str] = Header(None, alias="X-Management-API-Key"),
+):
+    # 1. ตรวจสอบ M2M API Key
+    if not x_management_api_key or x_management_api_key != EXPECTED_M2M_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Management-API-Key header.",
+        )
+    # 2. ตรวจสอบ IP Whitelist (ถ้าต้องการจำกัดระดับ Network)
+    client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
+    if "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    # ใน Local/Dev ให้ยกเว้น localhost
+    if client_ip not in [ALLOWED_CIAM_IP, "127.0.0.1", "localhost", "::1"]:
+        # raise HTTPException(status_code=403, detail=f"IP {client_ip} not allowed")
+        pass
+    return {"client_ip": client_ip}
+
+class CreateAccountRequest(BaseModel):
     username: str
     full_name: str
     email: Optional[str] = None
     department: Optional[str] = None
-    telephone: Optional[str] = None
-    telegram_id: Optional[str] = None
-    group_name: Optional[str] = "Standard User"
+    group_name: Optional[str] = None
+    use_ad_auth: bool = True
+    created_by: Optional[str] = "Central-IAM-Service"
 
-class SuspendRequest(BaseModel):
-    username: str
-    status: str = "TERMINATED"
-    reason: Optional[str] = None
+class UpdateStatusRequest(BaseModel):
+    is_active: bool
+    reason: Optional[str] = "Status updated via Central Management API"
+    updated_by: Optional[str] = "Central-IAM-Service"
 
-@router.get("/health", dependencies=[Depends(verify_ciam_auth)])
-def ciam_health():
-    return {"status": "ONLINE", "app_code": "my_spoke", "version": "1.0.0"}
-
-@router.post("/provision-user", dependencies=[Depends(verify_ciam_auth)])
-def ciam_provision_user(payload: ProvisionRequest):
-    # TODO: ค้นหาหรือสร้างผู้ใช้ในฐานข้อมูลของระบบลูก และกำหนดบทบาทตาม payload.group_name
-    return {"status": "SUCCESS", "message": f"User {payload.username} provisioned successfully"}
-
-@router.post("/suspend-user", dependencies=[Depends(verify_ciam_auth)])
-def ciam_suspend_user(payload: SuspendRequest):
-    # TODO: ตั้งค่า user.is_active = False และเตะ session / revoke refresh tokens ทันที
-    return {"status": "SUCCESS", "message": f"User {payload.username} suspended and all sessions revoked"}
-
-@router.post("/reactivate-user", dependencies=[Depends(verify_ciam_auth)])
-def ciam_reactivate_user(payload: dict):
-    # TODO: ตั้งค่า user.is_active = True
-    return {"status": "SUCCESS", "message": f"User {payload.get('username')} reactivated"}
-
-@router.get("/inventory", dependencies=[Depends(verify_ciam_auth)])
-def ciam_inventory():
-    # TODO: คืนค่ารายชื่อผู้ใช้ทั้งหมดในระบบลูกเพื่อใช้ในกระบวนการ Auto Reconciliation 04:00 น.
+@router.get("/accounts", dependencies=[Depends(verify_ciam_management_access)])
+def list_accounts_for_ciam(status: str = "all", department: Optional[str] = None, search: Optional[str] = None):
+    """ใช้ทั้ง Ping/Health Check และ Reconciliation ประจำวันเวลา 04:00 น."""
+    # TODO: Query จากตาราง users ในฐานข้อมูลของระบบลูก
     return {
-        "status": "success",
-        "total": 1,
-        "users": [
-            {"username": "somchai.p", "full_name": "Somchai P.", "is_active": True}
+        "application_name": "My Spoke Application",
+        "total_accounts": 1,
+        "active_accounts": 1,
+        "inactive_accounts": 0,
+        "accounts": [
+            {
+                "id": 1,
+                "username": "somchai.p",
+                "full_name": "นายสมชาย พร้อมพงษ์",
+                "email": "somchai.p@windowasia.com",
+                "department": "Purchasing",
+                "group_name": "PU User",
+                "use_ad_auth": True,
+                "is_active": True,
+                "last_login_at": "2026-09-30T08:30:00Z",
+                "created_at": "2026-09-20T10:00:00Z",
+                "updated_at": "2026-09-30T08:30:00Z"
+            }
         ]
+    }
+
+@router.post("/accounts", status_code=status.HTTP_201_CREATED, dependencies=[Depends(verify_ciam_management_access)])
+def create_account_from_ciam(payload: CreateAccountRequest):
+    """สร้างหรือ Provision บัญชีผู้ใช้ใหม่จาก Central IAM"""
+    # TODO: ตรวจสอบว่ามีอยู่แล้วหรือไม่ ถ้ามีให้ raise HTTPException(409, detail="User exists")
+    # TODO: สร้าง User ใหม่ และบันทึกลงฐานข้อมูล
+    return {
+        "success": True,
+        "id": 99,
+        "username": payload.username,
+        "message": f"Account '{payload.username}' created successfully.",
+        "group_name": payload.group_name,
+        "is_active": True,
+        "created_at": datetime.now()
+    }
+
+@router.patch("/accounts/{username}/status", dependencies=[Depends(verify_ciam_management_access)])
+def update_account_status_from_ciam(username: str, payload: UpdateStatusRequest):
+    """1-Click Offboarding (ระงับสิทธิ์ทันที) หรือ คืนสิทธิ์การใช้งาน"""
+    # TODO: อัปเดต user.is_active = payload.is_active
+    # TODO: ถ้า payload.is_active == False ให้เตะ Session และ Revoke Refresh Tokens ทั้งหมดทันที
+    return {
+        "username": username,
+        "is_active": payload.is_active,
+        "message": f"Status for '{username}' updated successfully.",
+        "updated_at": datetime.now()
     }
 ```
 
-### 10.2 ตัวอย่าง Node.js (Express.js): Group C Inbound Webhook
+### 10.2 ตัวอย่าง Node.js (Express.js): Group C Inbound Directory Channel
 
 ```javascript
 const express = require('express');
 const router = express.Router();
 
-const CIAM_API_KEY = process.env.CIAM_API_KEY || "sec_your_app_mgmt_key_here";
+const EXPECTED_M2M_KEY = process.env.CIAM_M2M_KEY || "sec_your_app_mgmt_key_here";
+const ALLOWED_CIAM_IP = "157.173.219.153";
 
 // Middleware ตรวจสอบความปลอดภัย
-function verifyCiamAuth(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ status: "FAILED", message: "Missing Bearer token" });
-  }
-  const token = authHeader.split(' ')[1];
-  if (token !== CIAM_API_KEY) {
-    return res.status(403).json({ status: "FAILED", message: "Invalid CIAM API Key" });
+function verifyCiamManagementAccess(req, res, next) {
+  const apiKey = req.headers['x-management-api-key'];
+  if (!apiKey || apiKey !== EXPECTED_M2M_KEY) {
+    return res.status(401).json({ status: "FAILED", message: "Invalid or missing X-Management-API-Key" });
   }
   next();
 }
 
-router.get('/health', verifyCiamAuth, (req, res) => {
-  res.json({ status: "ONLINE", app_code: "node_spoke", version: "1.0.0" });
+// 1. Directory Inventory & Health Check
+router.get('/api/v1/directory/accounts', verifyCiamManagementAccess, async (req, res) => {
+  // TODO: Query users จากฐานข้อมูล
+  res.json({
+    application_name: "Node Spoke App",
+    total_accounts: 1,
+    active_accounts: 1,
+    inactive_accounts: 0,
+    accounts: [
+      {
+        id: 1,
+        username: "somchai.p",
+        full_name: "นายสมชาย พร้อมพงษ์",
+        email: "somchai.p@windowasia.com",
+        department: "Purchasing",
+        group_name: "Standard User",
+        use_ad_auth: true,
+        is_active: true,
+        created_at: new Date()
+      }
+    ]
+  });
 });
 
-router.post('/provision-user', verifyCiamAuth, async (req, res) => {
-  const { username, full_name, email, group_name } = req.body;
-  // TODO: Upsert User และกำหนด Role ในฐานข้อมูลของระบบลูก
-  res.json({ status: "SUCCESS", message: `User ${username} provisioned`, app_username: username });
+// 2. Remote User Provisioning
+router.post('/api/v1/directory/accounts', verifyCiamManagementAccess, async (req, res) => {
+  const { username, full_name, email, department, group_name, use_ad_auth } = req.body;
+  // TODO: Insert user หรือตอบกลับ 409 Conflict หากมีอยู่แล้ว
+  res.status(201).json({
+    success: true,
+    id: 100,
+    username,
+    message: `Account '${username}' provisioned successfully`,
+    is_active: true,
+    created_at: new Date()
+  });
 });
 
-router.post('/suspend-user', verifyCiamAuth, async (req, res) => {
-  const { username } = req.body;
-  // TODO: ตั้งค่า is_active = false และยกเลิก JWT Session ทั้งหมดทันที
-  res.json({ status: "SUCCESS", message: `User ${username} suspended and sessions cleared` });
-});
-
-router.get('/inventory', verifyCiamAuth, async (req, res) => {
-  // TODO: ดึงข้อมูลพนักงานทั้งหมดเพื่อส่งกลับให้ CIAM ทำ Auto-Sync
-  res.json({ status: "success", total: 0, users: [] });
+// 3. 1-Click Offboarding & Reactivate
+router.patch('/api/v1/directory/accounts/:username/status', verifyCiamManagementAccess, async (req, res) => {
+  const { username } = req.params;
+  const { is_active, reason } = req.body;
+  // TODO: อัปเดต is_active และถ้า false ให้เตะ Session ออกจากระบบทันที
+  res.json({
+    username,
+    is_active,
+    message: `Account status updated to ${is_active}`,
+    updated_at: new Date()
+  });
 });
 
 module.exports = router;
