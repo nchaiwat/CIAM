@@ -16,6 +16,7 @@ import {
   Fingerprint,
   RefreshCw,
   Info,
+  UserCheck,
 } from "lucide-react";
 import { api, AuthorizeMeta } from "@/lib/api";
 
@@ -34,6 +35,15 @@ function AuthorizeContent() {
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  // Seamless SSO states
+  const [checkingSeamless, setCheckingSeamless] = useState(false);
+  const [seamlessUser, setSeamlessUser] = useState<{
+    username: string;
+    full_name: string;
+    department?: string;
+  } | null>(null);
+  const [switchAccount, setSwitchAccount] = useState(false);
+
   // Form states
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -50,11 +60,13 @@ function AuthorizeContent() {
       return;
     }
 
-    const checkMeta = async () => {
+    const checkMetaAndSession = async () => {
       setLoadingMeta(true);
       setValidationError(null);
+
+      let fetchedMeta: AuthorizeMeta | null = null;
       try {
-        const res = await api.getAuthorizeMeta({
+        fetchedMeta = await api.getAuthorizeMeta({
           response_type: responseType,
           client_id: clientId,
           redirect_uri: redirectUri,
@@ -63,19 +75,93 @@ function AuthorizeContent() {
           code_challenge: codeChallenge,
           code_challenge_method: codeChallengeMethod,
         });
-        setMeta(res);
+        setMeta(fetchedMeta);
       } catch (err: any) {
         console.error("Authorize check error:", err);
         setValidationError(
           err.message || "ไม่สามารถยืนยันข้อมูล Spoke Client ได้ หรือ Redirect URI ไม่ตรงกับที่ลงทะเบียนไว้"
         );
-      } finally {
+        setLoadingMeta(false);
+        return;
+      }
+
+      // Check if user already has an active CIAM session
+      const savedToken = typeof window !== "undefined" ? localStorage.getItem("ciam_token") : null;
+      const savedUserStr = typeof window !== "undefined" ? localStorage.getItem("ciam_user") : null;
+
+      if (savedToken && !switchAccount) {
+        let cachedUser = null;
+        try {
+          if (savedUserStr) cachedUser = JSON.parse(savedUserStr);
+        } catch {
+          // ignore parse error
+        }
+
+        if (cachedUser) {
+          setSeamlessUser(cachedUser);
+        }
+        setCheckingSeamless(true);
+        setLoadingMeta(false);
+
+        try {
+          const ssoRes = await api.submitSeamlessAuthorize({
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            scope,
+            state: state || undefined,
+            code_challenge: codeChallenge || undefined,
+            code_challenge_method: codeChallengeMethod || undefined,
+          });
+
+          if (ssoRes.status === "SUCCESS" && ssoRes.redirect_to) {
+            if (ssoRes.user) {
+              setSeamlessUser(ssoRes.user);
+            }
+            setRedirecting(true);
+            setRedirectTarget(ssoRes.redirect_to);
+            setTimeout(() => {
+              window.location.href = ssoRes.redirect_to;
+            }, 800);
+            return;
+          }
+        } catch (err: any) {
+          console.warn("Seamless SSO attempt failed:", err);
+          if (
+            err.status === 403 ||
+            (typeof err.message === "string" &&
+              (err.message.includes("สิทธิ์") || err.message.includes("ระงับ")))
+          ) {
+            setValidationError(err.message || "ท่านไม่ได้รับสิทธิ์เข้าใช้งานระบบนี้");
+            setCheckingSeamless(false);
+            return;
+          }
+
+          // In case session expired (401) or invalid, silently clear and drop back to login form
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("ciam_token");
+            localStorage.removeItem("ciam_user");
+          }
+          setCheckingSeamless(false);
+          setSeamlessUser(null);
+        }
+      } else {
         setLoadingMeta(false);
       }
     };
 
-    checkMeta();
-  }, [clientId, redirectUri, responseType, scope, state, codeChallenge, codeChallengeMethod]);
+    checkMetaAndSession();
+  }, [clientId, redirectUri, responseType, scope, state, codeChallenge, codeChallengeMethod, switchAccount]);
+
+  const handleSwitchAccount = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("ciam_token");
+      localStorage.removeItem("ciam_user");
+    }
+    setSwitchAccount(true);
+    setCheckingSeamless(false);
+    setSeamlessUser(null);
+    setLoginError(null);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,18 +180,31 @@ function AuthorizeContent() {
         client_id: clientId,
         redirect_uri: redirectUri,
         scope,
-        state,
+        state: state || undefined,
         code_challenge: codeChallenge || undefined,
         code_challenge_method: codeChallengeMethod || undefined,
       });
 
       if (res.status === "SUCCESS" && res.redirect_to) {
+        // Save token and user for subsequent Seamless SSO across apps
+        if (typeof window !== "undefined") {
+          if (res.access_token) {
+            localStorage.setItem("ciam_token", res.access_token);
+          }
+          if (res.user) {
+            localStorage.setItem("ciam_user", JSON.stringify(res.user));
+          }
+        }
+
+        if (res.user) {
+          setSeamlessUser(res.user);
+        }
         setRedirecting(true);
         setRedirectTarget(res.redirect_to);
         // Smooth transition before redirect
         setTimeout(() => {
           window.location.href = res.redirect_to;
-        }, 1200);
+        }, 1000);
       }
     } catch (err: any) {
       console.error("Authorize login failed:", err);
@@ -153,7 +252,7 @@ function AuthorizeContent() {
               <div className="p-4 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 space-y-2">
                 <div className="flex items-center gap-2 font-bold text-sm text-rose-200">
                   <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
-                  <span>คำขอเข้าสู่ระบบไม่ถูกต้อง (Invalid Request)</span>
+                  <span>คำขอเข้าสู่ระบบไม่ถูกต้อง (Access Denied)</span>
                 </div>
                 <p className="text-xs leading-relaxed text-rose-300">
                   {validationError}
@@ -165,37 +264,80 @@ function AuthorizeContent() {
                 <div className="truncate">Redirect URI: {redirectUri || "None"}</div>
               </div>
 
-              <button
-                onClick={() => window.history.back()}
-                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
-              >
-                ย้อนกลับ (Go Back)
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => window.history.back()}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                >
+                  ย้อนกลับ
+                </button>
+                <button
+                  onClick={handleSwitchAccount}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors"
+                >
+                  สลับบัญชีผู้ใช้
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Seamless SSO In-Progress State */}
+          {!loadingMeta && !validationError && checkingSeamless && !redirecting && (
+            <div className="py-8 text-center space-y-5 animate-in fade-in duration-300">
+              <div className="w-16 h-16 bg-blue-500/20 border border-blue-400/40 rounded-full flex items-center justify-center mx-auto text-blue-400 ring-8 ring-blue-500/10">
+                <RefreshCw className="w-8 h-8 animate-spin text-blue-400" />
+              </div>
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>ตรวจพบเซสชันการเข้าสู่ระบบ (Active Session)</span>
+                </div>
+                <h3 className="text-base font-bold text-white pt-1">
+                  {seamlessUser ? `กำลังเข้าสู่ระบบในชื่อ ${seamlessUser.full_name || seamlessUser.username}` : "กำลังยืนยันตัวตนอัตโนมัติ..."}
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
+                  กำลังนำทางกลับสู่ระบบ <span className="text-blue-300 font-semibold">{meta?.app_name || "เป้าหมาย"}</span> โดยไม่ต้องกรอกรหัสผ่านซ้ำ...
+                </p>
+              </div>
+
+              <div className="w-48 h-1.5 bg-slate-800 rounded-full overflow-hidden mx-auto">
+                <div className="w-full h-full bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 animate-pulse" />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleSwitchAccount}
+                  className="text-xs text-slate-400 hover:text-slate-200 underline underline-offset-4 transition-colors cursor-pointer"
+                >
+                  ไม่ใช่บัญชีของคุณ? สลับบัญชี / เข้าสู่ระบบด้วยบัญชีอื่น
+                </button>
+              </div>
             </div>
           )}
 
           {/* Redirecting Success State */}
-          {redirecting && (
+          {!loadingMeta && !validationError && redirecting && (
             <div className="py-10 text-center space-y-4 animate-in fade-in zoom-in duration-300">
-              <div className="w-14 h-14 bg-emerald-500/20 border border-emerald-400/30 rounded-full flex items-center justify-center mx-auto text-emerald-400">
-                <CheckCircle2 className="w-8 h-8 animate-bounce" />
+              <div className="w-16 h-16 bg-emerald-500/20 border border-emerald-400/30 rounded-full flex items-center justify-center mx-auto text-emerald-400 ring-8 ring-emerald-500/10">
+                <CheckCircle2 className="w-9 h-9 animate-bounce text-emerald-400" />
               </div>
               <div className="space-y-1">
                 <h3 className="text-base font-bold text-white">
-                  ยืนยันตัวตนสำเร็จ!
+                  {seamlessUser ? `ยืนยันตัวตนสำเร็จ: ${seamlessUser.full_name || seamlessUser.username}` : "ยืนยันตัวตนสำเร็จ!"}
                 </h3>
                 <p className="text-xs text-slate-400">
-                  กำลังนำทางกลับสู่ระบบ {meta?.app_name || "เป้าหมาย"}...
+                  กำลังนำทางกลับสู่ระบบ <span className="text-white font-medium">{meta?.app_name || "เป้าหมาย"}</span>...
                 </p>
               </div>
               <div className="w-48 h-1.5 bg-slate-800 rounded-full overflow-hidden mx-auto">
-                <div className="w-full h-full bg-gradient-to-r from-blue-500 to-emerald-400 animate-[shimmer_1s_infinite]" />
+                <div className="w-full h-full bg-gradient-to-r from-blue-500 to-emerald-400 animate-pulse" />
               </div>
             </div>
           )}
 
           {/* Ready & Active Login Form */}
-          {!loadingMeta && !validationError && !redirecting && meta && (
+          {!loadingMeta && !validationError && !checkingSeamless && !redirecting && meta && (
             <>
               {/* Spoke Application Banner */}
               <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-slate-300 space-y-1.5">
@@ -226,7 +368,7 @@ function AuthorizeContent() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
                     <span>ชื่อผู้ใช้ (AD Username)</span>
-                    <span className="text-[11px] text-slate-500 font-normal">เช่น admin, Patcha.S</span>
+                    <span className="text-[11px] text-slate-500 font-normal">เช่น admin, Chaiwat.N</span>
                   </label>
                   <div className="relative">
                     <Fingerprint className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />

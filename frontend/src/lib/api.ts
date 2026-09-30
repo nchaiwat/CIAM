@@ -551,6 +551,19 @@ export const ciamApi = {
       body: JSON.stringify(payload),
     }),
 
+  submitSeamlessAuthorize: (payload: {
+    client_id: string;
+    redirect_uri: string;
+    scope?: string;
+    state?: string;
+    code_challenge?: string;
+    code_challenge_method?: string;
+  }) =>
+    fetchApi<PortalLoginResponse>("/oauth/authorize/seamless", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   loginAdmin: (payload: LoginPayload) =>
     fetchApi<AdminTokenResponse>("/auth/login", {
       method: "POST",
@@ -685,6 +698,8 @@ export interface PortalLoginResponse {
   code: string;
   state?: string;
   redirect_to: string;
+  access_token?: string;
+  token_type?: string;
   user: {
     username: string;
     full_name: string;

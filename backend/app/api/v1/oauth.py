@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.schemas.oauth import (
     AuthorizeParams,
     PortalLoginRequest,
+    SeamlessAuthorizeRequest,
     OIDCTokenResponse,
     OIDCUserInfo,
     TokenRequest,
@@ -27,7 +28,7 @@ from app.models.mapping import AppAccountMapping
 from app.models.user import AdminUser
 from app.api.deps import get_current_user_optional, get_current_user
 from sqlalchemy import func
-from app.core.security import get_public_base_url
+from app.core.security import get_public_base_url, create_access_token
 from app.services.oidc_service import (
     validate_client_and_redirect_uri,
     verify_employee_credentials,
@@ -144,15 +145,99 @@ def authorize_post(
 
     logger.info("Issued authorization code for user '%s' to client '%s'", user["username"], app.app_code)
 
+    session_token = create_access_token(subject=user["username"])
+
+    return {
+        "status": "SUCCESS",
+        "code": code,
+        "state": payload.state,
+        "redirect_to": redirect_to,
+        "access_token": session_token,
+        "token_type": "bearer",
+        "user": {
+            "username": user["username"],
+            "full_name": user["full_name"],
+            "department": user["department"]
+        }
+    }
+
+
+@router.post("/authorize/seamless")
+def authorize_seamless(
+    request: Request,
+    payload: SeamlessAuthorizeRequest,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_user)
+):
+    """
+    Seamless Single Sign-On (True SSO) for already authenticated employees.
+    Validates client and grants authorization code without requiring credentials again.
+    """
+    app = validate_client_and_redirect_uri(
+        db=db, client_id=payload.client_id, redirect_uri=payload.redirect_uri
+    )
+
+    launch_username = current_user.username
+    if current_user.role not in ["SUPER_ADMIN", "ADMIN"]:
+        ident = db.query(MasterIdentity).filter(
+            MasterIdentity.username.ilike(current_user.username)
+        ).first()
+        if ident and not ident.is_active_in_ad:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"บัญชี '{current_user.username}' ถูกระงับการใช้งานใน Active Directory"
+            )
+        if ident:
+            mapping = db.query(AppAccountMapping).filter(
+                AppAccountMapping.identity_id == ident.id,
+                AppAccountMapping.application_id == app.id,
+                AppAccountMapping.is_active_in_app == True
+            ).first()
+            if not mapping:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"ท่านไม่ได้รับสิทธิ์เข้าใช้งานระบบ '{app.app_name}' กรุณาติดต่อฝ่ายเทคโนโลยีสารสนเทศ"
+                )
+            launch_username = mapping.app_username or current_user.username
+
+    code = create_authorization_code(
+        db=db,
+        client_id=payload.client_id,
+        username=launch_username,
+        redirect_uri=payload.redirect_uri,
+        scope=payload.scope or "openid profile email",
+        code_challenge=payload.code_challenge,
+        code_challenge_method=payload.code_challenge_method or "S256"
+    )
+
+    parsed_url = urlparse(payload.redirect_uri)
+    query_dict = parse_qs(parsed_url.query)
+    query_dict["code"] = [code]
+    if payload.state:
+        query_dict["state"] = [payload.state]
+
+    flattened_query = {k: v[0] if isinstance(v, list) else v for k, v in query_dict.items()}
+    new_query = urlencode(flattened_query)
+    redirect_to = urlunparse((
+        parsed_url.scheme,
+        parsed_url.netloc,
+        parsed_url.path,
+        parsed_url.params,
+        new_query,
+        parsed_url.fragment
+    ))
+
+    logger.info("Issued seamless SSO authorization code for user '%s' to client '%s'", launch_username, app.app_code)
+
     return {
         "status": "SUCCESS",
         "code": code,
         "state": payload.state,
         "redirect_to": redirect_to,
         "user": {
-            "username": user["username"],
-            "full_name": user["full_name"],
-            "department": user["department"]
+            "username": current_user.username,
+            "full_name": current_user.full_name,
+            "department": getattr(current_user, "department", "General") or "General"
         }
     }
 

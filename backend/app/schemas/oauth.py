@@ -23,6 +23,15 @@ class PortalLoginRequest(BaseModel):
     code_challenge_method: Optional[str] = "S256"
 
 
+class SeamlessAuthorizeRequest(BaseModel):
+    client_id: str
+    redirect_uri: str
+    scope: str = "openid profile email"
+    state: Optional[str] = None
+    code_challenge: Optional[str] = None
+    code_challenge_method: Optional[str] = "S256"
+
+
 class TokenRequest(BaseModel):
     grant_type: str = Field(..., description="Must be 'authorization_code'")
     code: str = Field(..., description="Authorization code issued by Central IAM")
