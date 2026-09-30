@@ -405,8 +405,15 @@ async def sync_application_inventory(
                 mapping = None
 
             is_active = bool(item.get("is_active", True))
-            # Flag discrepancy: disabled in AD but active in app
-            sync_status = "DISCREPANCY" if (not identity.is_active_in_ad and is_active) else "IN_SYNC"
+            is_exception = bool(
+                getattr(mapping, "is_approved_exception", False) or getattr(identity, "is_approved_exception", False)
+            )
+            if is_exception:
+                sync_status = "APPROVED_EXCEPTION"
+            elif not identity.is_active_in_ad and is_active:
+                sync_status = "DISCREPANCY"
+            else:
+                sync_status = "IN_SYNC"
 
             # Parse last login if provided
             last_login_dt = None

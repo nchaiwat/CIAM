@@ -122,3 +122,17 @@ class UserActivateResponse(BaseModel):
     overall_status: str
     checklist: List[AppActivationResult] = []
 
+class LocalPortalAccountRequest(BaseModel):
+    password: Optional[str] = None
+    notes: Optional[str] = None
+
+class LocalPortalAccountResponse(BaseModel):
+    status: str
+    message: str
+    username: str
+    full_name: str
+    temporary_password: str
+    role: str
+    is_approved_exception: bool
+
+

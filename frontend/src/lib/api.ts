@@ -119,6 +119,16 @@ export interface UserActivateResponse {
   checklist: AppActivationResult[];
 }
 
+export interface LocalPortalAccountResponse {
+  status: string;
+  message: string;
+  username: string;
+  full_name: string;
+  temporary_password: string;
+  role: string;
+  is_approved_exception: boolean;
+}
+
 export interface UserListItem {
   id: number;
   employee_id: string | null;
@@ -397,6 +407,15 @@ export const ciamApi = {
   revokeUserException: (identityId: number) =>
     fetchApi<AccountActionResponse>(`/directory/users/${identityId}/exception`, {
       method: "DELETE",
+    }),
+
+  createLocalPortalAccount: (
+    identityId: number,
+    payload: { password?: string; notes?: string }
+  ) =>
+    fetchApi<LocalPortalAccountResponse>(`/directory/users/${identityId}/local-account`, {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
 
 

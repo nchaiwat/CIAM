@@ -23,6 +23,8 @@ import {
   Crown,
   Zap,
   Link2 as LinkIcon,
+  Key,
+  Copy,
 } from "lucide-react";
 import {
   ciamApi,
@@ -31,6 +33,7 @@ import {
   UserCreateResponse,
   UserActivateResponse,
   AppAccountSummary,
+  LocalPortalAccountResponse,
 } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/date";
 
@@ -110,6 +113,16 @@ export default function DirectoryPage() {
   const [exceptionLoading, setExceptionLoading] = useState(false);
   const [exceptionError, setExceptionError] = useState<string | null>(null);
   const [exceptionSuccessMsg, setExceptionSuccessMsg] = useState<string | null>(null);
+
+  // Local Portal Account Modal State
+  const [isLocalAccountModalOpen, setIsLocalAccountModalOpen] = useState(false);
+  const [localAccountTarget, setLocalAccountTarget] = useState<UserListItem | null>(null);
+  const [localPassword, setLocalPassword] = useState("");
+  const [localNotes, setLocalNotes] = useState("");
+  const [localAccountLoading, setLocalAccountLoading] = useState(false);
+  const [localAccountError, setLocalAccountError] = useState<string | null>(null);
+  const [localAccountResult, setLocalAccountResult] = useState<LocalPortalAccountResponse | null>(null);
+  const [copiedPassword, setCopiedPassword] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -460,6 +473,51 @@ export default function DirectoryPage() {
     }
   };
 
+  const handleOpenLocalAccountModal = (user: UserListItem) => {
+    setLocalAccountTarget(user);
+    setLocalPassword("");
+    const appNames = user.connected_apps.map((a) => a.app_name).join(", ");
+    setLocalNotes(
+      user.exception_reason ||
+        `บัญชีผู้ใช้งานเฉพาะระบบ ${appNames || "IRM"} (Non-AD Local Portal Account)`
+    );
+    setLocalAccountError(null);
+    setLocalAccountResult(null);
+    setCopiedPassword(false);
+    setIsLocalAccountModalOpen(true);
+  };
+
+  const handleLocalAccountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!localAccountTarget) return;
+
+    try {
+      setLocalAccountLoading(true);
+      setLocalAccountError(null);
+      const res = await ciamApi.createLocalPortalAccount(localAccountTarget.id, {
+        password: localPassword.trim() || undefined,
+        notes: localNotes.trim() || undefined,
+      });
+      setLocalAccountResult(res);
+      await fetchUsers();
+      if (selectedUser && selectedUser.id === localAccountTarget.id) {
+        const refreshed = await ciamApi.getUserDetail(selectedUser.id);
+        setSelectedUser(refreshed.user);
+      }
+    } catch (err: any) {
+      setLocalAccountError(err.message || "เกิดข้อผิดพลาดในการสร้างบัญชี Local Portal");
+    } finally {
+      setLocalAccountLoading(false);
+    }
+  };
+
+  const handleCopyPassword = (pwd: string) => {
+    if (!pwd) return;
+    navigator.clipboard.writeText(pwd);
+    setCopiedPassword(true);
+    setTimeout(() => setCopiedPassword(false), 2500);
+  };
+
   const adCandidates = users.filter((u) => {
     if (u.is_ad_account === false) return false;
     if (linkTargetAccount?.source_user_id && u.id === linkTargetAccount.source_user_id) return false;
@@ -737,7 +795,15 @@ export default function DirectoryPage() {
 
                     {/* AD Status */}
                     <td className="py-3 px-4">
-                      {user.is_ad_account === false ? (
+                      {user.is_approved_exception && user.exception_type === "LOCAL_ACCOUNT" ? (
+                        <span
+                          className="bg-emerald-100 text-emerald-950 border border-emerald-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5"
+                          title="บัญชี Local Portal (เปิดใช้งานรหัสผ่านกลางแล้ว)"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                          <span>Local Portal</span>
+                        </span>
+                      ) : user.is_ad_account === false ? (
                         <span className="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                           <span>ระบบลูกเท่านั้น</span>
@@ -979,16 +1045,24 @@ export default function DirectoryPage() {
               <div
                 className={`p-3.5 rounded-lg border-2 text-xs space-y-2.5 ${
                   selectedUser.is_approved_exception
-                    ? "bg-purple-50 border-purple-300 text-purple-950"
+                    ? selectedUser.exception_type === "LOCAL_ACCOUNT"
+                      ? "bg-emerald-50 border-emerald-300 text-emerald-950"
+                      : "bg-purple-50 border-purple-300 text-purple-950"
                     : "bg-amber-50 border-amber-400 text-amber-950"
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2 font-black">
-                    <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                    {selectedUser.exception_type === "LOCAL_ACCOUNT" ? (
+                      <Key className="w-4 h-4 text-emerald-700 shrink-0" />
+                    ) : (
+                      <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                    )}
                     <span>
                       {selectedUser.is_approved_exception
-                        ? `ได้รับการอนุมัติข้อยกเว้น (${selectedUser.exception_type})`
+                        ? selectedUser.exception_type === "LOCAL_ACCOUNT"
+                          ? "บัญชี Local Portal (เข้าใช้งาน App Portal ได้)"
+                          : `ได้รับการอนุมัติข้อยกเว้น (${selectedUser.exception_type})`
                         : "ตรวจพบบัญชีที่ไม่ตรงกับ AD (Spoke Account Discrepancy)"}
                     </span>
                   </div>
@@ -1004,28 +1078,47 @@ export default function DirectoryPage() {
 
                 <p className="text-[11px] leading-relaxed text-slate-700">
                   {selectedUser.is_approved_exception
-                    ? `เหตุผล: ${selectedUser.exception_reason || "ไม่ได้ระบุ"} (อนุมัติโดย: ${selectedUser.exception_approved_by || "Admin"})`
-                    : "บัญชีนี้สร้างขึ้นจากระบบลูก (Spoke) หรือชื่อ Username สะกดไม่ตรงกับ Active Directory ทำให้ระบบตรวจเป็นบัญชีผี คุณสามารถผูกเข้ากับตัวตนหลักใน AD หรือบันทึกยอมรับเป็นข้อยกเว้นได้"}
+                    ? selectedUser.exception_type === "LOCAL_ACCOUNT"
+                      ? `ผู้ใช้งานนี้ได้รับอนุมัติให้มีรหัสผ่านกลางสำหรับล็อกอินเข้า App Portal ได้โดยตรง (ระบบกรองแสดงเฉพาะแอปที่เชื่อมต่อ: ${selectedUser.connected_apps.map((a) => a.app_name).join(", ") || "IRM"})`
+                      : `เหตุผล: ${selectedUser.exception_reason || "ไม่ได้ระบุ"} (อนุมัติโดย: ${selectedUser.exception_approved_by || "Admin"})`
+                    : "บัญชีนี้สร้างขึ้นจากระบบลูก (Spoke) หรือไม่มีอยู่ใน Active Directory คุณสามารถผูกเข้ากับ AD หรืออนุมัติเป็น Local Portal Account พร้อมตั้งรหัสผ่านกลางให้เขาเข้าใช้งาน App Portal ได้"}
                 </p>
 
-                {!selectedUser.is_approved_exception && (
-                  <div className="flex flex-wrap gap-2 pt-1">
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {!selectedUser.is_approved_exception ? (
+                    <>
+                      <button
+                        onClick={() => handleOpenLocalAccountModal(selectedUser)}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-xs cursor-pointer shadow-xs"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                        <span>อนุมัติเป็น Local Portal Account (ตั้งรหัสผ่าน)</span>
+                      </button>
+                      <button
+                        onClick={() => handleOpenLinkModalForUser(selectedUser)}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-xs cursor-pointer shadow-xs"
+                      >
+                        <LinkIcon className="w-3.5 h-3.5" />
+                        <span>ผูกบัญชีเข้ากับตัวตนใน AD</span>
+                      </button>
+                      <button
+                        onClick={() => handleOpenExceptionModalForUser(selectedUser)}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border-2 border-amber-400 hover:bg-amber-100 text-amber-900 rounded font-bold text-xs cursor-pointer shadow-xs"
+                      >
+                        <Shield className="w-3.5 h-3.5 text-amber-700" />
+                        <span>ยอมรับเป็นข้อยกเว้นทั่วไป</span>
+                      </button>
+                    </>
+                  ) : selectedUser.exception_type === "LOCAL_ACCOUNT" ? (
                     <button
-                      onClick={() => handleOpenLinkModalForUser(selectedUser)}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-xs cursor-pointer shadow-xs"
+                      onClick={() => handleOpenLocalAccountModal(selectedUser)}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-bold text-xs cursor-pointer shadow-xs"
                     >
-                      <LinkIcon className="w-3.5 h-3.5" />
-                      <span>ผูกบัญชีเข้ากับตัวตนใน AD</span>
+                      <Key className="w-3.5 h-3.5" />
+                      <span>รีเซ็ต / ตั้งรหัสผ่าน Portal ใหม่</span>
                     </button>
-                    <button
-                      onClick={() => handleOpenExceptionModalForUser(selectedUser)}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border-2 border-amber-400 hover:bg-amber-100 text-amber-900 rounded font-bold text-xs cursor-pointer shadow-xs"
-                    >
-                      <Shield className="w-3.5 h-3.5 text-amber-700" />
-                      <span>ยอมรับเป็นข้อยกเว้น (Accept Exception)</span>
-                    </button>
-                  </div>
-                )}
+                  ) : null}
+                </div>
               </div>
             )}
 
@@ -1864,6 +1957,160 @@ export default function DirectoryPage() {
           </div>
         </div>
       )}
+
+      {/* Local Portal Account Modal */}
+      {isLocalAccountModalOpen && localAccountTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white max-w-md w-full p-6 space-y-4 rounded-lg border-2 border-slate-300 shadow-2xl relative">
+            <div className="flex items-start justify-between border-b-2 border-slate-200 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-10 h-10 rounded-lg bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 font-bold">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {localAccountTarget.is_approved_exception && localAccountTarget.exception_type === "LOCAL_ACCOUNT"
+                      ? "รีเซ็ตรหัสผ่าน Local Portal"
+                      : "อนุมัติเป็น Local Portal Account"}
+                  </h3>
+                  <p className="text-xs text-slate-600 font-medium">
+                    กำหนดรหัสผ่านกลางสำหรับล็อกอินเข้า App Portal โดยตรง
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsLocalAccountModalOpen(false)}
+                className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {localAccountResult ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-md bg-emerald-50 border-2 border-emerald-300 text-emerald-950 text-xs space-y-3">
+                  <div className="font-bold flex items-center space-x-1.5 text-sm text-emerald-900">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <span>บันทึกบัญชี Local Portal เรียบร้อยแล้ว</span>
+                  </div>
+                  <p className="font-medium text-slate-700 leading-relaxed">
+                    ผู้ใช้งานสามารถนำข้อมูลด้านล่างไปล็อกอินที่หน้าต่าง <strong>Single Sign-On (App Portal)</strong> เพื่อเข้าสู่ระบบได้ทันที
+                  </p>
+
+                  <div className="p-3 bg-white rounded-md border border-emerald-300 space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-500 font-medium">ชื่อผู้ใช้ (Username):</span>
+                      <span className="font-mono font-bold text-slate-900">{localAccountResult.username}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-500 font-medium">รหัสผ่านเริ่มต้น (Password):</span>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          {localAccountResult.temporary_password}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyPassword(localAccountResult.temporary_password)}
+                          className="p-1 rounded hover:bg-slate-100 text-slate-600 cursor-pointer"
+                          title="คัดลอกรหัสผ่าน"
+                        >
+                          {copiedPassword ? (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    onClick={() => setIsLocalAccountModalOpen(false)}
+                    className="px-5 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm cursor-pointer"
+                  >
+                    เสร็จสิ้น
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleLocalAccountSubmit} className="space-y-4">
+                {localAccountError && (
+                  <div className="p-3 rounded-md bg-rose-50 border-2 border-rose-400 text-rose-900 text-xs font-bold">
+                    {localAccountError}
+                  </div>
+                )}
+
+                <div className="p-3 bg-slate-50 border-2 border-slate-300 rounded-md text-xs space-y-1">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase block">บัญชีเป้าหมาย:</span>
+                  <div className="font-bold text-slate-900 text-sm">{localAccountTarget.full_name}</div>
+                  <div className="font-mono text-blue-700 text-xs">{localAccountTarget.username}</div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    รหัสผ่านเริ่มต้น (Temporary Password)
+                  </label>
+                  <input
+                    type="text"
+                    value={localPassword}
+                    onChange={(e) => setLocalPassword(e.target.value)}
+                    placeholder="ปล่อยว่างไว้เพื่อให้ระบบสุ่มรหัสผ่านให้อัตโนมัติ"
+                    className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-mono focus:outline-none focus:border-emerald-600"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    หากไม่ระบุ ระบบจะสุ่มรหัสผ่านที่ปลอดภัย เช่น <span className="font-mono font-bold">Wa@xxxxxxxx</span>
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    บันทึกเหตุผล / หมายเหตุ (Audit Justification) *
+                  </label>
+                  <textarea
+                    rows={2}
+                    required
+                    value={localNotes}
+                    onChange={(e) => setLocalNotes(e.target.value)}
+                    placeholder="เช่น ผู้รับเหมาภายนอก ประจำคลัง IRM อนุมัติโดยหัวหน้างาน"
+                    className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-medium focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+
+                <div className="pt-2 border-t-2 border-slate-200 flex items-center justify-end space-x-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsLocalAccountModalOpen(false)}
+                    className="px-4 py-2 rounded-md bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold cursor-pointer"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={localAccountLoading}
+                    className="flex items-center space-x-1.5 px-5 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm disabled:opacity-50 cursor-pointer"
+                  >
+                    {localAccountLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>กำลังบันทึก...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Key className="w-4 h-4" />
+                        <span>ยืนยันสร้างรหัสผ่าน Portal</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

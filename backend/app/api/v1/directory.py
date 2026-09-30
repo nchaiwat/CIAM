@@ -20,7 +20,9 @@ from app.schemas.directory import (
     UserActivateResponse,
     AccountLinkRequest,
     AccountExceptionRequest,
-    AccountActionResponse
+    AccountActionResponse,
+    LocalPortalAccountRequest,
+    LocalPortalAccountResponse
 )
 from app.services.provisioning import execute_user_creation
 from app.services.deprovisioning import execute_user_activation
@@ -654,6 +656,105 @@ def revoke_user_exception(
     return AccountActionResponse(
         status="SUCCESS",
         message=f"ยกเลิกข้อยกเว้นสำหรับ {identity.username} เรียบร้อยแล้ว"
+    )
+
+
+@router.post("/users/{identity_id}/local-account", response_model=LocalPortalAccountResponse)
+def create_or_update_local_portal_account(
+    identity_id: int,
+    payload: LocalPortalAccountRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """
+    Provision or update a Local Portal Account for a non-AD user (e.g. Outsource/Spoke-local user).
+    - Sets or updates password in central_iam_admins with role 'PORTAL_USER'.
+    - Approves identity & associated spoke mappings as LOCAL_ACCOUNT exception (suppresses ghost warnings).
+    - Allows the user to log in to Central IAM App Portal directly.
+    """
+    import secrets
+    from sqlalchemy import func
+    from app.core.security import hash_password
+
+    identity = db.query(MasterIdentity).filter_by(id=identity_id).first()
+    if not identity:
+        raise HTTPException(status_code=404, detail="ไม่พบตัวตนที่ระบุ")
+
+    now = datetime.now(timezone.utc)
+    raw_password = (payload.password or "").strip()
+    if not raw_password:
+        # Generate clean readable temporary password e.g. Wa@2026xxxx
+        raw_password = f"Wa@{secrets.token_hex(4)}"
+
+    hashed_pwd = hash_password(raw_password)
+
+    # 1. Create or update AdminUser with PORTAL_USER role
+    admin_user = db.query(AdminUser).filter(
+        func.lower(AdminUser.username) == identity.username.lower().strip()
+    ).first()
+
+    email_val = identity.email or f"{identity.username.lower()}@windowasia.com"
+    full_name_val = identity.full_name or identity.username
+
+    if not admin_user:
+        admin_user = AdminUser(
+            username=identity.username,
+            full_name=full_name_val,
+            email=email_val,
+            hashed_password=hashed_pwd,
+            role="PORTAL_USER",
+            is_active=True,
+            failed_login_attempts=0
+        )
+        db.add(admin_user)
+    else:
+        admin_user.hashed_password = hashed_pwd
+        admin_user.is_active = True
+        admin_user.failed_login_attempts = 0
+        admin_user.locked_until = None
+        if admin_user.role not in ["SUPER_ADMIN", "ADMIN"]:
+            admin_user.role = "PORTAL_USER"
+
+    # 2. Mark MasterIdentity as approved LOCAL_ACCOUNT exception
+    exception_reason = (payload.notes or "").strip() or "บัญชีผู้ใช้เฉพาะระบบ (Non-AD Local Portal Account)"
+    identity.is_approved_exception = True
+    identity.exception_type = "LOCAL_ACCOUNT"
+    identity.exception_reason = exception_reason
+    identity.exception_approved_by = current_admin.username
+    identity.exception_approved_at = now
+
+    # 3. Mark all spoke account mappings as approved exceptions
+    for m in identity.accounts:
+        m.is_approved_exception = True
+        m.exception_type = "LOCAL_ACCOUNT"
+        m.exception_reason = exception_reason
+        m.exception_approved_by = current_admin.username
+        m.exception_approved_at = now
+        m.last_sync_status = "APPROVED_EXCEPTION"
+
+    # 4. Audit Log
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="CREATE_LOCAL_PORTAL_ACCOUNT",
+        target_username=identity.username,
+        affected_app_code="PORTAL",
+        execution_mode="PORTAL_ADMIN",
+        reason=f"สร้าง/รีเซ็ตรหัสผ่าน Local Portal Account สำหรับ {identity.username} (Role: {admin_user.role})",
+        status="SUCCESS"
+    ))
+
+    db.commit()
+    db.refresh(admin_user)
+    db.refresh(identity)
+
+    return LocalPortalAccountResponse(
+        status="SUCCESS",
+        message=f"เปิดใช้งานบัญชี Local Portal สำหรับ '{identity.username}' สำเร็จ พร้อมใช้งานใน App Portal ได้ทันที",
+        username=identity.username,
+        full_name=identity.full_name,
+        temporary_password=raw_password,
+        role=admin_user.role,
+        is_approved_exception=True
     )
 
 
