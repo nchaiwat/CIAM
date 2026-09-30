@@ -1,6 +1,6 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Version:** 2.0.0 (Zero `.env` Dependency Edition)  
+**Version:** 2.1.0 (Seamless True SSO, Single-Button UX & Return-to-Portal Edition)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
 **Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
 **Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636)
@@ -452,16 +452,17 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 ---
 
-### 5.2 มาตรฐานหน้าจอล็อกอินและพฤติกรรมเมื่อปิด SSO (Zero-Confusion Login Guidelines)
+### 5.2 มาตรฐานหน้าจอล็อกอินและพฤติกรรมเมื่อปิด SSO (Zero-Confusion Single-Button Standard)
 
 > [!IMPORTANT]
 > **กฎความเรียบง่ายและไม่ทำให้ผู้ใช้สับสน (Zero-Confusion Standard):**  
 > หน้าจอล็อกอินของระบบลูก (Spoke Login Page) จะต้องปรับเปลี่ยนการแสดงผลตามสถานะของ `ciam_sso_enabled` และ `ciam_break_glass_active` อย่างเคร่งครัดตาม 3 สถานการณ์ดังนี้:
 
 #### สถานการณ์ที่ 1: เปิดใช้งาน SSO ปกติ (`ciam_sso_enabled = true` และ `ciam_break_glass_active = false`)
-* **ปุ่มหลัก (Primary CTA):** แสดงปุ่มเด่นชัดสีน้ำเงิน/ฟ้า `[ 🛡️ เข้าสู่ระบบด้วย Central IAM (SSO) ⚡ ]` อยู่ด้านบนสุด
-* **เส้นคั่น (Divider):** แสดงเส้นคั่นบางๆ พร้อมข้อความ: `หรือเข้าสู่ระบบด้วยรหัสผ่าน`
-* **ฟอร์มรอง (Secondary):** แสดงช่อง Username / Password และปุ่มกด `เข้าสู่ระบบ (Sign In)`
+* **ปุ่มหลักเพียงปุ่มเดียว (Single Primary CTA):** แสดงปุ่มเด่นชัดสีน้ำเงิน/ฟ้า **`[ 🛡️ เข้าสู่ระบบด้วย Window Asia SSO ✨ ]`** เป็นปุ่มหลักเพียงปุ่มเดียวในหน้าจอ
+* **ซ่อนฟอร์ม Local Login เริ่มต้น (Hidden by Default):** **ซ่อนช่อง Username, Password และปุ่ม Sign In ดั้งเดิมไว้โดยเริ่มต้น** เพื่อไม่ให้พนักงานทั่วไปเกิดความสับสนว่าต้องพิมพ์รหัสตรงนี้หรือกดปุ่ม SSO ด้านบน
+* **ลิงก์สำรองสำหรับผู้ดูแลระบบ (Local Admin Link):** ทำเป็นข้อความลิงก์เล็กๆ ด้านล่าง เช่น *"เข้าสู่ระบบด้วยบัญชี Local (กรณีฉุกเฉิน) →"* สำหรับให้แอดมินคลิกเพื่อกางฟอร์มกรอกรหัสผ่านในกรณีพิเศษ (เช่น บัญชี `admin`)
+* **รองรับ Seamless True SSO:** เมื่อพนักงานมีเซสชันเดิมบน Central IAM (หรือเปิดมาจาก Portal) การคลิกปุ่ม SSO จะทำการยืนยันตัวตนและนำทางเข้าสู่ระบบลูกโดยอัตโนมัติใน ~0.8 วินาทีโดยไม่ต้องพิมพ์ชื่อและรหัสผ่านซ้ำอีก
 
 #### สถานการณ์ที่ 2: ปิดใช้งาน SSO ในระบบลูก (`ciam_sso_enabled = false`)
 * ❌ **ห้ามแสดงปุ่ม SSO โดยเด็ดขาด:** ไม่ต้องเรนเดอร์ปุ่ม SSO สีฟ้า
@@ -473,7 +474,25 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 #### สถานการณ์ที่ 3: โหมดฉุกเฉิน Break-Glass (`ciam_break_glass_active = true`)
 * แสดงกล่องแจ้งเตือนสีเหลือง/ส้มด้านบน: `⚠️ ระบบอยู่ในโหมดฉุกเฉิน (Break-Glass Active) - เข้าใช้งานด้วยรหัสผ่านตรง`
-* ปุ่มกดยืนยันแสดงข้อความ: `เข้าสู่ระบบฉุกเฉิน (Break-Glass Sign In)`
+* เปิดฟอร์ม Username และ Password ให้อัตโนมัติ โดยปุ่มกดยืนยันแสดงข้อความ: `เข้าสู่ระบบฉุกเฉิน (Break-Glass Sign In)`
+
+---
+
+### 5.3 มาตรฐานการออกจากระบบและการหมดอายุของเซสชัน (Seamless Logout & Expired Lifecycle)
+
+เพื่อให้ประสบการณ์การทำงานข้ามระบบของพนักงาน (Cross-App Experience) เป็นไปอย่างไร้รอยต่อตามหลักการ Enterprise Launchpad:
+
+1. **เมื่อพนักงานกด "ออกจากระบบ (Logout)" ในระบบลูก:**
+   * **กรณีล็อกอินผ่าน SSO (พนักงาน 99%):**
+     * ระบบลูกทำการล้าง Token และ Session เฉพาะของระบบลูกเอง
+     * นำทางผู้ใช้กลับไปยังหน้า **Central IAM Portal (`https://ciam.windowasia.com/portal`)** ทันที
+     * **ผลลัพธ์:** พนักงานกลับมาที่หน้าโต๊ะทำงานกลาง โดยที่เซสชันของ Central IAM ยังคงอยู่ ทำให้สามารถคลิกเปิดระบบงานอื่น (เช่น SAP B1, QMS, QOL, HR) ต่อได้ทันทีโดยไม่ต้องล็อกอินใหม่
+   * **กรณีล็อกอินผ่าน Local Admin (`admin` กรณีฉุกเฉิน):**
+     * นำทางกลับไปยังหน้า `/login` ของระบบลูกตามเดิม
+2. **เมื่อเซสชันในระบบลูกหมดอายุ (HTTP 401 Unauthorized):**
+   * หาก Request ในระบบลูกได้รับ HTTP 401 (Token Expired):
+     * ให้ล้าง Token ของระบบลูก และนำทางผู้ใช้กลับไปยัง Central IAM Portal (`https://ciam.windowasia.com/portal`) เช่นเดียวกัน
+     * หากเซสชันบน Central IAM ยังไม่หมดอายุ พนักงานสามารถคลิกเปิดระบบลูกใหม่ได้ทันทีใน 1 วินาที (Seamless Re-auth) โดยงานไม่สะดุด
 
 ---
 
@@ -881,5 +900,48 @@ router.post('/callback', async (req, res) => {
 module.exports = router;
 ```
 
+---
 
+### 10.5 ตัวอย่างการจัดการ Logout และ 401 Session Expired บน Frontend (React / Next.js / Vue)
 
+ตัวอย่างโค้ดฝั่ง Client ของระบบลูกที่ช่วยให้รองรับ Seamless Return to Portal:
+
+```typescript
+// 1. ฟังก์ชัน Logout ในระบบลูก (เช่น ใน Header หรือ User Menu)
+export const handleLogout = () => {
+  const authProvider = typeof window !== 'undefined' ? localStorage.getItem('app_auth_provider') : null;
+  const ciamPortalUrl =
+    (typeof window !== 'undefined' && localStorage.getItem('app_ciam_portal_url')) ||
+    'https://ciam.windowasia.com/portal';
+
+  // ล้าง Token เฉพาะของระบบลูก
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('app_access_token');
+    localStorage.removeItem('app_refresh_token');
+    localStorage.removeItem('app_auth_provider');
+  }
+
+  if (authProvider === 'local') {
+    // ผู้ใช้ที่เป็น Local Admin -> เด้งไปหน้า Login ของระบบลูก
+    window.location.href = '/login';
+  } else {
+    // ผู้ใช้ที่เข้าผ่าน SSO -> นำทางกลับสู่ Central IAM Portal กลางอย่างไร้รอยต่อ
+    window.location.href = ciamPortalUrl;
+  }
+};
+
+// 2. การดักจับ HTTP 401 (Session Expired Interceptor ใน Axios หรือ Fetch)
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      const isLoginPage = window.location.pathname === '/login';
+      const isAuthCallback = window.location.pathname === '/auth/callback';
+      if (!isLoginPage && !isAuthCallback) {
+        handleLogout();
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+```

@@ -2403,15 +2403,24 @@ export default function ApplicationsPage() {
               {/* SSO Flow Summary */}
               <div className="space-y-1.5">
                 <h4 className="font-bold text-slate-800 uppercase tracking-wider text-xs">
-                  2. การยืนยันตัวตน SSO และ Active Directory
+                  2. การยืนยันตัวตน SSO และ Active Directory (OIDC PKCE S256)
                 </h4>
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1 text-slate-700">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 text-slate-700">
                   <p>• <strong>Authorize URL:</strong> <code className="font-mono bg-white px-1.5 py-0.5 border rounded">https://ciam.windowasia.com/oauth/authorize</code></p>
                   <p>• <strong>Token Endpoint:</strong> <code className="font-mono bg-white px-1.5 py-0.5 border rounded">https://ciam.windowasia.com/api/v1/oauth/token</code></p>
                   <p>• <strong>JWKS URI:</strong> <code className="font-mono bg-white px-1.5 py-0.5 border rounded">https://ciam.windowasia.com/.well-known/jwks.json</code></p>
-                  <p className="text-[11px] text-slate-500 pt-1">
-                    * เมื่อพนักงาน Login ผ่าน SSO ทาง Central IAM จะไปตรวจสอบกับ Active Directory Domain Controller ให้เรียบร้อย แล้วส่ง Claims (ชื่อ, แผนก, กลุ่มสิทธิ์) กลับมาใน JWT ID Token
-                  </p>
+                  <p>• <strong>Portal URL:</strong> <code className="font-mono bg-white px-1.5 py-0.5 border rounded">https://ciam.windowasia.com/portal</code></p>
+                  <div className="pt-2 border-t border-slate-200 space-y-1 text-[11px] text-slate-600">
+                    <p className="font-semibold text-blue-900">
+                      ⚡ <strong>Seamless True SSO:</strong> ระบบลูกที่เรียกใช้ OIDC PKCE จะได้รับประโยชน์จาก Seamless SSO ทันที หากพนักงานมีเซสชันเดิมบน Central IAM ระบบจะ Re-authorize ให้อัตโนมัติใน ~0.8 วินาทีโดยไม่ต้องกรอกรหัสผ่านซ้ำ
+                    </p>
+                    <p className="font-semibold text-slate-800">
+                      🎯 <strong>Single-Button Standard:</strong> หน้าจอล็อกอินของระบบลูกควรแสดงเฉพาะปุ่ม <code>[ เข้าสู่ระบบด้วย Window Asia SSO ]</code> และซ่อนฟอร์มกรอกรหัสผ่านไว้ด้านหลังลิงก์สำรอง Local Login เพื่อไม่ให้ผู้ใช้งานสับสน
+                    </p>
+                    <p className="font-semibold text-emerald-800">
+                      🔄 <strong>Seamless Logout & Expired:</strong> เมื่อพนักงานกด Logout หรือเมื่อ Token หมดอายุ (HTTP 401) ในระบบลูก ให้นำทางผู้ใช้กลับสู่ <code>https://ciam.windowasia.com/portal</code> เพื่อให้ทำงานในระบบอื่นต่อได้ทันที
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
