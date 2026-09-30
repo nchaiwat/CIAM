@@ -214,14 +214,27 @@ FRONTEND_URL=http://localhost:3000
 > - Database: **`postgres`**
 >
 > **The EXACT deployment commands on VPS (`/var/www/Ciam`):**
+> **กฏเหล็ก:** ต้องเขียนแยกทีละบรรทัด ห้ามต่อด้วย `&&` ยาวเป็นพรืด และต้องมี `git pull` เสมอ:
 > ```bash
 > cd /var/www/Ciam
 > git pull
 > docker compose build api web
 > docker compose up -d api web
 > ```
-> - If updating **Backend only**: `docker compose build api && docker compose up -d api`
-> - If updating **Frontend only**: `docker compose build web && docker compose up -d web`
+> - กรณีอัปเดต **Backend อย่างเดียว**:
+> ```bash
+> cd /var/www/Ciam
+> git pull
+> docker compose build api
+> docker compose up -d api
+> ```
+> - กรณีอัปเดต **Frontend อย่างเดียว**:
+> ```bash
+> cd /var/www/Ciam
+> git pull
+> docker compose build web
+> docker compose up -d web
+> ```
 
 ---
 
