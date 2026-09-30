@@ -107,17 +107,10 @@ export default function EmployeeLoginPage() {
               <Building2 className="w-8 h-8 text-blue-600" />
             </div>
           </div>
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200/80 text-blue-700 text-xs font-bold mb-2">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Window Asia Single Sign-On</span>
-            </div>
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
-              พอร์ทัลเข้าใช้งานระบบ (App Portal)
+          <div className="pt-2">
+            <h1 className="text-2xl sm:text-[28px] font-extrabold tracking-tight text-slate-900">
+              Window Asia Single Sign-On
             </h1>
-            <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
-              เข้าใช้งานระบบงานทั้งหมดของ บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) ได้ในคลิกเดียว
-            </p>
           </div>
         </div>
 
