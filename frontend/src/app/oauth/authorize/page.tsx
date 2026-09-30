@@ -11,8 +11,8 @@ import {
   Building2,
   Sparkles,
   KeyRound,
-  UserCheck,
-  Mail,
+  Eye,
+  EyeOff,
   Fingerprint,
   RefreshCw,
   Info,
@@ -37,6 +37,7 @@ function AuthorizeContent() {
   // Form states
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
@@ -212,23 +213,6 @@ function AuthorizeContent() {
                 </div>
               </div>
 
-              {/* Scopes requested */}
-              <div className="space-y-2 text-xs text-slate-400">
-                <div className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">
-                  สิทธิ์ที่ระบบลูกจะได้รับ (Scopes):
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-800/60 border border-slate-700/50">
-                    <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>ชื่อ-นามสกุล / แผนก</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-800/60 border border-slate-700/50">
-                    <Mail className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>อีเมลองค์กร</span>
-                  </div>
-                </div>
-              </div>
-
               {/* Login Error Alert */}
               {loginError && (
                 <div className="p-3 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
@@ -260,21 +244,31 @@ function AuthorizeContent() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
                     <span>รหัสผ่าน (Password)</span>
-                    <span className="text-[11px] text-blue-400/80 hover:text-blue-400 cursor-pointer">
+                    <span className="text-[11px] text-blue-400/80">
                       รหัสผ่าน Active Directory
                     </span>
                   </label>
                   <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="กรอกรหัสผ่านของคุณ..."
                       required
                       autoFocus
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-950/70 border border-slate-700 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all"
+                      className="w-full pl-10 pr-10 py-2.5 bg-slate-950/70 border border-slate-700 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      tabIndex={-1}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                      title={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                      aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
 

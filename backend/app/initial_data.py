@@ -90,7 +90,7 @@ def init_db():
                 "api_key": "sec_irm_mgmt_9a4f21e8d3b76c501e4a",
                 "client_id": "irm-spoke-client",
                 "client_secret": "sec_irm_oauth_secret_2026",
-                "redirect_uris": "http://localhost:3000/portal/callback,http://localhost:3001/auth/callback,https://irm.windowasia.com/auth/callback",
+                "redirect_uris": "https://irm.windowasia.com/auth/callback,http://localhost:3001/auth/callback,http://localhost:3000/portal/callback",
                 "sso_enabled": True,
                 "health_status": "ONLINE",
                 "latency_ms": 32
@@ -103,7 +103,7 @@ def init_db():
                 "api_key": "sec_qms_mgmt_f49b10398dc3a011ef",
                 "client_id": "qms-spoke-client",
                 "client_secret": "sec_qms_oauth_secret_2026",
-                "redirect_uris": "http://localhost:3000/portal/callback,http://localhost:3002/auth/callback,https://qms.windowasia.com/auth/callback",
+                "redirect_uris": "https://qms.windowasia.com/auth/callback,http://localhost:3002/auth/callback,http://localhost:3000/portal/callback",
                 "sso_enabled": True,
                 "health_status": "ONLINE",
                 "latency_ms": 28
@@ -116,7 +116,7 @@ def init_db():
                 "api_key": "sec_qol_mgmt_7e1c8430a911bb",
                 "client_id": "qol-spoke-client",
                 "client_secret": "sec_qol_oauth_secret_2026",
-                "redirect_uris": "http://localhost:3000/portal/callback,https://qol.windowasia.com/auth/callback",
+                "redirect_uris": "https://qol.windowasia.com/auth/callback,http://localhost:3000/portal/callback",
                 "sso_enabled": True,
                 "health_status": "ONLINE",
                 "latency_ms": 25
@@ -205,6 +205,12 @@ def init_db():
                     app.client_secret = item.get("client_secret")
                     app.redirect_uris = item.get("redirect_uris")
                     app.sso_enabled = item.get("sso_enabled", True)
+                elif item.get("redirect_uris"):
+                    target_redirects = item["redirect_uris"]
+                    current_redirects = app.redirect_uris or ""
+                    if current_redirects.startswith("http://localhost:3000/portal/callback") or current_redirects != target_redirects:
+                        app.redirect_uris = target_redirects
+                        logger.info("Updated redirect_uris for %s to prioritize spoke callbacks: %s", app.app_code, target_redirects)
                 if item.get("sap_company_db") and not app.sap_company_db:
                     app.sap_company_db = item.get("sap_company_db")
                     app.sap_username = item.get("sap_username")

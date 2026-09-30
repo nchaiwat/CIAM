@@ -322,6 +322,7 @@ def get_portal_apps(
 
 @router.post("/portal/launch", response_model=PortalLaunchResponse)
 def launch_portal_app(
+    request: Request,
     payload: PortalLaunchRequest,
     db: Session = Depends(get_db),
     current_user: Optional[AdminUser] = Depends(get_current_user_optional)
@@ -399,16 +400,37 @@ def launch_portal_app(
 
     if not redirect_uri:
         uris = [u.strip() for u in (app.redirect_uris or "").split(",") if u.strip()]
-        # Prioritize production / live enterprise URI (*.windowasia.com) over localhost simulator
-        prod_uri = next((u for u in uris if "windowasia.com" in u), None)
-        if prod_uri:
-            redirect_uri = prod_uri
-        elif app.base_url:
-            redirect_uri = app.base_url
-        elif uris:
-            redirect_uri = uris[0]
-        else:
-            redirect_uri = "http://localhost:3000/portal/callback"
+        origin = request.headers.get("origin", "")
+        referer = request.headers.get("referer", "")
+        is_local_request = (
+            "localhost" in origin
+            or "127.0.0.1" in origin
+            or "localhost" in referer
+            or "127.0.0.1" in referer
+        )
+
+        spoke_uris = [u for u in uris if "portal/callback" not in u]
+
+        if is_local_request:
+            local_spoke = next(
+                (u for u in spoke_uris if "localhost" in u or "127.0.0.1" in u), None
+            )
+            if local_spoke:
+                redirect_uri = local_spoke
+
+        if not redirect_uri:
+            # Prioritize production / live enterprise URI (*.windowasia.com)
+            prod_uri = next((u for u in spoke_uris if "windowasia.com" in u), None)
+            if prod_uri:
+                redirect_uri = prod_uri
+            elif spoke_uris:
+                redirect_uri = spoke_uris[0]
+            elif app.base_url:
+                redirect_uri = app.base_url
+            elif uris:
+                redirect_uri = uris[0]
+            else:
+                redirect_uri = "http://localhost:3000/portal/callback"
 
     # Issue one-time code for current user
     code = create_authorization_code(
