@@ -108,8 +108,9 @@ export default function EmployeeLoginPage() {
             </div>
           </div>
           <div className="pt-2">
-            <h1 className="text-2xl sm:text-[28px] font-extrabold tracking-tight text-slate-900">
-              Window Asia Single Sign-On
+            <h1 className="text-2xl sm:text-[28px] font-extrabold tracking-tight text-slate-900 leading-snug">
+              Window Asia<br />
+              Single Sign-On
             </h1>
           </div>
         </div>
