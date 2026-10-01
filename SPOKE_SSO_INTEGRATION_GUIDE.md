@@ -71,9 +71,24 @@ Central IAM ทำหน้าที่เป็น **Centralized Identity Provi
    * **OIDC Client ID:** กำหนดรหัสระบุระบบ (เช่น `irm-spoke-client`)
    * **OIDC Client Secret:** กดปุ่ม *"สุ่มสร้าง Secret ใหม่"* เพื่อสร้างคีย์ความยาว 24 ไบต์ และกดคัดลอก
    * **Whitelisted Redirect URIs:** ระบุ Callback URL ของระบบลูก โดยสามารถใส่ได้หลาย URL คั่นด้วยจุลภาค (`,`) เช่น:  
-     `https://irm.windowasia.com/auth/callback, http://localhost:3001/auth/callback`
+     `https://irm.windowasia.com/auth/callback, http://localhost:3001/auth/callback`  
+     *(สำหรับระบบ On-Premise สามารถระบุเป็น Domain ภายในหรือ IP วงแลนได้ เช่น `http://wms.wa.local/auth/callback` หรือ `http://192.168.1.50:3000/auth/callback`)*
    * **SSO Enforcement Switch:** สวิตช์เปิด/ปิดการบังคับใช้ SSO สำหรับระบบนี้
-4. กดปุ่ม **"บันทึกการตั้งค่า"**
+4. เลือกแท็บ **นโยบายเครือข่าย & VPN (Network Policy & Zero-Trust Access)**:
+   * **ระดับการควบคุม:**
+     * `เข้าถึงได้จากทุกที่ (Anywhere)`: สำหรับระบบ Cloud / SaaS ที่มี Public Domain
+     * `เฉพาะต่อ VPN / วงแลนออฟฟิศ (VPN Only)`: สำหรับระบบ On-Premise / วง LAN ในโรงงาน
+   * **พฤติกรรมบน Portal เมื่อผู้ใช้อยู่นอก VPN (Restriction Mode):**
+     * `ซ่อนการ์ดระบบออกจาก Portal (Hide)`: พนักงานจะไม่เห็นการ์ดระบบนี้เมื่อไม่ได้ต่อ VPN
+     * `แสดงพร้อมปุ่มล็อก 🔒 (Lock With Banner)`: แสดงการ์ดแต่ Disable ปุ่มเปิด พร้อมแจ้งเตือนให้ต่อ VPN
+   * **วงเครือข่ายที่อนุญาต (Allowed CIDRs):** ระบุวง IP เฉพาะระบบ หรือเว้นว่างเพื่อใช้วง VPN กลางของบริษัท
+5. กดปุ่ม **"บันทึกการตั้งค่า"**
+
+### 3.1 ข้อกำหนดเครือข่ายสำหรับระบบ On-Premise (On-Premise Network Guidelines)
+* **Outbound HTTPS (Port 443) เท่านั้น:** เซิร์ฟเวอร์ On-Premise ของระบบลูก **ไม่ต้องเปิด Inbound Port ใดๆ** จากอินเทอร์เน็ตสาธารณะเข้ามา ต้องการเพียงการเชื่อมต่อขาออกไปยัง `https://ciam.windowasia.com` เพื่อแลก Code และดึง JWKS
+* **Client-Side Flow:** การ Redirect ระหว่าง Portal กับ Callback URL ทำงานผ่านเบราว์เซอร์ของพนักงานโดยตรง ตราบใดที่พนักงานต่อ OpenVPN หรืออยู่ในวงแลนออฟฟิศ จะสามารถเข้าใช้งานระบบลูกได้ทันที
+* **Off-VPN Security Guard (HTTP 403):** หากพนักงานพยายามเรียก Endpoint ขอสิทธิ์หรือยิงผ่าน Portal ขณะอยู่นอก VPN เซิร์ฟเวอร์ CIAM จะปฏิเสธคำขอด้วย `HTTP 403 Forbidden` พร้อมข้อความ:  
+  `"ระบบนี้จำกัดการเข้าถึงเฉพาะเครือข่ายภายในองค์กรหรือผ่าน VPN เท่านั้น"`
 
 ---
 

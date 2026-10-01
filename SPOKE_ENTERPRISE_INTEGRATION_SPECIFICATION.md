@@ -1,8 +1,8 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Version:** 2.2.0 (Production-Verified IRM Standard & Non-AD Exception Handling Edition)  
+**Version:** 2.3.0 (Zero-Trust Network Access & On-Premise Spoke Topology Edition)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
-**Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
+**Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
 **Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636)
 
 ---
@@ -10,6 +10,42 @@
 ## 1. บทนำและหลักการออกแบบ (Architecture Principles)
 
 เอกสารฉบับนี้กำหนดมาตรฐานการเชื่อมต่อระบบสารสนเทศภายในเครือบริษัท วินโดว์ เอเชีย จำกัด (มหาชน) ทั้งหมด เข้ากับระบบพิสูจน์ตัวตนกลาง **Window Asia Central IAM** เพื่อให้ทุกระบบย่อย (Spoke Applications) มีโครงสร้าง API, สถาปัตยกรรมการจัดเก็บการตั้งค่า และรูปแบบการบันทึก Audit Log เป็น **Template มาตรฐานเดียวกัน 100%**
+
+### 1.1 รูปแบบสภาพแวดล้อมระบบและการเชื่อมต่อเครือข่าย (Deployment Topologies)
+Central IAM รองรับระบบลูกทั้ง 2 รูปแบบ โดยมีข้อกำหนดทางเน็ตเวิร์กที่ Developer ต้องเข้าใจดังนี้:
+
+| มิติการพิจารณา | 🌐 ระบบบน Cloud / VPS (เช่น IRM, QMS) | 🏢 ระบบภายในองค์กร On-Premise / Local LAN (เช่น WMS, ERP ในโรงงาน) |
+| :--- | :--- | :--- |
+| **ตำแหน่งติดตั้ง** | Hostinger, AWS, GCP หรือ Public Cloud | เซิร์ฟเวอร์ในสำนักงานใหญ่ / เครื่องในโรงงาน / Local Private Network |
+| **การเข้าถึงจากภายนอก** | มี Public Domain / IP เข้าถึงได้จากอินเทอร์เน็ต | **ไม่มี Inbound Tunnel จากภายนอก** อยู่ในวง Private IP (เช่น `192.168.x.x` หรือ Domain ภายใน) |
+| **ความต้องการ Outbound** | HTTPS (Port 443) ออกอินเทอร์เน็ต | **HTTPS (Port 443) ออกอินเทอร์เน็ตเท่านั้น** (เพื่อยิงไปที่ `https://ciam.windowasia.com`) |
+| **ความต้องการ Inbound** | เปิด Inbound HTTPS ให้ CIAM เข้าถึงได้ | **❌ ไม่จำเป็นต้องเปิด Inbound Port ใดๆ** จากอินเทอร์เน็ตสาธารณะเข้ามาในออฟฟิศ |
+| **โหมดการเชื่อมต่อที่แนะนำ** | **Mode A:** Full Two-Way Integration (SSO + Inbound M2M) | **Mode B:** SSO-Only Client Mode (หรือใช้ Gateway ภายในหากต้องการ M2M) |
+| **นโยบายเครือข่ายบน CIAM** | `network_policy: ANYWHERE` | `network_policy: VPN_ONLY` (ควบคุมการเข้าถึงเฉพาะผ่าน OpenVPN หรือวง LAN) |
+
+### 1.2 โหมดการเชื่อมต่อของระบบลูก (Spoke Integration Modes)
+1. **Mode A: Full Two-Way Integration (SSO + Governance Webhooks):**  
+   - สำหรับระบบที่มี Public Domain หรือเชื่อมต่อผ่าน Site-to-Site Tunnel  
+   - พัฒนาครบทั้ง **Group A (Settings)**, **Group B (SSO Flow)**, และ **Group C (Directory & Status Inbound Webhook)**  
+   - ข้อดี: CIAM สามารถตรวจเช็ค Health, กวาด Reconciliation บัญชีผีเวลา 04:00 น., และสั่ง 1-Click Deprovisioning ระงับสิทธิ์ทันทีเมื่อพนักงานลาออก
+2. **Mode B: SSO-Only Client Mode (สำหรับ Isolated On-Premise Applications):**  
+   - สำหรับระบบ On-Premise แท้ๆ ที่ไม่มี Inbound Tunnel ใดๆ จากภายนอกเข้ามา  
+   - พัฒนาเฉพาะ **Group B (SSO Flow - OIDC/PKCE)** และ **Group A (Settings)**  
+   - **ไม่ต้องเปิด Group C (Inbound API)** ให้กับ CIAM  
+   - การยืนยันตัวตนทำงานได้ 100% เพราะเป็นการทำ Client-side Redirect ผ่านเบราว์เซอร์ของพนักงาน (ตราบใดที่พนักงานต่อ OpenVPN หรืออยู่ในวงแลนออฟฟิศ) และเซิร์ฟเวอร์ On-Premise ยิง Outbound ไปแลก Token กับ CIAM Cloud เท่านั้น
+
+### 1.3 นโยบายความปลอดภัยเครือข่าย Zero-Trust VPN Access Control
+เมื่อระบบลูกได้รับการตั้งค่านโยบายเครือข่ายเป็น `VPN_ONLY` บน Central IAM:
+* **การตรวจสอบ Client IP แบบเรียลไทม์:** เมื่อพนักงานเปิดหน้า Employee Portal (`/portal`) เซิร์ฟเวอร์ CIAM จะตรวจสอบ Egress Public IP ของพนักงาน
+* **Restriction Behavior:**
+  * **โหมด `HIDE` (แนะนำสำหรับ On-Prem):** การ์ดระบบนี้จะถูกซ่อนออกจาก Portal ทันทีหากพนักงานไม่ได้เชื่อมต่อ VPN (เพื่อป้องกันความสับสน)
+  * **โหมด `LOCK_WITH_BANNER`:** การ์ดจะแสดงพร้อมไอคอน 🔒 และปุ่มเปิดระบบจะถูกปิดใช้งาน (Disabled) พร้อมข้อความแจ้งเตือน *"กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน"*
+* **รายการวงเครือข่ายที่อนุญาต (Corporate VPN & Office CIDRs):**
+  * `49.231.185.245/32` (Window Asia HQ Gateway WAN - Egress IP หลักเมื่อต่อ Full Tunnel OpenVPN)
+  * `58.8.190.63/32` (สำนักงานสำรอง)
+  * `10.8.0.0/24` (OpenVPN Client Subnet)
+  * `192.168.0.0/16` (Office LAN Subnet)
+  * `157.173.219.153` (Public IP VPS ของเซิร์ฟเวอร์ Central IAM)
 
 ### ❌ ข้อห้ามสำคัญ (Zero `.env` Dependency):
 * **ห้าม Hardcode ค่าการเชื่อมต่อ Central IAM ลงในไฟล์ `.env` บน Production:**  

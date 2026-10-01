@@ -2710,6 +2710,45 @@ export default function ApplicationsPage() {
                 </div>
               </div>
 
+              {/* On-Premise vs Cloud Deployment Callout */}
+              <div className="p-3.5 rounded-lg bg-purple-50/80 border-2 border-purple-200 text-purple-950 space-y-2">
+                <div className="font-bold flex items-center justify-between text-xs text-purple-900">
+                  <div className="flex items-center space-x-1.5">
+                    <Shield className="w-4 h-4 text-purple-700" />
+                    <span>ข้อกำหนดการเชื่อมต่อ: ระบบ Cloud (Public) vs ระบบ On-Premise (เฉพาะต่อ VPN)</span>
+                  </div>
+                  <span className="text-[10px] bg-purple-200/80 text-purple-900 font-bold px-2 py-0.5 rounded">
+                    Zero-Trust Network Access
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[11px] text-slate-700">
+                  <div className="p-2.5 bg-white rounded border border-purple-200 space-y-1">
+                    <strong className="text-emerald-800 flex items-center gap-1 font-bold">
+                      🌐 1. ระบบบน Cloud (Two-Way Mode)
+                    </strong>
+                    <p className="text-slate-600 leading-relaxed">
+                      มี Public Domain (เช่น IRM, QMS) พัฒนาครบทั้ง SSO และ Inbound Webhook (ตารางด้านล่าง) เพื่อให้ CIAM เช็ค Health และกวาดบัญชีผีได้
+                    </p>
+                  </div>
+                  <div className="p-2.5 bg-white rounded border border-purple-200 space-y-1">
+                    <strong className="text-purple-800 flex items-center gap-1 font-bold">
+                      🏢 2. ระบบ On-Premise (SSO-Only Client Mode)
+                    </strong>
+                    <p className="text-slate-600 leading-relaxed">
+                      อยู่ในวง LAN โรงงาน/ออฟฟิศ <strong>ไม่ต้องเปิด Inbound Port</strong> ต้องการเพียง Outbound Port 443 ออกไปที่ CIAM เท่านั้น และตั้งค่าแอปเป็น <code>VPN_ONLY</code> บน CIAM
+                    </p>
+                  </div>
+                </div>
+                <div className="text-[10.5px] text-purple-900 font-medium pt-1 border-t border-purple-200 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-bold">วง VPN กลางที่ได้รับอนุญาต:</span>
+                  <span>OpenVPN HQ WAN: <code className="bg-white px-1 rounded font-mono">49.231.185.245</code>, <code className="bg-white px-1 rounded font-mono">58.8.190.63</code></span>
+                  <span>•</span>
+                  <span>OpenVPN Subnet: <code className="bg-white px-1 rounded font-mono">10.8.0.0/24</code></span>
+                  <span>•</span>
+                  <span>Office LAN: <code className="bg-white px-1 rounded font-mono">192.168.0.0/16</code></span>
+                </div>
+              </div>
+
               {/* Required Endpoints Table */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
