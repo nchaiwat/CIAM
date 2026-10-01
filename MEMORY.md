@@ -304,5 +304,16 @@ FRONTEND_URL=http://localhost:3000
 5. **Database Auto-Migration ([initial_data.py](file:///d:/Python/Central-IAM/backend/app/initial_data.py)):**
    - Automatically executes non-destructive `ALTER TABLE connected_applications ADD COLUMN IF NOT EXISTS ...` on startup.
 
+### 9.3 Spoke Developer Specifications & Documentation Standards (v2.3.0)
+* **[SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) (v2.3.0):**
+  - Downloaded via button `📥 สเปกเชื่อมต่อ (.md)` on `/applications`.
+  - Defines **Mode A (Full Two-Way Integration)** for cloud spokes with inbound webhooks vs **Mode B (SSO-Only Client Mode)** for isolated on-premise spokes (no inbound ports required; only Outbound HTTPS 443 to CIAM).
+  - Documents corporate VPN/Office CIDRs (`49.231.185.245`, `58.8.190.63`, `10.8.0.0/24`, `192.168.0.0/16`) for spoke-side firewall/reverse-proxy whitelisting.
+* **[SPOKE_SSO_INTEGRATION_GUIDE.md](file:///d:/Python/Central-IAM/SPOKE_SSO_INTEGRATION_GUIDE.md):**
+  - Documents internal LAN redirect URIs (e.g. `http://wms.wa.local/auth/callback`), Network Policy configuration steps, and off-VPN HTTP 403 handling.
+* **Interactive Developer Guide Modal (`frontend/src/app/applications/page.tsx`):**
+  - Opened via button `📋 คู่มือสำหรับ Dev`.
+  - Displays prominent Zero-Trust On-Premise vs Cloud topology card and corporate VPN network whitelist directly within the administrative UI.
+
 
 
