@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-10-01  
-**Version:** 1.9.4 (Spoke SSO Probing, Break-Glass Guard Step 0, Portal Offline/Break-Glass Shields, Supplier Master Blank Null Fixes)  
+**Version:** 1.9.5 (Zero-Trust Network Policy, VPN Access Restriction & Auto-Detection for On-Prem Spokes)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -279,6 +279,30 @@ FRONTEND_URL=http://localhost:3000
 * **UI Component:** `frontend/src/components/profile/AdminProfileModal.tsx` accessible via:
   1. Clicking User Profile Card in the Header (`Header.tsx`).
   2. Clicking "🔔 แจ้งเตือน Telegram & AD Agent" in the main Dashboard action bar (`app/page.tsx`).
+
+---
+
+## 9. Zero-Trust Network Policy & VPN Access Restriction (Version 1.9.5)
+
+### 9.1 Background & Problem Solved
+* On-premise applications (e.g. SAP B1 Client, local warehouse WMS, internal factory systems) sit inside Window Asia's local network without inbound public internet tunnels.
+* When remote employees not connected to OpenVPN accessed the Employee Portal (`/portal`), launching these applications caused browser timeouts or connection errors.
+
+### 9.2 Architecture & Components
+1. **Dynamic Client IP Extraction ([network_service.py](file:///d:/Python/Central-IAM/backend/app/services/network_service.py)):**
+   - Resolves real client IP using `X-Forwarded-For` (first IP), `X-Real-IP`, or fallback to `client.host`.
+2. **Corporate Network CIDRs (`corporate_vpn_networks` in `system_settings`):**
+   - **HQ Gateway Public WAN (VPN Egress):** `49.231.185.245/32`, `58.8.190.63/32`
+   - **Internal Subnets:** `10.8.0.0/24` (OpenVPN Clients), `192.168.0.0/16` (Office LAN), `172.18.0.0/16` (Docker Network), `127.0.0.1/32`, `::1/128`
+3. **Application Attributes ([application.py](file:///d:/Python/Central-IAM/backend/app/models/application.py)):**
+   - `network_policy`: `ANYWHERE` (public cloud) vs `VPN_ONLY` (on-prem/LAN).
+   - `vpn_restriction_mode`: `HIDE` (completely hidden from Employee Portal) vs `LOCK_WITH_BANNER` (rendered with `[🔒 ต้องต่อ VPN]` badge and disabled launch button `กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน`).
+   - `allowed_network_cidrs`: Optional custom CIDRs per application; falls back to corporate VPN networks if null.
+4. **Backend Security Guard ([oauth.py](file:///d:/Python/Central-IAM/backend/app/api/v1/oauth.py)):**
+   - `POST /api/v1/oauth/portal/launch`: Enforces IP authorization, strictly rejecting unauthorized remote IPs with `HTTP 403 Forbidden`.
+   - `GET /api/v1/oauth/portal/apps`: Applies `HIDE` or `LOCK_WITH_BANNER` based on the requester's client IP.
+5. **Database Auto-Migration ([initial_data.py](file:///d:/Python/Central-IAM/backend/app/initial_data.py)):**
+   - Automatically executes non-destructive `ALTER TABLE connected_applications ADD COLUMN IF NOT EXISTS ...` on startup.
 
 
 

@@ -8,6 +8,7 @@ from app.models.identity import MasterIdentity
 from app.models.mapping import AppAccountMapping
 from app.models.audit import IamAuditLog
 from app.models.oauth import OAuthAuthorizationCode
+from app.models.setting import SystemSetting
 from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
@@ -64,10 +65,17 @@ def init_db():
             app_columns = [c["name"] for c in inspector.get_columns("connected_applications")]
             if "spoke_sso_status" not in app_columns:
                 conn.execute(text("ALTER TABLE connected_applications ADD COLUMN spoke_sso_status VARCHAR(50) DEFAULT 'UNKNOWN';"))
+            if "network_policy" not in app_columns:
+                conn.execute(text("ALTER TABLE connected_applications ADD COLUMN network_policy VARCHAR(50) DEFAULT 'ANYWHERE';"))
+            if "vpn_restriction_mode" not in app_columns:
+                conn.execute(text("ALTER TABLE connected_applications ADD COLUMN vpn_restriction_mode VARCHAR(50) DEFAULT 'HIDE';"))
+            if "allowed_network_cidrs" not in app_columns:
+                conn.execute(text("ALTER TABLE connected_applications ADD COLUMN allowed_network_cidrs VARCHAR(500);"))
 
             conn.commit()
     except Exception as e:
         logger.debug("Auto-migration notice: %s", e)
+
 
     db = SessionLocal()
     try:
@@ -315,6 +323,27 @@ def init_db():
                         )
                         db.add(mapping)
                 logger.info("Seeded real master identity: %s (%s)", ident.full_name, ident.username)
+ 
+        # 4. Seed Corporate VPN / Office Network Subnets
+        vpn_setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "corporate_vpn_networks").first()
+        if not vpn_setting:
+            vpn_setting = SystemSetting(
+                setting_key="corporate_vpn_networks",
+                setting_value={
+                    "cidrs": [
+                        "49.231.185.245/32",
+                        "58.8.190.63/32",
+                        "10.8.0.0/24",
+                        "192.168.0.0/16",
+                        "172.18.0.0/16",
+                        "127.0.0.1/32",
+                        "::1/128"
+                    ]
+                },
+                description="Corporate Office Public IPs and OpenVPN Gateway CIDRs for On-Prem Spoke Security"
+            )
+            db.add(vpn_setting)
+            logger.info("Seeded corporate_vpn_networks setting")
 
         db.commit()
         logger.info("Database initialization and seeding complete with real data!")

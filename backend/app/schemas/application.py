@@ -17,6 +17,9 @@ class AppCreate(BaseModel):
     sap_username: Optional[str] = None
     sap_password: Optional[str] = None
     ad_allow_status_patch: Optional[bool] = False
+    network_policy: Optional[str] = "ANYWHERE"
+    vpn_restriction_mode: Optional[str] = "HIDE"
+    allowed_network_cidrs: Optional[str] = None
 
 class AppUpdate(BaseModel):
     app_name: Optional[str] = None
@@ -33,6 +36,9 @@ class AppUpdate(BaseModel):
     sap_username: Optional[str] = None
     sap_password: Optional[str] = None
     ad_allow_status_patch: Optional[bool] = None
+    network_policy: Optional[str] = None
+    vpn_restriction_mode: Optional[str] = None
+    allowed_network_cidrs: Optional[str] = None
 
 class AppOut(BaseModel):
     id: int
@@ -54,6 +60,9 @@ class AppOut(BaseModel):
     sap_company_db: Optional[str] = None
     sap_username: Optional[str] = None
     ad_allow_status_patch: Optional[bool] = False
+    network_policy: Optional[str] = "ANYWHERE"
+    vpn_restriction_mode: Optional[str] = "HIDE"
+    allowed_network_cidrs: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -80,6 +89,9 @@ class AppCredentialOut(BaseModel):
     sap_company_db: Optional[str] = None
     sap_username: Optional[str] = None
     sap_password: Optional[str] = None
+    network_policy: Optional[str] = "ANYWHERE"
+    vpn_restriction_mode: Optional[str] = "HIDE"
+    allowed_network_cidrs: Optional[str] = None
 
 class SyncScheduleOut(BaseModel):
     enabled: bool = True

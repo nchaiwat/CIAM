@@ -62,8 +62,12 @@ export default function ApplicationsPage() {
   const [sapUsername, setSapUsername] = useState("");
   const [sapPassword, setSapPassword] = useState("");
   const [showNewSapPassword, setShowNewSapPassword] = useState(false);
+  const [networkPolicy, setNetworkPolicy] = useState<string>("ANYWHERE");
+  const [vpnRestrictionMode, setVpnRestrictionMode] = useState<string>("HIDE");
+  const [allowedNetworkCidrs, setAllowedNetworkCidrs] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [showSpecModal, setShowSpecModal] = useState(false);
+
 
   const handleDownloadSpec = () => {
     const token = localStorage.getItem("ciam_token") || "";
@@ -125,8 +129,12 @@ export default function ApplicationsPage() {
 
   // Settings / Secret Key & SSO Modal states
   const [editApp, setEditApp] = useState<ConnectedApp | null>(null);
-  const [editTab, setEditTab] = useState<"M2M" | "SSO" | "SAP_B1" | "AD_PROXY" | "M365">("M2M");
+  const [editTab, setEditTab] = useState<"M2M" | "SSO" | "SAP_B1" | "AD_PROXY" | "M365" | "NETWORK">("M2M");
+  const [editNetworkPolicy, setEditNetworkPolicy] = useState<string>("ANYWHERE");
+  const [editVpnRestrictionMode, setEditVpnRestrictionMode] = useState<string>("HIDE");
+  const [editAllowedNetworkCidrs, setEditAllowedNetworkCidrs] = useState<string>("");
   const [editAppName, setEditAppName] = useState("");
+
   const [editBaseUrl, setEditBaseUrl] = useState("");
   const [editApiKey, setEditApiKey] = useState("");
   const [editConnectorType, setEditConnectorType] = useState<string>("REST_API");
@@ -172,12 +180,15 @@ export default function ApplicationsPage() {
     setTimeout(() => setter(false), 2000);
   };
 
-  const handleOpenEdit = async (app: ConnectedApp, defaultTab: "M2M" | "SSO" | "SAP_B1" | "AD_PROXY" | "M365" = "M2M") => {
+  const handleOpenEdit = async (app: ConnectedApp, defaultTab: "M2M" | "SSO" | "SAP_B1" | "AD_PROXY" | "M365" | "NETWORK" = "M2M") => {
     setEditApp(app);
     setEditAppName(app.app_name);
     setEditBaseUrl(app.base_url || "");
     setEditConnectorType(app.connector_type);
     setEditAdAllowStatusPatch(Boolean(app.ad_allow_status_patch));
+    setEditNetworkPolicy(app.network_policy || "ANYWHERE");
+    setEditVpnRestrictionMode(app.vpn_restriction_mode || "HIDE");
+    setEditAllowedNetworkCidrs(app.allowed_network_cidrs || "");
     setShowSecret(false);
     setShowClientSecret(false);
     setShowEditSapPassword(false);
@@ -207,6 +218,9 @@ export default function ApplicationsPage() {
       setEditSapCompanyDb(creds.sap_company_db || (isAd ? "157.173.219.153" : "WA_PROD"));
       setEditSapUsername(creds.sap_username || "");
       setEditSapPassword(creds.sap_password || "");
+      if (creds.network_policy) setEditNetworkPolicy(creds.network_policy);
+      if (creds.vpn_restriction_mode) setEditVpnRestrictionMode(creds.vpn_restriction_mode);
+      if (creds.allowed_network_cidrs) setEditAllowedNetworkCidrs(creds.allowed_network_cidrs);
     } catch {
       setEditApiKey("");
       setEditClientId(isAd ? "CIAM" : `${app.app_code.toLowerCase()}-spoke-client`);
@@ -240,6 +254,9 @@ export default function ApplicationsPage() {
         sap_username: editSapUsername || undefined,
         sap_password: editSapPassword || undefined,
         ad_allow_status_patch: editAdAllowStatusPatch,
+        network_policy: editNetworkPolicy,
+        vpn_restriction_mode: editVpnRestrictionMode,
+        allowed_network_cidrs: editAllowedNetworkCidrs.trim() || undefined,
       });
       alert("บันทึกการตั้งค่าระบบ, M2M Key และ Active Directory สำเร็จ");
       setEditApp(null);
@@ -461,6 +478,9 @@ export default function ApplicationsPage() {
         sap_company_db: connectorType === "SAP_B1" ? sapCompanyDb : undefined,
         sap_username: connectorType === "SAP_B1" ? sapUsername : undefined,
         sap_password: connectorType === "SAP_B1" ? sapPassword : undefined,
+        network_policy: networkPolicy,
+        vpn_restriction_mode: vpnRestrictionMode,
+        allowed_network_cidrs: allowedNetworkCidrs.trim() || undefined,
       });
       setShowAddModal(false);
       setAppCode("");
@@ -470,7 +490,11 @@ export default function ApplicationsPage() {
       setSapCompanyDb("WA_PROD");
       setSapUsername("");
       setSapPassword("");
+      setNetworkPolicy("ANYWHERE");
+      setVpnRestrictionMode("HIDE");
+      setAllowedNetworkCidrs("");
       fetchApps();
+
     } catch (err: any) {
       alert(`เกิดข้อผิดพลาดในการลงทะเบียนระบบ: ${err.message}`);
     } finally {
@@ -650,6 +674,37 @@ export default function ApplicationsPage() {
                       )}
                     </div>
                   )}
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 font-medium">นโยบายเครือข่าย:</span>
+                    {app.network_policy === "VPN_ONLY" ? (
+                      app.vpn_restriction_mode === "HIDE" ? (
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1"
+                          title="จำกัดเฉพาะเชื่อมต่อ VPN หรือใช้งานในสำนักงาน (ซ่อนแอปจาก Portal ทันทีเมื่ออยู่นอกวง)"
+                        >
+                          <Shield className="w-3 h-3 text-purple-700" />
+                          VPN Only (ซ่อน)
+                        </span>
+                      ) : (
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1"
+                          title="จำกัดเฉพาะเชื่อมต่อ VPN หรือใช้งานในสำนักงาน (แสดงการ์ดแบบล็อกพร้อมเตือนเมื่ออยู่นอกวง)"
+                        >
+                          <Lock className="w-3 h-3 text-amber-700" />
+                          VPN Only (ล็อก)
+                        </span>
+                      )
+                    ) : (
+                      <span
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-850 border border-emerald-300 flex items-center gap-1"
+                        title="เข้าถึงได้จากทุกที่บนอินเทอร์เน็ตโดยตรง"
+                      >
+                        <Globe className="w-3 h-3 text-emerald-600" />
+                        เข้าได้ทุกที่ (Anywhere)
+                      </span>
+                    )}
+                  </div>
 
                   <div className="flex items-center justify-between">
                     <span className="text-slate-600 font-medium">สถานะการเชื่อมต่อ:</span>
@@ -900,7 +955,25 @@ export default function ApplicationsPage() {
                   <span className="w-2 h-2 rounded-full bg-slate-300" />
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => setEditTab("NETWORK")}
+                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                  editTab === "NETWORK"
+                    ? "border-purple-600 text-purple-800 bg-purple-50/50"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <Shield className="w-3.5 h-3.5 text-purple-600" />
+                <span>นโยบายเครือข่าย & VPN</span>
+                {editNetworkPolicy === "VPN_ONLY" ? (
+                  <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                )}
+              </button>
             </div>
+
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
               {/* Common Details: Name & Base URL */}
@@ -1656,6 +1729,165 @@ export default function ApplicationsPage() {
                 </div>
               )}
 
+              {/* TAB: Network Policy & VPN Access Restriction */}
+              {editTab === "NETWORK" && (
+                <div className="space-y-4">
+                  {/* Info Header */}
+                  <div className="p-3.5 bg-purple-50/80 border-2 border-purple-200 rounded-lg space-y-1">
+                    <div className="font-bold text-purple-950 text-xs flex items-center gap-1.5">
+                      <Shield className="w-4 h-4 text-purple-700" />
+                      <span>นโยบายเครือข่ายความปลอดภัย (Zero-Trust Network Access & VPN Restriction)</span>
+                    </div>
+                    <p className="text-[11px] text-purple-900 leading-relaxed">
+                      กำหนดขอบเขตเครือข่ายสำหรับระบบ On-Premise หรือระบบภายในที่ไม่มี Inbound Public Tunnel โดย Central IAM จะตรวจสอบ Client IP ขณะเปิดใช้งานผ่าน Portal และการขอ OAuth Authorization Code
+                    </p>
+                  </div>
+
+                  {/* Policy Selection */}
+                  <div className="p-3.5 bg-slate-50 border-2 border-slate-200 rounded-lg space-y-3">
+                    <label className="block font-bold text-slate-800 text-xs">
+                      ระดับการควบคุมการเข้าถึง (Network Policy)
+                    </label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Option 1: ANYWHERE */}
+                      <label
+                        className={`p-3 rounded-lg border-2 flex items-start gap-2.5 cursor-pointer transition-all ${
+                          editNetworkPolicy === "ANYWHERE"
+                            ? "bg-emerald-50/70 border-emerald-500 shadow-xs"
+                            : "bg-white border-slate-300 hover:border-slate-400"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="editNetworkPolicy"
+                          value="ANYWHERE"
+                          checked={editNetworkPolicy === "ANYWHERE"}
+                          onChange={(e) => setEditNetworkPolicy(e.target.value)}
+                          className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-slate-900 text-xs flex items-center gap-1">
+                            <span className="text-emerald-700 font-extrabold">🌐 เข้าถึงได้จากทุกที่</span>
+                            <span className="text-[10px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded font-semibold">Anywhere</span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 leading-snug">
+                            อนุญาตให้เปิดใช้งานและขอ Token ได้จากทุก IP สาธารณะ เหมาะสำหรับระบบ Cloud / SaaS
+                          </p>
+                        </div>
+                      </label>
+
+                      {/* Option 2: VPN_ONLY */}
+                      <label
+                        className={`p-3 rounded-lg border-2 flex items-start gap-2.5 cursor-pointer transition-all ${
+                          editNetworkPolicy === "VPN_ONLY"
+                            ? "bg-purple-50/70 border-purple-500 shadow-xs"
+                            : "bg-white border-slate-300 hover:border-slate-400"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="editNetworkPolicy"
+                          value="VPN_ONLY"
+                          checked={editNetworkPolicy === "VPN_ONLY"}
+                          onChange={(e) => setEditNetworkPolicy(e.target.value)}
+                          className="mt-0.5 text-purple-600 focus:ring-purple-500"
+                        />
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-slate-900 text-xs flex items-center gap-1">
+                            <span className="text-purple-800 font-extrabold">🔒 เฉพาะต่อ VPN / วงแลนออฟฟิศ</span>
+                            <span className="text-[10px] px-1.5 py-0.2 bg-purple-100 text-purple-800 rounded font-semibold">VPN Only</span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 leading-snug">
+                            สำหรับระบบ On-Premise / ภายในองค์กร บังคับว่าพนักงานต้องต่อ OpenVPN หรืออยู่ในออฟฟิศเท่านั้น
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Sub-options for VPN_ONLY */}
+                    {editNetworkPolicy === "VPN_ONLY" && (
+                      <div className="pt-3 border-t border-slate-200 space-y-3.5 mt-2">
+                        {/* Restriction Display Mode */}
+                        <div>
+                          <label className="block font-bold text-slate-800 text-xs mb-1.5">
+                            พฤติกรรมบนหน้า Portal เมื่อพนักงานไม่ได้ต่อ VPN (Restriction Mode):
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <label
+                              className={`p-2.5 rounded-md border-2 flex items-start gap-2 cursor-pointer transition-all ${
+                                editVpnRestrictionMode === "HIDE"
+                                  ? "bg-purple-50 border-purple-400"
+                                  : "bg-white border-slate-300 hover:border-slate-400"
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="editVpnRestrictionMode"
+                                value="HIDE"
+                                checked={editVpnRestrictionMode === "HIDE"}
+                                onChange={(e) => setEditVpnRestrictionMode(e.target.value)}
+                                className="mt-0.5 text-purple-600 focus:ring-purple-500"
+                              />
+                              <div className="space-y-0.5">
+                                <div className="font-bold text-slate-900 text-xs">
+                                  ซ่อนการ์ดระบบออกจาก Portal (Hide)
+                                </div>
+                                <p className="text-[10.5px] text-slate-600">
+                                  พนักงานที่อยู่นอก VPN จะมองไม่เห็นระบบนี้ในหน้า Portal ป้องกันความสับสน
+                                </p>
+                              </div>
+                            </label>
+
+                            <label
+                              className={`p-2.5 rounded-md border-2 flex items-start gap-2 cursor-pointer transition-all ${
+                                editVpnRestrictionMode === "LOCK_WITH_BANNER"
+                                  ? "bg-amber-50 border-amber-400"
+                                  : "bg-white border-slate-300 hover:border-slate-400"
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="editVpnRestrictionMode"
+                                value="LOCK_WITH_BANNER"
+                                checked={editVpnRestrictionMode === "LOCK_WITH_BANNER"}
+                                onChange={(e) => setEditVpnRestrictionMode(e.target.value)}
+                                className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                              />
+                              <div className="space-y-0.5">
+                                <div className="font-bold text-slate-900 text-xs">
+                                  แสดงพร้อมปุ่มล็อก 🔒 (Lock With Banner)
+                                </div>
+                                <p className="text-[10.5px] text-slate-600">
+                                  แสดงการ์ดใน Portal แต่ล็อกปุ่มพร้อมแจ้งเตือน &quot;กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน&quot;
+                                </p>
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Custom Allowed CIDRs Override */}
+                        <div>
+                          <label className="block font-bold text-slate-800 text-xs mb-1">
+                            วงเน็ตเวิร์ก IP / CIDRs ที่อนุญาตเฉพาะระบบนี้ (Optional Custom CIDRs)
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={editAllowedNetworkCidrs}
+                            onChange={(e) => setEditAllowedNetworkCidrs(e.target.value)}
+                            placeholder="เว้นว่างเพื่อใช้ค่ากลางของบริษัท (Default Corporate VPN: 49.231.185.245/32, 58.8.190.63/32, 10.8.0.0/24, 192.168.0.0/16) หรือระบุเช่น 10.8.0.0/24, 192.168.1.0/24"
+                            className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono text-xs focus:outline-none focus:border-purple-600"
+                          />
+                          <p className="text-[10.5px] text-slate-500 mt-0.5">
+                            * คั่นด้วยเครื่องหมายจุลภาค (,) หากเว้นว่าง ระบบจะนำ IP ของผู้ใช้ไปเทียบกับวง VPN กลางของบริษัทโดยอัตโนมัติ
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="pt-3 border-t-2 border-slate-200 flex justify-end space-x-2 shrink-0">
                 <button
@@ -1947,6 +2179,113 @@ export default function ApplicationsPage() {
                 </span>
               </div>
               )}
+
+              {/* Network Policy & VPN Setting for New App */}
+              <div className="p-3 bg-purple-50/60 border-2 border-purple-200 rounded-lg space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-purple-700" />
+                    <span>นโยบายเครือข่าย & สิทธิ์การเข้าถึง (Network Policy)</span>
+                  </label>
+                  <span className="text-[10px] text-purple-700 font-semibold bg-purple-100 px-2 py-0.5 rounded">
+                    Zero-Trust Access
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <label
+                    className={`p-2 rounded border-2 flex items-center gap-2 cursor-pointer transition-all text-xs ${
+                      networkPolicy === "ANYWHERE"
+                        ? "bg-emerald-50 border-emerald-500 font-bold text-emerald-900"
+                        : "bg-white border-slate-300 text-slate-700"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="newAppNetworkPolicy"
+                      value="ANYWHERE"
+                      checked={networkPolicy === "ANYWHERE"}
+                      onChange={(e) => setNetworkPolicy(e.target.value)}
+                      className="text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>🌐 ทุกที่ (Cloud / SaaS)</span>
+                  </label>
+
+                  <label
+                    className={`p-2 rounded border-2 flex items-center gap-2 cursor-pointer transition-all text-xs ${
+                      networkPolicy === "VPN_ONLY"
+                        ? "bg-purple-100 border-purple-500 font-bold text-purple-900"
+                        : "bg-white border-slate-300 text-slate-700"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="newAppNetworkPolicy"
+                      value="VPN_ONLY"
+                      checked={networkPolicy === "VPN_ONLY"}
+                      onChange={(e) => setNetworkPolicy(e.target.value)}
+                      className="text-purple-600 focus:ring-purple-500"
+                    />
+                    <span>🔒 เฉพาะ VPN / On-Prem</span>
+                  </label>
+                </div>
+
+                {networkPolicy === "VPN_ONLY" && (
+                  <div className="pt-2 border-t border-purple-200 space-y-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        เมื่อพนักงานอยู่นอก VPN:
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label
+                          className={`p-1.5 rounded border text-[11px] flex items-center gap-1.5 cursor-pointer ${
+                            vpnRestrictionMode === "HIDE"
+                              ? "bg-white border-purple-500 font-bold text-purple-900 shadow-2xs"
+                              : "bg-slate-50 border-slate-300 text-slate-600"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="newAppVpnMode"
+                            value="HIDE"
+                            checked={vpnRestrictionMode === "HIDE"}
+                            onChange={(e) => setVpnRestrictionMode(e.target.value)}
+                            className="text-purple-600"
+                          />
+                          <span>ซ่อนจาก Portal</span>
+                        </label>
+                        <label
+                          className={`p-1.5 rounded border text-[11px] flex items-center gap-1.5 cursor-pointer ${
+                            vpnRestrictionMode === "LOCK_WITH_BANNER"
+                              ? "bg-white border-amber-500 font-bold text-amber-900 shadow-2xs"
+                              : "bg-slate-50 border-slate-300 text-slate-600"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="newAppVpnMode"
+                            value="LOCK_WITH_BANNER"
+                            checked={vpnRestrictionMode === "LOCK_WITH_BANNER"}
+                            onChange={(e) => setVpnRestrictionMode(e.target.value)}
+                            className="text-amber-600"
+                          />
+                          <span>แสดงแต่ล็อก 🔒</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div>
+                      <input
+                        type="text"
+                        value={allowedNetworkCidrs}
+                        onChange={(e) => setAllowedNetworkCidrs(e.target.value)}
+                        placeholder="CIDRs กำหนดเอง (เว้นว่างไว้เพื่อใช้วง VPN กลางของบริษัท)"
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded text-slate-900 font-mono text-[11px] focus:outline-none focus:border-purple-600"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div className="pt-3 border-t-2 border-slate-200 flex justify-end space-x-2">
                 <button

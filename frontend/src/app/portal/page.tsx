@@ -309,7 +309,8 @@ export default function PortalPage() {
               const isLaunching = launchingAppCode === app.app_code;
               const isOffline = app.health_status === "OFFLINE";
               const isSpokeSsoDisabled = app.spoke_sso_status === "DISABLED";
-              const isLaunchDisabled = isLaunching || isOffline || isSpokeSsoDisabled;
+              const isVpnLocked = Boolean(app.is_vpn_locked);
+              const isLaunchDisabled = isLaunching || isOffline || isSpokeSsoDisabled || isVpnLocked;
 
               return (
                 <div
@@ -319,6 +320,8 @@ export default function PortalPage() {
                       ? "border-rose-200/80 bg-slate-50/50"
                       : isSpokeSsoDisabled
                       ? "border-amber-200/80 bg-amber-50/20"
+                      : isVpnLocked
+                      ? "border-amber-300/80 bg-amber-50/15"
                       : "border-slate-200/90 hover:border-blue-400/80 hover:shadow-lg"
                   }`}
                 >
@@ -327,7 +330,11 @@ export default function PortalPage() {
                     <div className="flex items-start gap-4">
                       <div
                         className={`w-14 h-14 rounded-2xl flex items-center justify-center border shrink-0 transition-colors ${
-                          isOffline ? "bg-slate-200/60 border-slate-300 text-slate-400" : theme.bg
+                          isOffline
+                            ? "bg-slate-200/60 border-slate-300 text-slate-400"
+                            : isVpnLocked
+                            ? "bg-amber-100/70 border-amber-300 text-amber-700"
+                            : theme.bg
                         }`}
                       >
                         {theme.icon}
@@ -347,6 +354,11 @@ export default function PortalPage() {
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                               Break-Glass
+                            </span>
+                          ) : isVpnLocked ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                              <Lock className="w-3 h-3 text-amber-600" />
+                              ต้องต่อ VPN
                             </span>
                           ) : null}
                         </div>
@@ -399,6 +411,8 @@ export default function PortalPage() {
                           ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
                           : isSpokeSsoDisabled
                           ? "bg-amber-50 text-amber-700 border border-amber-300 cursor-not-allowed shadow-none"
+                          : isVpnLocked
+                          ? "bg-amber-50 text-amber-800 border border-amber-300 cursor-not-allowed shadow-none font-semibold"
                           : `${theme.btn} cursor-pointer`
                       }`}
                     >
@@ -411,6 +425,11 @@ export default function PortalPage() {
                         <span>ระบบปิดปรับปรุงชั่วคราว (Offline)</span>
                       ) : isSpokeSsoDisabled ? (
                         <span>ระบบปิดรับ SSO ชั่วคราว</span>
+                      ) : isVpnLocked ? (
+                        <span className="flex items-center justify-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5 text-amber-600" />
+                          <span>กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน</span>
+                        </span>
                       ) : (
                         <>
                           <span>เข้าใช้งานระบบ</span>

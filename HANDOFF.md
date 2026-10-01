@@ -95,6 +95,26 @@
 
 ---
 
+### 7) ระบบ Zero-Trust Network Policy & VPN Restriction สำหรับ On-Premise Spoke Applications (1 ต.ค. 2026)
+- **โจทย์และความท้าทาย:**
+  - แอปพลิเคชัน On-Premise (เช่น SAP B1 Client, WMS ในโรงงาน, Internal Local Web Apps) ติดตั้งอยู่ภายใน Local Network ของ Window Asia และไม่มี Inbound Public Tunnel ให้คนภายนอกเข้าถึงโดยตรง
+  - พนักงานที่อยู่นอกออฟฟิศและไม่ได้ต่อ OpenVPN หากกดเปิดใช้งานผ่าน Employee Portal (`/portal`) จะเจอ Browser Timeout หรือ Connection Refused ทำให้เกิดความสับสนและร้องเรียนปัญหาไปยังทีม IT
+- **การออกแบบสถาปัตยกรรม (Hybrid Approach):**
+  - **Dynamic Client IP Inspection:** เซิร์ฟเวอร์ CIAM บน Cloud จะตรวจสอบ Egress Public IP ของพนักงานขณะร้องขอหน้า Portal (`/oauth/portal/apps`) และจังหวะกดเปิดแอป (`/oauth/portal/launch`)
+  - **Corporate VPN Networks:** ค่ากลางของบริษัทที่รองรับการเข้าถึง On-Prem ประกอบด้วย:
+    - OpenVPN WAN Egress IP ของสำนักงานใหญ่ Window Asia: `49.231.185.245/32`, `58.8.190.63/32`
+    - Subnet ภายใน: `10.8.0.0/24` (OpenVPN Client Subnet), `192.168.0.0/16` (Office LAN Subnet), `172.18.0.0/16` (Docker Network), `127.0.0.1/32`
+  - **Per-Application Granular Control:**
+    1. `network_policy`: เลือกระหว่าง `ANYWHERE` (เข้าได้จากทุกที่ สำหรับ Cloud / SaaS) กับ `VPN_ONLY` (จำกัดเฉพาะต่อ VPN / ในออฟฟิศ)
+    2. `vpn_restriction_mode`: (เมื่อเป็น `VPN_ONLY`) เลือกระหว่าง:
+       - `HIDE`: ซ่อนการ์ดแอปพลิเคชันออกจาก Employee Portal ทันทีหากไม่ได้ต่อ VPN
+       - `LOCK_WITH_BANNER`: แสดงการ์ดใน Portal พร้อมไอคอน `🔒 ต้องต่อ VPN` และ Disable ปุ่มเปิดระบบเป็น `กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน`
+    3. `allowed_network_cidrs`: สามารถระบุวง IP/CIDRs เฉพาะของระบบนั้นๆ เพิ่มเติมได้ (หากเว้นว่างจะใช้วง VPN กลางของบริษัทโดยอัตโนมัติ)
+  - **Strict Backend Guard:** เอนด์พอยต์ `/api/v1/oauth/portal/launch` ตรวจสอบ IP แบบเข้มงวด หากอยู่นอกเครือข่ายจะส่งกลับ `HTTP 403 Forbidden` พร้อมข้อความแจ้งเตือนทันที ป้องกันการแอบขอ Authorization Code จากภายนอก
+  - **Database Migration:** เพิ่มคอลัมน์ `network_policy`, `vpn_restriction_mode`, `allowed_network_cidrs` ในตาราง `connected_applications` แบบ Non-destructive พร้อม Auto-Migration ใน `initial_data.py`
+
+---
+
 ## 4. สถานะ Git ล่าสุด (Current Git State)
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)

@@ -35,5 +35,11 @@ class ConnectedApplication(Base):
     # Active Directory Gateway Controls (Safety Guardrails)
     ad_allow_status_patch = Column(Boolean, default=False, nullable=True)
 
+    # Network Access Policy & VPN Restriction (Zero Trust Context-Aware Access Control)
+    network_policy = Column(String(50), default="ANYWHERE", nullable=False) # 'ANYWHERE', 'VPN_ONLY'
+    vpn_restriction_mode = Column(String(50), default="HIDE", nullable=False) # 'HIDE', 'LOCK_WITH_BANNER'
+    allowed_network_cidrs = Column(String(500), nullable=True) # Optional comma-separated CIDRs override
+
     # Relationships
     accounts = relationship("AppAccountMapping", back_populates="application", cascade="all, delete-orphan")
+

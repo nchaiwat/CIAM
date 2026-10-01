@@ -65,6 +65,9 @@ def list_applications(
             sap_company_db=app.sap_company_db,
             sap_username=app.sap_username,
             ad_allow_status_patch=app.ad_allow_status_patch,
+            network_policy=getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
+            vpn_restriction_mode=getattr(app, "vpn_restriction_mode", "HIDE") or "HIDE",
+            allowed_network_cidrs=getattr(app, "allowed_network_cidrs", None),
             total_linked_accounts=total_accounts,
             created_at=app.created_at
         )
@@ -102,6 +105,9 @@ def register_application(
         sap_password=data.sap_password.strip() if data.sap_password else None,
         rpa_adapter_name=data.rpa_adapter_name,
         ad_allow_status_patch=data.ad_allow_status_patch or False,
+        network_policy=data.network_policy or "ANYWHERE",
+        vpn_restriction_mode=data.vpn_restriction_mode or "HIDE",
+        allowed_network_cidrs=data.allowed_network_cidrs.strip() if data.allowed_network_cidrs else None,
         health_status="ONLINE" if data.connector_type == "RPA_WORKER" else "UNKNOWN"
     )
     db.add(new_app)
@@ -127,6 +133,9 @@ def register_application(
         sap_company_db=new_app.sap_company_db,
         sap_username=new_app.sap_username,
         ad_allow_status_patch=new_app.ad_allow_status_patch,
+        network_policy=new_app.network_policy,
+        vpn_restriction_mode=new_app.vpn_restriction_mode,
+        allowed_network_cidrs=new_app.allowed_network_cidrs,
         total_linked_accounts=0,
         created_at=new_app.created_at
     )
@@ -183,7 +192,10 @@ def get_application_credentials(
         sso_enabled=app.sso_enabled,
         sap_company_db=app.sap_company_db,
         sap_username=app.sap_username,
-        sap_password=app.sap_password
+        sap_password=app.sap_password,
+        network_policy=getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
+        vpn_restriction_mode=getattr(app, "vpn_restriction_mode", "HIDE") or "HIDE",
+        allowed_network_cidrs=getattr(app, "allowed_network_cidrs", None)
     )
 
 @router.patch("/{app_id}", response_model=AppOut)
@@ -228,6 +240,12 @@ def update_application(
         app.sap_password = data.sap_password.strip() or None
     if data.ad_allow_status_patch is not None:
         app.ad_allow_status_patch = data.ad_allow_status_patch
+    if data.network_policy is not None:
+        app.network_policy = data.network_policy
+    if data.vpn_restriction_mode is not None:
+        app.vpn_restriction_mode = data.vpn_restriction_mode
+    if data.allowed_network_cidrs is not None:
+        app.allowed_network_cidrs = data.allowed_network_cidrs.strip() or None
 
     db.add(IamAuditLog(
         actor_username=current_admin.username,
@@ -262,9 +280,13 @@ def update_application(
         sap_company_db=app.sap_company_db,
         sap_username=app.sap_username,
         ad_allow_status_patch=app.ad_allow_status_patch,
+        network_policy=getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
+        vpn_restriction_mode=getattr(app, "vpn_restriction_mode", "HIDE") or "HIDE",
+        allowed_network_cidrs=getattr(app, "allowed_network_cidrs", None),
         total_linked_accounts=total_accounts,
         created_at=app.created_at
     )
+
 
 @router.post("/{app_id}/ping", response_model=PingResult)
 async def ping_application(

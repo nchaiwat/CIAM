@@ -90,6 +90,9 @@ class PortalAppItem(BaseModel):
     latency_ms: Optional[int] = None
     launch_url: Optional[str] = None
     redirect_uris: Optional[str] = None
+    network_policy: Optional[str] = "ANYWHERE"
+    is_vpn_locked: Optional[bool] = False
+    vpn_lock_message: Optional[str] = None
 
 
 class PortalLaunchRequest(BaseModel):

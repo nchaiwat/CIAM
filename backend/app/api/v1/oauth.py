@@ -36,8 +36,10 @@ from app.services.oidc_service import (
     exchange_authorization_code,
     get_user_info_from_token
 )
+from app.services.network_service import get_client_ip, is_client_authorized_for_app_network
 
 logger = logging.getLogger("ciam.oauth")
+
 
 router = APIRouter(prefix="/oauth", tags=["OAuth 2.0 / OpenID Connect"])
 
@@ -328,6 +330,7 @@ def userinfo_endpoint(
 
 @router.get("/portal/apps", response_model=List[PortalAppItem])
 def get_portal_apps(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Optional[AdminUser] = Depends(get_current_user_optional)
 ):
@@ -336,6 +339,7 @@ def get_portal_apps(
     Filters applications based on the authenticated user's authorization:
     - Admins see all active SSO-enabled applications.
     - Regular employees only see applications where they have an active account mapping.
+    - Evaluates Network Policy (VPN / On-Prem restrictions): Hides apps or flags as VPN locked.
     """
     base_query = db.query(ConnectedApplication).filter(
         ConnectedApplication.is_active == True,
@@ -374,10 +378,27 @@ def get_portal_apps(
         "sap_b1": "ระบบบริหารทรัพยากรองค์กรหลัก (SAP Business One ERP)",
     }
 
+    client_ip = get_client_ip(request)
+
     items = []
     for app in apps:
         category = category_map.get(app.app_code, "ระบบสารสนเทศองค์กร (Enterprise System)")
         desc = desc_map.get(app.app_code, f"ระบบงาน {app.app_name} ในเครือบริษัท วินโดว์ เอเชีย จำกัด (มหาชน)")
+
+        # Network Policy & VPN Restriction evaluation
+        is_net_authorized = is_client_authorized_for_app_network(client_ip, app, db)
+        is_vpn_locked = False
+        vpn_lock_message = None
+
+        if not is_net_authorized:
+            restriction_mode = (getattr(app, "vpn_restriction_mode", "HIDE") or "HIDE").upper()
+            if restriction_mode == "HIDE":
+                # Option 1: Completely hide app from Portal if not in allowed corporate network/VPN
+                continue
+            else:
+                # Option 2: Show with lock banner and disabled launch button
+                is_vpn_locked = True
+                vpn_lock_message = "ต้องเชื่อมต่อ VPN หรือเข้าใช้งานจากออฟฟิศ"
 
         launch_url = app.base_url
         if app.redirect_uris:
@@ -400,7 +421,10 @@ def get_portal_apps(
                 health_status=app.health_status,
                 latency_ms=app.latency_ms,
                 launch_url=launch_url,
-                redirect_uris=app.redirect_uris
+                redirect_uris=app.redirect_uris,
+                network_policy=getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
+                is_vpn_locked=is_vpn_locked,
+                vpn_lock_message=vpn_lock_message
             )
         )
     return items
@@ -456,6 +480,14 @@ def launch_portal_app(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"ระบบ '{app.app_name}' ปิดรับการเข้าใช้งานผ่าน Single Sign-On ชั่วคราว (Break-Glass Active) กรุณาเข้าสู่ระบบผ่านหน้าเว็บหลักของระบบดังกล่าว"
+        )
+
+    # Validate Network Policy & VPN Authorization Guard
+    client_ip = get_client_ip(request)
+    if not is_client_authorized_for_app_network(client_ip, app, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"แอปพลิเคชัน '{app.app_name}' อนุญาตให้เข้าใช้งานเฉพาะเมื่อเชื่อมต่อ VPN องค์กร หรือใช้งานจากเครือข่ายภายในสำนักงานเท่านั้น"
         )
 
     # Validate authorization for normal employees

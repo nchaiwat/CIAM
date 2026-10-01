@@ -192,6 +192,9 @@ export interface ConnectedApp {
   sap_username?: string | null;
   sap_password?: string | null;
   ad_allow_status_patch?: boolean;
+  network_policy?: "ANYWHERE" | "VPN_ONLY" | string;
+  vpn_restriction_mode?: "HIDE" | "LOCK_WITH_BANNER" | string;
+  allowed_network_cidrs?: string | null;
   created_at: string;
 }
 
@@ -446,6 +449,9 @@ export const ciamApi = {
     sap_company_db?: string;
     sap_username?: string;
     sap_password?: string;
+    network_policy?: string;
+    vpn_restriction_mode?: string;
+    allowed_network_cidrs?: string;
   }) =>
     fetchApi<ConnectedApp>("/applications", {
       method: "POST",
@@ -468,6 +474,9 @@ export const ciamApi = {
       sap_company_db?: string | null;
       sap_username?: string | null;
       sap_password?: string | null;
+      network_policy?: string | null;
+      vpn_restriction_mode?: string | null;
+      allowed_network_cidrs?: string | null;
     }>(`/applications/${id}/credentials`),
 
   updateApplication: (
@@ -487,6 +496,9 @@ export const ciamApi = {
       sap_username?: string;
       sap_password?: string;
       ad_allow_status_patch?: boolean;
+      network_policy?: string;
+      vpn_restriction_mode?: string;
+      allowed_network_cidrs?: string;
     }
   ) =>
     fetchApi<ConnectedApp>(`/applications/${id}`, {
@@ -661,6 +673,9 @@ export interface PortalAppItem {
   latency_ms?: number;
   launch_url?: string;
   redirect_uris?: string;
+  network_policy?: string;
+  is_vpn_locked?: boolean;
+  vpn_lock_message?: string | null;
 }
 
 export interface PortalLaunchResponse {
