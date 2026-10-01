@@ -119,7 +119,7 @@
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)
 - **Branch:** `main`
-- **Head Commit:** [`9019798`](https://github.com/nchaiwat/CIAM/commit/9019798) - `docs: add on-premise topology, vpn-only guidelines and zero-trust spec for spoke devs`
+- **Head Commit:** [`a842936`](https://github.com/nchaiwat/CIAM/commit/a842936) - `docs: update MEMORY.md with Section 9.3 Spoke Developer Spec v2.3.0`
 - **Working Tree:** สะอาด (Compiled, Test Suites `37 passed`, `0 TS errors`)
 
 ### Repository IRM (`D:\Python\IRM`)
