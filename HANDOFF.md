@@ -119,7 +119,7 @@
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)
 - **Branch:** `main`
-- **Head Commit:** [`7b4504e`](https://github.com/nchaiwat/CIAM/commit/7b4504e) - `feat(network-policy): implement zero-trust network access and vpn restriction for on-prem apps`
+- **Head Commit:** [`9019798`](https://github.com/nchaiwat/CIAM/commit/9019798) - `docs: add on-premise topology, vpn-only guidelines and zero-trust spec for spoke devs`
 - **Working Tree:** สะอาด (Compiled, Test Suites `37 passed`, `0 TS errors`)
 
 ### Repository IRM (`D:\Python\IRM`)
