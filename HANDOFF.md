@@ -1,9 +1,11 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 27 กันยายน 2026 (Local Time: ~10:50 ICT)  
-> **Repository:** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
-> **Workspace Local:** `D:\Python\Central-IAM`  
-> **Production VPS:** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)
+> **Date Updated:** 1 ตุลาคม 2026 (Local Time: ~12:00 ICT)  
+> **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
+> **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
+> **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
+> **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
+> **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
 
 ---
 
@@ -13,7 +15,8 @@
 2. **Spoke Enterprise Connectors:** เชื่อมต่อกับระบบย่อยในองค์กร ได้แก่:
    - **Active Directory (AD DC Gateway):** ผ่าน REST Agent Gateway Port 3100 (`http://172.18.0.1:3100`) และ LDAP Direct Fallback
    - **SAP Business One (ERP):** เชื่อมต่อผ่าน SAP B1 Service Layer REST API (`https://sapb1.waapps.net/b1s/v2`)
-   - **IRM System:** ระบบจัดซื้อ/ทรัพยากรภายใน เชื่อมต่อผ่าน REST API M2M
+   - **IRM System:** ระบบจัดซื้อ/ทรัพยากรภายใน เชื่อมต่อผ่าน REST API M2M และ Single Sign-On (OIDC / PKCE)
+   - **QMS System:** ระบบควบคุมคุณภาพ เชื่อมต่อผ่าน REST API M2M
    - **Microsoft 365 (Entra ID / Exchange):** เชื่อมต่อผ่าน Microsoft Graph API
 3. **Enterprise SSO Portal (`/portal`):** ระบบ Launchpad สำหรับให้พนักงาน Login ด้วยรหัสผ่าน AD และเปิดใช้งานระบบ Spoke ต่างๆ ผ่าน OIDC/OAuth2
 4. **Automated Deprovisioning & Offboarding:** ปิดการใช้งานบัญชีทุกระบบพร้อมกันทันทีเมื่อพนักงานลาออก
@@ -23,7 +26,7 @@
 
 ## 2. โครงสร้างและการ Deploy (Deployment & Architecture)
 
-### บริการใน `docker-compose.yml`
+### บริการ Central-IAM (`docker-compose.yml`)
 | Service Name | บทบาท | Port ภายใน | Port ภายนอก | เทคโนโลยี | Volume Mounts |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`postgres`** | PostgreSQL Database (v16 Alpine) | 5432 | 5438 | PostgreSQL | `ciam_pgdata:/var/lib/postgresql/data` |
@@ -34,98 +37,106 @@
 > 1. ชื่อ Service ของ Frontend ใน `docker-compose.yml` คือ **`web`** (ห้ามใช้คำว่า `frontend` เด็ดขาด)
 > 2. Backend Service **`api`** มีการ mount `./backend:/app` แล้วใน Commit `ba03928` ทำให้การแก้ไข Python Code ใน `./backend` บน VPS จะถูกโหลดทันทีเมื่อสั่ง `docker compose restart api` โดยไม่ต้องเสียเวลา rebuild ทั้ง container ทุกครั้ง
 
-### คำสั่งมาตรฐานสำหรับ Deploy / Update บน VPS (`/var/www/Ciam`):
-```bash
-cd /var/www/Ciam
-git pull origin main
-docker compose up -d api web
-```
-
 ---
 
 ## 3. สรุปความคืบหน้าและการแก้ไขล่าสุด (Recent Progress & Key Commits)
 
 ### 1) การแก้ปัญหา SAP Business One Service Layer (Complete & Verified)
-- **ปัญหาเดิม:** 
-  1. การยิง API ไปยัง SAP Service Layer ติด `HTTP 401 code 300 (Authorization header not found)`
-  2. โดนจำกัดไว้แค่ `$top=10` ทำให้ดึงข้อมูลได้ไม่ครบ
-  3. รายชื่อบัญชีที่ดึงมาไม่มี User ERP ในรูปแบบ `Firstname.L` (เช่น `Chaiwat.N`) และสถานะ Locked ไม่ถูกต้อง
+- ทำความสะอาด URL Service Layer ไม่ให้ติด `/Login` ซ้ำ (Commit `89da958`)
+- เพิ่ม Pagination `@odata.nextLink` ดึงข้อมูลครบ 308 รายการ (Commit `fc1f084`)
+- ปรับ Priority ดึงข้อมูลจาก `/b1s/v2/Users` ก่อน `/b1s/v2/EmployeesInfo` (Commit `b513510`)
+
+---
+
+### 2) ปัญหาตัวเลขนับบัญชี Active Directory (Complete & Verified)
+- Stale mapping pruning ลบบัญชี service เก่า 54 บัญชี
+- แก้ Duplicate case-sensitive rows ซ้ำ 30 แถวด้วย immediate `db.delete()` + `db.flush()` ป้องกัน SQLAlchemy UniqueViolation 500 (Commit `8fd9a5d`)
+
+---
+
+### 3) การปรับปรุงระบบ Login & Employee Portal v1.9.3 (Complete & Verified)
+- แยก `/login` สำหรับพนักงาน (Clean/Modern Window Asia SSO ➔ เข้า `/portal`)
+- แยก `/admin/login` สำหรับ Admin IT (Cyber Dark Theme, Honeypot, Lockout)
+- กรองแอปตามสิทธิ์ `AppAccountMapping.is_active_in_app == True`
+
+---
+
+### 4) ระบบมาตรฐาน Spoke SSO Break-Glass & Guard Step 0 (1 ต.ค. 2026 — Commit `6a145b3`)
+- **ปัญหาเดิม:** เมื่อ Spoke (เช่น IRM) ปิดสวิตช์ SSO ภายในตนเอง (`ciam_sso_enabled = false` หรือเปิด Break-Glass) หน้า Login ตรงของ IRM ซ่อนปุ่ม SSO ถูกต้อง แต่ถ้าพนักงานกด Launch จาก Central-IAM Portal ตัว endpoint `/api/auth/sso/callback` ของ IRM ยังคงยอมรับโค้ดและพา Login ผ่าน SSO ได้เนื่องจากไม่มีการตรวจเช็คสถานะ SSO ใน Callback
 - **การแก้ไข:**
-  - **Commit `89da958`:** แก้ไขการทำความสะอาด `base_url` ด้วย Regex `re.sub(r'/b1s(/v[12])?(/.*)?$', '', raw_base_url)` กำจัดบั๊กที่ URL มี `/Login` ต่อท้าย ซึ่งทำให้คำขอ GET วิ่งไปชน `/b1s/v2/Login/b1s/v2/Users` และถูกปฏิเสธด้วย 401
-  - **Commit `fc1f084`:** ปลดล็อก `$top=10` และเพิ่มระบบ Pagination ติดตาม `@odata.nextLink` สูงสุด 100 หน้า ดึงข้อมูลได้ครบถ้วน 308 รายการ
-  - **Commit `b513510`:** ปรับ Priority ให้ดึงข้อมูลจาก `/b1s/v2/Users` ก่อน `/b1s/v2/EmployeesInfo` ทำให้ได้ Username รูปแบบเดียวกับ AD (`Chaiwat.N`) พร้อมสถานะ `Locked` ที่ถูกต้องตามระบบ ERP จริง
+  - **IRM Backend (`sso.py`):** เพิ่ม **Step 0 Check** ใน `handle_sso_callback` ตรวจสอบ `ciam_sso_enabled` และ `ciam_break_glass_active` หากปิดอยู่ จะปฏิเสธคำขอด้วย `HTTP 503 Service Unavailable` และบันทึก `transaction_logs` หมวด `ciam_sso`
+  - **Standard SDK & Reference Router (`spoke_sso_router.py`):** เพิ่ม Step 0 Check ใน reference template ของ CIAM
+  - **Standard Specifications:** บันทึก Step 0 เข้าไปใน `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` และ `SPOKE_SSO_INTEGRATION_GUIDE.md` ให้ทุกระบบลูกถือปฏิบัติเหมือนกัน 100%
 
 ---
 
-### 2) ปัญหาตัวเลขนับบัญชี Active Directory ไม่ตรงกับ Live Inventory (279 ➔ 225 ➔ 195)
-- **อาการที่พบ:**
-  - เมื่อคลิกปุ่ม **"ดูบัญชีสด"** (Live Inventory) Modal แสดงผล **195 Accounts**
-  - แต่การ์ดระบบหน้า Applications หัวข้อ **"จำนวนบัญชีที่ผูก"** แสดง **279 บัญชี** และพอกดซิงก์รอบแรกลดลงมาเหลือ **225 บัญชี** แต่ไม่ยอมลงไปที่ **195 บัญชี**
-  - และพอกดซิงก์รอบถัดมา เกิดข้อผิดพลาด **`API Error [500]: Internal Server Error`**
-- **การวิเคราะห์ Root Cause 4 จุด:**
-  1. **Stale Mappings (279 ➔ 225):** ระบบในอดีตเคย Sync บัญชี service/computer accounts มาเก็บไว้ 279 บัญชี แก้ไขโดยเพิ่ม Stale Mapping Pruning (`~func.trim(func.lower(AppAccountMapping.app_username)).in_(live_usernames)`) ลบออกไปได้ 54 บัญชี เหลือ 225 บัญชี
-  2. **Duplicate Case-Sensitive Rows (225 - 195 = 30):** ใน PostgreSQL ตาราง `app_account_mappings` มี **30 แถวซ้ำ** ที่เกิดจากตัวพิมพ์เล็ก/ใหญ่ต่างกัน (เช่น `Chaiwat.N` กับ `chaiwat.n`) เนื่องจากเดิมค้นหาด้วย `== uname` แบบ Case-sensitive เมื่อรันคำสั่ง `NOT IN` ทั้งสองตัวอยู่ใน live list จึงไม่มีแถวใดถูกลบ
-  3. **Docker Container Not Reloading Code:** บน VPS คอนเทนเนอร์ไม่ได้ mount `./backend` คำสั่ง `docker compose restart api` จึงรัน Image เก่าตลอดเวลา
-  4. **SQLAlchemy Order-of-Execution Causing Error 500:** เมื่อ Docker โหลดโค้ด Deduplicate ใหม่ กลไก Unit-of-Work ของ SQLAlchemy รัน `UPDATE` ก่อน `DELETE` เสมอ เมื่อพยายาม update ชื่อ `Chaiwat.N` ➔ `chaiwat.n` ขณะที่แถวคู่แฝดยังไม่ถูกลบออกจากตาราง PostgreSQL จึงเกิด **`UniqueViolation: duplicate key value violates unique constraint "uq_app_username_per_app"`** ส่งผลให้เป็น Error 500
-- **การแก้ไขใน Commit `ba03928` และ `8fd9a5d`:**
-  - เพิ่ม Volume Mount `./backend:/app` ใน `docker-compose.yml`
-  - ปรับการค้นหาและ Deduplicate ใน [`applications.py`](file:///d:/Python/Central-IAM/backend/app/api/v1/applications.py) และ [`scheduler.py`](file:///d:/Python/Central-IAM/backend/app/services/scheduler.py):
-    1. ตรวจสอบแถวซ้ำด้วย `func.lower(AppAccountMapping.app_username) == uname.lower()`
-    2. คัดเลือกแถวที่มีตัวสะกดตรงเป๊ะ (`app_username == uname`) มาใช้งานทันทีโดยไม่ต้อง rename
-    3. บังคับสั่ง `db.delete(dup)` และ **`db.flush()` ทันที** เพื่อลบแถวแฝดออกจาก PostgreSQL ก่อนจะแตะต้องแถวหลัก ป้องกัน Unique Key Violation 100%
-    4. รันรอบกวาดล้างครั้งสุดท้าย (`all_app_mappings`) ลบแถวซ้ำที่เหลือ
-    5. ครอบการทำงานด้วย `try ... except ... db.rollback()` เพื่อความปลอดภัยของ DB Transaction
+### 5) การตรวจจับสถานะ SSO ของ Spoke และระบบป้องกัน Offline ใน Portal (Commit `6a145b3`)
+- **Spoke SSO Probing:** ปรับ `RestApiConnector.health_check()` ให้ probe ไปที่ `GET /api/auth/sso/config` ของ Spoke ด้วย เพื่อดึงสถานะ `sso_enabled` และ `break_glass_active` มาบันทึกลงในคอลัมน์ `spoke_sso_status` ของ `connected_applications`
+- **Applications Page Badge (`/applications`):**
+  - แสดง `✕ Disabled (ปิด SSO)` หาก CIAM ปิด SSO
+  - แสดง `⚠️ Spoke ปิด SSO (Break-Glass)` หาก Spoke ปิด SSO หรือเข้าโหมดฉุกเฉิน
+  - แสดง `✓ SSO Active` หากเปิดใช้งานปกติทั้งสองฝั่ง
+- **Employee Portal Safety Guards (`/portal`):**
+  - หากระบบปลายทางออฟไลน์ (เช่น QMS ที่ยังไม่เปิด Server): การ์ดแสดงป้าย `🔴 ออฟไลน์` และปุ่มถูก Disable: `ระบบปิดปรับปรุงชั่วคราว (Offline)`
+  - หากระบบปิดรับ SSO: การ์ดแสดงป้าย `🔒 Break-Glass` และปุ่มถูก Disable: `ระบบปิดรับ SSO ชั่วคราว`
+  - Backend Guard ใน `/api/v1/oauth/portal/launch` บล็อกการยิง API ด้วย HTTP 503 พร้อมข้อความภาษาไทยแจ้งเตือนที่ชัดเจน
 
 ---
 
-### 3) การปรับปรุงระบบ Login & Employee Portal (Completed & Verified)
-- **โจทย์และความต้องการ:**
-  1. แยกหน้า Login ออกจากกันอย่างชัดเจน:
-     - `/login`: สำหรับ **พนักงานทั่วไป (Employee Portal)** — สไตล์ Clean & Modern สบายตา เป็นมิตร แบรนดิ้ง Window Asia Single Sign-On เข้าสู่ระบบด้วย Active Directory Username & Password แล้วพาเข้า `/portal` ทันที
-     - `/admin/login`: สำหรับ **ผู้ดูแลระบบ (Admin Console)** — สไตล์ High-Security Dark Cyber Theme คงระบบ Honeypot, คำเตือน พ.ร.บ. คอมพิวเตอร์, Brute-Force lockout และเข้าสู่หน้า Admin Dashboard
-  2. ปรับปรุงหน้า **`/portal` (App Launcher)** ให้ **Simple & Minimal**:
-     - ตัด Technical noise ทั้งหมดออก (latency ms, REST_API / OData badges, client_id, dropdown เลือกลิงก์ simulator, กล่องข้อความและ footer เตือนกฎหมาย)
-     - คงเหลือเฉพาะ: ส่วนต้อนรับและแสดงชื่อพนักงาน-แผนก, ช่องค้นหาระบบงาน, และการ์ดแอปพลิเคชันที่คลีนพร้อมปุ่ม "เข้าใช้งานระบบ" (1-Click Launch)
-  3. **Authorization-based Filtering:**
-     - ตรวจสอบสิทธิ์ของพนักงานจาก `AppAccountMapping` (`is_active_in_app == True`)
-     - **ซ่อนระบบที่พนักงานไม่ได้รับสิทธิ์ออกทั้งหมด** (แสดงเฉพาะระบบที่มีสิทธิ์เท่านั้น)
-     - สำหรับ Admin สามารถมองเห็นทุกระบบ พร้อมปุ่มสลับกลับไป Admin Console
-  4. **Backend Security & Token Enforcement:**
-     - ปรับ `/api/v1/oauth/portal/apps` ให้รับ token และ filter แอปตาม mapping ของ employee
-     - ปรับ `/api/v1/oauth/portal/launch` ให้ออก SSO Authorization Code ภายใต้ `username` จริงของพนักงาน (ยกเลิกการ hardcode "admin") และตรวจ 403 Forbidden หากพนักงานพยายาม launch ระบบที่ตนเองไม่มีสิทธิ์
-     - ปรับ `AppShell.tsx` ให้มี Role Guard ป้องกันไม่ให้พนักงาน (`PORTAL_USER`) เข้าถึงหน้า Admin Console (`/`, `/directory`, `/applications`, etc.)
+### 6) แก้บั๊กการบันทึกข้อมูลใน IRM (Supplier Master & Item Master — Commits `704b646`, `754323e`)
+- **ปัญหาเดิม:** 
+  1. เมื่อแก้ไข Email ของ Supplier หรือข้อมูล Item Master แล้วกดบันทึก หน้าจอไม่ Refresh ค่าใหม่ทันที ต้องกด Hard Reload จึงจะเห็นผลลัพธ์
+  2. เมื่อต้องการลบ Email ให้เป็นค่าว่าง (Blank) แต่ระบบยังคงจำและเซฟค่า Email เดิมไว้
+- **Root Cause & การแก้ไข:**
+  1. **Backend (`suppliers.py`):** โค้ดเดิมใช้ `if data.email is not None:` เมื่อผู้ใช้ส่ง `email: null` เข้ามา Python ข้ามการอัปเดตไปเลย แก้ไขโดยใช้ `data.model_dump(exclude_unset=True)` ตรวจจับฟิลด์ที่ส่งมาจริง หากเป็นค่าว่างจะบันทึกเป็น `NULL` ลงในฐานข้อมูลทันที (รวมถึงเบอร์โทรและชื่อผู้ติดต่อ)
+  2. **Frontend (`suppliers/page.tsx` & `items/page.tsx`):**
+     - เพิ่ม **Instant Optimistic State Update** นำผลลัพธ์ `res.data` จากเซิร์ฟเวอร์ไปอัปเดตลง State `suppliers` และ `items` ทันทีหลังกดบันทึก
+     - เพิ่ม Anti-Cache Parameters `{ params: { _t: Date.now() }, headers: { 'Cache-Control': 'no-cache' } }` ใน `fetchSuppliers()` และ `fetchItems()` ป้องกัน Browser HTTP Cache 100%
 
 ---
 
 ## 4. สถานะ Git ล่าสุด (Current Git State)
+
+### Repository Central-IAM (`D:\Python\Central-IAM`)
 - **Branch:** `main`
-- **Head Commit:** [`8fd9a5d`](https://github.com/nchaiwat/CIAM/commit/8fd9a5d) - `fix(sync): immediate flush on duplicate deletion to prevent unique constraint conflict on update`
-- **Working Tree:** สะอาด (Clean) ไม่มี uncommitted changes
+- **Head Commit:** [`6a145b3`](https://github.com/nchaiwat/CIAM/commit/6a145b3) - `feat(standardize): add spoke sso probing, offline portal guards, and callback step 0`
+- **Working Tree:** สะอาด (Compiled & Test Suites `32 passed`, `0 TS errors`)
+
+### Repository IRM (`D:\Python\IRM`)
+- **Branch:** `main`
+- **Head Commit:** [`754323e`](https://github.com/nchaiwat/IRM/commit/754323e) - `fix(suppliers): allow clearing email and contact fields to null/blank in update_supplier`
+- **Prior Commit:** [`704b646`](https://github.com/nchaiwat/IRM/commit/704b646) - `fix(sso-refresh): enforce sso active check in callback and fix auto-refresh on supplier/item updates`
+- **Working Tree:** สะอาด (`npx tsc --noEmit` ผ่าน 0 errors)
 
 ---
 
-## 5. สิ่งที่ต้องทำต่อเมื่อกลับมาทำงาน (Next Steps to Resume)
+## 5. คำสั่งมาตรฐานสำหรับ Deploy บน VPS (Production Runbook)
 
-### ขั้นตอนที่ 1: อัปเดตและทดสอบ Sync บน VPS
-เข้า VPS และรันคำสั่ง:
+### ฝั่ง Central-IAM (VPS: `/var/www/Ciam`):
 ```bash
 cd /var/www/Ciam
 git pull origin main
-docker compose restart api
+docker compose build api web
+docker compose up -d api web
 ```
-จากนั้น:
-1. เปิดหน้าเว็บ Central-IAM ➔ เมนู **Applications**
-2. คลิกปุ่ม **"ซิงก์"** ที่การ์ด **Active Directory (DC Gateway)**
-3. ตรวจสอบ:
-   - Toast ขึ้นแจ้งเตือนซิงก์สำเร็จ (ดึงข้อมูล 195 บัญชี)
-   - ตัวเลข **"จำนวนบัญชีที่ผูก"** เปลี่ยนจาก 225 บัญชี เป็น **195 บัญชี** เท่ากับรายการบัญชีสดในปุ่ม "ดูบัญชีสด"
 
-### ขั้นตอนที่ 2: ตรวจสอบ Spoke อื่นๆ (SAP B1, IRM)
-1. กด "ซิงก์" ที่การ์ด **SAP Business One** ตรวจสอบว่าจำนวนบัญชีที่ผูกตรงกับจำนวน Users จาก SAP Service Layer
-2. กด "ซิงก์" ที่การ์ด **IRM**
-3. ตรวจสอบว่าระบบไม่มี Spoke ใดมีปัญหา Duplicate Mapping หรือ Stale Mapping ค้างอีก
+### ฝั่ง IRM (VPS: `/var/www/Irm`):
+```bash
+cd /var/www/Irm
+git pull origin main
+docker compose up -d --build irm-backend irm-frontend
+```
 
-### ขั้นตอนที่ 3: Single Sign-On (SSO) Portal & Offboarding Verification
-1. ทดสอบ Login พนักงานทั่วไปเข้าหน้า `/portal`
-2. ทดสอบ Launch แอปพลิเคชันผ่าน OIDC
-3. ทดสอบการรัน Offboard พนักงาน 1 คน และตรวจสอบว่าส่งคำสั่ง Lock ไปยัง AD และ SAP B1 สำเร็จทั้งคู่
+---
+
+## 6. สิ่งที่ต้องทำต่อเมื่อกลับมาทำงาน (Next Steps to Resume)
+
+1. **ทดสอบใช้งานจริงบน VPS:**
+   - ทดสอบรันคำสั่ง Deploy ทั้ง CIAM และ IRM บน VPS
+   - ตรวจสอบหน้า Applications ของ CIAM: กด Ping ที่ IRM และตรวจสอบป้ายสถานะ SSO
+   - ตรวจสอบหน้า Portal ของ CIAM: พนักงานเห็นการ์ด QMS ขึ้นสถานะ ออฟไลน์/ปิดปรับปรุง (ปุ่ม Disable)
+2. **ทดสอบ Flow ใน IRM:**
+   - ทดสอบสลับสวิตช์ SSO ของ IRM เป็น Off ➔ ตรวจสอบว่าพยายาม Launch จาก CIAM Portal แล้วโดนปฏิเสธ 503 กลับมาหน้า Login หรือไม่
+   - ทดสอบการลบและแก้ไข Email ใน Supplier Master ให้เป็นค่า Blank ➔ ตรวจสอบว่าอัปเดตและ Refresh ทันที
+3. **ขยายผลมาตรฐาน Spoke Integration:**
+   - นำมาตรฐาน Step 0 Guard และ M2M/SSO Spoke Specification ไปประยุกต์ใช้กับระบบถัดไป (QMS และ QOL) เพื่อให้ทุกระบบเชื่อมต่อเข้าสู่ CIAM ในรูปแบบมาตรฐานเดียวกันทั้งองค์กร

@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
-**Last Updated:** 2026-09-28  
-**Version:** 1.9.3 (Minimal Employee App Launcher, Authorize-based App Filtering, Dual Clean Employee / Secure Admin Login Separation)  
+**Last Updated:** 2026-10-01  
+**Version:** 1.9.4 (Spoke SSO Probing, Break-Glass Guard Step 0, Portal Offline/Break-Glass Shields, Supplier Master Blank Null Fixes)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -190,15 +190,29 @@ FRONTEND_URL=http://localhost:3000
 
 ---
 
-## 6. SSO IdP & Break-Glass Architecture Context (Version 1.4.0)
+## 6. SSO IdP & Break-Glass Architecture Context (Version 1.9.4 Enterprise Standard)
 * **Single Sign-On (SSO):** Standard OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636).
 * **Token Standard:** Asymmetric RS256 JWT Signed by CIAM Private Key; spokes verify via `/.well-known/jwks.json` Public Key.
 * **Authorization Code:** One-time use, 60s TTL, exchanged backend-to-backend.
 * **Spoke SDK:** [ciam_sso_client.py](file:///d:/Python/Central-IAM/backend/app/sdk/ciam_sso_client.py) with built-in JWKS caching and Circuit Breaker health checks.
 * **Pilot Integration (IRM):** IRM backend deployed with [sso.py](file:///D:/Python/IRM/backend/app/routers/sso.py) router and Next.js frontend with SSO Login button and callback route.
+* **Standard Step 0 Guard in Spoke Callback (MANDATORY FOR ALL SPOKES):**
+  - When SSO is disabled on the Spoke (`ciam_sso_enabled = false` or `ciam_break_glass_active = true`), the callback endpoint `/api/auth/sso/callback` **MUST reject** incoming authorization codes with `HTTP 503 Service Unavailable` before calling CIAM `/token`.
+  - Prevents users from bypassing local Spoke SSO lockout by launching from CIAM Portal.
+* **Bi-directional Health Probing & Status Sync:**
+  - `RestApiConnector.health_check()` probes both `/api/health` (or `/api/v1/health`) and `GET /api/auth/sso/config` on the spoke.
+  - Detects if Spoke has disabled SSO locally and updates `connected_applications.spoke_sso_status` (`ACTIVE`, `DISABLED`, `BREAK_GLASS`, `UNAVAILABLE`).
+  - `/applications` UI displays real-time badges:
+    - `✕ Disabled (ปิด SSO)` (CIAM disabled)
+    - `⚠️ Spoke ปิด SSO (Break-Glass)` (Spoke disabled or emergency mode)
+    - `✓ SSO Active` (Both sides active)
+* **Portal Safety Shields (`/portal`):**
+  - If a spoke application is `OFFLINE` (e.g. QMS server down), the portal displays a red badge `🔴 ออฟไลน์` and disables the launch button: `ระบบปิดปรับปรุงชั่วคราว (Offline)`.
+  - If a spoke application has disabled SSO or is in break-glass, the portal displays `🔒 Break-Glass` and disables the launch button: `ระบบปิดรับ SSO ชั่วคราว`.
+  - Backend guard in `/api/v1/oauth/portal/launch` blocks requests with HTTP 503 if the app is offline or in break-glass mode.
 * **Break-Glass Fallback Plan (Emergency Outage):**
   1. Spoke apps maintain local break-glass admin route (`/login?mode=breakglass`) or local fallback credentials in local DB.
-  2. Spoke admin toggle: `SSO Enforcement [ON/OFF]` via `/api/auth/sso/break-glass-toggle`.
+  2. Spoke admin toggle: `SSO Enforcement [ON/OFF]` via `/api/auth/sso/break-glass-toggle` or system settings.
   3. Dynamic Failover: Spoke apps can fallback directly to AD Gateway (`http://172.18.0.1:3100/api/v2/login` per `ADAuthen.md`) if CIAM health check fails.
   4. Real-time Telegram/LINE alert triggered on break-glass activation.
 
