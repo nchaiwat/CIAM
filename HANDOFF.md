@@ -119,8 +119,8 @@
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)
 - **Branch:** `main`
-- **Head Commit:** [`6a145b3`](https://github.com/nchaiwat/CIAM/commit/6a145b3) - `feat(standardize): add spoke sso probing, offline portal guards, and callback step 0`
-- **Working Tree:** สะอาด (Compiled & Test Suites `32 passed`, `0 TS errors`)
+- **Head Commit:** [`7b4504e`](https://github.com/nchaiwat/CIAM/commit/7b4504e) - `feat(network-policy): implement zero-trust network access and vpn restriction for on-prem apps`
+- **Working Tree:** สะอาด (Compiled, Test Suites `37 passed`, `0 TS errors`)
 
 ### Repository IRM (`D:\Python\IRM`)
 - **Branch:** `main`
