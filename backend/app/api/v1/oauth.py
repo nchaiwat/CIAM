@@ -396,6 +396,7 @@ def get_portal_apps(
                 base_url=app.base_url,
                 client_id=app.client_id or f"{app.app_code}-spoke-client",
                 sso_enabled=app.sso_enabled,
+                spoke_sso_status=getattr(app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN",
                 health_status=app.health_status,
                 latency_ms=app.latency_ms,
                 launch_url=launch_url,
@@ -445,6 +446,16 @@ def launch_portal_app(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Application '{app.app_name}' is not currently available for SSO"
+        )
+    if app.health_status == "OFFLINE":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"ระบบ '{app.app_name}' ขณะนี้อยู่ในสถานะออฟไลน์ (ปิดปรับปรุงชั่วคราว) ไม่สามารถเปิดใช้งานผ่าน SSO ได้"
+        )
+    if getattr(app, "spoke_sso_status", "UNKNOWN") == "DISABLED":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"ระบบ '{app.app_name}' ปิดรับการเข้าใช้งานผ่าน Single Sign-On ชั่วคราว (Break-Glass Active) กรุณาเข้าสู่ระบบผ่านหน้าเว็บหลักของระบบดังกล่าว"
         )
 
     # Validate authorization for normal employees

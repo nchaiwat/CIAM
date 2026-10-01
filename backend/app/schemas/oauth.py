@@ -85,6 +85,7 @@ class PortalAppItem(BaseModel):
     base_url: Optional[str] = None
     client_id: Optional[str] = None
     sso_enabled: bool = True
+    spoke_sso_status: Optional[str] = "UNKNOWN"
     health_status: str = "UNKNOWN"
     latency_ms: Optional[int] = None
     launch_url: Optional[str] = None

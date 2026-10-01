@@ -241,20 +241,40 @@ class RestApiConnector(BaseConnector):
                     data = response.json()
                     app_name = data.get("application_name", self.app_code.upper())
                     total = data.get("total_accounts", len(data.get("accounts", [])))
+
+                    # Probe Spoke's SSO Config endpoint (Spec Section B.1)
+                    spoke_sso_active = None
+                    try:
+                        sso_cfg_res = await client.get(f"{self.base_url}/api/auth/sso/config", timeout=4.0)
+                        if sso_cfg_res.status_code == 200:
+                            sso_data = sso_cfg_res.json()
+                            is_enabled = sso_data.get("sso_enabled", True)
+                            is_break_glass = sso_data.get("break_glass_active", False)
+                            spoke_sso_active = bool(is_enabled and not is_break_glass)
+                    except Exception:
+                        pass
+
+                    msg = f"M2M REST API Active ({app_name}, {total} accounts)"
+                    if spoke_sso_active is False:
+                        msg += " [Spoke SSO Disabled / Break-Glass]"
+
                     return ConnectorHealth(
                         is_online=True,
                         latency_ms=elapsed,
-                        message=f"M2M REST API Active ({app_name}, {total} accounts)"
+                        message=msg,
+                        spoke_sso_active=spoke_sso_active
                     )
                 return ConnectorHealth(
                     is_online=False,
                     latency_ms=elapsed,
-                    message=f"HTTP {response.status_code}: {response.text[:100]}"
+                    message=f"HTTP {response.status_code}: {response.text[:100]}",
+                    spoke_sso_active=False
                 )
         except Exception as exc:
             elapsed = int((time.time() - start_time) * 1000)
             return ConnectorHealth(
                 is_online=False,
                 latency_ms=elapsed,
-                message=f"Unreachable: {str(exc)[:60]}"
+                message=f"Unreachable: {str(exc)[:60]}",
+                spoke_sso_active=False
             )

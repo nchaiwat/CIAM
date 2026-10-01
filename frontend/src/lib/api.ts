@@ -187,6 +187,7 @@ export interface ConnectedApp {
   client_id?: string | null;
   redirect_uris?: string | null;
   sso_enabled?: boolean;
+  spoke_sso_status?: "ACTIVE" | "DISABLED" | "UNKNOWN" | string;
   sap_company_db?: string | null;
   sap_username?: string | null;
   sap_password?: string | null;
@@ -655,6 +656,7 @@ export interface PortalAppItem {
   base_url?: string;
   client_id?: string;
   sso_enabled: boolean;
+  spoke_sso_status?: string;
   health_status: string;
   latency_ms?: number;
   launch_url?: string;

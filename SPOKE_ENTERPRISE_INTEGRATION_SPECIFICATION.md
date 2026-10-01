@@ -220,6 +220,7 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 #### B.3 `POST /api/auth/sso/callback` (แลกเปลี่ยน One-Time Code และออก Session ประจำระบบลูก)
 * **การจำกัดสิทธิ์:** Public (เบราว์เซอร์ส่งมาหลัง Redirect จาก Central IAM)
 * **ขั้นตอนการประมวลผล (Backend-to-Backend):**
+  0. **SSO Active & Break-Glass Guard:** ตรวจสอบว่า `ciam_sso_enabled == true` และ `ciam_break_glass_active == false` หากปิดอยู่ ให้ตอบกลับ `HTTP 503 Service Unavailable` และบันทึก `transaction_logs` หมวด `ciam_sso` ทันที เพื่อป้องกันไม่ให้ผู้ใช้แอบล็อกอินผ่าน Central IAM Portal เข้ามาได้ในขณะที่ระบบลูกปิดรับ SSO ชั่วคราว
   1. Backend ของระบบลูกส่งคำขอ HTTP POST (พร้อม `code`, `code_verifier`, `client_id`, `client_secret`) ตรงไปยัง `${ciam_base_url}/api/v1/oauth/token`
   2. ตรวจสอบ Asymmetric Signature ของ `id_token` ที่ได้รับด้วย Public Key จาก `${ciam_base_url}/.well-known/jwks.json` (อัลกอริทึม RS256)
   3. ตรวจสอบค่า Claims:
@@ -797,8 +798,16 @@ class CallbackPayload(BaseModel):
     state: str
 
 @router.post("/callback")
-async def sso_callback(payload: CallbackPayload):
+async def sso_callback(payload: CallbackPayload, db: Session = Depends(get_db)):
     """Step 2: รับ Code จาก Central IAM แลกเปลี่ยน Token และดึง Claims จาก AD"""
+    # 0. ตรวจสอบว่าระบบลูกเปิดใช้งาน SSO อยู่หรือไม่ (Break-Glass Active Guard)
+    sso_cfg = get_spoke_sso_settings(db)
+    if not sso_cfg.get("sso_enabled", True) or sso_cfg.get("break_glass_active", False):
+        raise HTTPException(
+            status_code=503,
+            detail="Single Sign-On is currently disabled on this application (Break-Glass Mode Active)."
+        )
+
     verifier = pkce_sessions.pop(payload.state, None)
     if not verifier:
         raise HTTPException(status_code=400, detail="Invalid state session or CSRF detected")

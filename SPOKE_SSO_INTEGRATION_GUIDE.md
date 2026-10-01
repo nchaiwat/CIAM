@@ -105,7 +105,11 @@ authorize_url = sso_client.get_authorize_url(
 )
 
 # 3. เมื่อ Central IAM Redirect กลับมาพร้อม One-Time Code:
-# ส่ง Code + Verifier แลก Token (Backend-to-Backend)
+# ก. ตรวจสอบก่อนเสมอว่า Spoke เปิดใช้งาน SSO อยู่หรือไม่ (Break-Glass Guard)
+if not is_sso_active():
+    raise HTTPException(status_code=503, detail="SSO is disabled on this spoke")
+
+# ข. ส่ง Code + Verifier แลก Token (Backend-to-Backend)
 tokens = sso_client.exchange_code_for_tokens(
     code=code,
     redirect_uri="https://irm.windowasia.com/auth/callback",

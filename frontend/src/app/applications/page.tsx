@@ -632,15 +632,22 @@ export default function ApplicationsPage() {
                   ) : (
                     <div className="flex items-center justify-between">
                       <span className="text-slate-600 font-medium">Single Sign-On (SSO):</span>
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          app.sso_enabled !== false
-                            ? "bg-blue-100 text-blue-800 border border-blue-200"
-                            : "bg-slate-100 text-slate-500 border border-slate-200"
-                        }`}
-                      >
-                        {app.sso_enabled !== false ? "✓ SSO Active" : "✕ Disabled"}
-                      </span>
+                      {app.sso_enabled === false ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                          ✕ Disabled (ปิด SSO)
+                        </span>
+                      ) : app.spoke_sso_status === "DISABLED" ? (
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse"
+                          title="ระบบลูกสลับไปโหมดฉุกเฉิน (Break-Glass) หรือปิดสวิตช์ SSO ภายในตนเอง"
+                        >
+                          ⚠️ Spoke ปิด SSO (Break-Glass)
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                          ✓ SSO Active
+                        </span>
+                      )}
                     </div>
                   )}
 

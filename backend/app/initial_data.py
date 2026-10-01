@@ -60,6 +60,11 @@ def init_db():
             if "exception_expires_at" not in mapping_columns:
                 conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN exception_expires_at TIMESTAMP;"))
 
+            # Safe auto-migration for connected_applications
+            app_columns = [c["name"] for c in inspector.get_columns("connected_applications")]
+            if "spoke_sso_status" not in app_columns:
+                conn.execute(text("ALTER TABLE connected_applications ADD COLUMN spoke_sso_status VARCHAR(50) DEFAULT 'UNKNOWN';"))
+
             conn.commit()
     except Exception as e:
         logger.debug("Auto-migration notice: %s", e)

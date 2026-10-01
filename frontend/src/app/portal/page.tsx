@@ -307,26 +307,52 @@ export default function PortalPage() {
             {apps.map((app) => {
               const theme = getAppTheme(app.app_code);
               const isLaunching = launchingAppCode === app.app_code;
+              const isOffline = app.health_status === "OFFLINE";
+              const isSpokeSsoDisabled = app.spoke_sso_status === "DISABLED";
+              const isLaunchDisabled = isLaunching || isOffline || isSpokeSsoDisabled;
 
               return (
                 <div
                   key={app.id}
-                  className="group bg-white rounded-2xl border border-slate-200/90 hover:border-blue-400/80 p-6 shadow-2xs hover:shadow-lg transition-all duration-200 flex flex-col justify-between space-y-6"
+                  className={`group bg-white rounded-2xl border p-6 shadow-2xs transition-all duration-200 flex flex-col justify-between space-y-6 ${
+                    isOffline
+                      ? "border-rose-200/80 bg-slate-50/50"
+                      : isSpokeSsoDisabled
+                      ? "border-amber-200/80 bg-amber-50/20"
+                      : "border-slate-200/90 hover:border-blue-400/80 hover:shadow-lg"
+                  }`}
                 >
                   <div className="space-y-4">
                     {/* Top: App Icon & Name */}
                     <div className="flex items-start gap-4">
                       <div
-                        className={`w-14 h-14 rounded-2xl flex items-center justify-center border shrink-0 transition-colors ${theme.bg}`}
+                        className={`w-14 h-14 rounded-2xl flex items-center justify-center border shrink-0 transition-colors ${
+                          isOffline ? "bg-slate-200/60 border-slate-300 text-slate-400" : theme.bg
+                        }`}
                       >
                         {theme.icon}
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                          {app.app_code}
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            {app.app_code}
+                          </span>
+                          {isOffline ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                              ออฟไลน์
+                            </span>
+                          ) : isSpokeSsoDisabled ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                              Break-Glass
+                            </span>
+                          ) : null}
                         </div>
-                        <h2 className="font-bold text-slate-900 text-base leading-snug group-hover:text-blue-600 transition-colors">
+                        <h2 className={`font-bold text-base leading-snug transition-colors ${
+                          isOffline ? "text-slate-600" : "text-slate-900 group-hover:text-blue-600"
+                        }`}>
                           {app.app_name}
                         </h2>
                         {app.category && (
@@ -367,14 +393,24 @@ export default function PortalPage() {
                   <div>
                     <button
                       onClick={() => handleLaunch(app)}
-                      disabled={isLaunching}
-                      className={`w-full py-3 px-4 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60 cursor-pointer ${theme.btn}`}
+                      disabled={isLaunchDisabled}
+                      className={`w-full py-3 px-4 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 active:scale-[0.98] ${
+                        isOffline
+                          ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
+                          : isSpokeSsoDisabled
+                          ? "bg-amber-50 text-amber-700 border border-amber-300 cursor-not-allowed shadow-none"
+                          : `${theme.btn} cursor-pointer`
+                      }`}
                     >
                       {isLaunching ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin" />
                           <span>กำลังเปิดใช้งานระบบ...</span>
                         </>
+                      ) : isOffline ? (
+                        <span>ระบบปิดปรับปรุงชั่วคราว (Offline)</span>
+                      ) : isSpokeSsoDisabled ? (
+                        <span>ระบบปิดรับ SSO ชั่วคราว</span>
                       ) : (
                         <>
                           <span>เข้าใช้งานระบบ</span>

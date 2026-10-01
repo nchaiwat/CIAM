@@ -14,6 +14,7 @@ class ConnectorHealth(BaseModel):
     is_online: bool
     latency_ms: int
     message: str
+    spoke_sso_active: Optional[bool] = None
 
 class BaseConnector(ABC):
     @abstractmethod

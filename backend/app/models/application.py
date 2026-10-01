@@ -25,6 +25,7 @@ class ConnectedApplication(Base):
     client_secret = Column(String(255), nullable=True)
     redirect_uris = Column(String(1000), nullable=True) # Comma-separated allowed callback URLs
     sso_enabled = Column(Boolean, default=True, nullable=False)
+    spoke_sso_status = Column(String(50), default="UNKNOWN", nullable=True) # 'ACTIVE', 'DISABLED', 'UNKNOWN'
 
     # SAP Business One Service Layer Credentials (Zero-Trust Session Auth)
     sap_company_db = Column(String(100), nullable=True)

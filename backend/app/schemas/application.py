@@ -50,6 +50,7 @@ class AppOut(BaseModel):
     client_id: Optional[str] = None
     redirect_uris: Optional[str] = None
     sso_enabled: bool = True
+    spoke_sso_status: Optional[str] = "UNKNOWN"
     sap_company_db: Optional[str] = None
     sap_username: Optional[str] = None
     ad_allow_status_patch: Optional[bool] = False
@@ -62,6 +63,7 @@ class PingResult(BaseModel):
     status: str # 'ONLINE' or 'OFFLINE'
     latency_ms: int
     message: str
+    spoke_sso_status: Optional[str] = "UNKNOWN"
 
 class AppCredentialOut(BaseModel):
     id: int

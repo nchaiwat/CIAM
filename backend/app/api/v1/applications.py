@@ -61,6 +61,7 @@ def list_applications(
             client_id=app.client_id,
             redirect_uris=app.redirect_uris,
             sso_enabled=app.sso_enabled,
+            spoke_sso_status=getattr(app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN",
             sap_company_db=app.sap_company_db,
             sap_username=app.sap_username,
             ad_allow_status_patch=app.ad_allow_status_patch,
@@ -122,6 +123,7 @@ def register_application(
         client_id=new_app.client_id,
         redirect_uris=new_app.redirect_uris,
         sso_enabled=new_app.sso_enabled,
+        spoke_sso_status=getattr(new_app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN",
         sap_company_db=new_app.sap_company_db,
         sap_username=new_app.sap_username,
         ad_allow_status_patch=new_app.ad_allow_status_patch,
@@ -256,6 +258,7 @@ def update_application(
         client_id=app.client_id,
         redirect_uris=app.redirect_uris,
         sso_enabled=app.sso_enabled,
+        spoke_sso_status=getattr(app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN",
         sap_company_db=app.sap_company_db,
         sap_username=app.sap_username,
         ad_allow_status_patch=app.ad_allow_status_patch,
@@ -281,13 +284,18 @@ async def ping_application(
     app.health_status = "ONLINE" if health.is_online else "OFFLINE"
     app.latency_ms = health.latency_ms
     app.last_health_check_at = datetime.now(timezone.utc)
+    if health.spoke_sso_active is not None:
+        app.spoke_sso_status = "ACTIVE" if health.spoke_sso_active else "DISABLED"
+    elif not health.is_online:
+        app.spoke_sso_status = "DISABLED"
     db.commit()
 
     return PingResult(
         app_code=app.app_code,
         status="ONLINE" if health.is_online else "OFFLINE",
         latency_ms=health.latency_ms,
-        message=health.message
+        message=health.message,
+        spoke_sso_status=getattr(app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN"
     )
 
 @router.get("/{app_id}/inventory")

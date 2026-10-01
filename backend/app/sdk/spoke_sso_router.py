@@ -156,6 +156,14 @@ async def handle_sso_callback(
     if "," in client_ip:
         client_ip = client_ip.split(",")[0].strip()
 
+    # Step 0: Enforce SSO Active Check (Break-Glass & SSO Disabled Guard)
+    if not is_sso_active():
+        logger.warning("SSO Callback rejected: SSO is disabled (Break-Glass Active) for IP %s", client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Central IAM SSO is currently disabled on this application (Break-Glass Mode Active). Please use local credentials.",
+        )
+
     sso_client = get_sso_client()
 
     # Step 1: Exchange code for tokens
