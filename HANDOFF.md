@@ -134,8 +134,8 @@
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)
 - **Branch:** `main`
-- **Head Commit:** [`a842936`](https://github.com/nchaiwat/CIAM/commit/a842936) - `docs: update MEMORY.md with Section 9.3 Spoke Developer Spec v2.3.0`
-- **Working Tree:** สะอาด (Compiled, Test Suites `37 passed`, `0 TS errors`)
+- **Head Commit:** [`951fab6`](https://github.com/nchaiwat/CIAM/commit/951fab6) - `feat(connectors): implement SSO_ONLY connector for on-premise spokes`
+- **Working Tree:** สะอาด (Compiled, Test Suites `38 passed`, `0 TS errors`)
 
 ### Repository IRM (`D:\Python\IRM`)
 - **Branch:** `main`
