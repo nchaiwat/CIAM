@@ -71,8 +71,9 @@
 * **Architecture Mode:** Dual-integration:
   1. **Native AD/LDAPS Auth Server:** Direct link to `172.18.0.1` (Ports 389/636) for WebGUI and OpenVPN authentication.
   2. **REST API Spoke Connector:** Community package `pfSense-API` (by Jared Hendrickson) installed via FreeBSD `pkg-static`.
-* **Installation Command:**
-  `fetch -o + https://github.com/jaredhendrickson13/pfsense-api/releases/latest/download/pfSense-2.7.2-pkg-RESTAPI.txz && pkg-static install -y pfSense-2.7.2-pkg-RESTAPI.txz && rm pfSense-2.7.2-pkg-RESTAPI.txz`
+* **Installation Command (pfSense 2.7.2):**
+  `pkg-static -C /dev/null add https://github.com/pfrest/pfSense-pkg-RESTAPI/releases/download/v2.4.3/pfSense-2.7.2-pkg-RESTAPI.pkg`
+  *(Note: v2.4.3 is the latest release specifically built for pfSense 2.7.2; latest v2.10+ targets 2.8+)*
 * **Key Endpoints:** `GET /api/v1/user`, `PATCH /api/v1/user` (enable/disable), `GET /api/v1/services/openvpn`
 * **Primary Role in CIAM:** 1-Click Offboarding (immediate VPN revocation & account disable) and Ghost VPN Account detection.
 
