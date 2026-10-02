@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 1 ตุลาคม 2026 (Local Time: ~12:00 ICT)  
+> **Date Updated:** 2 ตุลาคม 2026 (Local Time: ~22:45 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -164,8 +164,20 @@
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)
 - **Branch:** `main`
-- **Features:** Mode C Reverse Heartbeat Outbound Agent & SSO_ONLY Connector (v1.9.7)
+- **Head Commit:** [`af96c18`](https://github.com/nchaiwat/CIAM/commit/af96c18) - `feat(agent): implement reverse heartbeat and outbound agent for on-premise spokes (Mode C)`
+- **Prior Commit:** [`951fab6`](https://github.com/nchaiwat/CIAM/commit/951fab6) - `feat(connectors): implement SSO_ONLY connector for on-premise spokes`
+- **Features Completed:**
+  - `SSO_ONLY` Connector สำหรับ Isolated On-Premise Spokes (Mode B)
+  - Reverse Heartbeat & Outbound Agent API `/api/v1/agent/heartbeat` (Mode C)
+  - ตารางฐานข้อมูล `spoke_pending_commands` พร้อม Auto-migration
+  - Integration Specification v2.4.0 (หมวด D พร้อม `ciam_agent.py` code)
+  - Developer Guide Modal 3-Column Topology บนหน้าเว็บ `/applications`
 - **Working Tree:** สะอาด (Test Suites `39 passed`, `0 TS errors`)
+
+### Repository IRM (`D:\Python\IRM`)
+- **Branch:** `main`
+- **Head Commit:** [`754323e`](https://github.com/nchaiwat/IRM/commit/754323e) - `fix(suppliers): allow clearing email and contact fields to null/blank in update_supplier`
+- **Working Tree:** สะอาด
 
 ---
 
@@ -190,3 +202,29 @@ docker compose up -d api web
 2. **เอกสารคู่มือสำหรับทีม Dev:**
    - ดาวน์โหลดเอกสารฉบับเต็มได้จากปุ่ม `📥 สเปกเชื่อมต่อ (.md)` บนหน้า Admin Console (`/applications`)
    - หรือเปิดดูสรุปภาพรวมจากปุ่ม `📋 คู่มือสำหรับ Dev` บนหน้าจอได้ทันที
+
+---
+
+## 7. แผนงานและจุดที่จะกลับมาพัฒนาต่อ (Roadmap & Next Steps to Resume)
+
+เมื่อกลับมาพัฒนาต่อ ให้เริ่มจากลำดับงานดังนี้:
+
+1. **ทดสอบใช้งาน Mode C กับระบบ MTPulse จริง:**
+   - นำสคริปต์ `ciam_agent.py` ไปวางในโปรเจกต์ MTPulse (On-Prem)
+   - ผูกฟังก์ชัน `execute_local_command()` เข้ากับฐานข้อมูลจริงของ MTPulse (อัปเดต `status` หรือ `is_active` ของ User)
+   - ทดสอบสั่ง Disable ผู้ใช้จาก CIAM Cloud ➔ ตรวจสอบว่าคำสั่งถูกส่งไปที่ Agent ในรอบ Heartbeat และ User ใน MTPulse ถูกระงับสิทธิ์จริง
+2. **พัฒนาระบบ Background Dead Man's Switch Worker บน CIAM:**
+   - สร้าง Background Task หรือ Scheduler (เช่น APScheduler / Cron) บนเซิร์ฟเวอร์ CIAM
+   - คอยตรวจเช็คแอปพลิเคชันที่เป็น Mode C ทุกๆ 1 นาที หาก `last_health_check_at` ขาดการติดต่อนานเกิน 5 นาที (300 วินาที) ให้สลับสถานะเป็น `health_status="OFFLINE"` และตัดปุ่ม Launch บน Portal เป็น `ระบบปิดปรับปรุงชั่วคราว (Offline)` ทันที
+3. **กลับมาทำ pfSense Integration (ที่พักไว้):**
+   - ศึกษาวิธีการจัดการบัญชีผู้ใช้บน pfSense (User Management / Captive Portal / OpenVPN Users)
+   - พิจารณาแนวทางเชื่อมต่อ:
+     - ทางเลือกที่ 1: ผ่าน pfSense REST API Package (เช่น `pfsense-api` หรือ `FauxAPI`)
+     - ทางเลือกที่ 2: ผ่าน XML-RPC หรือ SSH Scripting
+     - ทางเลือกที่ 3: ให้ pfSense ทำการ Authen ผู้ใช้ผ่าน LDAP/RADIUS ส่งมาที่ Active Directory หรือ CIAM โดยตรง
+4. **เพิ่ม UI ดู Command Queue และ Agent Logs บน Admin Console:**
+   - ใน Modal "ตรวจสอบบัญชี (Inspect)" บนหน้า `/applications` เพิ่มแท็บ **"Outbound Agent Commands"**
+   - แสดงประวัติคำสั่งที่ CIAM ส่งไปให้ Spoke Agent (`PENDING`, `SENT`, `COMPLETED`, `FAILED`) พร้อม Timestamp และ Error Message เพื่อให้ Admin ตรวจสอบได้ว่าคำสั่งถูกนำไปรันที่ On-Prem สำเร็จหรือไม่
+5. **การ Deploy ขึ้น Production VPS (`157.173.219.153`):**
+   - สั่งรันคำสั่งใน Runbook บน VPS และตรวจสอบ Log ด้วย `docker compose logs -f api`
+   - ตรวจสอบว่า Auto-migration สร้างตาราง `spoke_pending_commands` ใน Production PostgreSQL สำเร็จ เรียบร้อย 100%
