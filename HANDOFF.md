@@ -130,24 +130,48 @@
 
 ---
 
+### 9) ระบบ Outbound Agent & Reverse Heartbeat สองทางสำหรับ On-Premise Spokes (Mode C) (2 ต.ค. 2026)
+- **โจทย์และความต้องการ:**
+  - ระบบ On-Premise (เช่น MTPulse, WMS, SAP B1 Local) อยู่ในวง LAN โรงงาน ไม่สามารถเปิด Inbound Port หรือ Public Domain จากอินเทอร์เน็ตได้
+  - แต่ต้องการฟังก์ชันสองทาง: ให้ Spoke มี Schedule หรือ Daemon ส่งข้อมูลบัญชีขึ้นมาหา CIAM (Directory Inventory Sync) และคอยเช็คคำสั่งตัดสิทธิ์/คืนสิทธิ์ (`DISABLE_USER`, `ENABLE_USER`) จาก CIAM ไปจัดการบน DB ของตนเอง
+  - หากระบบ On-Premise ขาดการติดต่อนานเกิน 5 นาที ให้ CIAM สลับสถานะเป็น Offline (Dead Man's Switch)
+- **สิ่งที่พัฒนาและทดสอบแล้ว:**
+  1. **Model & Database Table (`backend/app/models/application.py`):**
+     - เพิ่มตาราง `spoke_pending_commands` สำหรับเก็บคิวคำสั่ง (`command_id`, `app_code`, `action`, `username`, `reason`, `status`, `issued_by`, `created_at`, `executed_at`, `result_message`)
+     - ปรับ `backend/app/initial_data.py` ให้ Auto-migrate สร้างตารางและ Index อัตโนมัติเมื่อ Start
+  2. **Reverse Heartbeat & Pull API (`backend/app/api/v1/agent.py`):**
+     - Endpoint: `POST /api/v1/agent/heartbeat`
+     - ตรวจสอบ `X-Spoke-Client-ID` และ `X-Spoke-API-Key`
+     - อัปเดต `health_status="ONLINE"`, `spoke_sso_status="ACTIVE"`, `latency_ms=1`, และ `last_health_check_at=now()`
+     - รับผลลัพธ์คำสั่งรอบก่อนหน้า (`command_results`) เพื่อ Mark `COMPLETED` / `FAILED` พร้อมบันทึก `IamAuditLog`
+     - รองรับ `sync_type="FULL_SYNC"` อัปเดต `MasterIdentity` และ `AppAccountMapping` พร้อมนับ `total_linked_accounts`
+     - คืนคำสั่งที่ค้างอยู่ (`commands_dispatched`) สูงสุด 10 คำสั่ง และ Mark เป็น `SENT`
+  3. **Connector Integration (`backend/app/connectors/sso_only.py`):**
+     - อัปเกรด `set_account_status()` ให้สร้าง `SpokePendingCommand` เข้าคิวเมื่อ Admin สั่งเปิด/ปิดผู้ใช้
+  4. **Developer Specification & Production Guides:**
+     - อัปเดต [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) เป็น v2.4.0
+     - เพิ่มหมวด D: Reverse Heartbeat & Outbound Sync Channel
+     - แนบสคริปต์ [ciam_agent.py](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) พร้อมวิธีติดตั้ง Linux Systemd Service, Linux Crontab, และ Windows Task Scheduler
+     - อัปเดต Modal คู่มือสำหรับ Dev บนหน้า [applications/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/applications/page.tsx)
+  5. **การทดสอบ:**
+     - เพิ่ม Test Cases `test_sso_only_connector_lifecycle` และ `test_agent_heartbeat_and_command_queue`
+     - Pytest: **39 passed** ใน `test_api_flow.py` (0 failed)
+     - TypeScript: **0 errors** (`npx tsc --noEmit`)
+
+---
+
 ## 4. สถานะ Git ล่าสุด (Current Git State)
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)
 - **Branch:** `main`
-- **Head Commit:** [`951fab6`](https://github.com/nchaiwat/CIAM/commit/951fab6) - `feat(connectors): implement SSO_ONLY connector for on-premise spokes`
-- **Working Tree:** สะอาด (Compiled, Test Suites `38 passed`, `0 TS errors`)
-
-### Repository IRM (`D:\Python\IRM`)
-- **Branch:** `main`
-- **Head Commit:** [`754323e`](https://github.com/nchaiwat/IRM/commit/754323e) - `fix(suppliers): allow clearing email and contact fields to null/blank in update_supplier`
-- **Prior Commit:** [`704b646`](https://github.com/nchaiwat/IRM/commit/704b646) - `fix(sso-refresh): enforce sso active check in callback and fix auto-refresh on supplier/item updates`
-- **Working Tree:** สะอาด (`npx tsc --noEmit` ผ่าน 0 errors)
+- **Features:** Mode C Reverse Heartbeat Outbound Agent & SSO_ONLY Connector (v1.9.7)
+- **Working Tree:** สะอาด (Test Suites `39 passed`, `0 TS errors`)
 
 ---
 
 ## 5. คำสั่งมาตรฐานสำหรับ Deploy บน VPS (Production Runbook)
 
-### ฝั่ง Central-IAM (VPS: `/var/www/Ciam`):
+### ฝั่ง Central-IAM (VPS: `/var/www/Ciam` - IP: `157.173.219.153`):
 ```bash
 cd /var/www/Ciam
 git pull origin main
@@ -155,23 +179,14 @@ docker compose build api web
 docker compose up -d api web
 ```
 
-### ฝั่ง IRM (VPS: `/var/www/Irm`):
-```bash
-cd /var/www/Irm
-git pull origin main
-docker compose up -d --build irm-backend irm-frontend
-```
-
 ---
 
-## 6. สิ่งที่ต้องทำต่อเมื่อกลับมาทำงาน (Next Steps to Resume)
+## 6. สรุปความพร้อมของระบบสำหรับ Developer นำไปใช้งาน
 
-1. **ทดสอบใช้งานจริงบน VPS:**
-   - ทดสอบรันคำสั่ง Deploy ทั้ง CIAM และ IRM บน VPS
-   - ตรวจสอบหน้า Applications ของ CIAM: กด Ping ที่ IRM และตรวจสอบป้ายสถานะ SSO
-   - ตรวจสอบหน้า Portal ของ CIAM: พนักงานเห็นการ์ด QMS ขึ้นสถานะ ออฟไลน์/ปิดปรับปรุง (ปุ่ม Disable)
-2. **ทดสอบ Flow ใน IRM:**
-   - ทดสอบสลับสวิตช์ SSO ของ IRM เป็น Off ➔ ตรวจสอบว่าพยายาม Launch จาก CIAM Portal แล้วโดนปฏิเสธ 503 กลับมาหน้า Login หรือไม่
-   - ทดสอบการลบและแก้ไข Email ใน Supplier Master ให้เป็นค่า Blank ➔ ตรวจสอบว่าอัปเดตและ Refresh ทันที
-3. **ขยายผลมาตรฐาน Spoke Integration:**
-   - นำมาตรฐาน Step 0 Guard และ M2M/SSO Spoke Specification ไปประยุกต์ใช้กับระบบถัดไป (QMS และ QOL) เพื่อให้ทุกระบบเชื่อมต่อเข้าสู่ CIAM ในรูปแบบมาตรฐานเดียวกันทั้งองค์กร
+1. **ตัวเลือกระบบเชื่อมต่อ 3 รูปแบบ (Architectural Modes):**
+   - **Mode A (Cloud Two-Way):** สำหรับระบบที่มี Public Domain (เช่น IRM, QMS) — CIAM ยิง Inbound Webhook ไปตรวจสถานะและบริหารจัดการบัญชี
+   - **Mode B (On-Premise SSO-Only):** สำหรับระบบ On-Premise ในโรงงานที่ต้องการเพียง OIDC SSO — ไม่ต้องเปิด Inbound Port และไม่ต้องรัน Agent
+   - **Mode C (On-Premise Outbound Agent):** สำหรับระบบ On-Premise ที่ต้องการ Sync บัญชีสองทางและ 1-Click Offboarding — ไม่ต้องเปิด Inbound Port แต่ใช้สคริปต์ `ciam_agent.py` ยิง Reverse Heartbeat ขาออก (Port 443) มาหา CIAM
+2. **เอกสารคู่มือสำหรับทีม Dev:**
+   - ดาวน์โหลดเอกสารฉบับเต็มได้จากปุ่ม `📥 สเปกเชื่อมต่อ (.md)` บนหน้า Admin Console (`/applications`)
+   - หรือเปิดดูสรุปภาพรวมจากปุ่ม `📋 คู่มือสำหรับ Dev` บนหน้าจอได้ทันที

@@ -72,6 +72,25 @@ def init_db():
             if "allowed_network_cidrs" not in app_columns:
                 conn.execute(text("ALTER TABLE connected_applications ADD COLUMN allowed_network_cidrs VARCHAR(500);"))
 
+            if not inspector.has_table("spoke_pending_commands"):
+                conn.execute(text("""
+                    CREATE TABLE spoke_pending_commands (
+                        id SERIAL PRIMARY KEY,
+                        command_id VARCHAR(50) UNIQUE NOT NULL,
+                        app_code VARCHAR(50) NOT NULL,
+                        action VARCHAR(50) NOT NULL,
+                        username VARCHAR(100) NOT NULL,
+                        reason VARCHAR(255),
+                        status VARCHAR(20) DEFAULT 'PENDING' NOT NULL,
+                        issued_by VARCHAR(100) DEFAULT 'Central-IAM' NOT NULL,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        executed_at TIMESTAMP WITH TIME ZONE,
+                        result_message VARCHAR(500)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_spoke_cmd_app_code ON spoke_pending_commands(app_code);
+                    CREATE INDEX IF NOT EXISTS idx_spoke_cmd_status ON spoke_pending_commands(status);
+                """))
+
             conn.commit()
     except Exception as e:
         logger.debug("Auto-migration notice: %s", e)

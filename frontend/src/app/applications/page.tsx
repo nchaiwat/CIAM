@@ -2750,21 +2750,29 @@ export default function ApplicationsPage() {
                     Zero-Trust Network Access
                   </span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[11px] text-slate-700">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px] text-slate-700">
                   <div className="p-2.5 bg-white rounded border border-purple-200 space-y-1">
                     <strong className="text-emerald-800 flex items-center gap-1 font-bold">
-                      🌐 1. ระบบบน Cloud (Two-Way Mode)
+                      🌐 Mode A: Cloud (Two-Way)
                     </strong>
                     <p className="text-slate-600 leading-relaxed">
-                      มี Public Domain (เช่น IRM, QMS) พัฒนาครบทั้ง SSO และ Inbound Webhook (ตารางด้านล่าง) เพื่อให้ CIAM เช็ค Health และกวาดบัญชีผีได้
+                      มี Public Domain (เช่น IRM, QMS) พัฒนา Inbound Webhook ให้ CIAM ยิงเข้ามาเช็ค Health และกวาดบัญชีผีได้โดยตรง
                     </p>
                   </div>
                   <div className="p-2.5 bg-white rounded border border-purple-200 space-y-1">
-                    <strong className="text-purple-800 flex items-center gap-1 font-bold">
-                      🏢 2. ระบบ On-Premise (SSO-Only Client Mode)
+                    <strong className="text-blue-800 flex items-center gap-1 font-bold">
+                      🏢 Mode B: On-Premise (SSO-Only)
                     </strong>
                     <p className="text-slate-600 leading-relaxed">
-                      อยู่ในวง LAN โรงงาน/ออฟฟิศ <strong>ไม่ต้องเปิด Inbound Port</strong> ต้องการเพียง Outbound Port 443 ออกไปที่ CIAM เท่านั้น และตั้งค่าแอปเป็น <code>VPN_ONLY</code> บน CIAM
+                      อยู่ในวง LAN โรงงาน/ออฟฟิศ <strong>ไม่ต้องเปิด Inbound Port</strong> ใช้งาน OIDC SSO อย่างเดียว ตั้งค่าเป็น <code>VPN_ONLY</code> บน CIAM
+                    </p>
+                  </div>
+                  <div className="p-2.5 bg-white rounded border border-amber-200 space-y-1 bg-amber-50/50">
+                    <strong className="text-amber-800 flex items-center gap-1 font-bold">
+                      ⚡ Mode C: Outbound Agent (แนะนำ)
+                    </strong>
+                    <p className="text-slate-700 leading-relaxed">
+                      On-Premise ที่ต้องการ Sync สองทาง <strong>ไม่ต้องเปิด Inbound Port</strong> แต่ตั้ง Schedule/Agent ยิง Reverse Heartbeat ขาออก (Port 443) มาหา CIAM
                     </p>
                   </div>
                 </div>
@@ -2782,7 +2790,7 @@ export default function ApplicationsPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-slate-800 uppercase tracking-wider text-xs">
-                    1. Endpoint มาตรฐานที่ระบบลูกต้องเปิดให้ CIAM เรียกใช้งาน (Group C Inbound Channel)
+                    1.1 Endpoint สำหรับ Mode A (Cloud Two-Way): ระบบลูกเปิด Inbound ให้ CIAM เรียก
                   </h4>
                   <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                     ✓ ทดสอบและใช้งานจริงแล้วกับระบบ IRM
@@ -2822,6 +2830,46 @@ export default function ApplicationsPage() {
                           <strong>1-Click Offboarding & Reactivate:</strong> ปรับสถานะ <code>is_active=false</code> ตัดสิทธิ์และล้าง Session ทันที (หรือ <code>true</code> เพื่อคืนสิทธิ์)
                         </td>
                         <td className="p-2.5 font-mono text-rose-800 font-bold">200 OK + Revoke Active Tokens</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Mode C Endpoint Table */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-amber-900 uppercase tracking-wider text-xs flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    1.2 Endpoint สำหรับ Mode C (On-Premise Outbound Agent): Spoke ยิงหา CIAM ขาเดียว
+                  </h4>
+                  <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                    ⚡ Zero Inbound Ports Needed (Port 443 Outbound Only)
+                  </span>
+                </div>
+                <div className="border-2 border-amber-200 rounded-lg overflow-hidden bg-amber-50/20">
+                  <table className="w-full text-left">
+                    <thead className="bg-amber-100/60 border-b border-amber-200 text-[11px] font-bold text-slate-800">
+                      <tr>
+                        <th className="p-2.5">Method</th>
+                        <th className="p-2.5">Endpoint บน Central IAM</th>
+                        <th className="p-2.5">Header ที่ Spoke ส่งมา</th>
+                        <th className="p-2.5">หน้าที่การทำงาน (Reverse Heartbeat & Pull)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-100 text-[11px]">
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-700 font-mono">POST</td>
+                        <td className="p-2.5 font-mono text-slate-900 font-bold">/api/v1/agent/heartbeat</td>
+                        <td className="p-2.5 font-mono text-slate-700">
+                          <code>X-Spoke-Client-ID</code><br />
+                          <code>X-Spoke-API-Key</code>
+                        </td>
+                        <td className="p-2.5 text-slate-700 leading-relaxed">
+                          1. <strong>รายงาน Heartbeat:</strong> CIAM อัปเดตสถานะ Online ทันที (หากเงียบเกิน 5 นาที CIAM สลับเป็น Offline)<br />
+                          2. <strong>Sync Inventory:</strong> แนบ <code>sync_type: "FULL_SYNC"</code> พร้อมรายชื่อบัญชีเพื่ออัปเดตสถิติและหาบัญชีผี<br />
+                          3. <strong>ดึงคำสั่ง (Pull Commands):</strong> รับคำสั่ง Disable/Enable ที่ Admin สั่งไว้ไปประมวลผลบน DB ของ Spoke เอง
+                        </td>
                       </tr>
                     </tbody>
                   </table>

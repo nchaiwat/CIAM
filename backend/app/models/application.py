@@ -43,3 +43,19 @@ class ConnectedApplication(Base):
     # Relationships
     accounts = relationship("AppAccountMapping", back_populates="application", cascade="all, delete-orphan")
 
+
+class SpokePendingCommand(Base):
+    __tablename__ = "spoke_pending_commands"
+
+    id = Column(Integer, primary_key=True, index=True)
+    command_id = Column(String(50), unique=True, index=True, nullable=False)
+    app_code = Column(String(50), index=True, nullable=False)
+    action = Column(String(50), nullable=False) # 'DISABLE_USER', 'ENABLE_USER'
+    username = Column(String(100), nullable=False)
+    reason = Column(String(255), nullable=True)
+    status = Column(String(20), default="PENDING", nullable=False) # 'PENDING', 'SENT', 'COMPLETED', 'FAILED'
+    issued_by = Column(String(100), default="Central-IAM", nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    executed_at = Column(DateTime(timezone=True), nullable=True)
+    result_message = Column(String(500), nullable=True)
+

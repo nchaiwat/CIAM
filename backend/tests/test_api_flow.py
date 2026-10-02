@@ -472,3 +472,92 @@ def test_sso_only_connector_lifecycle():
     assert del_res.status_code == 200
 
 
+def test_agent_heartbeat_and_command_queue():
+    import uuid
+    from app.connectors.factory import get_connector_for_app
+    from app.models.application import ConnectedApplication, SpokePendingCommand
+    from app.core.database import SessionLocal
+
+    login_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Register test spoke app
+    test_code = f"agent_test_{uuid.uuid4().hex[:6]}"
+    test_key = "sec_test_agent_m2m_key_12345"
+    create_res = client.post(
+        "/api/v1/applications",
+        json={
+            "app_code": test_code,
+            "app_name": f"Agent Test {test_code}",
+            "connector_type": "SSO_ONLY",
+            "api_key": test_key
+        },
+        headers=headers
+    )
+    assert create_res.status_code == 200
+    app_id = create_res.json()["id"]
+
+    # 2. Queue a disable user command via SsoOnlyConnector
+    db = SessionLocal()
+    app = db.query(ConnectedApplication).filter(ConnectedApplication.id == app_id).first()
+    connector = get_connector_for_app(app)
+    import asyncio
+    asyncio.run(connector.set_account_status(username="test_emp_01", is_active=False, reason="Resigned employee"))
+    db.close()
+
+    # 3. Simulate Agent sending Heartbeat + Full Sync
+    agent_headers = {
+        "X-Spoke-Client-ID": f"{test_code}-spoke-client",
+        "X-Spoke-API-Key": test_key
+    }
+    hb_payload = {
+        "app_code": test_code,
+        "sync_type": "FULL_SYNC",
+        "accounts": [
+            {
+                "username": "test_emp_01",
+                "full_name": "Test Employee 01",
+                "email": "test01@windowasia.com",
+                "role": "Staff",
+                "is_active": True
+            }
+        ]
+    }
+    hb_res = client.post("/api/v1/agent/heartbeat", json=hb_payload, headers=agent_headers)
+    assert hb_res.status_code == 200
+    hb_data = hb_res.json()
+    assert hb_data["status"] == "ACKNOWLEDGED"
+    assert len(hb_data["pending_commands"]) >= 1
+    target_cmd = hb_data["pending_commands"][0]
+    assert target_cmd["action"] == "DISABLE_USER"
+    assert target_cmd["username"] == "test_emp_01"
+    cmd_id = target_cmd["command_id"]
+
+    # 4. Simulate Agent reporting command execution result
+    res_payload = {
+        "app_code": test_code,
+        "sync_type": "HEARTBEAT",
+        "command_results": [
+            {
+                "command_id": cmd_id,
+                "action": "DISABLE_USER",
+                "username": "test_emp_01",
+                "status": "COMPLETED",
+                "message": "User disabled in local SQLite/PostgreSQL"
+            }
+        ]
+    }
+    hb2_res = client.post("/api/v1/agent/heartbeat", json=res_payload, headers=agent_headers)
+    assert hb2_res.status_code == 200
+    hb2_data = hb2_res.json()
+    assert hb2_data["status"] == "ACKNOWLEDGED"
+    # The command should no longer be pending
+    assert not any(c["command_id"] == cmd_id for c in hb2_data["pending_commands"])
+
+    # 5. Clean up
+    del_res = client.delete(f"/api/v1/applications/{app_id}", headers=headers)
+    assert del_res.status_code == 200
+
+
+

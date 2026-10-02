@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
-**Last Updated:** 2026-10-01  
-**Version:** 1.9.5 (Zero-Trust Network Policy, VPN Access Restriction & Auto-Detection for On-Prem Spokes)  
+**Last Updated:** 2026-10-02  
+**Version:** 1.9.7 (On-Premise SSO Client Mode & Reverse Heartbeat Outbound Agent for Mode C)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -342,3 +342,34 @@ FRONTEND_URL=http://localhost:3000
 4. **Admin UI ([page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/applications/page.tsx)):**
    - Adds `SSO_ONLY (โหมดลูกข่าย On-Premise / ขาออกอย่างเดียว)` option to both Create and Edit Application modals.
    - Renders `SSO_CLIENT` badge, `✓ SSO Active (Client Mode)`, and `🟢 ออนไลน์ (Client Mode)`.
+
+---
+
+## 11. Reverse Heartbeat & Outbound Agent Architecture for Mode C (Version 1.9.7)
+
+### 11.1 Problem & Motivation
+* สำหรับระบบ On-Premise (เช่น MTPulse, WMS, SAP B1 Local) ที่ต้องการการควบคุมบัญชีสองทาง (Two-Way):
+  1. ส่ง Inventory บัญชีขึ้นมาให้ CIAM ตรวจนับและกวาดบัญชีผี (Ghost Accounts)
+  2. รับคำสั่ง 1-Click Offboarding (`DISABLE_USER`) และ Reactivate (`ENABLE_USER`) จาก CIAM ไปตัดสิทธิ์บน Database ของตนเอง
+* แต่เซิร์ฟเวอร์ On-Premise **ไม่สามารถเปิด Inbound Port หรือ Public IP** จากอินเทอร์เน็ตเข้ามาได้ (Security Policy ภายในองค์กร)
+
+### 11.2 Architecture Solution (Reverse Heartbeat & Pull Pattern)
+แทนที่จะให้ Cloud CIAM ยิง Inbound Webhook เข้าไปหา On-Premise เราเปลี่ยนทิศทางการเชื่อมต่อให้ระบบ On-Premise เป็นฝ่ายยิง Outbound HTTPS (Port 443) ออกมาหา CIAM:
+1. **Outbound Reverse Heartbeat:** Agent ของ Spoke ยิงมาที่ `POST /api/v1/agent/heartbeat` ทุก 30–60 วินาที
+2. **Directory Inventory Sync:** สามารถแนบ `sync_type: "FULL_SYNC"` พร้อมรายชื่อบัญชีเพื่ออัปเดตสถิติและ Master Directory อัตโนมัติ
+3. **Pull Command Queue:** CIAM มีตาราง `spoke_pending_commands` เมื่อ Admin สั่ง Disable/Enable บนหน้าจอ CIAM คำสั่งจะถูกบันทึกเป็น `PENDING` และถูกส่งกลับไปใน Response ของรอบ Heartbeat ถัดไป เพื่อให้ Spoke นำไปประมวลผลบน DB ตนเอง
+4. **Command Execution Feedback:** ในรอบ Heartbeat ถัดมา Spoke ส่ง `command_results: [{"command_id": "...", "status": "COMPLETED"}]` กลับมา CIAM จะอัปเดตสถานะคำสั่งและบันทึก IamAuditLog ทันที
+5. **Dead Man's Switch (5-Minute Rule):** หาก CIAM ไม่ได้รับ Heartbeat จาก Spoke เกิน 5 นาที ระบบจะตัดสถานะเป็น `health_status="OFFLINE"` อัตโนมัติ
+
+### 11.3 Key Source Files & Endpoints
+* **Database Model ([application.py](file:///d:/Python/Central-IAM/backend/app/models/application.py)):**
+  - `SpokePendingCommand`: `command_id`, `app_code`, `action`, `username`, `reason`, `status` (`PENDING`, `SENT`, `COMPLETED`, `FAILED`), `issued_by`, `created_at`, `executed_at`, `result_message`.
+* **API Router ([agent.py](file:///d:/Python/Central-IAM/backend/app/api/v1/agent.py)):**
+  - `POST /api/v1/agent/heartbeat`
+  - Authentication: `X-Spoke-Client-ID` และ `X-Spoke-API-Key`
+  - Schema: `AgentHeartbeatRequest` (`timestamp`, `agent_version`, `sync_type`, `accounts`, `command_results`)
+  - Response: `AgentHeartbeatResponse` (`status="ACK"`, `server_time`, `commands_dispatched: [...]`, `accounts_synced`)
+* **Connector Integration ([sso_only.py](file:///d:/Python/Central-IAM/backend/app/connectors/sso_only.py)):**
+  - เมธอด `set_account_status()` ของ `SsoOnlyConnector` ถูกอัปเกรดให้สร้างคำสั่ง `SpokePendingCommand` ลงตารางทันที เพื่อรอให้ Spoke Agent เข้ามาดึงไปรัน
+* **Developer Specifications & Agent Script:**
+  - [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) หมวด D บันทึกสเปกฉบับเต็ม, JSON Schemas, ตัวอย่างสคริปต์ `ciam_agent.py` ที่พร้อม Copy ไปรันได้ทันที, พร้อมคู่มือ Systemd Service, Linux Crontab, และ Windows Task Scheduler

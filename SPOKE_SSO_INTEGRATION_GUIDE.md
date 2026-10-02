@@ -90,6 +90,10 @@ Central IAM ทำหน้าที่เป็น **Centralized Identity Provi
 * **Off-VPN Security Guard (HTTP 403):** หากพนักงานพยายามเรียก Endpoint ขอสิทธิ์หรือยิงผ่าน Portal ขณะอยู่นอก VPN เซิร์ฟเวอร์ CIAM จะปฏิเสธคำขอด้วย `HTTP 403 Forbidden` พร้อมข้อความ:  
   `"ระบบนี้จำกัดการเข้าถึงเฉพาะเครือข่ายภายในองค์กรหรือผ่าน VPN เท่านั้น"`
 
+> [!TIP]
+> **ต้องการ Sync บัญชี หรือ 1-Click Offboarding สองทางสำหรับระบบ On-Premise โดยไม่ต้องเปิด Inbound Port?**  
+> สามารถใช้สถาปัตยกรรม **Mode C: Reverse Heartbeat & Outbound Agent** โดยให้ Spoke ตั้ง Schedule/Cron Job ขาออกยิงมายัง `POST /api/v1/agent/heartbeat` ตามข้อกำหนดฉบับสมบูรณ์ในเอกสาร [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) หมวด D
+
 ---
 
 ## 4. โค้ดตัวอย่างการเชื่อมต่อสำหรับระบบลูก (Implementation Guide)

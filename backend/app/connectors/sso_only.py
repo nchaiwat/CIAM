@@ -37,14 +37,39 @@ class SsoOnlyConnector(BaseConnector):
         reason: str,
         updated_by: str = "Central-IAM-Service"
     ) -> ConnectorResult:
+        import secrets
+        from datetime import datetime, timezone
+        from app.core.database import SessionLocal
+        from app.models.application import SpokePendingCommand
+
+        action_cmd = "ENABLE_USER" if is_active else "DISABLE_USER"
+        cmd_id = f"cmd_{secrets.token_hex(6)}"
+
+        try:
+            db = SessionLocal()
+            cmd = SpokePendingCommand(
+                command_id=cmd_id,
+                app_code=self.app_code,
+                action=action_cmd,
+                username=username,
+                reason=reason,
+                status="PENDING",
+                issued_by=updated_by
+            )
+            db.add(cmd)
+            db.commit()
+            db.close()
+        except Exception as e:
+            logger.warning("Failed to queue pending spoke command for %s: %s", self.app_code, e)
+
         action = "permitted" if is_active else "revoked"
         return ConnectorResult(
             success=True,
             status_code=200,
             execution_mode="SSO_CLIENT",
-            message=f"SSO Access {action} centrally for '{username}' in {self.app_name}",
+            message=f"SSO Access {action} centrally for '{username}' in {self.app_name} (Queued command {cmd_id} for On-Premise Agent)",
             execution_time_ms=1,
-            details={"mode": "SSO_CLIENT_ONLY", "is_active": is_active}
+            details={"mode": "SSO_CLIENT_ONLY", "is_active": is_active, "command_id": cmd_id}
         )
 
     async def provision_account(self, account_data: dict) -> ConnectorResult:

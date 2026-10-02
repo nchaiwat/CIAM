@@ -1,8 +1,8 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Version:** 2.3.0 (Zero-Trust Network Access & On-Premise Spoke Topology Edition)  
+**Version:** 2.4.0 (Enterprise Reverse Heartbeat & Outbound Agent Specification Edition)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
-**Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
+**Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
 **Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636)
 
 ---
@@ -12,27 +12,33 @@
 เอกสารฉบับนี้กำหนดมาตรฐานการเชื่อมต่อระบบสารสนเทศภายในเครือบริษัท วินโดว์ เอเชีย จำกัด (มหาชน) ทั้งหมด เข้ากับระบบพิสูจน์ตัวตนกลาง **Window Asia Central IAM** เพื่อให้ทุกระบบย่อย (Spoke Applications) มีโครงสร้าง API, สถาปัตยกรรมการจัดเก็บการตั้งค่า และรูปแบบการบันทึก Audit Log เป็น **Template มาตรฐานเดียวกัน 100%**
 
 ### 1.1 รูปแบบสภาพแวดล้อมระบบและการเชื่อมต่อเครือข่าย (Deployment Topologies)
-Central IAM รองรับระบบลูกทั้ง 2 รูปแบบ โดยมีข้อกำหนดทางเน็ตเวิร์กที่ Developer ต้องเข้าใจดังนี้:
+Central IAM รองรับสภาพแวดล้อมระบบลูกทั้ง Cloud และ On-Premise โดยแบ่งการเชื่อมต่อเป็น **3 รูปแบบหลัก** ที่ Developer ต้องเลือกใช้ให้ตรงกับระบบของตนเอง:
 
-| มิติการพิจารณา | 🌐 ระบบบน Cloud / VPS (เช่น IRM, QMS) | 🏢 ระบบภายในองค์กร On-Premise / Local LAN (เช่น WMS, ERP ในโรงงาน) |
-| :--- | :--- | :--- |
-| **ตำแหน่งติดตั้ง** | Hostinger, AWS, GCP หรือ Public Cloud | เซิร์ฟเวอร์ในสำนักงานใหญ่ / เครื่องในโรงงาน / Local Private Network |
-| **การเข้าถึงจากภายนอก** | มี Public Domain / IP เข้าถึงได้จากอินเทอร์เน็ต | **ไม่มี Inbound Tunnel จากภายนอก** อยู่ในวง Private IP (เช่น `192.168.x.x` หรือ Domain ภายใน) |
-| **ความต้องการ Outbound** | HTTPS (Port 443) ออกอินเทอร์เน็ต | **HTTPS (Port 443) ออกอินเทอร์เน็ตเท่านั้น** (เพื่อยิงไปที่ `https://ciam.windowasia.com`) |
-| **ความต้องการ Inbound** | เปิด Inbound HTTPS ให้ CIAM เข้าถึงได้ | **❌ ไม่จำเป็นต้องเปิด Inbound Port ใดๆ** จากอินเทอร์เน็ตสาธารณะเข้ามาในออฟฟิศ |
-| **โหมดการเชื่อมต่อที่แนะนำ** | **Mode A:** Full Two-Way Integration (SSO + Inbound M2M) | **Mode B:** SSO-Only Client Mode (หรือใช้ Gateway ภายในหากต้องการ M2M) |
-| **นโยบายเครือข่ายบน CIAM** | `network_policy: ANYWHERE` | `network_policy: VPN_ONLY` (ควบคุมการเข้าถึงเฉพาะผ่าน OpenVPN หรือวง LAN) |
+| มิติการพิจารณา | 🌐 Mode A: Cloud Two-Way (เช่น IRM, QMS) | 🏢 Mode B: On-Premise SSO-Only (ระบบทั่วไป) | 🚀 Mode C: On-Prem Outbound Agent (แนะนำสำหรับ On-Prem) |
+| :--- | :--- | :--- | :--- |
+| **ตำแหน่งติดตั้ง** | Hostinger, AWS, GCP หรือ Public Cloud | สำนักงานใหญ่ / ในโรงงาน / Local Private Network | สำนักงานใหญ่ / เครื่องในโรงงาน / Local Private Network |
+| **การเข้าถึงจากภายนอก** | มี Public Domain / IP เข้าถึงได้จากอินเทอร์เน็ต | **ไม่มี Inbound Tunnel จากภายนอก** (Private IP/Local) | **ไม่มี Inbound Tunnel จากภายนอก** (Private IP/Local) |
+| **พอร์ต Inbound ขาเข้า** | ต้องเปิด Inbound HTTPS (Port 443) ให้ CIAM ยิงเข้ามาได้ | **❌ ไม่ต้องเปิด Inbound Port ใดๆ จากภายนอก** | **❌ ไม่ต้องเปิด Inbound Port ใดๆ จากภายนอก** |
+| **พอร์ต Outbound ขาออก** | HTTPS (Port 443) ออกอินเทอร์เน็ต | HTTPS (Port 443) ออกอินเทอร์เน็ตเพื่อแลก Token | HTTPS (Port 443) ออกอินเทอร์เน็ตเพื่อแลก Token และยิง Heartbeat |
+| **การจัดการบัญชีผู้ใช้** | CIAM กวาด Directory Sync และสั่ง 1-Click Offboard ตรง | Just-In-Time (JIT) Provisioning เมื่อ User ล็อกอินครั้งแรก | **กวาด Directory Sync ได้ + สั่ง 1-Click Offboard ได้จริง** |
+| **ตรวจสถานะ Online/Offline** | CIAM ยิง Ping Inbound ตรง | ระบบมองเป็น Client Mode (พร้อมรับ SSO เสมอ) | **มี Heartbeat แท้จริง** (ถ้าไม่ส่งตามเวลาระบบจะปรับเป็น Offline) |
+| **ความซับซ้อนฝั่ง Dev** | ทำ Endpoint กลุ่ม A, B, C | ทำ Endpoint กลุ่ม A, B (ไม่ต้องเขียน Background Service) | ทำกลุ่ม A, B + รันสคริปต์ **Agent เล็กๆ ยิง Heartbeat (กลุ่ม D)** |
+| **นโยบายเครือข่ายบน CIAM** | `network_policy: ANYWHERE` | `network_policy: VPN_ONLY` | `network_policy: VPN_ONLY` |
 
 ### 1.2 โหมดการเชื่อมต่อของระบบลูก (Spoke Integration Modes)
 1. **Mode A: Full Two-Way Integration (SSO + Governance Webhooks):**  
-   - สำหรับระบบที่มี Public Domain หรือเชื่อมต่อผ่าน Site-to-Site Tunnel  
+   - สำหรับระบบที่มี Public Domain หรือเชื่อมต่อผ่าน Site-to-Site Tunnel ที่ Cloud ยิงเข้ามาได้  
    - พัฒนาครบทั้ง **Group A (Settings)**, **Group B (SSO Flow)**, และ **Group C (Directory & Status Inbound Webhook)**  
-   - ข้อดี: CIAM สามารถตรวจเช็ค Health, กวาด Reconciliation บัญชีผีเวลา 04:00 น., และสั่ง 1-Click Deprovisioning ระงับสิทธิ์ทันทีเมื่อพนักงานลาออก
-2. **Mode B: SSO-Only Client Mode (สำหรับ Isolated On-Premise Applications):**  
-   - สำหรับระบบ On-Premise แท้ๆ ที่ไม่มี Inbound Tunnel ใดๆ จากภายนอกเข้ามา  
+   - ข้อดี: CIAM สามารถตรวจเช็ค Health แบบ Inbound, กวาด Reconciliation บัญชีผีเวลา 04:00 น., และสั่ง 1-Click Deprovisioning ระงับสิทธิ์ทันทีเมื่อพนักงานลาออก
+2. **Mode B: SSO-Only Client Mode (สำหรับ Isolated On-Premise แบบเรียบง่าย):**  
+   - สำหรับระบบ On-Premise ที่ไม่มี Inbound Tunnel และ**ไม่ต้องการรัน Background Worker ใดๆ**  
    - พัฒนาเฉพาะ **Group B (SSO Flow - OIDC/PKCE)** และ **Group A (Settings)**  
    - **ไม่ต้องเปิด Group C (Inbound API)** ให้กับ CIAM  
-   - การยืนยันตัวตนทำงานได้ 100% เพราะเป็นการทำ Client-side Redirect ผ่านเบราว์เซอร์ของพนักงาน (ตราบใดที่พนักงานต่อ OpenVPN หรืออยู่ในวงแลนออฟฟิศ) และเซิร์ฟเวอร์ On-Premise ยิง Outbound ไปแลก Token กับ CIAM Cloud เท่านั้น
+   - การยืนยันตัวตนทำงานได้ 100% ผ่าน Client-side Browser Redirect และใช้ Just-In-Time (JIT) Provisioning
+3. **Mode C: Outbound Agent Mode (Reverse Heartbeat & Command Queue — แนะนำสำหรับ On-Premise สำคัญ เช่น MTPulse, WMS, ERP):**  
+   - สำหรับระบบ On-Premise ที่ต้องการฟังก์ชันระดับ Enterprise ครบถ้วน (กวาดรายชื่อบัญชีขึ้น CIAM + สั่งระงับสิทธิ์ 1-Click Offboarding + ตรวจสอบสถานะ Live Online/Offline) **โดยไม่ต้องเปิดพอร์ต Inbound ใดๆ บน Firewall ออฟฟิศ**  
+   - พัฒนา **Group A (Settings)**, **Group B (SSO Flow)** และรันสคริปต์ **Group D (Outbound Heartbeat Agent)**  
+   - Spoke จะตั้งเวลา (Cronjob หรือ Background Task ทุก 120 วินาที) ยิง Outbound HTTPS 443 ไปรายงานตัวที่ `POST https://ciam.windowasia.com/api/v1/agent/heartbeat` และดึงคำสั่งระงับสิทธิ์กลับมาทำงานในเครื่องตนเองโดยอัตโนมัติ
 
 ### 1.3 นโยบายความปลอดภัยเครือข่าย Zero-Trust VPN Access Control
 เมื่อระบบลูกได้รับการตั้งค่านโยบายเครือข่ายเป็น `VPN_ONLY` บน Central IAM:
@@ -115,22 +121,22 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 ## 3. ช่องทาง API มาตรฐานที่ระบบลูกต้องพัฒนา (Required API Channels)
 
-ระบบลูก (เช่น IRM, QMS, QOL, SAP B1 Service) ต้องเปิด Endpoint ตามโครงสร้างมาตรฐาน **3 กลุ่มหลัก** ดังต่อไปนี้:
+ระบบลูกต้องเปิดหรือใช้งาน Endpoint ตามโครงสร้างมาตรฐาน **4 กลุ่มหลัก** (ขึ้นอยู่กับ Mode ที่เลือก):
 
 ```
-┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                 SPOKE APPLICATION API CHANNELS                                    │
-├──────────────────────────────┬──────────────────────────────────┬─────────────────────────────────┤
-│ Group A: Settings Channel    │ Group B: SSO Authentication Flow │ Group C: Directory & Governance │
-│ (สิทธิ์เฉพาะ Admin ของระบบ)   │ (ยืนยันตัวตนกับ AD ผ่าน CIAM)     │ (CIAM สั่งการเข้ามาแบบ M2M)     │
-├──────────────────────────────┼──────────────────────────────────┼─────────────────────────────────┤
-│ • GET  /api/settings/ciam-sso│ • GET  /api/auth/sso/config      │ • GET   /api/v1/directory/      │
-│ • PUT  /api/settings/ciam-sso│ • POST /api/auth/sso/            │         accounts                │
-│ • POST /api/settings/ciam-sso│         authorize-url            │ • POST  /api/v1/directory/      │
-│        /test-connection      │ • POST /api/auth/sso/callback    │         accounts                │
-│                              │ • POST /api/auth/sso/            │ • PATCH /api/v1/directory/      │
-│                              │         break-glass-toggle       │         accounts/{user}/status  │
-└──────────────────────────────┴──────────────────────────────────┴─────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                     SPOKE APPLICATION API CHANNELS                                     │
+├──────────────────────────────┬──────────────────────────────────┬──────────────────┬───────────────────┤
+│ Group A: Settings Channel    │ Group B: SSO Authentication Flow │ Group C: Inbound │ Group D: Outbound │
+│ (สิทธิ์เฉพาะ Admin ของระบบ)   │ (ยืนยันตัวตนกับ AD ผ่าน CIAM)     │ Directory (Mode A)│ Agent (Mode C)    │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────┼───────────────────┤
+│ • GET  /api/settings/ciam-sso│ • GET  /api/auth/sso/config      │ • GET  accounts  │ • POST /api/v1/   │
+│ • PUT  /api/settings/ciam-sso│ • POST /api/auth/sso/            │ • POST accounts  │   agent/heartbeat │
+│ • POST /api/settings/ciam-sso│         authorize-url            │ • PATCH accounts │ (On-Prem ยิงขึ้นหา│
+│        /test-connection      │ • POST /api/auth/sso/callback    │   /{user}/status │  CIAM ทุก 120s)   │
+│                              │ • POST /api/auth/sso/            │ (CIAM ยิงเข้า    │ (ดึงคำสั่ง &      │
+│                              │         break-glass-toggle       │  หา Spoke Direct)│  Sync บัญชี)      │
+└──────────────────────────────┴──────────────────────────────────┴──────────────────┴───────────────────┘
 ```
 
 ---
@@ -451,6 +457,274 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
      * **หน้า App Portal จะแสดงเฉพาะแอปที่เขามีสิทธิ์ (เช่น IRM) เท่านั้น** และซ่อนระบบอื่นที่ไม่มีสิทธิ์ออกไปโดยอัตโนมัติ
      * ผู้ใช้สามารถคลิกเข้าสู่ระบบลูกผ่าน Single Sign-On ได้อย่างราบรื่น
   5. หากผู้ใช้รายเดียวกันมีบัญชีใน 2 ระบบลูกที่ไม่ได้ใช้ AD ทั้งคู่ และรหัสผ่านไม่ตรงกัน ผู้ดูแลระบบสามารถใช้ฟังก์ชัน **"รวมตัวตน (Unified Identity Link)"** ในหน้าบัญชีผู้ใช้ Central IAM เพื่อผูกบัญชีทั้งสองเข้ากับ Portal Identity เดียวกันได้อย่างปลอดภัย
+
+### หมวด D: Reverse Heartbeat & Outbound Sync Channel (สำหรับ Mode C: On-Premise Spoke Applications)
+
+หมวดนี้ออกแบบมาสำหรับระบบลูกที่ติดตั้งอยู่ภายในเครือข่ายองค์กร (On-Premise / Local LAN เช่น MTPulse, WMS, ERP ในโรงงาน) ที่**ไม่มี Inbound Public Tunnel จากภายนอก** แต่ต้องการให้:
+1. Central IAM สามารถ**กวาดรายชื่อผู้ใช้ทั้งหมด (Directory Sync)** มาเก็บไว้เพื่อตรวจสอบสิทธิ์และการจัดการแบบศูนย์กลาง
+2. สามารถสั่ง**ระงับสิทธิ์บัญชีผู้ใช้ (1-Click Offboarding)** หรือคืนสิทธิ์ได้จาก Central IAM Cloud
+3. Central IAM แสดงสถานะ **🟢 ออนไลน์ / 🔴 ออฟไลน์** ได้อย่างแท้จริง ผ่านระบบ **Dead Man's Switch Heartbeat** โดยไม่ต้องเจาะไฟร์วอลล์ออฟฟิศ
+
+---
+
+#### D.1 สถาปัตยกรรมการทำงาน (Reverse Heartbeat & Pull Pattern)
+แทนที่เซิร์ฟเวอร์ CIAM บน Cloud จะยิง Inbound เข้ามา (ซึ่งทำไม่ได้เพราะติด NAT/Firewall):
+1. **ระบบลูก (Spoke) เป็นฝ่ายยิง Outbound HTTPS 443 ออกไปหา CIAM เป็นระยะ:** (ค่าแนะนำ: ทุก 120 วินาที / 2 นาที)
+2. **รายงานตัว (Heartbeat):** แจ้ง CIAM ว่าเครื่องยังทำงานอยู่ปกติ CIAM จะอัปเดตสถานะเป็น `ONLINE`
+3. **ส่งผลลัพธ์คำสั่งเดิม (Command Acknowledgment):** หากรอบที่แล้วได้รับคำสั่งระงับสิทธิ์ ให้ส่งสถานะกลับว่าระงับสิทธิ์ในฐานข้อมูลตนเองสำเร็จแล้ว (`COMPLETED`)
+4. **ดึงคำสั่งใหม่กลับมาทำ (Pull Pending Commands):** CIAM จะส่งรายการคำสั่งที่รออยู่ (เช่น `DISABLE_USER`) กลับมาใน Response เพื่อให้ Spoke นำไป execute ในเครื่องตนเอง
+5. **กวาดรายชื่อขึ้น Cloud (Push Directory Sync):** ส่งรายชื่อบัญชีทั้งหมด (`accounts`) ขึ้นมาอัปเดตบน CIAM (ส่งวันละครั้ง หรือส่งเมื่อมีการสร้าง User ภายใน)
+
+---
+
+#### D.2 `POST https://ciam.windowasia.com/api/v1/agent/heartbeat` (เอนด์พอยต์รายงานตัวบน CIAM)
+* **ผู้เรียก:** ฝั่งระบบลูก (Spoke Agent Background Worker)
+* **ผู้รับ:** Central IAM Engine บน Cloud
+* **Authentication Headers:**
+  * `Content-Type: application/json`
+  * `X-Spoke-Client-ID`: ค่า Client ID ของระบบลูก (เช่น `mtpulse-spoke-client`)
+  * `X-Spoke-API-Key`: ค่า M2M Secret API Key (หรือ Client Secret ที่ผูกไว้บน CIAM)
+  * `X-Request-Timestamp`: Unix Timestamp (วินาที)
+
+##### รูปแบบ Request Body:
+```json
+{
+  "app_code": "mtpulse",
+  "status": "HEALTHY",
+  "app_version": "1.0.4",
+  "sync_type": "HEARTBEAT",
+  "command_results": [
+    {
+      "command_id": "cmd_a1b2c3d4",
+      "action": "DISABLE_USER",
+      "username": "somchai.k",
+      "status": "COMPLETED",
+      "message": "User deactivated successfully in local SQLite/PostgreSQL database"
+    }
+  ],
+  "accounts": [
+    {
+      "username": "chaiwat.n",
+      "full_name": "Chaiwat Nilawan",
+      "email": "chaiwat.n@windowasia.com",
+      "department": "IT",
+      "role": "PU Staff",
+      "is_active": true
+    }
+  ]
+}
+```
+> **หมายเหตุเรื่อง Accounts Payload:** ฟิลด์ `accounts` ให้ส่งเฉพาะเมื่อ `sync_type == "FULL_SYNC"` (เช่น วันละครั้ง) เพื่อประหยัด Bandwidth ในรอบ Heartbeat ปกติทุก 2 นาทีให้ส่ง `sync_type: "HEARTBEAT"` และละเว้นฟิลด์ `accounts` ได้
+
+##### รูปแบบ Response Example (200 OK):
+```json
+{
+  "status": "ACKNOWLEDGED",
+  "app_code": "mtpulse",
+  "server_time": "2026-10-02T10:00:00Z",
+  "next_heartbeat_seconds": 120,
+  "pending_commands": [
+    {
+      "command_id": "cmd_e5f6g7h8",
+      "action": "DISABLE_USER",
+      "username": "resigned_user_01",
+      "reason": "1-Click Offboarding via Central IAM",
+      "issued_at": "2026-10-02T09:58:30Z"
+    }
+  ],
+  "message": "Heartbeat received for วิเคราะห์การขาย Modern Trade. 1 pending command(s) dispatched."
+}
+```
+
+---
+
+#### D.3 กฎเกณฑ์การตรวจจับ Online / Offline (Dead Man's Switch)
+* **ความถี่ Heartbeat:** แนะนำให้ Spoke ยิง Heartbeat ทุก **120 วินาที (2 นาที)**
+* **เงื่อนไขสถานะออนไลน์ (`ONLINE`):** เมื่อ CIAM ได้รับ Heartbeat ล่าสุดภายใน **300 วินาที (5 นาที)**
+* **เงื่อนไขสถานะออฟไลน์ (`OFFLINE`):** หากเซิร์ฟเวอร์ On-Premise ไฟดับ, อินเทอร์เน็ตสำนักงานขัดข้อง หรือ Agent หยุดทำงานเกิน **5 นาที** CIAM จะปรับสถานะของระบบนี้เป็น **`🔴 ออฟไลน์`** โดยอัตโนมัติ และปุ่มบนหน้า Employee Portal จะถูกล็อกเป็น *"ระบบปิดปรับปรุงชั่วคราว (Offline)"* ทันที เพื่อป้องกันพนักงานเข้าใช้งานระบบที่ล่ม
+
+---
+
+#### D.4 ตัวอย่างโค้ดมาตรฐานสำหรับ Developer ระบบลูก (Production-Ready Python Agent)
+ทีมพัฒนา Spoke สามารถนำไฟล์สคริปต์นี้ (เช่น `ciam_agent.py`) ไปวางในโปรเจกต์ของระบบตนเอง และตั้งเวลารันได้ทันที:
+
+```python
+\"\"\"
+ciam_agent.py — Reverse Heartbeat & Command Worker for On-Premise Spoke Applications
+Organization: Window Asia Public Company Limited
+Supported Mode: Mode C (Outbound Reverse Heartbeat & Command Queue)
+\"\"\"
+
+import time
+import logging
+import requests
+from datetime import datetime
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("ciam_spoke_agent")
+
+# --- 1. การกำหนดค่าเชื่อมต่อ (ดึงจาก system_settings ใน DB หรือ Config File) ---
+CIAM_BASE_URL = "https://ciam.windowasia.com"
+APP_CODE = "mtpulse"                            # รหัสระบบลูกตัวพิมพ์เล็ก
+SPOKE_CLIENT_ID = "mtpulse-spoke-client"        # Client ID ที่ลงทะเบียนไว้บน CIAM
+SPOKE_API_KEY = "sec_mtpulse_mgmt_xxxxxxxxx"   # M2M API Key หรือ Client Secret
+HEARTBEAT_INTERVAL = 120                       # วินาที (2 นาที)
+
+def execute_local_command(action: str, username: str) -> tuple[bool, str]:
+    \"\"\"
+    ฟังก์ชันสำหรับจัดการฐานข้อมูลภายในระบบลูกเมื่อได้รับคำสั่งจาก CIAM
+    * แก้ไขฟังก์ชันนี้ให้ปรับปรุงสถานะผู้ใช้ในตาราง users หรือฐานข้อมูลจริงของระบบคุณ *
+    \"\"\"
+    try:
+        logger.info(f"⚡ กำลังดำเนินการคำสั่ง '{action}' สำหรับผู้ใช้ '{username}' ในระบบภายใน...")
+        
+        if action == "DISABLE_USER":
+            # ตัวอย่าง SQL หรือ ORM:
+            # db.execute("UPDATE users SET is_active = FALSE WHERE username = ?", (username,))
+            # db.execute("DELETE FROM user_active_sessions WHERE username = ?", (username,))
+            return True, f"User '{username}' disabled and sessions revoked successfully."
+            
+        elif action == "ENABLE_USER":
+            # db.execute("UPDATE users SET is_active = TRUE WHERE username = ?", (username,))
+            return True, f"User '{username}' enabled successfully."
+            
+        return False, f"Unknown action: {action}"
+    except Exception as exc:
+        logger.error(f"❌ ดำเนินการคำสั่งไม่สำเร็จ: {exc}")
+        return False, str(exc)
+
+def fetch_local_accounts() -> list[dict]:
+    \"\"\"
+    ฟังก์ชันดึงรายชื่อผู้ใช้ทั้งหมดจากฐานข้อมูลภายใน เพื่อส่งขึ้นไปกวาด Sync บน CIAM
+    (เรียกเฉพาะเมื่อต้องการทำ Full Directory Sync)
+    \"\"\"
+    # ตัวอย่างคืนค่าบัญชี:
+    return [
+        # {"username": "somchai", "full_name": "สมชาย ใจดี", "email": "somchai@wa.com", "role": "Staff", "is_active": True}
+    ]
+
+def run_agent_cycle(is_full_sync: bool = False, previous_results: list = None) -> list:
+    \"\"\"
+    ยิง Outbound POST 1 รอบไปยัง Central IAM:
+    1. ส่ง Heartbeat
+    2. ส่งผลลัพธ์คำสั่งรอบก่อนหน้า (ถ้ามี)
+    3. รับคำสั่งใหม่ไปประมวลผล
+    \"\"\"
+    endpoint = f"{CIAM_BASE_URL}/api/v1/agent/heartbeat"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Spoke-Client-ID": SPOKE_CLIENT_ID,
+        "X-Spoke-API-Key": SPOKE_API_KEY,
+        "X-Request-Timestamp": str(int(time.time()))
+    }
+    payload = {
+        "app_code": APP_CODE,
+        "status": "HEALTHY",
+        "sync_type": "FULL_SYNC" if is_full_sync else "HEARTBEAT",
+        "command_results": previous_results or []
+    }
+    
+    if is_full_sync:
+        payload["accounts"] = fetch_local_accounts()
+
+    try:
+        res = requests.post(endpoint, json=payload, headers=headers, timeout=15)
+        if res.status_code == 200:
+            data = res.json()
+            logger.info(f"✅ Heartbeat สำเร็จ: ตอบรับจาก CIAM ({data.get('server_time')})")
+            
+            # ตรวจสอบและประมวลผลคำสั่งที่ส่งมาจาก CIAM
+            pending_commands = data.get("pending_commands", [])
+            new_results = []
+            for cmd in pending_commands:
+                cmd_id = cmd["command_id"]
+                action = cmd["action"]
+                target_user = cmd["username"]
+                success, msg = execute_local_command(action, target_user)
+                new_results.append({
+                    "command_id": cmd_id,
+                    "action": action,
+                    "username": target_user,
+                    "status": "COMPLETED" if success else "FAILED",
+                    "message": msg
+                })
+            return new_results
+        else:
+            logger.warning(f"⚠️ CIAM ตอบกลับสถานะ {res.status_code}: {res.text[:200]}")
+            return previous_results or []
+    except Exception as exc:
+        logger.error(f"❌ ไม่สามารถเชื่อมต่อไปยัง Central IAM: {exc}")
+        return previous_results or []
+
+def main():
+    logger.info(f"🚀 เริ่มต้นการทำงาน Window Asia CIAM Agent สำหรับระบบ '{APP_CODE}'")
+    
+    # รอบแรกสุด: ทำ Full Sync กวาดบัญชีขึ้น CIAM
+    pending_results = run_agent_cycle(is_full_sync=True)
+    
+    sync_counter = 0
+    while True:
+        try:
+            time.sleep(HEARTBEAT_INTERVAL)
+            sync_counter += 1
+            
+            # กวาด Full Directory Sync ทุกๆ 720 รอบ (ประมาณ 24 ชั่วโมง)
+            is_daily_sync = (sync_counter % 720 == 0)
+            
+            pending_results = run_agent_cycle(is_full_sync=is_daily_sync, previous_results=pending_results)
+        except KeyboardInterrupt:
+            logger.info("หยุดการทำงานของ Agent")
+            break
+        except Exception as exc:
+            logger.error(f"ข้อผิดพลาดใน Loop: {exc}")
+            time.sleep(30)
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+#### D.5 การตั้งเวลาให้ Agent ทำงานอัตโนมัติ (Deployment Options)
+
+Developer สามารถเลือกติดตั้ง Agent ให้ทำงานตลอด 24 ชั่วโมงได้ 3 วิธี:
+
+##### วิธีที่ 1: ติดตั้งเป็น Linux Systemd Service (แนะนำสำหรับ Linux Server)
+สร้างไฟล์ `/etc/systemd/system/ciam-agent.service`:
+```ini
+[Unit]
+Description=Window Asia Central IAM Spoke Reverse Agent
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/mtpulse
+ExecStart=/var/www/mtpulse/venv/bin/python /var/www/mtpulse/ciam_agent.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+เปิดใช้งาน service:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable ciam-agent
+sudo systemctl start ciam-agent
+```
+
+##### วิธีที่ 2: รันผ่าน Crontab บน Linux
+```bash
+# ส่ง Heartbeat ทุก 2 นาที
+*/2 * * * * cd /var/www/mtpulse && /var/www/mtpulse/venv/bin/python ciam_agent.py --once >> /var/log/ciam_agent.log 2>&1
+```
+
+##### วิธีที่ 3: ตั้งเวลาผ่าน Windows Task Scheduler (สำหรับ Windows Server)
+* Action: `Start a program`
+* Program/script: `python.exe` (หรือ `pythonw.exe` เพื่อซ่อนหน้าต่าง cmd)
+* Add arguments: `C:\inetpub\wwwroot\mtpulse\ciam_agent.py`
+* Trigger: `At startup` หรือ `Daily, repeat every 2 minutes indefinitely`
 
 ---
 
