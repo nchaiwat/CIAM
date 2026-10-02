@@ -316,5 +316,29 @@ FRONTEND_URL=http://localhost:3000
   - Opened via button `📋 คู่มือสำหรับ Dev`.
   - Displays prominent Zero-Trust On-Premise vs Cloud topology card and corporate VPN network whitelist directly within the administrative UI.
 
+---
 
+## 10. On-Premise SSO Client Mode (`SSO_ONLY` Connector) (Version 1.9.6)
 
+### 10.1 Background & Problem Solved
+* On-premise spoke systems (e.g. MTPulse, WMS, Factory ERP) run inside private subnets without inbound public ports or tunnels from Cloud VPS.
+* When registered as `REST_API`, Cloud CIAM attempted to HTTP GET the internal private base URL (e.g. `https://wa-mtpulse.wa...`). This network failure caused:
+  1. Health status to flip to `🔴 ออฟไลน์`.
+  2. Spoke SSO status to flip to `⚠️ Spoke ปิด SSO (Break-Glass)`.
+  3. The Employee Portal launch button to become disabled (`ระบบปิดปรับปรุงชั่วคราว (Offline)`).
+* In reality, Mode B SSO does NOT require Cloud-to-On-Prem inbound connectivity. All authentication occurs via user browser redirect and spoke outbound token verification.
+
+### 10.2 Technical Implementation
+1. **Dedicated Connector ([sso_only.py](file:///d:/Python/Central-IAM/backend/app/connectors/sso_only.py)):**
+   - Implements `SsoOnlyConnector`.
+   - `health_check()`: Always reports `ONLINE` (`latency_ms=1`, `spoke_sso_active=True`, message: `"SSO Client Mode Active (พร้อมรับการล็อกอินผ่านเบราว์เซอร์และ VPN)"`).
+   - `sync_inventory()`: Reports that accounts are provisioned Just-In-Time (JIT) upon SSO login.
+   - `deprovision()` & `set_account_status()`: Centrally revokes CIAM session/access for the user.
+2. **Connector Factory & Auto-Activation ([factory.py](file:///d:/Python/Central-IAM/backend/app/connectors/factory.py), [applications.py](file:///d:/Python/Central-IAM/backend/app/api/v1/applications.py)):**
+   - Automatically activates and sets `health_status="ONLINE"`, `spoke_sso_status="ACTIVE"` when registered or updated with `connector_type="SSO_ONLY"`.
+3. **Portal Launch & Guardrails ([oauth.py](file:///d:/Python/Central-IAM/backend/app/api/v1/oauth.py), [page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/portal/page.tsx)):**
+   - Bypasses offline/break-glass launch block for `SSO_ONLY` / `SSO_CLIENT` connectors.
+   - Portal displays `[MTPULSE]` with unlocked active button `เข้าใช้งานระบบ ↗`.
+4. **Admin UI ([page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/applications/page.tsx)):**
+   - Adds `SSO_ONLY (โหมดลูกข่าย On-Premise / ขาออกอย่างเดียว)` option to both Create and Edit Application modals.
+   - Renders `SSO_CLIENT` badge, `✓ SSO Active (Client Mode)`, and `🟢 ออนไลน์ (Client Mode)`.

@@ -6,6 +6,7 @@ from app.connectors.sap_b1 import SapB1Connector
 from app.connectors.ad_proxy import AdProxyConnector
 from app.connectors.rpa.mock_legacy import MockLegacyErpRpaAdapter
 from app.connectors.m365_graph import M365GraphConnector
+from app.connectors.sso_only import SsoOnlyConnector
 from app.core.config import settings
 
 def get_connector_for_app(app: ConnectedApplication) -> BaseConnector:
@@ -36,6 +37,12 @@ def get_connector_for_app(app: ConnectedApplication) -> BaseConnector:
             secret_key=app.client_secret or "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823",
             allow_status_patch=bool(getattr(app, "ad_allow_status_patch", False)),
             origin_ip=app.sap_company_db or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
+        )
+    elif c_type in ["SSO_ONLY", "SSO_CLIENT", "CLIENT_MODE", "ON_PREM_SSO"]:
+        return SsoOnlyConnector(
+            app_code=app.app_code,
+            app_name=app.app_name,
+            base_url=app.base_url
         )
     elif c_type == "RPA_WORKER":
         if app.rpa_adapter_name == "mock_legacy_erp":

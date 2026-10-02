@@ -115,6 +115,21 @@
 
 ---
 
+### 8) ระบบ On-Premise SSO Client Mode (`SSO_ONLY` Connector) (2 ต.ค. 2026)
+- **โจทย์และความท้าทาย:**
+  - แอป On-Premise (เช่น MTPulse, WMS ภายใน) อยู่ในวงแลนออฟฟิศ ไม่มี Inbound Public Tunnel จากภายนอก
+  - เมื่อลงทะเบียนเป็น `REST_API` (Two-Way) ระบบ CIAM Cloud ยิง Ping Inbound เข้าหา URL ภายในไม่ได้ ทำให้ขึ้น `🔴 ออฟไลน์` และ `⚠️ Spoke ปิด SSO (Break-Glass)` ส่งผลให้ปุ่มบน Employee Portal ถูกล็อกเป็น `ระบบปิดปรับปรุงชั่วคราว (Offline)`
+- **การแก้ไข:**
+  - เพิ่ม Connector ตัวใหม่ `SsoOnlyConnector` (`backend/app/connectors/sso_only.py`)
+  - รองรับประเภท `connector_type = "SSO_ONLY"` ใน `factory.py`, `applications.py`, และ `oauth.py`
+  - เมื่อเปิดเป็น `SSO_ONLY`:
+    - สถานะจะกลายเป็น `🟢 ออนไลน์ (Client Mode)` และ `✓ SSO Active (Client Mode)` อัตโนมัติ
+    - Backend ข้ามการบล็อก Launch สำหรับ SSO Client Mode
+    - Employee Portal ปลดล็อกปุ่มเป็น `เข้าใช้งานระบบ ↗` ให้พนักงานล็อกอินผ่านเบราว์เซอร์ได้ทันที
+    - เพิ่มตัวเลือก `SSO_ONLY` ใน Dropdown ของทั้งหน้าเพิ่มและแก้ไขระบบบน Admin Console
+
+---
+
 ## 4. สถานะ Git ล่าสุด (Current Git State)
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)

@@ -55,7 +55,7 @@ export default function ApplicationsPage() {
   // Form states for new app
   const [appCode, setAppCode] = useState("");
   const [appName, setAppName] = useState("");
-  const [connectorType, setConnectorType] = useState<"REST_API" | "RPA_WORKER" | "SAP_B1">("REST_API");
+  const [connectorType, setConnectorType] = useState<"REST_API" | "SSO_ONLY" | "RPA_WORKER" | "SAP_B1">("REST_API");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [sapCompanyDb, setSapCompanyDb] = useState("WA_PROD");
@@ -610,8 +610,12 @@ export default function ApplicationsPage() {
                   </div>
 
                   <div className="flex items-center space-x-1.5">
-                    <span className="bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-0.5 rounded text-[11px] font-bold">
-                      {app.connector_type}
+                    <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border ${
+                      app.connector_type === "SSO_ONLY"
+                        ? "bg-indigo-50 text-indigo-800 border-indigo-200"
+                        : "bg-blue-50 text-blue-800 border-blue-200"
+                    }`}>
+                      {app.connector_type === "SSO_ONLY" ? "SSO_CLIENT" : app.connector_type}
                     </span>
                     <button
                       onClick={() => {
@@ -659,6 +663,10 @@ export default function ApplicationsPage() {
                       {app.sso_enabled === false ? (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
                           ✕ Disabled (ปิด SSO)
+                        </span>
+                      ) : app.connector_type === "SSO_ONLY" ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                          ✓ SSO Active (Client Mode)
                         </span>
                       ) : app.spoke_sso_status === "DISABLED" ? (
                         <span
@@ -711,15 +719,19 @@ export default function ApplicationsPage() {
                     <div className="flex items-center space-x-1.5">
                       <span
                         className={`w-2.5 h-2.5 rounded-full ${
-                          app.health_status === "ONLINE" ? "bg-emerald-600" : "bg-rose-600"
+                          app.connector_type === "SSO_ONLY" || app.health_status === "ONLINE" ? "bg-emerald-600" : "bg-rose-600"
                         }`}
                       ></span>
                       <span
                         className={`font-bold ${
-                          app.health_status === "ONLINE" ? "text-emerald-800" : "text-rose-800"
+                          app.connector_type === "SSO_ONLY"
+                            ? "text-emerald-800"
+                            : app.health_status === "ONLINE"
+                            ? "text-emerald-800"
+                            : "text-rose-800"
                         }`}
                       >
-                        {app.health_status === "ONLINE" ? "ออนไลน์" : "ออฟไลน์"}
+                        {app.connector_type === "SSO_ONLY" ? "ออนไลน์ (Client Mode)" : app.health_status === "ONLINE" ? "ออนไลน์" : "ออฟไลน์"}
                       </span>
                       {app.latency_ms && (
                         <span className="text-[11px] font-mono text-slate-500 font-semibold">({app.latency_ms} ms)</span>
@@ -976,8 +988,8 @@ export default function ApplicationsPage() {
 
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
-              {/* Common Details: Name & Base URL */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Common Details: Name, Base URL & Connector Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">ชื่อระบบเต็ม</label>
                   <input
@@ -998,6 +1010,22 @@ export default function ApplicationsPage() {
                     placeholder="https://spoke.windowasia.com"
                     className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono focus:outline-none focus:border-blue-600"
                   />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">ประเภทการเชื่อมต่อ</label>
+                  <select
+                    value={editConnectorType}
+                    onChange={(e) => setEditConnectorType(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-bold focus:outline-none focus:border-blue-600 cursor-pointer"
+                  >
+                    <option value="REST_API">REST API (Two-Way Integration)</option>
+                    <option value="SSO_ONLY">SSO_ONLY (โหมดลูกข่าย On-Premise)</option>
+                    <option value="SAP_B1">SAP Business One</option>
+                    <option value="AD_PROXY">Active Directory Proxy</option>
+                    <option value="M365">Microsoft 365</option>
+                    <option value="RPA_WORKER">RPA Worker</option>
+                  </select>
                 </div>
               </div>
 
@@ -2058,7 +2086,8 @@ export default function ApplicationsPage() {
                   }}
                   className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-bold focus:outline-none focus:border-blue-600 cursor-pointer"
                 >
-                  <option value="REST_API">REST API (มาตรฐาน Spoke M2M Specification)</option>
+                  <option value="REST_API">REST API (มาตรฐาน Spoke M2M Specification - Two Way)</option>
+                  <option value="SSO_ONLY">SSO_ONLY (โหมดลูกข่าย On-Premise / ขาออกอย่างเดียว)</option>
                   <option value="SAP_B1">SAP Business One (Service Layer v2 OData)</option>
                   <option value="RPA_WORKER">RPA Worker (ระบบ Legacy ผ่าน Bot Automation)</option>
                 </select>

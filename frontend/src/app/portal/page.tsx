@@ -307,8 +307,9 @@ export default function PortalPage() {
             {apps.map((app) => {
               const theme = getAppTheme(app.app_code);
               const isLaunching = launchingAppCode === app.app_code;
-              const isOffline = app.health_status === "OFFLINE";
-              const isSpokeSsoDisabled = app.spoke_sso_status === "DISABLED";
+              const isSsoClientMode = app.connector_type === "SSO_ONLY" || app.connector_type === "SSO_CLIENT";
+              const isOffline = app.health_status === "OFFLINE" && !isSsoClientMode;
+              const isSpokeSsoDisabled = app.spoke_sso_status === "DISABLED" && !isSsoClientMode;
               const isVpnLocked = Boolean(app.is_vpn_locked);
               const isLaunchDisabled = isLaunching || isOffline || isSpokeSsoDisabled || isVpnLocked;
 

@@ -429,4 +429,46 @@ def test_health_monitor_schedule_and_alert():
     assert "summary" in alert_data
 
 
+def test_sso_only_connector_lifecycle():
+    import uuid
+    login_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Register a new app with connector_type SSO_ONLY
+    app_code = f"sso_app_{uuid.uuid4().hex[:6]}"
+    create_res = client.post(
+        "/api/v1/applications",
+        json={
+            "app_code": app_code,
+            "app_name": f"On-Prem App {app_code}",
+            "connector_type": "SSO_ONLY",
+            "base_url": "https://internal-app.windowasia.local"
+        },
+        headers=headers
+    )
+    assert create_res.status_code == 200
+    app_data = create_res.json()
+    app_id = app_data["id"]
+    assert app_data["connector_type"] == "SSO_ONLY"
+    assert app_data["health_status"] == "ONLINE"
+    assert app_data["spoke_sso_status"] == "ACTIVE"
+
+    # 2. Ping the SSO_ONLY application
+    ping_res = client.post(f"/api/v1/applications/{app_id}/ping", headers=headers)
+    assert ping_res.status_code == 200
+    ping_data = ping_res.json()
+    assert ping_data["status"] == "ONLINE"
+    assert ping_data["spoke_sso_status"] == "ACTIVE"
+
+    # 3. Check inventory
+    inv_res = client.get(f"/api/v1/applications/{app_id}/inventory", headers=headers)
+    assert inv_res.status_code == 200
+    inv_data = inv_res.json()
+    assert inv_data["mode"] == "SSO_CLIENT_ONLY"
+
+    # 4. Clean up
+    del_res = client.delete(f"/api/v1/applications/{app_id}", headers=headers)
+    assert del_res.status_code == 200
+
 

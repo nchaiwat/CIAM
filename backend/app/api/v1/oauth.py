@@ -471,12 +471,13 @@ def launch_portal_app(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Application '{app.app_name}' is not currently available for SSO"
         )
-    if app.health_status == "OFFLINE":
+    is_sso_client_mode = (app.connector_type or "").upper() in ["SSO_ONLY", "SSO_CLIENT", "CLIENT_MODE", "ON_PREM_SSO"]
+    if app.health_status == "OFFLINE" and not is_sso_client_mode:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"ระบบ '{app.app_name}' ขณะนี้อยู่ในสถานะออฟไลน์ (ปิดปรับปรุงชั่วคราว) ไม่สามารถเปิดใช้งานผ่าน SSO ได้"
         )
-    if getattr(app, "spoke_sso_status", "UNKNOWN") == "DISABLED":
+    if getattr(app, "spoke_sso_status", "UNKNOWN") == "DISABLED" and not is_sso_client_mode:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"ระบบ '{app.app_name}' ปิดรับการเข้าใช้งานผ่าน Single Sign-On ชั่วคราว (Break-Glass Active) กรุณาเข้าสู่ระบบผ่านหน้าเว็บหลักของระบบดังกล่าว"

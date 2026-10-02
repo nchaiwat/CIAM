@@ -107,8 +107,9 @@ def register_application(
         ad_allow_status_patch=data.ad_allow_status_patch or False,
         network_policy=data.network_policy or "ANYWHERE",
         vpn_restriction_mode=data.vpn_restriction_mode or "HIDE",
-        allowed_network_cidrs=data.allowed_network_cidrs.strip() if data.allowed_network_cidrs else None,
-        health_status="ONLINE" if data.connector_type == "RPA_WORKER" else "UNKNOWN"
+        health_status="ONLINE" if data.connector_type in ["RPA_WORKER", "SSO_ONLY", "SSO_CLIENT", "CLIENT_MODE", "ON_PREM_SSO"] else "UNKNOWN",
+        latency_ms=1 if data.connector_type in ["SSO_ONLY", "SSO_CLIENT", "CLIENT_MODE", "ON_PREM_SSO"] else None,
+        spoke_sso_status="ACTIVE" if data.connector_type in ["SSO_ONLY", "SSO_CLIENT", "CLIENT_MODE", "ON_PREM_SSO"] else "UNKNOWN"
     )
     db.add(new_app)
     db.commit()
@@ -216,6 +217,10 @@ def update_application(
         app.app_name = data.app_name.strip()
     if data.connector_type is not None:
         app.connector_type = data.connector_type
+        if data.connector_type in ["SSO_ONLY", "SSO_CLIENT", "CLIENT_MODE", "ON_PREM_SSO"]:
+            app.health_status = "ONLINE"
+            app.latency_ms = 1
+            app.spoke_sso_status = "ACTIVE"
     if data.base_url is not None:
         app.base_url = data.base_url.strip() or None
     if data.api_key is not None:

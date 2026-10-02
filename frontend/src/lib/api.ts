@@ -442,7 +442,7 @@ export const ciamApi = {
   registerApplication: (payload: {
     app_code: string;
     app_name: string;
-    connector_type: "REST_API" | "RPA_WORKER" | "SAP_B1";
+    connector_type: "REST_API" | "SSO_ONLY" | "RPA_WORKER" | "SAP_B1" | string;
     base_url?: string;
     api_key?: string;
     rpa_adapter_name?: string;
