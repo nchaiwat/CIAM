@@ -160,24 +160,38 @@
 
 ---
 
+### 10) ปรับปรุง UX การเปิดระบบและลดการเปิดแท็บ Chrome ซ้ำซ้อน (3 ต.ค. 2026 — Commit `f55fa65` และ `9439921`)
+- **ปัญหาเดิม:** เมื่อพนักงานกดเปิดระบบงานจาก Central-IAM Employee Portal (`/portal`) ระบบเดิมใช้ `window.open(..., "_blank")` ทำให้เกิดการเปิดแท็บ Chrome ใหม่สะสมทุกครั้ง หากพนักงานเปิดหลายครั้งหรือสลับไปมาระหว่างระบบ แท็บจะค้างหลายสิบแท็บ กิน RAM เครื่องและทำให้เครื่องช้าลง
+- **การแก้ไข:**
+  1. **Central-IAM Portal ([portal/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/portal/page.tsx)):**
+     - ปรับฟังก์ชัน `handleLaunch` ให้เปลี่ยนหน้าโดยตรงในแท็บเดิมด้วย `window.location.href = res.launch_url`
+     - คงสถานะปุ่มกดให้หมุนแสดง `กำลังนำทางเข้าสู่ระบบ...` อย่างราบรื่นขณะที่เบราว์เซอร์กำลังโหลดเข้าสู่ Spoke
+     - เบราว์เซอร์จะไม่สร้างแท็บ Chrome ใหม่ ประหยัดทรัพยากรเครื่องของผู้ใช้งาน 100%
+  2. **IRM Header Switcher ([Header.tsx](file:///d:/Python/IRM/frontend/src/components/layout/Header.tsx)):**
+     - เพิ่มปุ่ม **`[🏢 สลับระบบ (Portal)]`** บนแถบ Header สำหรับผู้ใช้งานที่ล็อกอินผ่าน SSO
+     - พนักงานสามารถคลิกกลับมายังหน้า Central-IAM Portal ในแท็บเดิมได้ทันทีตลอดเวลาโดยไม่ต้องพิมพ์ URL ใหม่ และไม่ต้องกดออกจากระบบ
+     - หากกด "ออกจากระบบ" (Logout) ระบบเดิมจะ Redirect กลับมาหน้า Portal ให้โดยอัตโนมัติอยู่แล้ว
+
+---
+
 ## 4. สถานะ Git ล่าสุด (Current Git State)
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)
 - **Branch:** `main`
-- **Head Commit:** [`af96c18`](https://github.com/nchaiwat/CIAM/commit/af96c18) - `feat(agent): implement reverse heartbeat and outbound agent for on-premise spokes (Mode C)`
-- **Prior Commit:** [`951fab6`](https://github.com/nchaiwat/CIAM/commit/951fab6) - `feat(connectors): implement SSO_ONLY connector for on-premise spokes`
+- **Head Commit:** [`f55fa65`](https://github.com/nchaiwat/CIAM/commit/f55fa65) - `feat(portal): navigate in same tab to prevent opening duplicate browser tabs and save RAM`
+- **Prior Commit:** `d780456` - `docs: update HANDOFF.md with Mode C completion and future roadmap`
 - **Features Completed:**
+  - Same-Tab Portal Launch UX (`window.location.href`)
   - `SSO_ONLY` Connector สำหรับ Isolated On-Premise Spokes (Mode B)
   - Reverse Heartbeat & Outbound Agent API `/api/v1/agent/heartbeat` (Mode C)
   - ตารางฐานข้อมูล `spoke_pending_commands` พร้อม Auto-migration
-  - Integration Specification v2.4.0 (หมวด D พร้อม `ciam_agent.py` code)
-  - Developer Guide Modal 3-Column Topology บนหน้าเว็บ `/applications`
 - **Working Tree:** สะอาด (Test Suites `39 passed`, `0 TS errors`)
 
 ### Repository IRM (`D:\Python\IRM`)
 - **Branch:** `main`
-- **Head Commit:** [`754323e`](https://github.com/nchaiwat/IRM/commit/754323e) - `fix(suppliers): allow clearing email and contact fields to null/blank in update_supplier`
-- **Working Tree:** สะอาด
+- **Head Commit:** [`9439921`](https://github.com/nchaiwat/IRM/commit/9439921) - `feat(header): add return to Central IAM portal switcher button for SSO users`
+- **Prior Commit:** `754323e` - `fix(suppliers): allow clearing email and contact fields to null/blank in update_supplier`
+- **Working Tree:** สะอาด (TypeScript `0 TS errors`)
 
 ---
 
