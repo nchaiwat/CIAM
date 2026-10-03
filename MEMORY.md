@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
-**Last Updated:** 2026-10-02  
-**Version:** 1.9.7 (On-Premise SSO Client Mode & Reverse Heartbeat Outbound Agent for Mode C)  
+**Last Updated:** 2026-10-03  
+**Version:** 1.9.8 (Same-Tab Portal Launch & Spoke Portal Switcher UX)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -373,3 +373,19 @@ FRONTEND_URL=http://localhost:3000
   - เมธอด `set_account_status()` ของ `SsoOnlyConnector` ถูกอัปเกรดให้สร้างคำสั่ง `SpokePendingCommand` ลงตารางทันที เพื่อรอให้ Spoke Agent เข้ามาดึงไปรัน
 * **Developer Specifications & Agent Script:**
   - [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) หมวด D บันทึกสเปกฉบับเต็ม, JSON Schemas, ตัวอย่างสคริปต์ `ciam_agent.py` ที่พร้อม Copy ไปรันได้ทันที, พร้อมคู่มือ Systemd Service, Linux Crontab, และ Windows Task Scheduler
+
+---
+
+## 12. Same-Tab Portal Launch & Spoke Portal Switcher Architecture (Version 1.9.8)
+
+### 12.1 Problem Solved
+* เดิมการเปิดแอปจาก Employee Portal (`/portal`) ใช้ `window.open(..., "_blank")` ส่งผลให้เบราว์เซอร์เปิด Chrome แท็บใหม่ทุกครั้ง หากพนักงานเปิดหลายครั้งหรือสลับหลายระบบ แท็บจะสะสมนับสิบแท็บ กินหน่วยความจำ RAM และทำให้เครื่องคอมพิวเตอร์ของพนักงานทำงานช้าลง
+
+### 12.2 Technical Solution
+1. **Central-IAM Portal ([portal/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/portal/page.tsx)):**
+   - เปลี่ยนจากการเปิดแท็บใหม่ เป็นการนำทางในหน้าต่างเดิม: `window.location.href = res.launch_url;`
+   - ค้างสถานะปุ่มและแสดงข้อความ `กำลังนำทางเข้าสู่ระบบ...` ขณะที่เบราว์เซอร์กำลังโหลดเข้าสู่ Spoke อย่างราบรื่น
+   - ป้องกันการเกิดแท็บใหม่ซ้ำซ้อน ช่วยประหยัด RAM ได้ 100%
+2. **Spoke Portal Switcher Button ([Header.tsx](file:///d:/Python/IRM/frontend/src/components/layout/Header.tsx)):**
+   - ในระบบลูก (เช่น IRM) เพิ่มปุ่มลัด `[🏢 สลับระบบ (Portal)]` บนแถบ Header สำหรับผู้ใช้งาน SSO เพื่อให้คลิกกลับมายังหน้า Central IAM Portal ในแท็บเดิมได้ทันทีโดยไม่ต้องกดออกจากระบบ
+   - เมื่อกด Logout จากระบบลูก ระบบจะ Redirect กลับมายังหน้า Portal (`https://ciam.windowasia.com/portal`) ในแท็บเดิมโดยอัตโนมัติ
