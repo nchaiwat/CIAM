@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 2 ตุลาคม 2026 (Local Time: ~22:45 ICT)  
+> **Date Updated:** 3 ตุลาคม 2026 (Local Time: ~17:50 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -178,32 +178,66 @@
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)
 - **Branch:** `main`
-- **Head Commit:** [`f55fa65`](https://github.com/nchaiwat/CIAM/commit/f55fa65) - `feat(portal): navigate in same tab to prevent opening duplicate browser tabs and save RAM`
-- **Prior Commit:** `d780456` - `docs: update HANDOFF.md with Mode C completion and future roadmap`
+- **Head Commit:** [`bb2837d`](https://github.com/nchaiwat/CIAM/commit/bb2837d) - `docs: establish AGENTS.md operational protocols and update MEMORY.md to v1.9.8`
+- **Prior Commit:** `f55fa65` - `feat(portal): navigate in same tab to prevent opening duplicate browser tabs and save RAM`
 - **Features Completed:**
   - Same-Tab Portal Launch UX (`window.location.href`)
+  - IRM Header Portal Switcher button `[🏢 สลับระบบ (Portal)]`
+  - `AGENTS.md` Workspace Guidelines & Operational Protocols
   - `SSO_ONLY` Connector สำหรับ Isolated On-Premise Spokes (Mode B)
   - Reverse Heartbeat & Outbound Agent API `/api/v1/agent/heartbeat` (Mode C)
   - ตารางฐานข้อมูล `spoke_pending_commands` พร้อม Auto-migration
 - **Working Tree:** สะอาด (Test Suites `39 passed`, `0 TS errors`)
+- **Remote Sync:** Synced กับ `origin/main` 100%
 
 ### Repository IRM (`D:\Python\IRM`)
 - **Branch:** `main`
 - **Head Commit:** [`9439921`](https://github.com/nchaiwat/IRM/commit/9439921) - `feat(header): add return to Central IAM portal switcher button for SSO users`
 - **Prior Commit:** `754323e` - `fix(suppliers): allow clearing email and contact fields to null/blank in update_supplier`
 - **Working Tree:** สะอาด (TypeScript `0 TS errors`)
+- **Remote Sync:** Synced กับ `origin/main` 100%
 
 ---
 
 ## 5. คำสั่งมาตรฐานสำหรับ Deploy บน VPS (Production Runbook)
 
+> ⚠️ **กฎเหล็กการ Deploy (Critical Rules):**  
+> 1. ชื่อ Service ของ Frontend ใน `docker-compose.yml` คือ **`web`** (ห้ามใช้คำว่า `frontend` เด็ดขาด) และ Backend คือ **`api`**  
+> 2. **ต้องเขียนคำสั่งแยกทีละบรรทัด ห้ามเชื่อมด้วย `&&` ยาวเป็นพรืด**  
+> 3. ต้องมี `git pull` นำหน้าเสมอ  
+> 4. หากมีการแก้ไขระบบลูก (เช่น IRM): ต้องแสดงคำสั่ง Deploy ของระบบลูกคู่กันไปด้วยเสมอ  
+
 ### ฝั่ง Central-IAM (VPS: `/var/www/Ciam` - IP: `157.173.219.153`):
-```bash
-cd /var/www/Ciam
-git pull origin main
-docker compose build api web
-docker compose up -d api web
-```
+- กรณีแก้ **Frontend** (`web`):
+  ```bash
+  cd /var/www/Ciam
+  git pull
+  docker compose build web
+  docker compose up -d web
+  ```
+- กรณีแก้ **Backend** (`api`):
+  ```bash
+  cd /var/www/Ciam
+  git pull
+  docker compose build api
+  docker compose up -d api
+  ```
+- กรณีแก้ทั้ง **Backend และ Frontend**:
+  ```bash
+  cd /var/www/Ciam
+  git pull
+  docker compose build api web
+  docker compose up -d api web
+  ```
+
+### ฝั่ง IRM (VPS: `/var/www/Irm` - Hostinger):
+- กรณีแก้ **Frontend**:
+  ```bash
+  cd /var/www/Irm
+  git pull
+  docker compose build frontend
+  docker compose up -d frontend
+  ```
 
 ---
 

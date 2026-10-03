@@ -8,6 +8,34 @@
 
 ---
 
+## 0. กฎเหล็กและข้อบังคับในการทำงานของ AI Agent (Critical Operational Protocols)
+
+> [!CAUTION]
+> **AI Agent ทุกตัวที่เข้ามารับช่วงต่อในโปรเจกต์นี้ ต้องปฏิบัติตามกฎเหล็กต่อไปนี้ 100% โดยไม่มีข้อยกเว้น และห้ามรอให้ผู้ใช้ต้องคอยทวงถาม:**
+
+### 0.1 กฎการเริ่มต้นบทสนทนา (Session Startup Protocol)
+เมื่อเริ่มรอบงานใหม่หรือเริ่มแชทใหม่ AI Agent **ต้องอ่านและทำความเข้าใจไฟล์บริบท 3 ไฟล์นี้โดยอัตโนมัติทันที** ก่อนเริ่มตอบคำถามหรือลงมือเขียนโค้ด:
+1. [MEMORY.md](file:///d:/Python/Central-IAM/MEMORY.md) — ระบบเน็ตเวิร์ก พอร์ต คีย์เชื่อมต่อ และกฎเกณฑ์ความปลอดภัย
+2. [HANDOFF.md](file:///d:/Python/Central-IAM/HANDOFF.md) — สถานะความคืบหน้าล่าสุด Git Commits และ Roadmap งานที่จะทำต่อ
+3. [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) — สเปกการเชื่อมต่อ Mode A, Mode B, Mode C
+
+### 0.2 กฎการส่งมอบและ Deploy โค้ด (Post-Modification & Deployment Protocol)
+เมื่อมีการเพิ่มฟีเจอร์หรือแก้ไขบั๊กเสร็จสิ้นในแต่ละรอบ:
+1. **ตรวจสอบความถูกต้อง (Verification):**
+   - Backend: รัน `.venv\Scripts\pytest.exe` (ต้องผ่าน 100%)
+   - Frontend: รัน `npx tsc --noEmit` (ต้องได้ 0 errors)
+2. **Git Commit & Push:**
+   - ทำ `git add` และ `git commit` ด้วยข้อความ Conventional Commits
+   - อัปเดตบันทึกใน [HANDOFF.md](file:///d:/Python/Central-IAM/HANDOFF.md) และ [MEMORY.md](file:///d:/Python/Central-IAM/MEMORY.md)
+   - รัน `git push origin main` เสมอ
+3. **สรุปคำสั่ง Deploy บน VPS ตามกฎเหล็ก (Critical VPS Deployment Rules):**
+   - **กฎข้อ 1:** ชื่อ Service ของ Frontend ใน `docker-compose.yml` คือ **`web`** (ห้ามใช้คำว่า `frontend` เด็ดขาด) และ Backend คือ **`api`**
+   - **กฎข้อ 2:** **ต้องเขียนคำสั่งแยกทีละบรรทัด ห้ามต่อด้วย `&&` ยาวเป็นพรืด**
+   - **กฎข้อ 3:** ต้องมี `git pull` นำหน้าเสมอ
+   - **กฎข้อ 4:** หากมีการแก้ไขระบบลูก (เช่น IRM): ต้องแสดงคำสั่ง Deploy ของระบบลูกคู่กันไปด้วยเสมอ
+
+---
+
 ## 1. System Topology & Active Network Ports
 
 | Component | Technology | Host / Bind | Active Port | URL / Access | Notes |
