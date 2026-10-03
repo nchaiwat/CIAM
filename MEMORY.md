@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-10-03  
-**Version:** 1.9.8 (Same-Tab Portal Launch & Spoke Portal Switcher UX)  
+**Version:** 1.9.9 (Mode C 1-Click Offboard Command Queueing & Label Clarity)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -398,7 +398,7 @@ FRONTEND_URL=http://localhost:3000
   - Schema: `AgentHeartbeatRequest` (`timestamp`, `agent_version`, `sync_type`, `accounts`, `command_results`)
   - Response: `AgentHeartbeatResponse` (`status="ACK"`, `server_time`, `commands_dispatched: [...]`, `accounts_synced`)
 * **Connector Integration ([sso_only.py](file:///d:/Python/Central-IAM/backend/app/connectors/sso_only.py)):**
-  - เมธอด `set_account_status()` ของ `SsoOnlyConnector` ถูกอัปเกรดให้สร้างคำสั่ง `SpokePendingCommand` ลงตารางทันที เพื่อรอให้ Spoke Agent เข้ามาดึงไปรัน
+  - เมธอด `set_account_status()` และ `deprovision()` ของ `SsoOnlyConnector` ถูกอัปเกรดให้สร้างคำสั่ง `SpokePendingCommand` (`DISABLE_USER` / `ENABLE_USER`) ลงตารางทันที เพื่อรอให้ Spoke Agent เข้ามาดึงไปรันในเครื่อง On-Premise
 * **Developer Specifications & Agent Script:**
   - [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) หมวด D บันทึกสเปกฉบับเต็ม, JSON Schemas, ตัวอย่างสคริปต์ `ciam_agent.py` ที่พร้อม Copy ไปรันได้ทันที, พร้อมคู่มือ Systemd Service, Linux Crontab, และ Windows Task Scheduler
 

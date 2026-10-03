@@ -174,6 +174,22 @@
 
 ---
 
+### 11) แก้ไข One-Click Offboarding ให้สร้างคำสั่ง Outbound Agent (Mode C) และระบุ Label ให้ชัดเจน (3 ต.ค. 2026)
+- **ปัญหาเดิมที่พบจาก Codex (MTPulse):**
+  1. เมื่อทำการ 1-Click Offboard บัญชีพนักงาน ปรากฏว่าบัญชีใน MTPulse ไม่ถูกตัดสิทธิ์ เนื่องจากใน `SsoOnlyConnector.deprovision()` ส่งคืนเฉพาะ static message แจ้งยกเลิก SSO โดยไม่ได้สร้างคิวคำสั่ง `DISABLE_USER` ลงในตาราง `spoke_pending_commands`
+  2. ตัวเลือก Dropdown ประเภทการเชื่อมต่อบน Admin UI ใช้ชื่อ `SSO_ONLY (โหมดลูกข่าย On-Premise)` ทำให้สับสนว่ารองรับ Outbound Agent (Mode C) หรือไม่
+- **การแก้ไข:**
+  1. **Connector Layer ([sso_only.py](file:///d:/Python/Central-IAM/backend/app/connectors/sso_only.py)):**
+     - ปรับปรุงเมธอด `deprovision()` ให้เรียก `set_account_status(username, is_active=False, reason)` เหมือนกับ Connectors อื่นๆ
+     - คำสั่ง `DISABLE_USER` จะถูกสร้างลงใน `spoke_pending_commands` ด้วยสถานะ `PENDING` ทันทีเมื่อ Admin กด Offboard
+     - เมื่อ Spoke Agent (เช่น MTPulse) ส่ง Heartbeat รอบถัดไป (`POST /api/v1/agent/heartbeat`) ระบบจะดึงคำสั่งที่รออยู่ส่งกลับไปในก้อน `pending_commands` ให้ Agent นำไปรันตัดสิทธิ์บนฐานข้อมูล On-Premise ทันที
+  2. **Admin UI ([applications/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/applications/page.tsx)):**
+     - ปรับข้อความตัวเลือก Dropdown ทั้งหน้าสร้างและแก้ไขระบบเป็น `SSO_ONLY (โหมดลูกข่าย On-Premise / Outbound Agent Mode C)` เพื่อความเข้าใจที่ชัดเจน
+- **เงื่อนไขสำคัญที่ต้องมีเพื่อให้ Offboard ส่งคำสั่งไปยัง Spoke:**
+  - บัญชีพนักงานรายนั้นจะต้องมี `AppAccountMapping` ผูกกับแอปพลิเคชันนั้นใน CIAM (สร้างผ่าน `sync_type: "FULL_SYNC"` ของ Agent หรือพนักงานเคย SSO เข้าใช้งานครั้งแรก)
+
+---
+
 ## 4. สถานะ Git ล่าสุด (Current Git State)
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)

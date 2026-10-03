@@ -1020,7 +1020,7 @@ export default function ApplicationsPage() {
                     className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-bold focus:outline-none focus:border-blue-600 cursor-pointer"
                   >
                     <option value="REST_API">REST API (Two-Way Integration)</option>
-                    <option value="SSO_ONLY">SSO_ONLY (โหมดลูกข่าย On-Premise)</option>
+                    <option value="SSO_ONLY">SSO_ONLY (โหมดลูกข่าย On-Premise / Outbound Agent Mode C)</option>
                     <option value="SAP_B1">SAP Business One</option>
                     <option value="AD_PROXY">Active Directory Proxy</option>
                     <option value="M365">Microsoft 365</option>
@@ -2087,7 +2087,7 @@ export default function ApplicationsPage() {
                   className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-bold focus:outline-none focus:border-blue-600 cursor-pointer"
                 >
                   <option value="REST_API">REST API (มาตรฐาน Spoke M2M Specification - Two Way)</option>
-                  <option value="SSO_ONLY">SSO_ONLY (โหมดลูกข่าย On-Premise / ขาออกอย่างเดียว)</option>
+                  <option value="SSO_ONLY">SSO_ONLY (โหมดลูกข่าย On-Premise / Outbound Agent Mode C)</option>
                   <option value="SAP_B1">SAP Business One (Service Layer v2 OData)</option>
                   <option value="RPA_WORKER">RPA Worker (ระบบ Legacy ผ่าน Bot Automation)</option>
                 </select>

@@ -21,14 +21,9 @@ class SsoOnlyConnector(BaseConnector):
         self.base_url = (base_url or "").rstrip("/")
 
     async def deprovision(self, username: str, reason: str) -> ConnectorResult:
-        return ConnectorResult(
-            success=True,
-            status_code=200,
-            execution_mode="SSO_CLIENT",
-            message=f"SSO Access revoked centrally for '{username}' in {self.app_name} (User cannot authenticate via CIAM SSO)",
-            execution_time_ms=1,
-            details={"mode": "SSO_CLIENT_ONLY", "note": "Managed centrally via CIAM session invalidation"}
-        )
+        """Revoke SSO access and queue DISABLE_USER command for On-Premise Outbound Agent (Mode C)."""
+        return await self.set_account_status(username=username, is_active=False, reason=reason)
+
 
     async def set_account_status(
         self,
