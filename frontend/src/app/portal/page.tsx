@@ -129,12 +129,13 @@ export default function PortalPage() {
     try {
       const res = await api.launchPortalApp(app.client_id);
       if (res && res.launch_url) {
-        window.open(res.launch_url, "_blank", "noopener,noreferrer");
+        // Navigate directly in the same tab to save RAM and avoid spawning duplicate browser tabs
+        window.location.href = res.launch_url;
+        return;
       }
     } catch (err: any) {
       alert("เกิดข้อผิดพลาดในการเปิดระบบ: " + (err.message || "ไม่สามารถสร้าง SSO Ticket ได้"));
-    } finally {
-      setTimeout(() => setLaunchingAppCode(null), 800);
+      setLaunchingAppCode(null);
     }
   };
 
@@ -420,7 +421,7 @@ export default function PortalPage() {
                       {isLaunching ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>กำลังเปิดใช้งานระบบ...</span>
+                          <span>กำลังนำทางเข้าสู่ระบบ...</span>
                         </>
                       ) : isOffline ? (
                         <span>ระบบปิดปรับปรุงชั่วคราว (Offline)</span>
