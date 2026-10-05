@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 3 ตุลาคม 2026 (Local Time: ~17:50 ICT)  
+> **Date Updated:** 5 ตุลาคม 2026 (Local Time: ~11:25 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -194,13 +194,14 @@
 
 ### Repository Central-IAM (`D:\Python\Central-IAM`)
 - **Branch:** `main`
-- **Head Commit:** [`bb2837d`](https://github.com/nchaiwat/CIAM/commit/bb2837d) - `docs: establish AGENTS.md operational protocols and update MEMORY.md to v1.9.8`
-- **Prior Commit:** `f55fa65` - `feat(portal): navigate in same tab to prevent opening duplicate browser tabs and save RAM`
+- **Head Commit:** [`85b2743`](https://github.com/nchaiwat/CIAM/commit/85b2743) - `fix(connectors): route sso_only deprovision to queue DISABLE_USER command for Mode C agent`
+- **Prior Commit:** `8e69876` - `feat(applications): clarify SSO_ONLY label as Outbound Agent Mode C in create and edit modal dropdowns`
 - **Features Completed:**
+  - Route `SsoOnlyConnector.deprovision()` to `set_account_status(is_active=False)` เพื่อสร้างคำสั่ง `DISABLE_USER` ลงใน `spoke_pending_commands` สำหรับ Mode C Outbound Agent
+  - Dropdown Label ชัดเจน: `SSO_ONLY (โหมดลูกข่าย On-Premise / Outbound Agent Mode C)`
   - Same-Tab Portal Launch UX (`window.location.href`)
   - IRM Header Portal Switcher button `[🏢 สลับระบบ (Portal)]`
-  - `AGENTS.md` Workspace Guidelines & Operational Protocols
-  - `SSO_ONLY` Connector สำหรับ Isolated On-Premise Spokes (Mode B)
+  - Zero-Trust VPN Access Guard & Allowed CIDRs
   - Reverse Heartbeat & Outbound Agent API `/api/v1/agent/heartbeat` (Mode C)
   - ตารางฐานข้อมูล `spoke_pending_commands` พร้อม Auto-migration
 - **Working Tree:** สะอาด (Test Suites `39 passed`, `0 TS errors`)
@@ -271,24 +272,30 @@
 
 ## 7. แผนงานและจุดที่จะกลับมาพัฒนาต่อ (Roadmap & Next Steps to Resume)
 
-เมื่อกลับมาพัฒนาต่อ ให้เริ่มจากลำดับงานดังนี้:
+เมื่อกลับมาทำงานต่อ ให้ดำเนินงานตามลำดับดังนี้:
 
-1. **ทดสอบใช้งาน Mode C กับระบบ MTPulse จริง:**
-   - นำสคริปต์ `ciam_agent.py` ไปวางในโปรเจกต์ MTPulse (On-Prem)
-   - ผูกฟังก์ชัน `execute_local_command()` เข้ากับฐานข้อมูลจริงของ MTPulse (อัปเดต `status` หรือ `is_active` ของ User)
-   - ทดสอบสั่ง Disable ผู้ใช้จาก CIAM Cloud ➔ ตรวจสอบว่าคำสั่งถูกส่งไปที่ Agent ในรอบ Heartbeat และ User ใน MTPulse ถูกระงับสิทธิ์จริง
-2. **พัฒนาระบบ Background Dead Man's Switch Worker บน CIAM:**
-   - สร้าง Background Task หรือ Scheduler (เช่น APScheduler / Cron) บนเซิร์ฟเวอร์ CIAM
-   - คอยตรวจเช็คแอปพลิเคชันที่เป็น Mode C ทุกๆ 1 นาที หาก `last_health_check_at` ขาดการติดต่อนานเกิน 5 นาที (300 วินาที) ให้สลับสถานะเป็น `health_status="OFFLINE"` และตัดปุ่ม Launch บน Portal เป็น `ระบบปิดปรับปรุงชั่วคราว (Offline)` ทันที
-3. **กลับมาทำ pfSense Integration (ที่พักไว้):**
-   - ศึกษาวิธีการจัดการบัญชีผู้ใช้บน pfSense (User Management / Captive Portal / OpenVPN Users)
-   - พิจารณาแนวทางเชื่อมต่อ:
-     - ทางเลือกที่ 1: ผ่าน pfSense REST API Package (เช่น `pfsense-api` หรือ `FauxAPI`)
-     - ทางเลือกที่ 2: ผ่าน XML-RPC หรือ SSH Scripting
-     - ทางเลือกที่ 3: ให้ pfSense ทำการ Authen ผู้ใช้ผ่าน LDAP/RADIUS ส่งมาที่ Active Directory หรือ CIAM โดยตรง
-4. **เพิ่ม UI ดู Command Queue และ Agent Logs บน Admin Console:**
-   - ใน Modal "ตรวจสอบบัญชี (Inspect)" บนหน้า `/applications` เพิ่มแท็บ **"Outbound Agent Commands"**
-   - แสดงประวัติคำสั่งที่ CIAM ส่งไปให้ Spoke Agent (`PENDING`, `SENT`, `COMPLETED`, `FAILED`) พร้อม Timestamp และ Error Message เพื่อให้ Admin ตรวจสอบได้ว่าคำสั่งถูกนำไปรันที่ On-Prem สำเร็จหรือไม่
-5. **การ Deploy ขึ้น Production VPS (`157.173.219.153`):**
-   - สั่งรันคำสั่งใน Runbook บน VPS และตรวจสอบ Log ด้วย `docker compose logs -f api`
-   - ตรวจสอบว่า Auto-migration สร้างตาราง `spoke_pending_commands` ใน Production PostgreSQL สำเร็จ เรียบร้อย 100%
+### ลำดับที่ 1: Deploy การแก้ไขล่าสุดขึ้น Production VPS (`157.173.219.153`)
+- นำคำสั่ง Runbook ในข้อ 5 ไปรันบน VPS เพื่อให้โค้ด `sso_only.py` (Commit `85b2743`) ที่แก้ให้ 1-Click Offboard บันทึกคำสั่ง `DISABLE_USER` ลงตาราง `spoke_pending_commands` มีผลบน Production
+```bash
+cd /var/www/Ciam
+git pull
+docker compose build api web
+docker compose up -d api web
+```
+
+### ลำดับที่ 2: ทดสอบ SSO เข้า MTPulse ร่วมกับทีมพัฒนา MTPulse (Codex)
+- **กรณีที่ 1 (Spoke-Initiated SSO):** ให้ทดลองคลิกปุ่ม **`[ เข้าสู่ระบบด้วย CIAM ]`** บนหน้า Login ของ MTPulse (`https://wa-mtpulse.wa.net`) โดยตรง
+  - หากผ่านเข้าหน้า Dashboard ได้ แสดงว่า Credentials (Client ID, Secret, Redirect URI) ถูกต้อง 100%
+- **กรณีที่ 2 (Portal / IdP-Initiated SSO):** หากกดเปิดจากหน้า CIAM Portal แล้วยังขึ้น *"SSO session ไม่ถูกต้องหรือหมดอายุ"*
+  - ให้แจ้งทีม Codex (MTPulse) ตรวจสอบไฟล์ `/auth/callback` ของ MTPulse โดยปรับให้รองรับกรณีที่ไม่มีค่า `sessionStorage` (เหมือนที่ทำใน IRM [page.tsx](file:///D:/Python/IRM/frontend/src/app/auth/callback/page.tsx))
+
+### ลำดับที่ 3: ทดสอบ Outbound Agent & 1-Click Offboard ระหว่าง CIAM กับ MTPulse (Mode C)
+1. **Directory Push:** ให้ MTPulse Agent ยิง Heartbeat แบบ `sync_type: "FULL_SYNC"` พร้อมข้อมูลบัญชี (`accounts`) มายัง `POST /api/v1/agent/heartbeat` เพื่อสร้าง `AppAccountMapping` บน CIAM
+2. **1-Click Offboard:** แอดมินทดลองกดตัดสิทธิ์ผู้ใช้จากหน้า CIAM Offboarding Hub ➔ ตรวจสอบว่ามีแถวคำสั่ง `DISABLE_USER` สถานะ `PENDING` ในตาราง `spoke_pending_commands`
+3. **Command Execution:** เมื่อ MTPulse Agent ยิง Heartbeat รอบถัดไป ➔ ตรวจสอบว่าได้รับคำสั่ง `DISABLE_USER` ใน Response ก้อน `pending_commands` และสั่งระงับสิทธิ์ใน DB ของ MTPulse สำเร็จ พร้อมส่งผลลัพธ์ `COMPLETED` กลับมา
+
+### ลำดับที่ 4: พัฒนาระบบ Background Dead Man's Switch Worker บน CIAM
+- สร้าง Background Task หรือ Scheduler ตรวจสอบแอปพลิเคชันที่เป็น Mode C ทุกๆ 1 นาที หาก `last_health_check_at` ขาดการติดต่อนานเกิน 5 นาที (300 วินาที) ให้ปรับสถานะเป็น `health_status="OFFLINE"` อัตโนมัติ
+
+### ลำดับที่ 5: พัฒนา UI Outbound Agent Commands ในหน้า Admin Console
+- ใน Modal "ตรวจสอบบัญชี (Inspect)" บนหน้า `/applications` เพิ่มแท็บ **"Outbound Agent Commands"** แสดงสถานะคิวคำสั่ง (`PENDING`, `SENT`, `COMPLETED`, `FAILED`) พร้อม Timestamp เพื่อให้แอดมินตรวจสอบย้อนหลังได้ง่าย
