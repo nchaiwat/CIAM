@@ -220,9 +220,10 @@ export default function ApplicationsPage() {
       setEditApiKey(creds.api_key || "");
       setEditClientId(creds.client_id || (isAd ? "CIAM" : `${app.app_code.toLowerCase()}-spoke-client`));
       setEditClientSecret(creds.client_secret || "");
+      const defaultBase = (app.base_url || "https://" + app.app_code + ".windowasia.com").replace(/\/+$/, "");
       setEditRedirectUris(
         creds.redirect_uris ||
-          `${app.base_url || "https://" + app.app_code + ".windowasia.com"}/api/auth/callback,http://localhost:3000/portal/callback`
+          `${defaultBase}/auth/callback,${defaultBase}/api/auth/callback,http://localhost:3000/portal/callback`
       );
       setEditSsoEnabled(creds.sso_enabled ?? true);
       setEditSapCompanyDb(creds.sap_company_db || (isAd ? "157.173.219.153" : "WA_PROD"));

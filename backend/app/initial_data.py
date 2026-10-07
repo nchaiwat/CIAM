@@ -202,6 +202,18 @@ def init_db():
                 "sso_enabled": False,
                 "health_status": "ONLINE",
                 "latency_ms": 115
+            },
+            {
+                "app_code": "mtpulse",
+                "app_name": "MT Pulse",
+                "connector_type": "SSO_ONLY",
+                "base_url": "https://wa-mtpulse.wa.net",
+                "client_id": "mtpulse-spoke-client",
+                "client_secret": "sec_mtpulse_oauth_secret_2026",
+                "redirect_uris": "https://wa-mtpulse.wa.net/auth/callback,https://wa-mtpulse.wa.net/api/auth/callback,http://localhost:3000/portal/callback",
+                "sso_enabled": True,
+                "health_status": "ONLINE",
+                "latency_ms": 30
             }
         ]
 
@@ -261,8 +273,27 @@ def init_db():
                         app.client_secret = item.get("client_secret")
                     if not app.client_id:
                         app.client_id = "CIAM"
+                # Auto-upgrade MTPulse redirect_uris to ensure wa-mtpulse.wa.net is permitted
+                if item["app_code"] == "mtpulse":
+                    needed_mt = [
+                        "https://wa-mtpulse.wa.net/auth/callback",
+                        "https://wa-mtpulse.wa.net/api/auth/callback",
+                        "http://localhost:3000/portal/callback"
+                    ]
+                    cur_uris = [u.strip() for u in (app.redirect_uris or "").split(",") if u.strip()]
+                    for nu in needed_mt:
+                        if nu not in cur_uris:
+                            cur_uris.append(nu)
+                    app.redirect_uris = ",".join(cur_uris)
+                    if not app.client_id:
+                        app.client_id = "mtpulse-spoke-client"
+                    if not app.base_url:
+                        app.base_url = "https://wa-mtpulse.wa.net"
+                    app.sso_enabled = True
+                    logger.info("Ensured MTPulse redirect_uris configured: %s", app.redirect_uris)
                 db.flush()
             app_objs[item["app_code"]] = app
+
 
         # Auto-heal AD master identities and spoke account mappings:
         # Recover corporate identities wrongly set to inactive in AD due to 04:00 AM sync-absence bug

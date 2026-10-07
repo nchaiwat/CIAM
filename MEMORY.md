@@ -527,3 +527,10 @@ FRONTEND_URL=http://localhost:3000
      - Body แสดง Glowing Spinner + ข้อมูลอธิบาย + Shimmer Skeleton Placeholder 3 แถว
      - เมื่อข้อมูลโหลดเสร็จ จะสลับไปแสดงตารางบัญชีสดพร้อมสถิติอย่างลื่นไหล
 
+### 16.4 Spoke Redirect URI Auto-Expansion & Same-Origin Standard Callback Authorization
+* **ปัญหา:** Spoke Application (เช่น MTPulse: `wa-mtpulse.wa.net`) ยิงขอ SSO Authorization Code แล้วเกิด Error `Redirect URI 'https://wa-mtpulse.wa.net/auth/callback' is not authorized for client 'mtpulse-spoke-client'`
+* **การแก้ไข:**
+  1. ใน `oidc_service.py`: ให้ขยาย `allowed_uris` ของ client โดยอัตโนมัติให้รวม `${base_url}/auth/callback`, `${base_url}/api/auth/callback`, `${base_url}/portal/callback`
+  2. อนุญาต Same-Origin Matching สำหรับ standard callback paths (`/auth/callback`, `/api/auth/callback`) หากมี Origin/Host ตรงกับระบบลูกที่ลงทะเบียนไว้
+  3. บรรจุ `mtpulse` ใน `apps_data` และรัน Auto-Upgrade ใน `initial_data.py` รับประกันว่า callback URIs สำหรับ MTPulse จะถูกบันทึกในฐานข้อมูลเสมอ
+

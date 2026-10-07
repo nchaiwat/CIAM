@@ -91,6 +91,19 @@ def test_oauth_authorize_get_validation():
     assert res_bad_uri.status_code == 400
     assert "not authorized" in res_bad_uri.json()["detail"]
 
+    # 3.1 Authorized redirect URI for MTPulse (https://wa-mtpulse.wa.net/auth/callback)
+    res_mtpulse = client.get(
+        "/api/v1/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": "mtpulse-spoke-client",
+            "redirect_uri": "https://wa-mtpulse.wa.net/auth/callback"
+        }
+    )
+    assert res_mtpulse.status_code == 200
+    assert res_mtpulse.json()["status"] == "READY_FOR_AUTHENTICATION"
+    assert res_mtpulse.json()["client_id"] == "mtpulse-spoke-client"
+
     # 4. Unsupported response type
     res_bad_type = client.get(
         "/api/v1/oauth/authorize",

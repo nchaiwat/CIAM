@@ -403,9 +403,19 @@ docker compose up -d api web
      - ลบโค้ด `stale_identities` deactivation ใน `scheduler.py` (รอบ 04:00 น.) และ `applications.py` เพื่อไม่ให้ปิดสิทธิ์พนักงาน AD เพียงเพราะไม่มีชื่อใน Sync Batch ชั่วคราว
      - ปรับให้รอบ Sync AD อัปเดต `identity.is_active_in_ad = is_active` อย่างถูกต้อง
      - เพิ่มระบบ Auto-Healing ใน `init_db()` (`initial_data.py`) ฟื้นฟูสถานะ Active ให้พนักงานที่ถูกตั้งเป็น Inactive ผิดพลาดโดยอัตโนมัติเมื่อสตาร์ทเซิร์ฟเวอร์
-  3. **Instant Loading Feedback เมื่อกด "ดูบัญชีสด" & Actions อื่นๆ:**
-     - เพิ่ม State `inspectingApp` และ `inspectingId` ให้ปุ่มบนการ์ดหมุน Spinner `<RefreshCw className="animate-spin" />` พร้อมข้อความ "กำลังดึงข้อมูล..." ทันที
-     - เปิด Modal ทันที 0ms แสดง Loading State หน้าจอเชื่อมต่อ Service Layer / API แบบ Real-Time พร้อม Skeleton Shimmer Placeholder เพื่อให้ผู้ใช้รับรู้ว่าระบบกำลังทำงาน ไม่ได้ Freeze/ค้าง
+### ลำดับที่ 10: แก้ปัญหา Redirect URI ไม่ได้รับอนุญาตสำหรับ MTPulse (wa-mtpulse.wa.net)
+- **ปัญหา:** เมื่อเปิด App Portal ไปยัง MTPulse หรือคลิก SSO จาก MTPulse เกิด Error: `Redirect URI 'https://wa-mtpulse.wa.net/auth/callback' is not authorized for client 'mtpulse-spoke-client'`
+- **สาเหตุ:**
+  1. `mtpulse` ยังไม่ได้ถูก seed อยู่ใน `apps_data` ใน `initial_data.py` ทำให้ไม่มีการกำหนด `redirect_uris` เริ่มต้นที่ครบถ้วน
+  2. ใน `oidc_service.py` การตรวจ `validate_client_and_redirect_uri` เทียบเฉพาะ exact match กับสตริงในฐานข้อมูล โดยยังไม่ได้รวม standard callbacks (`/auth/callback`, `/api/auth/callback`) บน `base_url` และยังไม่ได้รองรับ same-origin matching
+- **การแก้ไข:**
+  1. **Backend ([oidc_service.py](file:///d:/Python/Central-IAM/backend/app/services/oidc_service.py)):**
+     - ขยาย `allowed_uris` ให้ครอบคลุม `${base_url}/auth/callback`, `${base_url}/api/auth/callback`, `${base_url}/portal/callback` โดยอัตโนมัติ
+     - เพิ่ม Same-Origin Matcher สำหรับ Path มาตรฐาน (`/auth/callback`, `/api/auth/callback`) บน Origin เดียวกันกับที่ลงทะเบียนไว้
+  2. **Database Auto-Upgrade ([initial_data.py](file:///d:/Python/Central-IAM/backend/app/initial_data.py)):**
+     - บรรจุ `mtpulse` เข้า `apps_data`
+     - เพิ่มบล็อก Auto-Upgrade ใน `init_db()` ตรวจสอบแอป `mtpulse-spoke-client` และเพิ่ม `https://wa-mtpulse.wa.net/auth/callback,https://wa-mtpulse.wa.net/api/auth/callback,http://localhost:3000/portal/callback` ให้อัตโนมัติเมื่อสตาร์ท container
+  3. **Frontend UI ([page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/applications/page.tsx)):** ปรับ Default Redirect URIs ตอนเปิดหน้าต่างแก้ไขแอปให้ใส่ทั้ง `/auth/callback` และ `/api/auth/callback` เป็นมาตรฐาน
 
 
 

@@ -46,15 +46,36 @@ def validate_client_and_redirect_uri(
     if app.redirect_uris:
         allowed_uris = [u.strip() for u in app.redirect_uris.split(",") if u.strip()]
 
-    # Also allow base_url if configured
+    # Also allow base_url and standard callback endpoints under base_url if configured
     if app.base_url:
-        allowed_uris.append(app.base_url.rstrip("/"))
+        b = app.base_url.rstrip("/")
+        allowed_uris.extend([
+            b,
+            f"{b}/auth/callback",
+            f"{b}/api/auth/callback",
+            f"{b}/portal/callback"
+        ])
 
-    # Check match (exact or prefix match if configured)
+    # Check match: exact match or normalized match
     is_valid_uri = any(
         redirect_uri == allowed or redirect_uri.rstrip("/") == allowed.rstrip("/")
         for allowed in allowed_uris
     )
+
+    # Check same-origin standard callback path match
+    if not is_valid_uri:
+        from urllib.parse import urlparse
+        req_parsed = urlparse(redirect_uri)
+        req_origin = f"{req_parsed.scheme}://{req_parsed.netloc}".rstrip("/").lower()
+        req_path = req_parsed.path.rstrip("/").lower()
+
+        if req_path in ["/auth/callback", "/api/auth/callback", "/portal/callback", "/callback"]:
+            for allowed in allowed_uris:
+                al_parsed = urlparse(allowed)
+                al_origin = f"{al_parsed.scheme}://{al_parsed.netloc}".rstrip("/").lower()
+                if req_origin and al_origin and req_origin == al_origin:
+                    is_valid_uri = True
+                    break
 
     if not is_valid_uri:
         raise HTTPException(
