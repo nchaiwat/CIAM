@@ -30,6 +30,7 @@ function AuthorizeContent() {
   const state = searchParams.get("state") || "";
   const codeChallenge = searchParams.get("code_challenge") || "";
   const codeChallengeMethod = searchParams.get("code_challenge_method") || "S256";
+  const nonce = searchParams.get("nonce") || "";
 
   const [meta, setMeta] = useState<AuthorizeMeta | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
@@ -72,6 +73,7 @@ function AuthorizeContent() {
           redirect_uri: redirectUri,
           scope,
           state,
+          nonce,
           code_challenge: codeChallenge,
           code_challenge_method: codeChallengeMethod,
         });
@@ -109,6 +111,7 @@ function AuthorizeContent() {
             redirect_uri: redirectUri,
             scope,
             state: state || undefined,
+            nonce: nonce || undefined,
             code_challenge: codeChallenge || undefined,
             code_challenge_method: codeChallengeMethod || undefined,
           });
@@ -181,6 +184,7 @@ function AuthorizeContent() {
         redirect_uri: redirectUri,
         scope,
         state: state || undefined,
+        nonce: nonce || undefined,
         code_challenge: codeChallenge || undefined,
         code_challenge_method: codeChallengeMethod || undefined,
       });

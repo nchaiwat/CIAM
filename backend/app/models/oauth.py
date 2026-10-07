@@ -13,6 +13,7 @@ class OAuthAuthorizationCode(Base):
     scope = Column(String(255), default="openid profile email", nullable=False)
     code_challenge = Column(String(255), nullable=True)
     code_challenge_method = Column(String(20), default="S256", nullable=False) # 'S256' or 'plain'
+    nonce = Column(String(255), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     is_used = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

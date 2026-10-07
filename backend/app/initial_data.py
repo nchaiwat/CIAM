@@ -72,6 +72,12 @@ def init_db():
             if "allowed_network_cidrs" not in app_columns:
                 conn.execute(text("ALTER TABLE connected_applications ADD COLUMN allowed_network_cidrs VARCHAR(500);"))
 
+            # Safe auto-migration for oauth_authorization_codes
+            if inspector.has_table("oauth_authorization_codes"):
+                oauth_columns = [c["name"] for c in inspector.get_columns("oauth_authorization_codes")]
+                if "nonce" not in oauth_columns:
+                    conn.execute(text("ALTER TABLE oauth_authorization_codes ADD COLUMN nonce VARCHAR(255);"))
+
             if not inspector.has_table("spoke_pending_commands"):
                 conn.execute(text("""
                     CREATE TABLE spoke_pending_commands (

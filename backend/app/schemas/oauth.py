@@ -10,6 +10,7 @@ class AuthorizeParams(BaseModel):
     state: Optional[str] = None
     code_challenge: Optional[str] = None
     code_challenge_method: Optional[str] = "S256"
+    nonce: Optional[str] = None
 
 
 class PortalLoginRequest(BaseModel):
@@ -21,6 +22,7 @@ class PortalLoginRequest(BaseModel):
     state: Optional[str] = None
     code_challenge: Optional[str] = None
     code_challenge_method: Optional[str] = "S256"
+    nonce: Optional[str] = None
 
 
 class SeamlessAuthorizeRequest(BaseModel):
@@ -30,6 +32,7 @@ class SeamlessAuthorizeRequest(BaseModel):
     state: Optional[str] = None
     code_challenge: Optional[str] = None
     code_challenge_method: Optional[str] = "S256"
+    nonce: Optional[str] = None
 
 
 class TokenRequest(BaseModel):

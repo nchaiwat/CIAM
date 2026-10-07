@@ -597,6 +597,7 @@ export const ciamApi = {
     state?: string;
     code_challenge?: string;
     code_challenge_method?: string;
+    nonce?: string;
   }) =>
     fetchApi<PortalLoginResponse>("/oauth/authorize/seamless", {
       method: "POST",
@@ -721,6 +722,7 @@ export interface AuthorizeMeta {
   redirect_uri: string;
   scope: string;
   state?: string;
+  nonce?: string;
   code_challenge?: string;
   code_challenge_method?: string;
   status: string;
@@ -733,6 +735,7 @@ export interface PortalLoginPayload {
   redirect_uri: string;
   scope?: string;
   state?: string;
+  nonce?: string;
   code_challenge?: string;
   code_challenge_method?: string;
 }

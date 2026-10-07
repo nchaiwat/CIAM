@@ -261,7 +261,8 @@ def create_authorization_code(
     redirect_uri: str,
     scope: str = "openid profile email",
     code_challenge: Optional[str] = None,
-    code_challenge_method: Optional[str] = "S256"
+    code_challenge_method: Optional[str] = "S256",
+    nonce: Optional[str] = None
 ) -> str:
     """Generate a single-use authorization code with 60s TTL."""
     code = secrets.token_urlsafe(36)
@@ -275,6 +276,7 @@ def create_authorization_code(
         scope=scope,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method or "S256",
+        nonce=nonce,
         expires_at=expires_at,
         is_used=False
     )
@@ -410,11 +412,12 @@ def exchange_authorization_code(
         employee_id = "ADMIN-01"
         roles = {"admin": "SUPER_ADMIN"}
 
-    # Construct RS256 ID Token
+    # Construct RS256 ID Token (OIDC Standard Claims)
     id_token_payload = {
         "iss": issuer_url.rstrip("/"),
         "sub": auth_code.username,
         "aud": auth_code.client_id,
+        "azp": auth_code.client_id,
         "exp": exp_ts,
         "iat": now_ts,
         "auth_time": now_ts,
@@ -425,6 +428,12 @@ def exchange_authorization_code(
         "employee_id": employee_id,
         "roles": roles
     }
+
+    # Strict OIDC Nonce: echo client nonce or generate deterministic fallback
+    if getattr(auth_code, "nonce", None):
+        id_token_payload["nonce"] = auth_code.nonce
+    else:
+        id_token_payload["nonce"] = f"ciam_{auth_code.code[:16]}"
 
     id_token = sign_rs256_token(id_token_payload)
 

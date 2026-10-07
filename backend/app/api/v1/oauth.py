@@ -54,6 +54,7 @@ def authorize_get(
     state: Optional[str] = Query(None, description="Client state token"),
     code_challenge: Optional[str] = Query(None, description="PKCE code challenge (SHA256)"),
     code_challenge_method: Optional[str] = Query("S256", description="'S256' or 'plain'"),
+    nonce: Optional[str] = Query(None, description="Client OIDC nonce"),
     db: Session = Depends(get_db)
 ):
     """
@@ -89,6 +90,7 @@ def authorize_get(
         "redirect_uri": redirect_uri,
         "scope": scope,
         "state": state,
+        "nonce": nonce,
         "code_challenge": code_challenge,
         "code_challenge_method": code_challenge_method,
         "status": "READY_FOR_AUTHENTICATION"
@@ -123,7 +125,8 @@ def authorize_post(
         redirect_uri=payload.redirect_uri,
         scope=payload.scope or "openid profile email",
         code_challenge=payload.code_challenge,
-        code_challenge_method=payload.code_challenge_method or "S256"
+        code_challenge_method=payload.code_challenge_method or "S256",
+        nonce=payload.nonce
     )
 
     # 4. Construct redirect URI with query parameters
@@ -209,7 +212,8 @@ def authorize_seamless(
         redirect_uri=payload.redirect_uri,
         scope=payload.scope or "openid profile email",
         code_challenge=payload.code_challenge,
-        code_challenge_method=payload.code_challenge_method or "S256"
+        code_challenge_method=payload.code_challenge_method or "S256",
+        nonce=payload.nonce
     )
 
     parsed_url = urlparse(payload.redirect_uri)
@@ -562,7 +566,8 @@ def launch_portal_app(
             else:
                 redirect_uri = "http://localhost:3000/portal/callback"
 
-    # Issue one-time code for current user
+    # Issue one-time code for current user with deterministic portal nonce
+    portal_nonce = f"ciam_portal_{secrets.token_hex(16)}"
     code = create_authorization_code(
         db=db,
         client_id=payload.client_id,
@@ -570,7 +575,8 @@ def launch_portal_app(
         redirect_uri=redirect_uri,
         scope="openid profile email",
         code_challenge=None,
-        code_challenge_method="plain"
+        code_challenge_method="plain",
+        nonce=portal_nonce
     )
 
     state = payload.state or f"ciam_launch_{secrets.token_hex(6)}"
