@@ -263,6 +263,19 @@ def init_db():
                 db.flush()
             app_objs[item["app_code"]] = app
 
+        # Auto-heal AD spoke account mappings: ensure is_active_in_app strictly mirrors MasterIdentity.is_active_in_ad
+        ad_app_obj = app_objs.get("ad")
+        if ad_app_obj:
+            ad_mappings = db.query(AppAccountMapping).filter(AppAccountMapping.application_id == ad_app_obj.id).all()
+            healed_count = 0
+            for m in ad_mappings:
+                if m.identity and m.is_active_in_app != m.identity.is_active_in_ad:
+                    m.is_active_in_app = m.identity.is_active_in_ad
+                    healed_count += 1
+            if healed_count > 0:
+                db.flush()
+                logger.info("Auto-healed %d AD spoke account mappings to match MasterIdentity AD status", healed_count)
+
         # 3. Seed Real Master Identities from Active Directory & IRM
         now = datetime.now(timezone.utc)
         real_identities = [

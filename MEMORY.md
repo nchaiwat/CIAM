@@ -461,3 +461,27 @@ FRONTEND_URL=http://localhost:3000
 * **Prioritize Failure Information:** ในงาน `SYNC_ALL_APPS` หรือ Batch Tasks อื่นๆ หากมีระบบใดระบบหนึ่งล้มเหลว ข้อความ `reason` จะระบุชื่อและ Error สาเหตุที่ล้มเหลวทันที
 * **Full Spoke Details in Modal:** รายละเอียดผลลัพธ์รายระบบถูกบันทึกเป็น JSON ใน `IamAuditLog.details` และ Modal เจาะลึก Audit Trail บนหน้าเว็บจะมีกล่องแดงเด่นชัด **"ระบบที่ซิงก์ล้มเหลว (FAILED SPOKES)"** ให้แอดมินแก้ไขปัญหาได้ตรงจุดทันที
 
+---
+
+## 15. Granular Spoke Access Control & Directory Identity Presentation Standards (Version 2.0.2)
+
+### 15.1 Granular Per-System Access Control (ระงับสิทธิ์เฉพาะระบบโดยไม่ Offboard ตัวตนหลัก)
+* **API Endpoint:** `PATCH /api/v1/directory/accounts/{mapping_id}/status`
+* **Schema:** `AccountStatusUpdateRequest(is_active: bool, reason: Optional[str])`
+* **Flow & Integration:**
+  1. อัปเดต `AppAccountMapping.is_active_in_app = payload.is_active`
+  2. หากแอปที่ถูกปรับคือ Active Directory (`app_code == 'ad'`) จะซิงก์สถานะไปยัง `MasterIdentity.is_active_in_ad` ให้สอดคล้องกัน
+  3. ยิงคำสั่งไปยัง Spoke Application โดยตรง:
+     - **Mode A (REST API เช่น IRM):** เรียก `connector.deprovision()` หรือ `connector.activate()`
+     - **Mode C (Outbound Agent เช่น MTPulse):** สร้างคำสั่ง `DISABLE_USER` / `ENABLE_USER` ใน `SpokePendingCommand` ให้ Agent บนเครื่องลูกมารับไปปิด/เปิดการใช้งาน
+     - **Mode B (SAP B1):** ปรับสถานะใน CIAM
+  4. บันทึกประวัติใน `IamAuditLog` (Action: `DISABLE_SPOKE_ACCESS` หรือ `ENABLE_SPOKE_ACCESS`)
+* **Admin UI:** ในหน้า Directory Modal "ดูสิทธิ์ & ตั้งค่า" เพิ่มปุ่มสลับสิทธิ์รายแอป:
+  - หากเปิดอยู่: `[ 🚫 ระงับสิทธิ์ระบบนี้ ]`
+  - หากถูกระงับ: `[ ✅ เปิดใช้งานระบบนี้ ]` พร้อมแสดงสถานะแบบ Real-time ทันที
+
+### 15.2 Directory Presentation Standards (Alphabetical Sorting & AD Status Integrity)
+* **Alphabetical Sequence (A-Z):** สิทธิ์ระบบลูก (Spokes) ในตารางทะเบียนผู้ใช้และใน Modal จะถูกจัดเรียงตามลำดับตัวอักษรของ `app_code` เสมอ (เช่น `AD` ➔ `IRM` ➔ `M365` ➔ `QMS` ➔ `QOL` ➔ `SAP_B1`) เพื่อให้การแสดงผลของพนักงานทุกคนมีลำดับสม่ำเสมอเหมือนกัน 100%
+* **AD Status Mirroring:** สิทธิ์ของ `AD` ในคอลัมน์ระบบลูกจะสะท้อนค่าจริงของ `MasterIdentity.is_active_in_ad` เสมอ และมีการ Auto-heal ใน Backend ป้องกันปัญหา AD แสดงผลเป็นสีแดง/Disable โดยไม่ตั้งใจ
+* **Broad Department & AD Detection:** ขยายขอบเขตการตรวจจับตัวตน AD ครอบคลุมพนักงานขาย (`Sale`, `Sale Admin`), จัดซื้อ (`Purchasing`), ฯลฯ ไม่ให้ตกหล่นเป็น "ระบบลูกเท่านั้น"
+

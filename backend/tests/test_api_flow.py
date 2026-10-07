@@ -560,4 +560,61 @@ def test_agent_heartbeat_and_command_queue():
     assert del_res.status_code == 200
 
 
+def test_granular_spoke_status_toggle_and_alphabetical_sorting():
+    login_res = client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": "admin123"}
+    )
+    assert login_res.status_code == 200
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Fetch directory users
+    res = client.get("/api/v1/directory/users", headers=headers)
+    assert res.status_code == 200
+    users = res.json()
+    assert len(users) > 0
+
+    # Verify alphabetical sorting of connected_apps for all users with multiple apps
+    for u in users:
+        apps = u.get("connected_apps", [])
+        if len(apps) > 1:
+            app_codes = [a["app_code"].upper() for a in apps]
+            assert app_codes == sorted(app_codes), f"Apps not sorted alphabetically: {app_codes}"
+
+    # 2. Find a user with a connected app to test granular status toggle
+    target_user = next((u for u in users if len(u.get("connected_apps", [])) > 0), None)
+    assert target_user is not None
+    target_app = target_user["connected_apps"][0]
+    mapping_id = target_app["mapping_id"]
+    initial_status = target_app["is_active_in_app"]
+
+    # 3. Toggle status to the opposite
+    toggle_res = client.patch(
+        f"/api/v1/directory/accounts/{mapping_id}/status",
+        headers=headers,
+        json={"is_active": not initial_status, "reason": "Test granular deprovisioning"}
+    )
+    assert toggle_res.status_code == 200
+    toggle_data = toggle_res.json()
+    assert toggle_data["status"] == "SUCCESS"
+    assert toggle_data["details"]["is_active_in_app"] == (not initial_status)
+
+    # 4. Re-fetch user and verify updated status
+    refreshed_res = client.get(f"/api/v1/directory/users/{target_user['id']}", headers=headers)
+    assert refreshed_res.status_code == 200
+    refreshed_user = refreshed_res.json()["user"]
+    refreshed_app = next(a for a in refreshed_user["connected_apps"] if a["mapping_id"] == mapping_id)
+    assert refreshed_app["is_active_in_app"] == (not initial_status)
+
+    # 5. Restore original status
+    restore_res = client.patch(
+        f"/api/v1/directory/accounts/{mapping_id}/status",
+        headers=headers,
+        json={"is_active": initial_status, "reason": "Restore original status"}
+    )
+    assert restore_res.status_code == 200
+
+
+
 

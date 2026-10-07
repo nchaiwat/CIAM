@@ -54,6 +54,10 @@ class AccountExceptionRequest(BaseModel):
     reason: str
     expires_at: Optional[datetime] = None
 
+class AccountStatusUpdateRequest(BaseModel):
+    is_active: bool
+    reason: Optional[str] = "Individual system access update by administrator"
+
 class AccountActionResponse(BaseModel):
     status: str
     message: str

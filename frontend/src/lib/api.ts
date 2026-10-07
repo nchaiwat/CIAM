@@ -402,6 +402,12 @@ export const ciamApi = {
       method: "DELETE",
     }),
 
+  updateAccountStatus: (mappingId: number, payload: { is_active: boolean; reason?: string }) =>
+    fetchApi<AccountActionResponse>(`/directory/accounts/${mappingId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
   approveUserException: (identityId: number, payload: AccountExceptionPayload) =>
     fetchApi<AccountActionResponse>(`/directory/users/${identityId}/exception`, {
       method: "POST",

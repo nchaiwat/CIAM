@@ -86,6 +86,24 @@
 - **ปัญหาเดิม:** หน้า `admin/settings` มีการจำกัดความกว้างด้วย `max-w-5xl` ทำให้บนหน้าจอคอมพิวเตอร์แบบ Widescreen แสดงผลไม่เต็มพื้นที่ เกิดช่องว่างสีขาวขนาดใหญ่ทางขวา
 - **การแก้ไข:** ปลดล็อกข้อจำกัดความกว้างโดยเปลี่ยนเป็น `w-full` ใน `frontend/src/app/(dashboard)/admin/settings/page.tsx` ของระบบ IRM ทำให้ทุกการ์ดและการตั้งค่าขยายเต็มพื้นที่ตามขนาดหน้าจออย่างสมบูรณ์ (Commit `744fcb4`)
 
+---
+
+### 7) แก้ไขสถานะ AD ในสิทธิ์ระบบลูก (Spokes), การจัดเรียงตัวอักษร A-Z, และระบบระงับสิทธิ์รายระบบ (Granular Access Control) (Complete & Verified)
+- **1. แก้ไขสถานะ AD Badge ไม่ให้แสดงแดง/Disabled:**
+  - **สาเหตุ:** ข้อมูล `AppAccountMapping` สำหรับ `app_code == 'ad'` ในฐานข้อมูลมีค่า `is_active_in_app` เป็น False หรือไม่ซิงก์ตรงกับสถานะจริงของตัวตนหลัก (`is_active_in_ad`), และผู้ใช้กลุ่ม Sale/Sale Admin ถูกระบุเป็น `is_ad_account = False` เนื่องจากคีย์เวิร์ดตรวจสอบแผนกไม่ครอบคลุม
+  - **การแก้ไข:**
+    - ปรับ `_build_app_summaries` ใน `directory.py`: เมื่อ `app_code == 'ad'` ให้ค่า `is_active_in_app` ซิงก์ตรงกับ `MasterIdentity.is_active_in_ad` เสมอ และ Auto-heal ข้อมูลในฐานข้อมูลให้ถูกต้อง
+    - ปรับการระบุตัวตน AD (`is_ad`): ตรวจจับจาก `has_ad_mapping` และครอบคลุมแผนก `"Sale"`, `"Sale Admin"`, `"Purchasing"` ป้องกันการตกหล่นเป็น "ระบบลูกเท่านั้น" โดยไม่ตั้งใจ
+    - ฝั่ง Frontend (`directory/page.tsx`): Badge ของ AD จะยึดตาม `isEffectiveActive` ที่อ้างอิง `user.is_active_in_ad` เสมอ
+- **2. จัดเรียงสิทธิ์ระบบลูก (Spokes) ตามตัวอักษร (Alphabetical Order A-Z):**
+  - ใน `directory.py` (`_build_app_summaries`) และหน้า Frontend (`directory/page.tsx` ทั้งในตารางและ Modal ดูสิทธิ์) ทำการ Sort รายชื่อแอปตาม `app_code` (เช่น `AD` ➔ `IRM` ➔ `M365` ➔ `QMS` ➔ `QOL` ➔ `SAP_B1`) ทำให้พนักงานทุกคนมีลำดับ Badge ที่เป็นระเบียบและสม่ำเสมอเหมือนกัน 100%
+- **3. ระบบระงับสิทธิ์ / เปิดสิทธิ์เฉพาะระบบ (Granular Per-System Access Control):**
+  - **Backend Endpoint ใหม่:** `PATCH /api/v1/directory/accounts/{mapping_id}/status`
+    - รองรับการเปิด/ปิดสิทธิ์เฉพาะระบบของพนักงานรายบุคคล (เช่น ย้ายแผนกหรือหมดความจำเป็นในบางแอป แต่ยังไม่ได้ลาออก)
+    - ส่งคำสั่ง Deprovision/Activate ไปยัง Spoke Connector (Mode A REST API เช่น IRM, Mode C Outbound Agent เช่น MTPulse, และ AD Proxy)
+    - บันทึกประวัติใน `IamAuditLog` (Action: `DISABLE_SPOKE_ACCESS` / `ENABLE_SPOKE_ACCESS`)
+  - **Frontend UI:** เพิ่มปุ่ม `[ ระงับสิทธิ์ระบบนี้ ]` และ `[ เปิดใช้งานระบบนี้ ]` ใน Modal "ดูสิทธิ์ & ตั้งค่า" พร้อมอัปเดตสถานะแบบ Real-time ทันที
+
 
 
 

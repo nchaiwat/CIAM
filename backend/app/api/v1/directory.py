@@ -1,3 +1,5 @@
+import json
+import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -20,12 +22,16 @@ from app.schemas.directory import (
     UserActivateResponse,
     AccountLinkRequest,
     AccountExceptionRequest,
+    AccountStatusUpdateRequest,
     AccountActionResponse,
     LocalPortalAccountRequest,
     LocalPortalAccountResponse
 )
 from app.services.provisioning import execute_user_creation
 from app.services.deprovisioning import execute_user_activation
+from app.connectors.factory import get_connector_for_app
+
+logger = logging.getLogger("ciam.directory")
 
 router = APIRouter(prefix="/directory", tags=["User Directory"])
 
@@ -49,7 +55,7 @@ def _get_identity_activity(identity: MasterIdentity, mappings: list, now=None):
 
     return created_at, last_access, days_since_access
 
-def _build_app_summaries(mappings: list, now=None):
+def _build_app_summaries(mappings: list, identity_is_active_in_ad: Optional[bool] = None, now=None):
     if now is None:
         now = datetime.now(timezone.utc)
     summaries = []
@@ -61,6 +67,14 @@ def _build_app_summaries(mappings: list, now=None):
             days_login = max(0, (now - t_utc).days)
 
         m_created = getattr(m, "created_at", None) or getattr(m, "updated_at", None)
+
+        is_act = m.is_active_in_app
+        if app.app_code.lower() == "ad" and identity_is_active_in_ad is not None:
+            # Active Directory spoke badge strictly mirrors Master Identity's AD status
+            is_act = identity_is_active_in_ad
+            if m.is_active_in_app != identity_is_active_in_ad:
+                m.is_active_in_app = identity_is_active_in_ad
+
         summaries.append(
             AppAccountSummary(
                 mapping_id=m.id,
@@ -70,7 +84,7 @@ def _build_app_summaries(mappings: list, now=None):
                 connector_type=app.connector_type,
                 app_username=m.app_username,
                 app_group_name=m.app_group_name,
-                is_active_in_app=m.is_active_in_app,
+                is_active_in_app=is_act,
                 last_sync_status=m.last_sync_status,
                 last_app_login_at=m.last_app_login_at,
                 created_at=m_created,
@@ -82,6 +96,8 @@ def _build_app_summaries(mappings: list, now=None):
                 exception_approved_at=getattr(m, "exception_approved_at", None),
             )
         )
+    # Sort alphabetically by app_code so everyone has consistent sequence
+    summaries.sort(key=lambda x: x.app_code.upper())
     return summaries
 
 @router.get("/users", response_model=List[UserListItem])
@@ -141,7 +157,7 @@ def list_users(
 
     for identity in identities:
         mappings = mappings_by_identity.get(identity.id, [])
-        app_summaries = _build_app_summaries(mappings, now=now)
+        app_summaries = _build_app_summaries(mappings, identity_is_active_in_ad=identity.is_active_in_ad, now=now)
         created_at, last_access, days_since_access = _get_identity_activity(identity, mappings, now=now)
 
         # Check overall active status across AD and spokes
@@ -174,12 +190,18 @@ def list_users(
             if has_ghost != has_disc:
                 continue
 
-        # AD users have ad_guid, employee_id, AD login history, or corporate AD department
+        # AD users have ad_guid, employee_id, AD login history, AD mapping, or corporate AD department (e.g. Sale, Purchasing, IT)
+        has_ad_mapping = any(app.app_code.lower() == "ad" for _, app in mappings)
+        dept_lower = (identity.department or "").strip().lower()
+        corporate_keywords = ("it", "pu", "purchasing", "admin", "accounting", "hr", "executive", "management", "general", "qa", "sale", "warehouse")
+        is_corp_dept = any(kw in dept_lower for kw in corporate_keywords) if dept_lower else False
+
         is_ad = bool(
             identity.ad_guid 
             or identity.employee_id 
             or identity.last_login_ad_at 
-            or (identity.department and identity.department in corporate_depts)
+            or has_ad_mapping
+            or is_corp_dept
         )
 
         exc_type = getattr(identity, "exception_type", None) or next((getattr(m, "exception_type", None) for m, _ in mappings if getattr(m, "is_approved_exception", False)), None)
@@ -229,7 +251,7 @@ def get_user_detail(
         .all()
     )
 
-    app_summaries = _build_app_summaries(mappings)
+    app_summaries = _build_app_summaries(mappings, identity_is_active_in_ad=identity.is_active_in_ad)
     created_at, last_access, days_since_access = _get_identity_activity(identity, mappings)
     has_disc = (not identity.is_active_in_ad) and any(m.is_active_in_app for m, _ in mappings)
 
@@ -517,6 +539,95 @@ def approve_account_exception(
             "app_username": mapping.app_username,
             "exception_type": mapping.exception_type,
             "exception_reason": mapping.exception_reason
+        }
+    )
+
+
+@router.patch("/accounts/{mapping_id}/status", response_model=AccountActionResponse)
+async def update_account_status(
+    mapping_id: int,
+    payload: AccountStatusUpdateRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """
+    Enable or disable an individual spoke application account for a specific user.
+    Allows granular access control without offboarding the entire employee identity.
+    """
+    mapping = db.query(AppAccountMapping).filter_by(id=mapping_id).first()
+    if not mapping:
+        raise HTTPException(status_code=404, detail="ไม่พบบัญชีระบบลูกที่ระบุ (AppAccountMapping not found)")
+
+    app = mapping.application
+    identity = mapping.identity
+    app_name = app.app_name if app else "ระบบลูก"
+    app_code = app.app_code if app else "spoke"
+    target_username = mapping.app_username
+
+    prev_status = mapping.is_active_in_app
+    mapping.is_active_in_app = payload.is_active
+
+    # If this is the Active Directory account, keep MasterIdentity.is_active_in_ad in sync!
+    if app and app.app_code.lower() == "ad" and identity:
+        identity.is_active_in_ad = payload.is_active
+
+    # Determine sync status
+    if identity:
+        mapping.last_sync_status = "IN_SYNC" if identity.is_active_in_ad == mapping.is_active_in_app else "DISCREPANCY"
+
+    # Attempt to propagate status change to target application connector
+    connector_msg = ""
+    connector_success = True
+    if app:
+        try:
+            connector = get_connector_for_app(app)
+            if payload.is_active:
+                conn_res = await connector.activate(
+                    username=target_username,
+                    reason=f"Central IAM Granular Access Enabled: {payload.reason}",
+                    updated_by=current_admin.username
+                )
+            else:
+                conn_res = await connector.deprovision(
+                    username=target_username,
+                    reason=f"Central IAM Granular Access Revoked: {payload.reason}"
+                )
+            connector_msg = conn_res.message
+            connector_success = conn_res.success
+        except Exception as exc:
+            logger.warning("Spoke connector update for %s (%s) threw: %s", app_code, target_username, exc)
+            connector_msg = f"ปรับสิทธิ์ในระบบกลางสำเร็จ แต่ส่งคำสั่งไปยัง {app_name} มีข้อความ: {str(exc)[:120]}"
+
+    action_label = "เปิดใช้งาน" if payload.is_active else "ระงับสิทธิ์"
+    audit_reason = f"{action_label}การเข้าถึงระบบ '{app_name}' ({app_code.upper()}) สำหรับบัญชี '{target_username}': {payload.reason}"
+
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="ENABLE_SPOKE_ACCESS" if payload.is_active else "DISABLE_SPOKE_ACCESS",
+        target_username=target_username,
+        affected_app_code=app_code,
+        previous_status="ACTIVE" if prev_status else "DISABLED",
+        new_status="ACTIVE" if payload.is_active else "DISABLED",
+        execution_mode="PORTAL_ADMIN",
+        reason=audit_reason,
+        ip_address=req.client.host if req.client else "127.0.0.1",
+        status="SUCCESS" if connector_success else "WARNING",
+        details=json.dumps({"mapping_id": mapping_id, "identity_username": identity.username if identity else None, "connector_msg": connector_msg})
+    ))
+
+    db.commit()
+
+    return AccountActionResponse(
+        status="SUCCESS",
+        message=f"{action_label}การเข้าถึง {app_name} สำหรับ {target_username} เรียบร้อยแล้ว",
+        details={
+            "mapping_id": mapping_id,
+            "app_code": app_code,
+            "app_name": app_name,
+            "app_username": target_username,
+            "is_active_in_app": mapping.is_active_in_app,
+            "connector_message": connector_msg
         }
     )
 

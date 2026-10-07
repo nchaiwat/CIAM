@@ -25,6 +25,7 @@ import {
   Link2 as LinkIcon,
   Key,
   Copy,
+  XCircle,
 } from "lucide-react";
 import {
   ciamApi,
@@ -473,6 +474,52 @@ export default function DirectoryPage() {
     }
   };
 
+  const [togglingMappingId, setTogglingMappingId] = useState<number | null>(null);
+
+  const handleToggleAppStatus = async (user: UserListItem, app: AppAccountSummary) => {
+    if (!app.mapping_id) return;
+    const newStatus = !app.is_active_in_app;
+    const actionName = newStatus ? "เปิดใช้งานสิทธิ์" : "ระงับสิทธิ์เฉพาะระบบ";
+    const confirmMsg = `ยืนยัน${actionName} "${app.app_name} (${app.app_code.toUpperCase()})" สำหรับ ${user.full_name} หรือไม่?`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      setTogglingMappingId(app.mapping_id);
+      const res = await ciamApi.updateAccountStatus(app.mapping_id, {
+        is_active: newStatus,
+        reason: `ผู้ดูแลระบบ${actionName}เฉพาะระบบผ่านหน้ารายละเอียดผู้ใช้`,
+      });
+
+      // Update selectedUser state in real time
+      setSelectedUser((prev) => {
+        if (!prev) return null;
+        const updatedApps = prev.connected_apps.map((a) =>
+          a.mapping_id === app.mapping_id ? { ...a, is_active_in_app: newStatus } : a
+        );
+        const updatedAdStatus = app.app_code.toLowerCase() === "ad" ? newStatus : prev.is_active_in_ad;
+        return { ...prev, connected_apps: updatedApps, is_active_in_ad: updatedAdStatus };
+      });
+
+      // Update users list in real time
+      setUsers((prev) =>
+        prev.map((u) => {
+          if (u.id !== user.id) return u;
+          const updatedApps = u.connected_apps.map((a) =>
+            a.mapping_id === app.mapping_id ? { ...a, is_active_in_app: newStatus } : a
+          );
+          const updatedAdStatus = app.app_code.toLowerCase() === "ad" ? newStatus : u.is_active_in_ad;
+          return { ...u, connected_apps: updatedApps, is_active_in_ad: updatedAdStatus };
+        })
+      );
+
+      alert(res.message || `${actionName}สำเร็จเรียบร้อย`);
+    } catch (err: any) {
+      alert(`ไม่สามารถ${actionName}ได้: ${err.message || err}`);
+    } finally {
+      setTogglingMappingId(null);
+    }
+  };
+
   const handleOpenLocalAccountModal = (user: UserListItem) => {
     setLocalAccountTarget(user);
     setLocalPassword("");
@@ -827,37 +874,46 @@ export default function DirectoryPage() {
                         {user.connected_apps.length === 0 ? (
                           <span className="text-xs text-slate-400 font-medium">-</span>
                         ) : (
-                          user.connected_apps.map((app) => (
-                            <div
-                              key={`${app.application_id}-${app.app_username}`}
-                              title={
-                                app.is_approved_exception
-                                  ? `ข้อยกเว้น: ${app.exception_type} (${app.exception_reason})`
-                                  : undefined
-                              }
-                              className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center space-x-1 border ${
-                                app.is_approved_exception
-                                  ? "bg-purple-100 text-purple-950 border-purple-300"
-                                  : !user.is_active_in_ad && app.is_active_in_app
-                                  ? "bg-amber-200 text-amber-950 border-amber-400"
-                                  : app.is_active_in_app
-                                  ? "bg-slate-100 text-slate-800 border-slate-300"
-                                  : "bg-slate-50 text-slate-400 border-slate-200 line-through"
-                              }`}
-                            >
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  app.is_approved_exception
-                                    ? "bg-purple-600"
-                                    : app.is_active_in_app
-                                    ? "bg-emerald-600"
-                                    : "bg-rose-600"
-                                }`}
-                              ></span>
-                              <span className="uppercase">{app.app_code}</span>
-                              {app.is_approved_exception && <span className="text-[9px]">🛡️</span>}
-                            </div>
-                          ))
+                          [...user.connected_apps]
+                            .sort((a, b) => a.app_code.localeCompare(b.app_code))
+                            .map((app) => {
+                              const isEffectiveActive =
+                                app.app_code.toLowerCase() === "ad"
+                                  ? (user.is_active_in_ad ?? app.is_active_in_app)
+                                  : app.is_active_in_app;
+
+                              return (
+                                <div
+                                  key={`${app.application_id}-${app.app_username}`}
+                                  title={
+                                    app.is_approved_exception
+                                      ? `ข้อยกเว้น: ${app.exception_type} (${app.exception_reason})`
+                                      : undefined
+                                  }
+                                  className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center space-x-1 border ${
+                                    app.is_approved_exception
+                                      ? "bg-purple-100 text-purple-950 border-purple-300"
+                                      : !user.is_active_in_ad && isEffectiveActive && app.app_code.toLowerCase() !== "ad"
+                                      ? "bg-amber-200 text-amber-950 border-amber-400"
+                                      : isEffectiveActive
+                                      ? "bg-slate-100 text-slate-800 border-slate-300"
+                                      : "bg-slate-50 text-slate-400 border-slate-200 line-through"
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${
+                                      app.is_approved_exception
+                                        ? "bg-purple-600"
+                                        : isEffectiveActive
+                                        ? "bg-emerald-600"
+                                        : "bg-rose-600"
+                                    }`}
+                                  ></span>
+                                  <span className="uppercase">{app.app_code}</span>
+                                  {app.is_approved_exception && <span className="text-[9px]">🛡️</span>}
+                                </div>
+                              );
+                            })
                         )}
                       </div>
                     </td>
@@ -1210,97 +1266,131 @@ export default function DirectoryPage() {
                     ไม่มีบัญชีในระบบลูก
                   </div>
                 ) : (
-                  selectedUser.connected_apps.map((app) => (
-                    <div
-                      key={`${app.application_id}-${app.app_username}`}
-                      className={`p-3 rounded-lg border-2 ${
-                        app.is_approved_exception
-                          ? "bg-purple-50/60 border-purple-200"
-                          : "bg-slate-50 border-slate-200"
-                      } space-y-2`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2.5">
-                          <div
-                            className={`w-2.5 h-2.5 rounded-full ${
-                              app.is_active_in_app ? "bg-emerald-600" : "bg-rose-600"
-                            }`}
-                          ></div>
-                          <div>
-                            <div className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                              <span>{app.app_name}</span>
-                              <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-blue-100 text-blue-800 border border-blue-200 font-bold">
-                                {app.connector_type}
-                              </span>
+                  [...selectedUser.connected_apps]
+                    .sort((a, b) => a.app_code.localeCompare(b.app_code))
+                    .map((app) => {
+                      const isEffectiveActive =
+                        app.app_code.toLowerCase() === "ad"
+                          ? (selectedUser.is_active_in_ad ?? app.is_active_in_app)
+                          : app.is_active_in_app;
+
+                      return (
+                        <div
+                          key={`${app.application_id}-${app.app_username}`}
+                          className={`p-3 rounded-lg border-2 ${
+                            app.is_approved_exception
+                              ? "bg-purple-50/60 border-purple-200"
+                              : "bg-slate-50 border-slate-200"
+                          } space-y-2`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2.5">
+                              <div
+                                className={`w-2.5 h-2.5 rounded-full ${
+                                  isEffectiveActive ? "bg-emerald-600" : "bg-rose-600"
+                                }`}
+                              ></div>
+                              <div>
+                                <div className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                                  <span>{app.app_name}</span>
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-blue-100 text-blue-800 border border-blue-200 font-bold">
+                                    {app.connector_type}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-slate-600 font-medium">
+                                  Username ในระบบ:{" "}
+                                  <strong className="font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-300">
+                                    {app.app_username}
+                                  </strong>
+                                  {app.app_username.toLowerCase() !== selectedUser.username.toLowerCase() && (
+                                    <span className="ml-1 text-[10px] text-amber-800 bg-amber-100 px-1 rounded border border-amber-300 font-bold">
+                                      ต่างจาก AD ({selectedUser.username})
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-slate-600 font-medium mt-0.5">
+                                  บทบาท: <strong className="text-slate-800">{app.app_group_name || "Standard User"}</strong>
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-[11px] text-slate-600 font-medium">
-                              Username ในระบบ:{" "}
-                              <strong className="font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-300">
-                                {app.app_username}
-                              </strong>
-                              {app.app_username.toLowerCase() !== selectedUser.username.toLowerCase() && (
-                                <span className="ml-1 text-[10px] text-amber-800 bg-amber-100 px-1 rounded border border-amber-300 font-bold">
-                                  ต่างจาก AD ({selectedUser.username})
+
+                            <div className="flex flex-col items-end gap-1">
+                              <span
+                                className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                  isEffectiveActive
+                                    ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                                    : "bg-rose-100 text-rose-900 border border-rose-300"
+                                }`}
+                              >
+                                {isEffectiveActive ? "เปิดใช้งาน" : "ถูกระงับ"}
+                              </span>
+
+                              {app.is_approved_exception && (
+                                <span className="text-[10px] bg-purple-100 text-purple-900 border border-purple-300 font-bold px-1.5 py-0.5 rounded">
+                                  🛡️ ข้อยกเว้น ({app.exception_type})
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-slate-600 font-medium mt-0.5">
-                              บทบาท: <strong className="text-slate-800">{app.app_group_name || "Standard User"}</strong>
-                            </div>
+                          </div>
+
+                          {/* App Action Buttons */}
+                          <div className="pt-2 border-t border-slate-200/80 flex items-center justify-end space-x-2">
+                            {app.mapping_id && (
+                              <>
+                                {/* Granular Per-System Access Toggle */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleAppStatus(selectedUser, app)}
+                                  disabled={togglingMappingId === app.mapping_id}
+                                  className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors cursor-pointer flex items-center space-x-1 border ${
+                                    isEffectiveActive
+                                      ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-300"
+                                      : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300"
+                                  }`}
+                                  title={isEffectiveActive ? "ระงับสิทธิ์เฉพาะระบบนี้ (ไม่กระทบระบบอื่น)" : "เปิดใช้งานสิทธิ์ระบบนี้"}
+                                >
+                                  {togglingMappingId === app.mapping_id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : isEffectiveActive ? (
+                                    <XCircle className="w-3 h-3 text-rose-600" />
+                                  ) : (
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  )}
+                                  <span>{isEffectiveActive ? "ระงับสิทธิ์ระบบนี้" : "เปิดใช้งานระบบนี้"}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenLinkModalForAccount(app, selectedUser)}
+                                  className="px-2.5 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 text-[11px] font-bold transition-colors cursor-pointer flex items-center space-x-1"
+                                >
+                                  <LinkIcon className="w-3 h-3" />
+                                  <span>ย้าย/ผูกกับ AD</span>
+                                </button>
+
+                                {app.is_approved_exception ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevokeException(selectedUser, app.mapping_id)}
+                                    className="px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 text-[11px] font-bold transition-colors cursor-pointer"
+                                  >
+                                    ยกเลิกยกเว้น
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenExceptionModalForAccount(app, selectedUser)}
+                                    className="px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-bold transition-colors cursor-pointer"
+                                  >
+                                    อนุมัติข้อยกเว้น
+                                  </button>
+                                )}
+                              </>
+                            )}
                           </div>
                         </div>
-
-                        <div className="flex flex-col items-end gap-1">
-                          <span
-                            className={`px-2 py-0.5 rounded text-xs font-bold ${
-                              app.is_active_in_app
-                                ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                                : "bg-rose-100 text-rose-900 border border-rose-300"
-                            }`}
-                          >
-                            {app.is_active_in_app ? "เปิดใช้งาน" : "ถูกระงับ"}
-                          </span>
-
-                          {app.is_approved_exception && (
-                            <span className="text-[10px] bg-purple-100 text-purple-900 border border-purple-300 font-bold px-1.5 py-0.5 rounded">
-                              🛡️ ข้อยกเว้น ({app.exception_type})
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* App Action Buttons */}
-                      <div className="pt-2 border-t border-slate-200/80 flex items-center justify-end space-x-2">
-                        {app.mapping_id && (
-                          <>
-                            <button
-                              onClick={() => handleOpenLinkModalForAccount(app, selectedUser)}
-                              className="px-2.5 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 text-[11px] font-bold transition-colors cursor-pointer flex items-center space-x-1"
-                            >
-                              <LinkIcon className="w-3 h-3" />
-                              <span>ย้าย/ผูกกับ AD</span>
-                            </button>
-
-                            {app.is_approved_exception ? (
-                              <button
-                                onClick={() => handleRevokeException(selectedUser, app.mapping_id)}
-                                className="px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 text-[11px] font-bold transition-colors cursor-pointer"
-                              >
-                                ยกเลิกยกเว้น
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleOpenExceptionModalForAccount(app, selectedUser)}
-                                className="px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-bold transition-colors cursor-pointer"
-                              >
-                                อนุมัติข้อยกเว้น
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))
+                      );
+                    })
                 )}
               </div>
             </div>
