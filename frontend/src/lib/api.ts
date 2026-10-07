@@ -676,6 +676,7 @@ export interface PortalAppItem {
   network_policy?: string;
   is_vpn_locked?: boolean;
   vpn_lock_message?: string | null;
+  detected_client_ip?: string | null;
 }
 
 export interface PortalLaunchResponse {

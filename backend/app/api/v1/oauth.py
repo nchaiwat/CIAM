@@ -398,7 +398,7 @@ def get_portal_apps(
             else:
                 # Option 2: Show with lock banner and disabled launch button
                 is_vpn_locked = True
-                vpn_lock_message = "ต้องเชื่อมต่อ VPN หรือเข้าใช้งานจากออฟฟิศ"
+                vpn_lock_message = f"กรุณาเชื่อมต่อ VPN หรือเข้าใช้งานจากเครือข่ายองค์กร (ตรวจพบ IP: {client_ip})"
 
         launch_url = app.base_url
         if app.redirect_uris:
@@ -424,7 +424,8 @@ def get_portal_apps(
                 redirect_uris=app.redirect_uris,
                 network_policy=getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
                 is_vpn_locked=is_vpn_locked,
-                vpn_lock_message=vpn_lock_message
+                vpn_lock_message=vpn_lock_message,
+                detected_client_ip=client_ip
             )
         )
     return items

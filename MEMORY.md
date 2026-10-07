@@ -438,3 +438,26 @@ FRONTEND_URL=http://localhost:3000
    - ต้นแบบนำร่องติดตั้งใน IRM: `d:\Python\IRM\frontend\src\app\login\page.tsx`
    - บันทึกสเปกใน [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) ข้อ 5.2
    - บันทึกคู่มือใน [SPOKE_SSO_INTEGRATION_GUIDE.md](file:///d:/Python/Central-IAM/SPOKE_SSO_INTEGRATION_GUIDE.md) ข้อ 4.2
+
+---
+
+## 14. Network Access Control, VPN IP Detection & Audit Log Diagnostics (Version 2.0.1)
+
+### 14.1 Network Architecture & IP Detection (Cloud VPS vs Office LAN vs VPN)
+* **Cloud VPS Egress & Ingress:** CIAM โฮสต์อยู่บน Cloud VPS (`157.173.219.153`) นอกวง LAN สำนักงาน
+* **Office LAN Traffic (`192.168.10.0/24`):** เมื่อพนักงานในออฟฟิศเชื่อมต่ออินเทอร์เน็ตเข้ามาหา CIAM VPS ทราฟฟิกจะวิ่งผ่าน NAT Firewall Gateway ของสำนักงาน ดังนั้น CIAM จะมองเห็นเป็น **Public WAN IP** (เช่น `49.231.185.245`) เสมอ ไม่เคยเห็น IP วงภายใน (`192.168.10.x`)
+* **VPN Egress:** เมื่อผู้ใช้งานเชื่อมต่อ Window Asia OpenVPN (Full-Tunnel) ทราฟฟิกขาออกทั้งหมดจะ Egress ออกทาง Gateway สำนักงาน IP `49.231.185.245` หรือ VPN Subnet Pool `10.8.0.0/24`
+* **CIDR Whitelist Logic (`network_service.py`):**
+  - หากแอปพลิเคชัน (เช่น MTPulse) มีการกรอก `allowed_network_cidrs`: ระบบจะใช้ค่านั้นแบบ **Strict Override** (ไม่รวมค่า Default)
+  - ดังนั้น หากกรอกเฉพาะ `192.168.10.0/24` แต่เครื่องไคลเอนต์วิ่งผ่าน WAN `49.231.185.245` เข้ามา แอปจะขึ้นล็อก VPN ทันที
+  - **แนวทางปฏิบัติ:**
+    - หากเว้นว่าง `allowed_network_cidrs` ไว้: ระบบจะ fallback ไปใช้ `DEFAULT_CORPORATE_NETWORKS` (`49.231.185.245/32`, `10.8.0.0/24`, `192.168.0.0/16`, ฯลฯ)
+    - หากต้องการระบุเฉพาะ: ต้องใส่ Public IP ของ HQ ร่วมด้วย เช่น `49.231.185.245/32, 10.8.0.0/24, 192.168.10.0/24`
+* **Client IP Transparency บน Portal (`/portal`):**
+  - Backend ส่ง `detected_client_ip` ผ่าน `PortalAppItem`
+  - บนปุ่มล็อกแสดง IP ที่ตรวจพบทันที: `"กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน (IP ตรวจพบ: 49.231.185.245)"`
+
+### 14.2 Enhanced Audit Log for Automated Tasks (`scheduler.py` & `/audit-logs`)
+* **Prioritize Failure Information:** ในงาน `SYNC_ALL_APPS` หรือ Batch Tasks อื่นๆ หากมีระบบใดระบบหนึ่งล้มเหลว ข้อความ `reason` จะระบุชื่อและ Error สาเหตุที่ล้มเหลวทันที
+* **Full Spoke Details in Modal:** รายละเอียดผลลัพธ์รายระบบถูกบันทึกเป็น JSON ใน `IamAuditLog.details` และ Modal เจาะลึก Audit Trail บนหน้าเว็บจะมีกล่องแดงเด่นชัด **"ระบบที่ซิงก์ล้มเหลว (FAILED SPOKES)"** ให้แอดมินแก้ไขปัญหาได้ตรงจุดทันที
+

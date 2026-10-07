@@ -16,7 +16,8 @@ import {
   Clock,
   Server,
   ShieldCheck,
-  Info
+  Info,
+  AlertTriangle
 } from "lucide-react";
 import { ciamApi, AuditLogItem } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
@@ -365,6 +366,53 @@ export default function AuditLogsPage() {
                   {selectedLog.reason || "ไม่มีข้อความเหตุผล"}
                 </div>
               </div>
+
+              {/* Special Section: Failed Spokes Breakdown for SYNC_ALL_APPS */}
+              {(() => {
+                const parsedDetails = parseLogDetails(selectedLog.details);
+                const failedApps = parsedDetails?.failed_apps || (parsedDetails?.results ? parsedDetails.results.filter((r: any) => !r.success) : null);
+
+                if (failedApps && Array.isArray(failedApps) && failedApps.length > 0) {
+                  return (
+                    <div className="bg-rose-50 rounded-xl border-2 border-rose-300 shadow-sm overflow-hidden space-y-0">
+                      <div className="px-4 py-3 bg-rose-100/80 border-b border-rose-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-rose-700 shrink-0" />
+                          <h4 className="text-xs sm:text-sm font-extrabold text-rose-950">
+                            ตรวจพบระบบที่ซิงก์ล้มเหลว ({failedApps.length} ระบบ)
+                          </h4>
+                        </div>
+                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-rose-200 text-rose-900 border border-rose-300">
+                          FAILED SPOKES
+                        </span>
+                      </div>
+
+                      <div className="p-4 space-y-3">
+                        {failedApps.map((f: any, idx: number) => (
+                          <div key={idx} className="bg-white p-3.5 rounded-lg border-2 border-rose-200 shadow-2xs space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-extrabold text-xs sm:text-sm text-slate-900 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                                {f.app_name || f.app_code}
+                                <code className="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                                  {f.app_code}
+                                </code>
+                              </span>
+                              <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                ไม่สามารถซิงก์ได้
+                              </span>
+                            </div>
+                            <div className="p-2.5 bg-rose-50 rounded border border-rose-200 text-xs text-rose-900 font-mono break-words leading-relaxed">
+                              <strong>สาเหตุความล้มเหลว (Root Cause):</strong> {f.error || "เกิดข้อผิดพลาดในการเชื่อมต่อ (Connection / Timeout Error)"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Special Section: AD Gateway Responses & Probes */}
               {(() => {

@@ -93,6 +93,7 @@ class PortalAppItem(BaseModel):
     network_policy: Optional[str] = "ANYWHERE"
     is_vpn_locked: Optional[bool] = False
     vpn_lock_message: Optional[str] = None
+    detected_client_ip: Optional[str] = None
 
 
 class PortalLaunchRequest(BaseModel):

@@ -61,6 +61,18 @@
 
 ---
 
+### 4) การปรับปรุง Audit Log แจกแจงระบบที่ล้มเหลว และการตรวจสอบ VPN IP บน Portal (Complete & Verified)
+- **เจาะลึกระบบที่ล้มเหลวใน Sync All Apps (`SYNC_ALL_APPS`):**
+  - ปรับ `scheduler.py` ให้ระบุชื่อและ Error ของระบบที่ล้มเหลวไว้ที่ข้อความสรุปทันที เช่น `"ซิงก์สำเร็จ 7 ระบบ, ล้มเหลว 1 ระบบ [พบปัญหา: Quality Management System (QMS): Connection refused / Offline]"`
+  - บันทึก JSON รายละเอียดรายระบบ (Status, Accounts, Error reason) ลง `IamAuditLog.details` ครบถ้วน
+  - ปรับ Frontend `/audit-logs` ใน Modal "เจาะลึก Audit Trail" ให้มีกล่องสีแดงเด่นชัด **"ระบบที่ซิงก์ล้มเหลว (FAILED SPOKES)"** พร้อมชื่อระบบ รหัสแอป และสาเหตุความผิดพลาด
+- **ความโปร่งใสเรื่อง VPN Restriction บน Portal (`/portal`):**
+  - เพิ่มฟิลด์ `detected_client_ip` ลงใน `PortalAppItem` (`oauth.py`, `schemas/oauth.py`)
+  - อัปเดตหน้า `/portal` ให้ปุ่มที่ติดล็อก VPN แสดง IP จริงที่ Server ตรวจพบ เช่น `กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน (IP ตรวจพบ: 49.231.185.245)` ทำให้ผู้ใช้งานและแอดมินเข้าใจทันทีว่าทำไมถึงถูกล็อก
+
+
+---
+
 ### 4) ระบบมาตรฐาน Spoke SSO Break-Glass & Guard Step 0 (1 ต.ค. 2026 — Commit `6a145b3`)
 - **ปัญหาเดิม:** เมื่อ Spoke (เช่น IRM) ปิดสวิตช์ SSO ภายในตนเอง (`ciam_sso_enabled = false` หรือเปิด Break-Glass) หน้า Login ตรงของ IRM ซ่อนปุ่ม SSO ถูกต้อง แต่ถ้าพนักงานกด Launch จาก Central-IAM Portal ตัว endpoint `/api/auth/sso/callback` ของ IRM ยังคงยอมรับโค้ดและพา Login ผ่าน SSO ได้เนื่องจากไม่มีการตรวจเช็คสถานะ SSO ใน Callback
 - **การแก้ไข:**

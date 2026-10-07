@@ -428,9 +428,16 @@ export default function PortalPage() {
                       ) : isSpokeSsoDisabled ? (
                         <span>ระบบปิดรับ SSO ชั่วคราว</span>
                       ) : isVpnLocked ? (
-                        <span className="flex items-center justify-center gap-1.5">
-                          <Lock className="w-3.5 h-3.5 text-amber-600" />
-                          <span>กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน</span>
+                        <span className="flex flex-col items-center justify-center gap-0.5 text-center">
+                          <span className="flex items-center gap-1.5">
+                            <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน</span>
+                          </span>
+                          {app.detected_client_ip && (
+                            <span className="text-[10px] text-amber-700/80 font-mono font-normal">
+                              (IP ตรวจพบ: {app.detected_client_ip})
+                            </span>
+                          )}
                         </span>
                       ) : (
                         <>

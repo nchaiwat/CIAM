@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
@@ -270,16 +271,32 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
             })
             fail_count += 1
 
-    summary_text = f"ซิงก์สำเร็จ {success_count} ระบบ, ล้มเหลว {fail_count} ระบบ"
+    failed_items = [r for r in results if not r["success"]]
+    if failed_items:
+        failed_desc = "; ".join([f"{f['app_name']} ({f['app_code']}): {f['error']}" for f in failed_items])
+        summary_text = f"ซิงก์สำเร็จ {success_count} ระบบ, ล้มเหลว {fail_count} ระบบ [พบปัญหา: {failed_desc}]"
+        affected_apps = ",".join([f["app_code"] for f in failed_items])
+    else:
+        summary_text = f"ซิงก์สำเร็จ {success_count} ระบบ, ล้มเหลว 0 ระบบ"
+        affected_apps = "ALL"
+
+    details_payload = json.dumps({
+        "total_apps": len(apps),
+        "success_count": success_count,
+        "fail_count": fail_count,
+        "failed_apps": failed_items,
+        "results": results
+    }, ensure_ascii=False)
 
     # Audit log
     db.add(IamAuditLog(
         actor_username=actor_username,
         action_type="SYNC_ALL_APPS",
         target_username="ALL_CONNECTED_SPOKES",
-        affected_app_code="ALL",
+        affected_app_code=affected_apps,
         execution_mode="SCHEDULED_OR_MANUAL",
         reason=summary_text,
+        details=details_payload,
         status="SUCCESS" if fail_count == 0 else ("WARNING" if success_count > 0 else "FAILED")
     ))
 
