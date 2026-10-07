@@ -428,6 +428,20 @@ export const ciamApi = {
       body: JSON.stringify(payload),
     }),
 
+  assignSpokeApp: (
+    identityId: number,
+    payload: {
+      application_id: number;
+      app_username?: string;
+      app_group_name?: string;
+      reason?: string;
+    }
+  ) =>
+    fetchApi<AccountActionResponse>(`/directory/users/${identityId}/assign-app`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
 
   // Offboarding
   previewOffboard: (username: string) =>

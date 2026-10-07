@@ -63,6 +63,12 @@ class AccountActionResponse(BaseModel):
     message: str
     details: Optional[dict] = None
 
+class AssignSpokeAppRequest(BaseModel):
+    application_id: int
+    app_username: Optional[str] = None
+    app_group_name: Optional[str] = "Standard User"
+    reason: Optional[str] = "มอบสิทธิ์ระบบลูกโดยผู้ดูแลระบบ"
+
 
 class UserDetailResponse(BaseModel):
     user: UserListItem

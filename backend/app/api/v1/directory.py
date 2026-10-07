@@ -25,7 +25,8 @@ from app.schemas.directory import (
     AccountStatusUpdateRequest,
     AccountActionResponse,
     LocalPortalAccountRequest,
-    LocalPortalAccountResponse
+    LocalPortalAccountResponse,
+    AssignSpokeAppRequest
 )
 from app.services.provisioning import execute_user_creation
 from app.services.deprovisioning import execute_user_activation
@@ -332,6 +333,102 @@ async def activate_user(
 # -------------------------------------------------------------
 # Enterprise Identity Linking & Approved Exception Endpoints
 # -------------------------------------------------------------
+
+@router.post("/users/{identity_id}/assign-app", response_model=AccountActionResponse)
+async def assign_spoke_app_to_user(
+    identity_id: int,
+    payload: AssignSpokeAppRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """
+    Assign an existing Master Identity to a Connected Application (Spoke).
+    Creates or re-activates AppAccountMapping and dispatches provisioning if applicable.
+    """
+    identity = db.query(MasterIdentity).filter_by(id=identity_id).first()
+    if not identity:
+        raise HTTPException(status_code=404, detail="ไม่พบตัวตนที่ระบุ (MasterIdentity not found)")
+
+    app = db.query(ConnectedApplication).filter_by(id=payload.application_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="ไม่พบระบบลูกที่ระบุ (ConnectedApplication not found)")
+
+    target_username = (payload.app_username or identity.username).strip()
+    target_group = (payload.app_group_name or "Standard User").strip()
+
+    now = datetime.now(timezone.utc)
+    existing_mapping = db.query(AppAccountMapping).filter_by(
+        identity_id=identity.id,
+        application_id=app.id
+    ).first()
+
+    connector_msg = ""
+    connector_success = True
+
+    if existing_mapping:
+        existing_mapping.is_active_in_app = True
+        existing_mapping.app_username = target_username
+        existing_mapping.app_group_name = target_group
+        existing_mapping.last_sync_status = "IN_SYNC" if identity.is_active_in_ad else "DISCREPANCY"
+        existing_mapping.updated_at = now
+        mapping = existing_mapping
+    else:
+        mapping = AppAccountMapping(
+            identity_id=identity.id,
+            application_id=app.id,
+            app_username=target_username,
+            app_group_name=target_group,
+            is_active_in_app=True,
+            last_sync_status="IN_SYNC" if identity.is_active_in_ad else "DISCREPANCY",
+            created_at=now,
+            updated_at=now
+        )
+        db.add(mapping)
+
+    # If Mode A (REST API), attempt provisioning to child system
+    if app.connector_type == "REST_API":
+        try:
+            connector = get_connector_for_app(app)
+            conn_res = await connector.provision(
+                username=target_username,
+                full_name=identity.full_name,
+                email=identity.email,
+                department=identity.department,
+                group_name=target_group
+            )
+            connector_msg = conn_res.message
+            connector_success = conn_res.success
+        except Exception as exc:
+            logger.warning("Spoke connector provision for %s (%s) threw: %s", app.app_code, target_username, exc)
+            connector_msg = f"มอบสิทธิ์ในระบบกลางสำเร็จ แต่ส่งคำสั่งไปยัง {app.app_name} มีข้อความ: {str(exc)[:120]}"
+
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="ASSIGN_SPOKE_ACCESS",
+        target_username=target_username,
+        affected_app_code=app.app_code,
+        execution_mode="PORTAL_ADMIN",
+        reason=f"มอบสิทธิ์ระบบ '{app.app_name}' ให้กับ '{identity.username}' ({identity.full_name}): {payload.reason}",
+        ip_address=req.client.host if req.client else "127.0.0.1",
+        status="SUCCESS" if connector_success else "WARNING"
+    ))
+
+    db.commit()
+
+    return AccountActionResponse(
+        status="SUCCESS",
+        message=f"มอบสิทธิ์ระบบ {app.app_name} ให้กับ {identity.full_name} ({target_username}) สำเร็จเรียบร้อย",
+        details={
+            "identity_id": identity.id,
+            "application_id": app.id,
+            "app_code": app.app_code,
+            "app_name": app.app_name,
+            "app_username": target_username,
+            "connector_message": connector_msg
+        }
+    )
+
 
 @router.post("/accounts/{mapping_id}/link-identity", response_model=AccountActionResponse)
 def link_account_to_identity(

@@ -80,13 +80,24 @@
   - **Backend Manual Sync (`/applications/{app_id}/sync`):** สำหรับแอป `SSO_ONLY` ปรับให้ตรวจสอบและยืนยันจำนวนบัญชีปัจจุบันที่บันทึกไว้ แทนที่จะคืน 0 บัญชี
   - **Modal ปรับปรุงใหม่:** หัวข้อแสดงเป็น "รายชื่อผู้ใช้ปัจจุบันในระบบ {ชื่อระบบ}" พร้อม Subtitle ระบุเวลาที่ซิงก์ล่าสุด และแถบ Notice สีฟ้าแจ้งว่าข้อมูลนี้มาจาก Outbound Agent Push รอบล่าสุด
 
+### 7) การมอบสิทธิ์ระบบลูกให้กับผู้ใช้เดิมในระบบ (Assign Spoke App to Existing Users) (Complete & Verified)
+- **ปัญหา & ความต้องการ:** เมื่อมีผู้ใช้เดิมใน Active Directory หรือ Master Identity (เช่น `Ronnakorn.P`) แต่ยังไม่มีสิทธิ์ในระบบลูกใหม่ (เช่น MTPulse) เดิมไม่มีปุ่มให้ Admin มอบสิทธิ์ระบบลูกใหม่แก่ผู้ใช้ที่มีอยู่แล้วในระบบโดยตรง
+- **การแก้ไข:**
+  - **Backend Endpoint:** เพิ่ม `POST /api/v1/directory/users/{identity_id}/assign-app` (`directory.py`, `schemas/directory.py`) รับ `application_id`, `app_username`, `app_group_name` พร้อมสร้าง `AppAccountMapping` แบบเปิดใช้งานทันที และบันทึก `IamAuditLog(action_type="ASSIGN_SPOKE_ACCESS")`
+  - **Frontend UI:** ในหน้าต่าง Modal "ดูสิทธิ์ & ตั้งค่า" ของ `/directory` เพิ่มปุ่ม **`[ + มอบสิทธิ์ระบบลูกใหม่ ]`** และฟอร์ม Inline ให้เลือกแอปพลิเคชันที่ยังไม่เคยมีสิทธิ์ (เช่น MTPulse) กำหนด Username และสิทธิ์ แล้วกดบันทึกได้ทันที โดยจะสะท้อนผลลัพธ์ทั้งใน Badge ของหน้า Directory และการแสดงการ์ดบน Employee Portal ของผู้ใช้ทันที
+
 ---
 
-### 6) ปรับขนาดหน้าจอ System Setting บนระบบ IRM ให้เต็มความกว้าง (Full Width) (Complete & Verified)
-- **ปัญหาเดิม:** หน้า `admin/settings` มีการจำกัดความกว้างด้วย `max-w-5xl` ทำให้บนหน้าจอคอมพิวเตอร์แบบ Widescreen แสดงผลไม่เต็มพื้นที่ เกิดช่องว่างสีขาวขนาดใหญ่ทางขวา
-- **การแก้ไข:** ปลดล็อกข้อจำกัดความกว้างโดยเปลี่ยนเป็น `w-full` ใน `frontend/src/app/(dashboard)/admin/settings/page.tsx` ของระบบ IRM ทำให้ทุกการ์ดและการตั้งค่าขยายเต็มพื้นที่ตามขนาดหน้าจออย่างสมบูรณ์ (Commit `744fcb4`)
+### 8) การกรองสถานะ (Active/Inactive/All), ค้นหาด่วน และเรียงตามตัวอักษรใน Modal ผู้ใช้สด (Complete & Verified)
+- **ปัญหา & ความต้องการ:** ในหน้าจอ Modal "รายชื่อผู้ใช้สดในระบบ" (เช่น SAP Business One ซึ่งมี 266 บัญชี) เดิมไม่มีตัวกรองสถานะ และไม่มีการเรียงตามตัวอักษร ทำให้ค้นหาชื่อผู้ใช้ได้ยาก
+- **การแก้ไข:**
+  - เพิ่ม **Status Filter Pills:** ปุ่มตัวกรอง `ทั้งหมด ({allCount})`, `🟢 เปิดใช้งาน ({activeCount})`, `🔴 ปิดใช้งาน ({inactiveCount})`
+  - เพิ่ม **Alphabetical Sorting Button:** ปุ่มสลับการเรียงลำดับตามตัวอักษร `[ เรียง A ➔ Z / เรียง Z ➔ A ]`
+  - เพิ่ม **Quick Search Input:** ช่องค้นหาด่วนแบบ Real-time ให้พิมพ์ค้นหาชื่อ, username, แผนก หรืออีเมลได้ทันที
+  - ขยายความกว้าง Modal เป็น `max-w-2xl` เพิ่มพื้นที่แสดงผลและข้อความสรุปจำนวนที่กรองได้
 
 ---
+
 
 ### 7) แก้ไขสถานะ AD ในสิทธิ์ระบบลูก (Spokes), การจัดเรียงตัวอักษร A-Z, และระบบระงับสิทธิ์รายระบบ (Granular Access Control) (Complete & Verified)
 - **1. แก้ไขสถานะ AD Badge ไม่ให้แสดงแดง/Disabled:**
