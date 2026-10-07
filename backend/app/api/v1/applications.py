@@ -331,10 +331,53 @@ async def get_application_inventory(
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
-    """Fetch live account inventory directly from target spoke application."""
+    """Fetch live account inventory directly from target spoke application or local mapping for agent spokes."""
     app = db.query(ConnectedApplication).filter(ConnectedApplication.id == app_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    if app.connector_type == "SSO_ONLY":
+        from app.models.identity import MasterIdentity
+
+        mappings = (
+            db.query(AppAccountMapping, MasterIdentity)
+            .outerjoin(MasterIdentity, AppAccountMapping.identity_id == MasterIdentity.id)
+            .filter(AppAccountMapping.application_id == app.id)
+            .order_by(AppAccountMapping.app_username.asc())
+            .all()
+        )
+
+        account_list = []
+        for m, ident in mappings:
+            full_name = ident.full_name if ident and ident.full_name else m.app_username
+            email = ident.email if ident and ident.email else None
+            dept = ident.department if ident and ident.department else None
+            account_list.append({
+                "username": m.app_username,
+                "full_name": full_name,
+                "email": email,
+                "group_name": m.app_group_name or dept or "User",
+                "is_active": m.is_active_in_app,
+                "last_sync_status": m.last_sync_status,
+                "last_login_at": m.last_app_login_at.isoformat() if m.last_app_login_at else None,
+                "source": "AGENT_MAPPING"
+            })
+
+        formatted_sync_time = (
+            app.last_sync_at.strftime("%d/%m/%Y %H:%M")
+            if app.last_sync_at
+            else "ยังไม่เคยซิงก์"
+        )
+        return {
+            "application_name": app.app_name,
+            "total_accounts": len(account_list),
+            "active_accounts": sum(1 for a in account_list if a["is_active"]),
+            "accounts": account_list,
+            "mode": "SSO_CLIENT_ONLY",
+            "is_agent_mode": True,
+            "last_sync_at": app.last_sync_at.isoformat() if app.last_sync_at else None,
+            "notice": f"ระบบนี้เชื่อมต่อด้วย Outbound Agent (Mode C) — แสดงรายชื่อบัญชีปัจจุบันที่บันทึกไว้ในระบบ ({len(account_list)} บัญชี) ซิงก์ล่าสุดเมื่อ {formatted_sync_time}"
+        }
 
     connector = get_connector_for_app(app)
     try:
@@ -360,6 +403,31 @@ async def sync_application_inventory(
     app = db.query(ConnectedApplication).filter(ConnectedApplication.id == app_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    now = datetime.now(timezone.utc)
+
+    if app.connector_type == "SSO_ONLY":
+        current_mapped_count = db.query(AppAccountMapping).filter(AppAccountMapping.application_id == app.id).count()
+        app.total_linked_accounts = current_mapped_count
+        app.last_sync_at = now
+        db.add(IamAuditLog(
+            actor_username=current_admin.username,
+            action_type="SYNC",
+            target_username=f"INVENTORY_{app.app_code.upper()}",
+            affected_app_code=app.app_code,
+            execution_mode="SSO_ONLY",
+            reason=f"ตรวจสอบและยืนยันบัญชีปัจจุบันของ {app.app_name} จำนวน {current_mapped_count} บัญชี (Outbound Agent Mode)",
+            status="SUCCESS"
+        ))
+        db.commit()
+        return {
+            "success": True,
+            "app_code": app.app_code,
+            "total_accounts_fetched": current_mapped_count,
+            "synced_count": current_mapped_count,
+            "synced_at": now.isoformat(),
+            "message": f"ยืนยันบัญชีปัจจุบันของ {app.app_name} จำนวน {current_mapped_count} บัญชี (ระบบ Outbound Agent จะส่งข้อมูลอัตโนมัติในรอบถัดไป)"
+        }
 
     connector = get_connector_for_app(app)
     try:

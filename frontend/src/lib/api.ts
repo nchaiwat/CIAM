@@ -512,9 +512,16 @@ export const ciamApi = {
     }),
 
   getApplicationInventory: (id: number) =>
-    fetchApi<{ application_name: string; total_accounts: number; active_accounts: number; accounts: any[]; notice?: string }>(
-      `/applications/${id}/inventory`
-    ),
+    fetchApi<{
+      application_name: string;
+      total_accounts: number;
+      active_accounts?: number;
+      accounts: any[];
+      notice?: string;
+      is_agent_mode?: boolean;
+      mode?: string;
+      last_sync_at?: string;
+    }>(`/applications/${id}/inventory`),
 
   syncApplicationInventory: (id: number) =>
     fetchApi<{ success: boolean; app_code: string; total_accounts_fetched: number; synced_count: number; synced_at: string }>(
