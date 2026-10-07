@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
-**Last Updated:** 2026-10-03  
-**Version:** 1.9.9 (Mode C 1-Click Offboard Command Queueing & Label Clarity)  
+**Last Updated:** 2026-10-07  
+**Version:** 2.0.0 (Responsive Spoke Login Standard: Mobile-Familiar 100% & Desktop-Flexible Compact SSO)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -417,3 +417,24 @@ FRONTEND_URL=http://localhost:3000
 2. **Spoke Portal Switcher Button ([Header.tsx](file:///d:/Python/IRM/frontend/src/components/layout/Header.tsx)):**
    - ในระบบลูก (เช่น IRM) เพิ่มปุ่มลัด `[🏢 สลับระบบ (Portal)]` บนแถบ Header สำหรับผู้ใช้งาน SSO เพื่อให้คลิกกลับมายังหน้า Central IAM Portal ในแท็บเดิมได้ทันทีโดยไม่ต้องกดออกจากระบบ
    - เมื่อกด Logout จากระบบลูก ระบบจะ Redirect กลับมายังหน้า Portal (`https://ciam.windowasia.com/portal`) ในแท็บเดิมโดยอัตโนมัติ
+
+---
+
+## 13. Responsive Spoke Login Architecture (Version 2.0.0)
+
+### 13.1 Problem & Motivation
+* ในการใช้งานจริง พนักงานที่เข้าใช้งานระบบลูก (เช่น IRM, WMS) ผ่าน Mobile (หน้างาน คลังสินค้า ขนส่ง โรงงาน) มักเป็นพนักงานที่ใช้ระบบนั้นเพียงระบบเดียว การซ่อนฟอร์มล็อกอินเดิมแล้วบังคับแสดงเฉพาะปุ่ม SSO ขนาดยักษ์ ทำให้ผู้ใช้งานสับสนและรู้สึกว่าระบบเปลี่ยนไป
+* ในขณะที่พนักงานสำนักงานบน Desktop ทำงานหลายระบบพร้อมกัน ต้องการทางเลือกในการเข้าใช้งาน ทั้งแบบ SSO รวดเร็ว 1-Click หรือแบบพิมพ์ Username / Password ในฟอร์มเดิม
+
+### 13.2 Specification & Implementation Rule
+1. **Mobile View (หน้าจอมือถือ / แท็บเล็ต):**
+   - หน้าตา Login **เหมือนเดิม 100%**: ฟอร์ม Username, Password, Remember Me, และปุ่ม Sign In ดั้งเดิมสีเด่นชัด แสดงเป็นหน้าจอหลักทันที
+   - ปุ่ม SSO เป็นตัวเลือกเสริม (Secondary Option) ขนาดกะทัดรัด อยู่ด้านล่างฟอร์มใต้เส้นคั่น `— หรือเข้าสู่ระบบด้วย —`
+2. **Desktop View (หน้าจอคอมพิวเตอร์):**
+   - ปุ่ม SSO **มีขนาดเล็กลง (Compact height `py-2.5`, text-xs/sm)** อยู่ด้านบน คั่นด้วย `— หรือเข้าสู่ระบบด้วยชื่อผู้ใช้งาน —`
+   - ฟอร์ม Username / Password แสดงควบคู่กันทันที
+   - ผู้ใช้มีอิสระเลือกล็อกอินด้วยวิธีที่ตนเองสะดวก (Dual Freedom of Choice)
+3. **Reference Implementation & Guides:**
+   - ต้นแบบนำร่องติดตั้งใน IRM: `d:\Python\IRM\frontend\src\app\login\page.tsx`
+   - บันทึกสเปกใน [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) ข้อ 5.2
+   - บันทึกคู่มือใน [SPOKE_SSO_INTEGRATION_GUIDE.md](file:///d:/Python/Central-IAM/SPOKE_SSO_INTEGRATION_GUIDE.md) ข้อ 4.2

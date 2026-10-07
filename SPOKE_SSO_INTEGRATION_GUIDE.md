@@ -148,8 +148,12 @@ email = claims.get("email")
 
 ### 4.2 ฝั่ง Frontend (Next.js / React)
 
-#### หน้าล็อกอิน (`login/page.tsx`):
+#### ก. มาตรฐาน Responsive Login UI (คุ้นเคยเดิมบน Mobile 100% & ปุ่ม SSO กะทัดรัดบน Desktop):
+* **ผู้ใช้ Mobile (หน้างาน/คลัง/โรงงาน):** แสดงฟอร์ม Username & Password พร้อมปุ่ม Sign In ดั้งเดิมเป็นหลัก 100% โดยมีปุ่ม SSO ขนาดย่อมเป็นตัวเลือกเสริมด้านล่าง
+* **ผู้ใช้ Desktop (สำนักงาน):** แสดงปุ่ม SSO ขนาดกะทัดรัด (Compact `py-2.5`) ด้านบนฟอร์มหลัก เพื่อให้เลือกกด SSO 1-Click หรือพิมพ์กรอก Username/Password ได้อย่างอิสระ
+
 ```tsx
+// ฟังก์ชันเรียกขอ SSO Authorize URL
 const handleCiamSso = async () => {
   const redirectUri = window.location.origin + '/auth/callback';
   const res = await api.post('/api/auth/sso/authorize-url', { redirect_uri: redirectUri });
@@ -161,6 +165,52 @@ const handleCiamSso = async () => {
   // นำทางไปยัง Central IAM
   window.location.href = res.data.authorize_url;
 };
+```
+
+#### ข. โครงสร้าง JSX Responsive สำหรับหน้า `login/page.tsx`:
+```tsx
+<div className="w-full max-w-md bg-slate-900 rounded-2xl p-6 sm:p-8">
+  {/* 1. Desktop SSO Option: กะทัดรัดอยู่ด้านบนสำหรับจอคอมพิวเตอร์ */}
+  {ssoConfig?.sso_enabled && !ssoConfig.break_glass_active && (
+    <div className="hidden md:block mb-5">
+      <button
+        type="button"
+        onClick={handleCiamSso}
+        className="w-full py-2.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium text-xs rounded-xl shadow-md flex items-center justify-center gap-2"
+      >
+        <span>🛡️ เข้าสู่ระบบด้วย Window Asia SSO ✨</span>
+      </button>
+      <div className="relative my-4">
+        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800" /></div>
+        <div className="relative flex justify-center text-[11px]"><span className="bg-slate-900 px-3 text-slate-500">หรือเข้าสู่ระบบด้วยชื่อผู้ใช้งาน</span></div>
+      </div>
+    </div>
+  )}
+
+  {/* 2. Standard Login Form: แสดงเด่นชัดเสมอ ทั้งบน Mobile และ Desktop */}
+  <form onSubmit={handleSubmit} className="space-y-4">
+    <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="ชื่อผู้ใช้งาน" className="w-full px-3.5 py-2.5 bg-slate-950 rounded-xl text-sm text-white" />
+    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="รหัสผ่าน" className="w-full px-3.5 py-2.5 bg-slate-950 rounded-xl text-sm text-white" />
+    <button type="submit" className="w-full mt-2 py-2.5 px-4 bg-blue-600 text-white font-semibold text-sm rounded-xl">เข้าสู่ระบบ (Sign In)</button>
+  </form>
+
+  {/* 3. Mobile Secondary SSO: อยู่ด้านล่างฟอร์มหลักในขนาดกะทัดรัด สำหรับจอมือถือ */}
+  {ssoConfig?.sso_enabled && !ssoConfig.break_glass_active && (
+    <div className="block md:hidden pt-4 mt-1">
+      <div className="relative mb-3">
+        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800" /></div>
+        <div className="relative flex justify-center text-[10px]"><span className="bg-slate-900 px-2.5 text-slate-500">หรือเข้าสู่ระบบด้วย</span></div>
+      </div>
+      <button
+        type="button"
+        onClick={handleCiamSso}
+        className="w-full py-2.5 px-3 bg-slate-800 text-slate-300 text-xs rounded-xl flex items-center justify-center gap-2"
+      >
+        <span>🛡️ Window Asia SSO ✨</span>
+      </button>
+    </div>
+  )}
+</div>
 ```
 
 #### หน้า Callback (`auth/callback/page.tsx`):

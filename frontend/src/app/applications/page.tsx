@@ -2901,8 +2901,8 @@ export default function ApplicationsPage() {
                     <p className="font-semibold text-blue-900">
                       ⚡ <strong>Seamless True SSO:</strong> ระบบลูกที่เรียกใช้ OIDC PKCE จะได้รับประโยชน์จาก Seamless SSO ทันที หากพนักงานมีเซสชันเดิมบน Central IAM ระบบจะ Re-authorize ให้อัตโนมัติใน ~0.8 วินาทีโดยไม่ต้องกรอกรหัสผ่านซ้ำ
                     </p>
-                    <p className="font-semibold text-slate-800">
-                      🎯 <strong>Single-Button Standard:</strong> หน้าจอล็อกอินของระบบลูกควรแสดงเฉพาะปุ่ม <code>[ เข้าสู่ระบบด้วย Window Asia SSO ]</code> และซ่อนฟอร์มกรอกรหัสผ่านไว้ด้านหลังลิงก์สำรอง Local Login เพื่อไม่ให้ผู้ใช้งานสับสน
+                    <p className="font-semibold text-indigo-900">
+                      📱 <strong>Responsive Login Standard:</strong> บน <strong>Mobile</strong> หน้าตา Login ต้องแทบจะเหมือนเดิม 100% (ฟอร์ม Username & Password เป็นหลัก ไม่เปลี่ยนให้ผู้ใช้สับสน โดยมีปุ่ม SSO เล็กๆ ด้านล่าง) และบน <strong>Desktop</strong> ทำปุ่ม SSO ให้เล็กลง (Compact) วางคู่กับฟอร์มเพื่อให้ผู้ใช้เลือกวิธีเข้าสู่ระบบได้อย่างอิสระ
                     </p>
                     <p className="font-semibold text-emerald-800">
                       🔄 <strong>Seamless Logout & Expired:</strong> เมื่อพนักงานกด Logout หรือเมื่อ Token หมดอายุ (HTTP 401) ในระบบลูก ให้นำทางผู้ใช้กลับสู่ <code>https://ciam.windowasia.com/portal</code> เพื่อให้ทำงานในระบบอื่นต่อได้ทันที

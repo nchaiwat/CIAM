@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 5 ตุลาคม 2026 (Local Time: ~11:25 ICT)  
+> **Date Updated:** 7 ตุลาคม 2026 (Local Time: ~08:30 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -187,6 +187,23 @@
      - ปรับข้อความตัวเลือก Dropdown ทั้งหน้าสร้างและแก้ไขระบบเป็น `SSO_ONLY (โหมดลูกข่าย On-Premise / Outbound Agent Mode C)` เพื่อความเข้าใจที่ชัดเจน
 - **เงื่อนไขสำคัญที่ต้องมีเพื่อให้ Offboard ส่งคำสั่งไปยัง Spoke:**
   - บัญชีพนักงานรายนั้นจะต้องมี `AppAccountMapping` ผูกกับแอปพลิเคชันนั้นใน CIAM (สร้างผ่าน `sync_type: "FULL_SYNC"` ของ Agent หรือพนักงานเคย SSO เข้าใช้งานครั้งแรก)
+
+### 12) มาตรฐานหน้าจอล็อกอิน Spoke แบบ Responsive: Mobile-Familiar 100% & Desktop-Flexible Compact SSO (7 ต.ค. 2026)
+- **โจทย์และความต้องการ:**
+  - พนักงานที่เข้าใช้งานระบบลูก (เช่น IRM, WMS) ผ่าน Mobile (หน้างาน คลังสินค้า ผลิต) มักใช้แค่แอปนั้นแอปเดียว หน้าจอเดิมที่ซ่อนฟอร์มแล้วแสดงเฉพาะปุ่ม SSO ขนาดยักษ์ทำให้ผู้ใช้สับสนและรู้สึกว่าระบบเปลี่ยนไป
+  - บน Mobile ต้องการให้หน้าตา Login **แทบจะเหมือนเดิม 100%** (ฟอร์ม Username, Password, Remember Me, และปุ่ม Sign In สีเด่นชัดเป็นหลัก) โดยมีปุ่ม SSO เป็นตัวเลือกขนาดย่อมอยู่ด้านล่างสุด
+  - บน Desktop พนักงานทำงานหลายระบบ ต้องการเปิดโอกาสให้เลือกเข้าใช้งานตามความต้องการ (Dual Freedom of Choice) จึงให้**ปุ่ม SSO มีขนาดเล็กลง (Compact)** จัดวางควบคู่ไปกับฟอร์มมาตรฐาน
+- **การดำเนินการ:**
+  1. **เอกสารสเปกกลาง ([SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md)):**
+     - ปรับปรุงข้อ 5.2 เป็น *"มาตรฐานหน้าจอล็อกอินแบบ Responsive: คุ้นเคยเดิมบน Mobile 100% & เลือกได้ยืดหยุ่นบน Desktop"*
+     - เพิ่มตารางเปรียบเทียบ UX ระหว่าง Mobile vs Desktop และมอบโค้ดตัวอย่าง JSX + Tailwind CSS (`hidden md:block` และ `block md:hidden`)
+  2. **คู่มือ SSO สรุป ([SPOKE_SSO_INTEGRATION_GUIDE.md](file:///d:/Python/Central-IAM/SPOKE_SSO_INTEGRATION_GUIDE.md)):**
+     - อัปเดตข้อ 4.2 ฝั่ง Frontend ให้ตรงกับ Responsive Design Standard ใหม่
+  3. **Admin Console ([applications/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/applications/page.tsx)):**
+     - อัปเดตคำอธิบายใน Modal คู่มือสำหรับ Dev (Dev Spec Modal) ให้เป็น Responsive Login Standard
+  4. **ระบบนำร่อง IRM ([page.tsx](file:///d:/Python/IRM/frontend/src/app/login/page.tsx)):**
+     - ปรับปรุงหน้าจอ Login ของ IRM ให้ตรงตามสเปกใหม่ 100%: ฟอร์มแสดงผลเด่นชัดเสมอ บน Desktop มีปุ่ม SSO กะทัดรัดด้านบน และบน Mobile มีปุ่ม SSO ขนาดเล็กด้านล่างต่อจากฟอร์ม
+     - ผ่านการตรวจสอบ TypeScript `0 TS errors` ทั้งฝั่ง CIAM และ IRM
 
 ---
 

@@ -765,29 +765,145 @@ sudo systemctl start ciam-agent
 
 ---
 
-### 5.2 มาตรฐานหน้าจอล็อกอินและพฤติกรรมเมื่อปิด SSO (Zero-Confusion Single-Button Standard)
+### 5.2 มาตรฐานหน้าจอล็อกอินแบบ Responsive: คุ้นเคยเดิมบน Mobile 100% & เลือกได้ยืดหยุ่นบน Desktop (Mobile Familiarity & Desktop Dual-Option)
 
 > [!IMPORTANT]
-> **กฎความเรียบง่ายและไม่ทำให้ผู้ใช้สับสน (Zero-Confusion Standard):**  
-> หน้าจอล็อกอินของระบบลูก (Spoke Login Page) จะต้องปรับเปลี่ยนการแสดงผลตามสถานะของ `ciam_sso_enabled` และ `ciam_break_glass_active` อย่างเคร่งครัดตาม 3 สถานการณ์ดังนี้:
+> **หลักการออกแบบหน้าจอล็อกอินระบบลูก (User-Centric Responsive Login Standard):**  
+> จากการใช้งานจริงในองค์กร พนักงานแบ่งออกเป็น 2 กลุ่มอย่างชัดเจน:
+> 1. **ผู้ใช้งานผ่าน Mobile (หน้างาน / คลังสินค้า / จัดซื้อ / ฝ่ายผลิต):** มักเข้าใช้งานแอปพลิเคชันนั้นๆ เพียงแอปเดียวบนโทรศัพท์มือถือ **หน้าตา Login ต้องแทบจะเหมือนเดิม 100%** เพื่อไม่ให้พนักงานรู้สึกว่ามีอะไรเปลี่ยนแปลงไปจากเดิมที่เคยใช้งาน
+> 2. **ผู้ใช้งานผ่าน Desktop (สำนักงาน / แล็ปท็อป):** มักทำงานหลายระบบพร้อมกัน **ปุ่ม SSO ต้องมีขนาดกะทัดรัด (Compact)** และแสดงควบคู่ไปกับฟอร์มมาตรฐาน เพื่อเปิดโอกาสให้พนักงานเลือกวิธีล็อกอินตามความต้องการได้อย่างอิสระ
 
-#### สถานการณ์ที่ 1: เปิดใช้งาน SSO ปกติ (`ciam_sso_enabled = true` และ `ciam_break_glass_active = false`)
-* **ปุ่มหลักเพียงปุ่มเดียว (Single Primary CTA):** แสดงปุ่มเด่นชัดสีน้ำเงิน/ฟ้า **`[ 🛡️ เข้าสู่ระบบด้วย Window Asia SSO ✨ ]`** เป็นปุ่มหลักเพียงปุ่มเดียวในหน้าจอ
-* **ซ่อนฟอร์ม Local Login เริ่มต้น (Hidden by Default):** **ซ่อนช่อง Username, Password และปุ่ม Sign In ดั้งเดิมไว้โดยเริ่มต้น** เพื่อไม่ให้พนักงานทั่วไปเกิดความสับสนว่าต้องพิมพ์รหัสตรงนี้หรือกดปุ่ม SSO ด้านบน
-* **ลิงก์สำรองสำหรับผู้ดูแลระบบ (Local Admin Link):** ทำเป็นข้อความลิงก์เล็กๆ ด้านล่าง เช่น *"เข้าสู่ระบบด้วยบัญชี Local (กรณีฉุกเฉิน) →"* สำหรับให้แอดมินคลิกเพื่อกางฟอร์มกรอกรหัสผ่านในกรณีพิเศษ (เช่น บัญชี `admin`)
-* **รองรับ Seamless True SSO:** เมื่อพนักงานมีเซสชันเดิมบน Central IAM (หรือเปิดมาจาก Portal) การคลิกปุ่ม SSO จะทำการยืนยันตัวตนและนำทางเข้าสู่ระบบลูกโดยอัตโนมัติใน ~0.8 วินาทีโดยไม่ต้องพิมพ์ชื่อและรหัสผ่านซ้ำอีก
+---
 
-#### สถานการณ์ที่ 2: ปิดใช้งาน SSO ในระบบลูก (`ciam_sso_enabled = false`)
-* ❌ **ห้ามแสดงปุ่ม SSO โดยเด็ดขาด:** ไม่ต้องเรนเดอร์ปุ่ม SSO สีฟ้า
-* ❌ **ห้ามแสดงแบนเนอร์แจ้งเตือน SSO:** ห้ามมีกล่องข้อความเตือนใดๆ เช่น *"Central IAM SSO ปิดใช้งานชั่วคราว"* หรือ *"SSO Disabled"*
-* ❌ **ห้ามแสดงเส้นคั่น Break-Glass:** ห้ามแสดงข้อความ *"หรือเข้าสู่ระบบสำรอง (Break-Glass Login)"*
-* ❌ **ห้ามมีคำว่า "สำรอง" บนปุ่มกดยืนยัน:** ปุ่ม Submit ด้านล่างต้องแสดงข้อความมาตรฐานคือ **`เข้าสู่ระบบ (Sign In)`** เท่านั้น (ไม่ใช่ "เข้าสู่ระบบสำรอง")
-* ❌ **ห้ามแสดง Footer เกี่ยวกับ Break-Glass:** ซ่อนข้อความ *"Break-Glass Ready"* ท้ายหน้าจอ
-* **ผลลัพธ์ที่ต้องการ:** หน้าจอจะกลายเป็นฟอร์ม Login แบบมาตรฐานดั้งเดิม 100% (ช่อง Username, Password และปุ่มเข้าสู่ระบบ) ผู้ใช้ทั่วไปจะไม่เห็นคำว่า SSO หรือคำว่า "สำรอง" ใดๆ ทั้งสิ้น
+#### 1. รายละเอียดการแสดงผลแยกตามขนาดหน้าจอ (Responsive Behavior)
 
-#### สถานการณ์ที่ 3: โหมดฉุกเฉิน Break-Glass (`ciam_break_glass_active = true`)
-* แสดงกล่องแจ้งเตือนสีเหลือง/ส้มด้านบน: `⚠️ ระบบอยู่ในโหมดฉุกเฉิน (Break-Glass Active) - เข้าใช้งานด้วยรหัสผ่านตรง`
-* เปิดฟอร์ม Username และ Password ให้อัตโนมัติ โดยปุ่มกดยืนยันแสดงข้อความ: `เข้าสู่ระบบฉุกเฉิน (Break-Glass Sign In)`
+| มิติ / หน้าจอ | 📱 เข้าใช้งานด้วย Mobile (จอมือถือ / แท็บเล็ตหน้างาน) | 💻 เข้าใช้งานด้วย Desktop (คอมพิวเตอร์ / แล็ปท็อป) |
+| :--- | :--- | :--- |
+| **เป้าหมายประสบการณ์ (UX Goal)** | **คงความคุ้นเคยเดิม 100%** ไม่สะดุด ไม่สับสน | **เปิดโอกาสให้เลือก (Freedom of Choice)** รวดเร็วและสะดวก |
+| **ฟอร์ม Username & Password** | **แสดงเด่นชัดเป็นฟอร์มหลักทันทีตั้งแต่เปิดหน้าจอ** (ไม่ต้องกดลิงก์ใดๆ เพื่อเปิด) | **แสดงควบคู่กันบนหน้าจอทันที** สามารถกรอกข้อมูลเข้าใช้งานได้ทันที |
+| **ปุ่ม Sign In ของระบบเดิม** | เป็นปุ่มหลัก (Primary CTA) สีเด่นชัด ขนาดเต็มแผง | เป็นปุ่มมาตรฐานด้านล่างฟอร์ม |
+| **ตำแหน่งและขนาดปุ่ม SSO** | **อยู่ด้านล่างต่อจากฟอร์มหลัก** คั่นด้วยเส้นแบ่ง `— หรือเข้าสู่ระบบด้วย —` ปุ่มขนาดกะทัดรัด (Secondary Option) ไม่แย่งความเด่น | **วางไว้ด้านบนฟอร์มหลัก** คั่นด้วย `— หรือเข้าสู่ระบบด้วยชื่อผู้ใช้งาน —` **ปุ่มขนาดเล็กลง (Compact height `py-2.5`, text-xs/sm)** ไม่ครอบงำหน้าจอ |
+
+---
+
+#### 2. พฤติกรรมตามสถานะระบบ (State-Driven Logic)
+
+##### สถานการณ์ที่ 1: เปิดใช้งาน SSO ปกติ (`ciam_sso_enabled = true` และ `ciam_break_glass_active = false`)
+* **บน Desktop:** แสดงปุ่ม SSO ขนาดกะทัดรัด (Compact Button) ด้านบนฟอร์ม คั่นด้วยเส้นแบ่ง `— หรือเข้าสู่ระบบด้วยชื่อผู้ใช้งาน —` ตามด้วยฟอร์ม Username & Password ปกติ
+* **บน Mobile:** แสดงฟอร์ม Username & Password ดั้งเดิมเป็นหลัก พร้อมปุ่ม Submit สีเด่นชัด และมีเส้นแบ่ง `— หรือเข้าสู่ระบบด้วย —` พร้อมปุ่ม SSO ขนาดย่อมด้านล่างสุด
+* **True SSO:** เมื่อกดปุ่ม SSO หากมีเซสชันเดิมบน Central IAM ระบบจะ Redirect แลก Token และเข้าสู่ระบบทันทีภายใน ~0.8 วินาที
+
+##### สถานการณ์ที่ 2: ปิดใช้งาน SSO ในระบบลูก (`ciam_sso_enabled = false`)
+* ❌ **ซ่อนปุ่ม SSO และเส้นแบ่งทั้งหมด 100%:** ไม่ต้องเรนเดอร์ปุ่ม SSO และไม่ต้องมีเส้นคั่นใดๆ ทั้งบน Desktop และ Mobile
+* ❌ **ห้ามแสดงข้อความเตือนหรือคำว่า "สำรอง":** ห้ามขึ้นว่า "SSO Disabled" หรือ "เข้าสู่ระบบสำรอง"
+* **ผลลัพธ์:** หน้าจอจะกลายเป็นฟอร์ม Login ดั้งเดิมของระบบลูก 100%
+
+##### สถานการณ์ที่ 3: โหมดฉุกเฉิน Break-Glass (`ciam_break_glass_active = true`)
+* แสดงกล่องแจ้งเตือนสีส้ม/เหลืองด้านบน: `⚠️ ระบบอยู่ในโหมดฉุกเฉิน (Break-Glass Active) - กรุณาเข้าใช้งานด้วยรหัสผ่านตรง`
+* ซ่อนปุ่ม SSO และให้พนักงานล็อกอินผ่านฟอร์ม Username / Password ดั้งเดิมตรงไปยังระบบหรือ AD Gateway
+
+---
+
+#### 3. ตัวอย่างโค้ดมาตรฐานสำหรับ Dev ระบบลูก (React / Next.js + Tailwind CSS)
+
+ทีมพัฒนาของแต่ละ Spoke สามารถนำโครงสร้าง JSX และ Tailwind Responsive Classes (`hidden md:block` และ `block md:hidden`) ไปปรับใช้ได้ทันที:
+
+```tsx
+export default function SpokeLoginPage() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [ssoConfig, setSsoConfig] = useState({ sso_enabled: true, break_glass_active: false });
+
+  return (
+    <div className="w-full max-w-md bg-slate-900 rounded-2xl p-6 sm:p-8 border border-slate-800">
+      {/* 1. Header & Logo ระบบลูก */}
+      <div className="text-center mb-6">
+        <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white">
+          APP
+        </div>
+        <h1 className="text-xl font-bold text-white">ชื่อระบบงาน (Spoke App)</h1>
+        <p className="text-xs text-slate-400 mt-1">คำอธิบายระบบงาน</p>
+      </div>
+
+      {/* 2. Desktop SSO Button: ขนาดย่อมลงมา (Compact) อยู่ด้านบนสำหรับ Desktop */}
+      {ssoConfig?.sso_enabled && !ssoConfig.break_glass_active && (
+        <div className="hidden md:block mb-5">
+          <button
+            type="button"
+            onClick={handleCiamSso}
+            className="w-full py-2.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition cursor-pointer"
+          >
+            <span>🛡️ เข้าสู่ระบบด้วย Window Asia SSO ✨</span>
+          </button>
+          
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-800" />
+            </div>
+            <div className="relative flex justify-center text-[11px]">
+              <span className="bg-slate-900 px-3 text-slate-500">หรือเข้าสู่ระบบด้วยชื่อผู้ใช้งาน</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Standard Login Form: แสดงเด่นชัดเสมอ ทั้งบน Mobile และ Desktop */}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-xs font-semibold text-slate-300 mb-1.5">ชื่อผู้ใช้งาน (Username)</label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="ชื่อผู้ใช้งาน AD หรือ Local"
+            className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-300 mb-1.5">รหัสผ่าน (Password)</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="กรอกรหัสผ่าน"
+            className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        {/* ปุ่มเข้าสู่ระบบหลัก (Primary CTA) */}
+        <button
+          type="submit"
+          className="w-full mt-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-xl shadow-md transition cursor-pointer"
+        >
+          เข้าสู่ระบบ (Sign In)
+        </button>
+      </form>
+
+      {/* 4. Mobile Secondary SSO: อยู่ด้านล่างฟอร์มหลักในขนาดกะทัดรัด สำหรับจอมือถือ */}
+      {ssoConfig?.sso_enabled && !ssoConfig.break_glass_active && (
+        <div className="block md:hidden pt-4 mt-1">
+          <div className="relative mb-3">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-800" />
+            </div>
+            <div className="relative flex justify-center text-[10px]">
+              <span className="bg-slate-900 px-2.5 text-slate-500">หรือเข้าสู่ระบบด้วย</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleCiamSso}
+            className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer"
+          >
+            <span>🛡️ Window Asia SSO ✨</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+```
 
 ---
 
