@@ -71,6 +71,7 @@ export default function ApplicationsPage() {
   const [allowedNetworkCidrs, setAllowedNetworkCidrs] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [showSpecModal, setShowSpecModal] = useState(false);
+  const [specModalTab, setSpecModalTab] = useState<"spec" | "changelog">("spec");
   const [sortBy, setSortBy] = useState<"id" | "name" | "code">("id");
 
 
@@ -2752,12 +2753,147 @@ export default function ApplicationsPage() {
               </div>
               <button
                 onClick={() => setShowSpecModal(false)}
-                className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold text-xs"
+                className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold text-xs cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
+            {/* Tab Switcher */}
+            <div className="flex items-center space-x-2 border-b-2 border-slate-200 pb-2.5">
+              <button
+                type="button"
+                onClick={() => setSpecModalTab("spec")}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition cursor-pointer flex items-center space-x-1.5 ${
+                  specModalTab === "spec"
+                    ? "bg-slate-900 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>📘 ข้อกำหนดทางเทคนิค (API & SSO)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSpecModalTab("changelog")}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition cursor-pointer flex items-center space-x-1.5 ${
+                  specModalTab === "changelog"
+                    ? "bg-indigo-700 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>📜 ประวัติการปรับปรุงสเปก (Revision Changelog)</span>
+                <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1">
+                  v2.5.0
+                </span>
+              </button>
+            </div>
+
+            {specModalTab === "changelog" ? (
+              <div className="flex-1 overflow-y-auto space-y-4 text-xs pr-1">
+                {/* Current Active Version Banner */}
+                <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-900 to-slate-900 text-white shadow-md space-y-2 border border-indigo-700/50">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center space-x-2.5">
+                      <span className="px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-500 text-slate-950">
+                        v2.5.0 ล่าสุด
+                      </span>
+                      <h4 className="font-extrabold text-sm text-white">
+                        Enterprise Spoke Integration Standard
+                      </h4>
+                    </div>
+                    <div className="text-[11px] text-slate-300 font-medium">
+                      วันที่มีผล: <span className="font-bold text-white">7 ตุลาคม 2026</span> • มาตรฐานความปลอดภัย ISO 27001
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    ตารางบันทึกประวัติการปรับปรุงข้อกำหนดมาตรฐานกลาง (Specification Changelog) เพื่อให้ทีมพัฒนาทุกระบบในเครือบริษัท วินโดว์ เอเชีย จำกัด (มหาชน) สามารถตรวจสอบย้อนกลับและทราบความเปลี่ยนแปลงในแต่ละเวอร์ชัน
+                  </p>
+                </div>
+
+                {/* Changelog Timeline */}
+                <div className="space-y-3">
+                  {/* v2.5.0 */}
+                  <div className="p-3.5 rounded-lg border-2 border-emerald-300 bg-emerald-50/40 space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.5.0</span>
+                        <span className="font-bold text-emerald-950">Dual-Mode SSO & Portal Launch Standard</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          Active Current
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">07/10/2026</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-700 text-[11.5px] leading-relaxed">
+                      <li><strong>แก้ปัญหา SSO Session Mismatch:</strong> ปรับปรุงหมวด B.3 ให้ระบบลูกรองรับทั้ง Spoke-Initiated (มี sessionStorage) และ IdP-Initiated / Portal Launch (ไม่มี sessionStorage) ป้องกันข้อผิดพลาด <em>&quot;SSO session ไม่ถูกต้องหรือหมดอายุ&quot;</em> ที่เคยพบใน MTPulse</li>
+                      <li><strong>กฎเหล็ก Frontend (/auth/callback):</strong> ห้าม Throw Error หรือเตะผู้ใช้กลับเมื่อไม่มี session verifier โดยให้ fallback ส่งค่าว่างไปยัง Backend</li>
+                      <li><strong>กฎเหล็ก Backend (POST /api/auth/sso/callback):</strong> กำหนดให้ <code>code_verifier</code> และ <code>state</code> เป็น Optional ไม่บังคับตรวจ Session Memory ในหน่วยความจำ และแนบ <code>code_verifier</code> เฉพาะเมื่อมีค่าจริง</li>
+                      <li><strong>UX Responsive Login Standard:</strong> กำหนดมาตรฐานหน้า Login ให้มือถือคงรูปแบบเดิม 100% ไม่เปลี่ยนให้ผู้ใช้สับสน และ Desktop มีปุ่ม SSO ขนาดย่อม</li>
+                      <li><strong>แจกโค้ดตัวอย่างพร้อมใช้:</strong> เพิ่ม Section 10.5 ตัวอย่าง Next.js 14 Frontend Callback Component และปรับปรุงตัวอย่าง FastAPI / Express</li>
+                    </ul>
+                  </div>
+
+                  {/* v2.4.0 */}
+                  <div className="p-3.5 rounded-lg border-2 border-slate-200 bg-white space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-slate-700 text-white">v2.4.0</span>
+                        <span className="font-bold text-slate-900">Mode C Outbound Agent & 1-Click Offboarding</span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">05/10/2026</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-600 text-[11.5px] leading-relaxed">
+                      <li><strong>Reverse Heartbeat Standard:</strong> เพิ่มสเปก Mode C (<code>POST /api/v1/agent/heartbeat</code>) สำหรับระบบ On-Premise ในโรงงานที่ไม่มี Inbound Public Port (Zero Inbound Ports)</li>
+                      <li><strong>Command Dispatch Queue:</strong> สั่งระงับสิทธิ์ <code>DISABLE_USER</code> ผ่านคิวคำสั่งเพื่อให้ Agent ดึงไปตัดสิทธิ์ในระบบตนเองโดยอัตโนมัติ</li>
+                    </ul>
+                  </div>
+
+                  {/* v2.3.0 */}
+                  <div className="p-3.5 rounded-lg border-2 border-slate-200 bg-white space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-slate-700 text-white">v2.3.0</span>
+                        <span className="font-bold text-slate-900">Zero-Trust Network Access & VPN Policies</span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">03/10/2026</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-600 text-[11.5px] leading-relaxed">
+                      <li>กำหนดมาตรฐานการจำกัดสิทธิ์เครือข่าย <code>VPN_ONLY</code> (โหมด HIDE และ LOCK_WITH_BANNER) พร้อมตรวจสอบ Egress Public IP ของสำนักงาน</li>
+                    </ul>
+                  </div>
+
+                  {/* v2.2.0 */}
+                  <div className="p-3.5 rounded-lg border-2 border-slate-200 bg-white space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-slate-700 text-white">v2.2.0</span>
+                        <span className="font-bold text-slate-900">Non-AD Local Account Provisioning</span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">01/10/2026</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-600 text-[11.5px] leading-relaxed">
+                      <li>รองรับบัญชีที่ไม่ใช่ Active Directory (เช่น Supplier ใน IRM) ผ่านฟิลด์ <code>use_ad_auth: false</code> เพื่อจัดการสิทธิ์เฉพาะระบบผ่าน Portal</li>
+                    </ul>
+                  </div>
+
+                  {/* v2.0.0 */}
+                  <div className="p-3.5 rounded-lg border-2 border-slate-200 bg-white space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-slate-700 text-white">v2.0.0</span>
+                        <span className="font-bold text-slate-900">OIDC PKCE S256 & Asymmetric RS256 Verification</span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">25/09/2026</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-600 text-[11.5px] leading-relaxed">
+                      <li>ยกระดับความปลอดภัยด้วย Asymmetric RS256 Public Key Verification ผ่าน JWKS Endpoint</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            ) : (
             <div className="flex-1 overflow-y-auto space-y-4 text-xs pr-1">
               {/* Important Callout */}
               <div className="p-3.5 rounded-lg bg-blue-50 border-2 border-blue-200 text-blue-950 space-y-1">
@@ -2974,6 +3110,7 @@ export default function ApplicationsPage() {
                 </div>
               </div>
             </div>
+          )}
 
             {/* Footer Buttons */}
             <div className="pt-3 border-t-2 border-slate-200 flex items-center justify-between">

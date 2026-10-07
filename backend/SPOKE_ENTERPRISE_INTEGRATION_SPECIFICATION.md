@@ -1,9 +1,26 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Version:** 2.4.0 (Enterprise Reverse Heartbeat & Outbound Agent Specification Edition)  
+**Current Version:** 2.5.0 (Dual-Mode SSO, Portal Launch & Callback Standard Edition)  
+**Effective Date:** 7 ตุลาคม 2026 (07/10/2026)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
 **Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
 **Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636)
+
+---
+
+## 0. ประวัติการแก้ไขเอกสารและบันทึกการเปลี่ยนแปลง (Document Revision History & Changelog)
+
+ตารางบันทึกประวัติการปรับปรุงข้อกำหนดมาตรฐาน เพื่อให้ทีมพัฒนาทุกระบบ (Spoke Teams) สามารถตรวจสอบย้อนกลับและทราบความแตกต่างของข้อกำหนดในแต่ละเวอร์ชันตามมาตรฐาน ISO 27001:
+
+| เวอร์ชัน (Version) | วันที่มีผล (Date) | สถานะ (Status) | สรุปรายการปรับปรุงจากเวอร์ชันก่อนหน้า (Change Summary & Key Differences) |
+| :---: | :---: | :---: | :--- |
+| **v2.5.0** | 07/10/2026 | **Current Active** | • **Dual-Mode SSO & Portal Launch Support (หมวด B.3):** แก้ปัญหา Spoke App ขึ้น Error *"SSO session ไม่ถูกต้องหรือหมดอายุ"* เมื่อเปิดจากการ์ดใน Central IAM Portal โดยกำหนดให้ระบบลูกต้องรองรับทั้ง Spoke-Initiated (มี sessionStorage) และ IdP-Initiated / Portal Launch (ไม่มี sessionStorage)<br/>• **Frontend Standard (`/auth/callback`):** กำหนดกฎเหล็กห้ามบล็อกผู้ใช้หรือขึ้น Error เมื่อไม่มี `sessionStorage` และให้ fallback ส่งค่าว่างไปยัง Backend<br/>• **Backend Standard (`POST /api/auth/sso/callback`):** กำหนดให้ `code_verifier` และ `state` เป็น Optional ไม่บังคับตรวจ Session Memory ในหน่วยความจำ และแนบ `code_verifier` เฉพาะเมื่อมีค่าจริง<br/>• **Responsive Login UX Standard (หมวด 5):** กำหนด UX ให้หน้าจอมือถือคงรูปแบบเดิม 100% ไม่เปลี่ยนให้ผู้ใช้สับสน และบน Desktop ปรับปุ่ม SSO ให้กะทัดรัดขึ้น<br/>• **Ready-to-Use Code Snippets (ภาคผนวก 10.3 - 10.5):** เพิ่มตัวอย่าง Frontend Callback (Next.js 14) และปรับปรุงตัวอย่าง FastAPI / Express ให้รองรับ Portal Launch 100% |
+| **v2.4.0** | 05/10/2026 | Superseded | • **Mode C Outbound Agent Specification (หมวด 1.2, หมวด D):** เพิ่มมาตรฐาน Reverse Heartbeat & Command Pull (`POST /api/v1/agent/heartbeat`) สำหรับระบบ On-Premise ที่ไม่มี Inbound Public Port (Zero Inbound Ports)<br/>• **Automated 1-Click Offboarding:** กำหนดโครงสร้างคำสั่ง `DISABLE_USER` และ `ENABLE_USER` ผ่าน Outbound Heartbeat Queue พร้อมตัวอย่างสคริปต์ `ciam_agent.py` |
+| **v2.3.0** | 03/10/2026 | Superseded | • **Zero-Trust Network Policy (หมวด 1.3):** กำหนดมาตรฐานการจำกัดการเข้าถึงผ่าน VPN (`VPN_ONLY`, `HIDE`, `LOCK_WITH_BANNER`) พร้อมระบุรายการ Corporate Subnets / Gateway CIDRs |
+| **v2.2.0** | 01/10/2026 | Superseded | • **Local Account Management:** รองรับบัญชีที่ไม่ใช่ Active Directory (เช่น Supplier ใน IRM) ผ่านฟิลด์ `use_ad_auth: false` เพื่อจัดการสิทธิ์เฉพาะระบบผ่าน Portal |
+| **v2.1.0** | 28/09/2026 | Superseded | • **Break-Glass Emergency Switch (หมวด B.4):** กำหนดมาตรฐานโหมดปลดระบบฉุกเฉินระดับ ISO 27001 ให้สลับไปใช้ Direct AD Gateway หรือ Local Credential ได้ทันทีเมื่อระบบกลางขัดข้อง |
+| **v2.0.0** | 25/09/2026 | Superseded | • **OIDC PKCE S256 & Asymmetric RS256 Verification:** ยกระดับความปลอดภัยการยืนยันตัวตนด้วย Asymmetric RS256 Public Key ผ่าน JWKS Endpoint |
+| **v1.0.0** | 15/09/2026 | Superseded | • ร่างข้อกำหนดการเชื่อมต่อระบบลูกเวอร์ชันแรก (REST M2M API, Two-Way Directory Sync และ System Settings) |
 
 ---
 

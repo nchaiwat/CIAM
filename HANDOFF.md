@@ -374,5 +374,8 @@ docker compose up -d api web
   2. **กฎเหล็ก Frontend `/auth/callback`:** ห้ามบล็อกผู้ใช้หรือขึ้น Error "SSO session ไม่ถูกต้อง" เมื่อเปิดผ่าน Portal โดยให้ fallback ส่ง `code_verifier: ""` ไปยัง Backend ทันที
   3. **กฎเหล็ก Backend `/api/auth/sso/callback`:** กำหนด `code_verifier` และ `state` เป็น Optional ไม่บังคับตรวจ Session Memory และแนบ `code_verifier` เฉพาะเมื่อมีค่า
   4. **แจกโค้ดมาตรฐานพร้อมใช้:** เพิ่ม Section 10.5 ตัวอย่างโค้ด Frontend Callback (Next.js 14 / React App Router) และปรับโค้ดตัวอย่าง Backend (FastAPI, Express/Node.js) ในภาคผนวกให้เป็นมาตรฐานเดียวกับที่ IRM ใช้งานจริง
+  5. **Document Revision History & UI Changelog:**
+     - เพิ่มหมวด **0. ประวัติการแก้ไขเอกสาร (Document Revision History)** ในไฟล์ markdown แสดงประวัติตั้งแต่ v1.0.0 จนถึง v2.5.0 พร้อมสรุปสิ่งที่เปลี่ยนแปลง
+     - เพิ่มแท็บ **"📜 ประวัติการปรับปรุงสเปก (Revision Changelog)"** ใน Modal คู่มือสำหรับ Dev บนหน้าจอ `/applications` ให้ผู้ดูแลระบบและ Dev เปิดดู Log ความแตกต่างย้อนหลังผ่านหน้าเว็บได้ทันที
 
 
