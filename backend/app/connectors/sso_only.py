@@ -87,10 +87,31 @@ class SsoOnlyConnector(BaseConnector):
         )
 
     async def sync_inventory(self) -> dict:
+        import secrets
+        from app.core.database import SessionLocal
+        from app.models.application import SpokePendingCommand
+        cmd_id = f"cmd_{secrets.token_hex(6)}"
+        try:
+            db = SessionLocal()
+            cmd = SpokePendingCommand(
+                command_id=cmd_id,
+                app_code=self.app_code,
+                action="REQUEST_FULL_SYNC",
+                username="ALL_ACCOUNTS",
+                reason="Scheduled 04:00 AM Full Directory Sync triggered from Central IAM",
+                status="PENDING",
+                issued_by="Central-IAM-Scheduler"
+            )
+            db.add(cmd)
+            db.commit()
+            db.close()
+        except Exception as e:
+            logger.warning("Failed to queue scheduled REQUEST_FULL_SYNC for %s: %s", self.app_code, e)
+
         return {
             "application_name": self.app_name,
             "total_accounts": 0,
             "accounts": [],
             "mode": "SSO_CLIENT_ONLY",
-            "message": "ระบบนี้เชื่อมต่อแบบ SSO Client Mode (On-Premise) บัญชีผู้ใช้จะถูกสร้างและจับคู่แบบ Just-In-Time (JIT) เมื่อพนักงานเข้าใช้งานผ่าน SSO"
+            "message": f"ส่งคำสั่งขอ Full Directory Sync ({cmd_id}) สำหรับ Mode C Outbound Agent เรียบร้อยแล้ว (จะประมวลผลเมื่อ Agent ส่ง Heartbeat รอบถัดไป)"
         }

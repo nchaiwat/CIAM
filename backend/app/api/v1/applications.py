@@ -410,13 +410,28 @@ async def sync_application_inventory(
         current_mapped_count = db.query(AppAccountMapping).filter(AppAccountMapping.application_id == app.id).count()
         app.total_linked_accounts = current_mapped_count
         app.last_sync_at = now
+
+        # ส่งคำสั่ง REQUEST_FULL_SYNC เข้า Command Queue สำหรับ Mode C Agent
+        import secrets
+        from app.models.application import SpokePendingCommand
+        cmd_id = f"cmd_{secrets.token_hex(6)}"
+        db.add(SpokePendingCommand(
+            command_id=cmd_id,
+            app_code=app.app_code,
+            action="REQUEST_FULL_SYNC",
+            username="ALL_ACCOUNTS",
+            reason=f"Admin '{current_admin.username}' triggered Full Directory Sync via Central IAM",
+            status="PENDING",
+            issued_by=current_admin.username
+        ))
+
         db.add(IamAuditLog(
             actor_username=current_admin.username,
             action_type="SYNC",
             target_username=f"INVENTORY_{app.app_code.upper()}",
             affected_app_code=app.app_code,
             execution_mode="SSO_ONLY",
-            reason=f"ตรวจสอบและยืนยันบัญชีปัจจุบันของ {app.app_name} จำนวน {current_mapped_count} บัญชี (Outbound Agent Mode)",
+            reason=f"ตรวจสอบบัญชีปัจจุบัน ({current_mapped_count} บัญชี) และส่งคำสั่ง REQUEST_FULL_SYNC ({cmd_id}) ไปยัง Outbound Agent",
             status="SUCCESS"
         ))
         db.commit()
@@ -426,7 +441,7 @@ async def sync_application_inventory(
             "total_accounts_fetched": current_mapped_count,
             "synced_count": current_mapped_count,
             "synced_at": now.isoformat(),
-            "message": f"ยืนยันบัญชีปัจจุบันของ {app.app_name} จำนวน {current_mapped_count} บัญชี (ระบบ Outbound Agent จะส่งข้อมูลอัตโนมัติในรอบถัดไป)"
+            "message": f"ยืนยันบัญชีปัจจุบันของ {app.app_name} จำนวน {current_mapped_count} บัญชี และส่งคำสั่งขอ Full Directory Sync (REQUEST_FULL_SYNC) ไปยัง Agent เรียบร้อยแล้ว (จะอัปเดตเมื่อ Agent ส่ง Heartbeat ถัดไป)"
         }
 
     connector = get_connector_for_app(app)

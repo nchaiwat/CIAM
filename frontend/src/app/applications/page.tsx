@@ -2785,7 +2785,7 @@ export default function ApplicationsPage() {
                 <Clock className="w-3.5 h-3.5" />
                 <span>📜 ประวัติการปรับปรุงสเปก (Revision Changelog)</span>
                 <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1">
-                  v2.5.0
+                  v2.6.0
                 </span>
               </button>
             </div>
@@ -2797,7 +2797,7 @@ export default function ApplicationsPage() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center space-x-2.5">
                       <span className="px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-500 text-slate-950">
-                        v2.5.0 ล่าสุด
+                        v2.6.0 ล่าสุด
                       </span>
                       <h4 className="font-extrabold text-sm text-white">
                         Enterprise Spoke Integration Standard
@@ -2814,12 +2814,12 @@ export default function ApplicationsPage() {
 
                 {/* Changelog Timeline */}
                 <div className="space-y-3">
-                  {/* v2.5.0 */}
+                  {/* v2.6.0 */}
                   <div className="p-3.5 rounded-lg border-2 border-emerald-300 bg-emerald-50/40 space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center space-x-2">
-                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.5.0</span>
-                        <span className="font-bold text-emerald-950">Dual-Mode SSO & Portal Launch Standard</span>
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.6.0</span>
+                        <span className="font-bold text-emerald-950">RFC 9700 Seamless SSO Bounce, Architecture Equivalence & Outbound Command Protocol</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                           Active Current
                         </span>
@@ -2827,6 +2827,23 @@ export default function ApplicationsPage() {
                       <span className="text-[11px] text-slate-500 font-medium">07/10/2026</span>
                     </div>
                     <ul className="list-disc list-inside space-y-1 text-slate-700 text-[11.5px] leading-relaxed">
+                      <li><strong>RFC 9700 Seamless SSO Initiation Bounce:</strong> กำหนดมาตรฐาน Portal Launch ให้ชี้ไปที่ SSO Start Endpoint (เช่น <code>/auth/start</code>) เพื่อให้ Spoke ผูก Client State &amp; PKCE กับเบราว์เซอร์ได้สมบูรณ์ 100% ป้องกัน CSRF / Login Injection ตาม RFC 9700 §4.7 โดยคงประสบการณ์ Seamless 1-Click Launch</li>
+                      <li><strong>Architecture Equivalence Principles:</strong> ยอมรับสถาปัตยกรรมเทียบเท่า ไม่ต้องแก้โค้ดให้เหมือนตัวอย่างทุกบรรทัด (รองรับ Backend PKCE Storage, HttpOnly Session Cookie แทน Token, การ Query DB ต่อ Request, และการ Resolve ตัวตนด้วย <code>sub</code> / <code>preferred_username</code>)</li>
+                      <li><strong>Mode C Full Sync Trigger:</strong> เพิ่มคำสั่ง <code>REQUEST_FULL_SYNC</code> ใน Heartbeat Command Queue เมื่อแอดมินกดปุ่ม &quot;⚡ ซิงค์&quot; บน CIAM หรือรอบ 04:00 น. โดย Mode C ไม่ต้องเปิด Inbound Port และไม่ต้องเปิด Group C API</li>
+                      <li><strong>Asynchronous Deprovisioning &amp; Local Admin Protection:</strong> กำหนด Lifecycle คำสั่ง (<code>PENDING</code> ➔ <code>SENT</code> ➔ <code>COMPLETED</code> / <code>FAILED</code>) และรับรองสิทธิ์ของ Spoke ในการปฏิเสธคำสั่งปิดบัญชีผู้ดูแลระบบฉุกเฉิน (Local Admin Protection)</li>
+                    </ul>
+                  </div>
+
+                  {/* v2.5.0 */}
+                  <div className="p-3.5 rounded-lg border-2 border-slate-200 bg-white space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-slate-700 text-white">v2.5.0</span>
+                        <span className="font-bold text-slate-900">Dual-Mode SSO &amp; Portal Launch Standard</span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">07/10/2026</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-600 text-[11.5px] leading-relaxed">
                       <li><strong>แก้ปัญหา SSO Session Mismatch:</strong> ปรับปรุงหมวด B.3 ให้ระบบลูกรองรับทั้ง Spoke-Initiated (มี sessionStorage) และ IdP-Initiated / Portal Launch (ไม่มี sessionStorage) ป้องกันข้อผิดพลาด <em>&quot;SSO session ไม่ถูกต้องหรือหมดอายุ&quot;</em> ที่เคยพบใน MTPulse</li>
                       <li><strong>กฎเหล็ก Frontend (/auth/callback):</strong> ห้าม Throw Error หรือเตะผู้ใช้กลับเมื่อไม่มี session verifier โดยให้ fallback ส่งค่าว่างไปยัง Backend</li>
                       <li><strong>กฎเหล็ก Backend (POST /api/auth/sso/callback):</strong> กำหนดให้ <code>code_verifier</code> และ <code>state</code> เป็น Optional ไม่บังคับตรวจ Session Memory ในหน่วยความจำ และแนบ <code>code_verifier</code> เฉพาะเมื่อมีค่าจริง</li>
@@ -3067,7 +3084,7 @@ export default function ApplicationsPage() {
                         <td className="p-2.5 text-slate-700 leading-relaxed">
                           1. <strong>รายงาน Heartbeat:</strong> CIAM อัปเดตสถานะ Online ทันที (หากเงียบเกิน 5 นาที CIAM สลับเป็น Offline)<br />
                           2. <strong>Sync Inventory:</strong> แนบ <code>sync_type: "FULL_SYNC"</code> พร้อมรายชื่อบัญชีเพื่ออัปเดตสถิติและหาบัญชีผี<br />
-                          3. <strong>ดึงคำสั่ง (Pull Commands):</strong> รับคำสั่ง Disable/Enable ที่ Admin สั่งไว้ไปประมวลผลบน DB ของ Spoke เอง
+                          3. <strong>ดึงคำสั่ง (Pull Commands):</strong> รับคำสั่ง <code>DISABLE_USER</code>, <code>ENABLE_USER</code> หรือ <code>REQUEST_FULL_SYNC</code> (ขอ Sync สด) ไปประมวลผลบน DB ของ Spoke เอง
                         </td>
                       </tr>
                     </tbody>

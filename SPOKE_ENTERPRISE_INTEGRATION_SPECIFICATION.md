@@ -1,10 +1,10 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Current Version:** 2.5.0 (Dual-Mode SSO, Portal Launch & Callback Standard Edition)  
+**Current Version:** 2.6.0 (RFC 9700 Seamless SSO Bounce, Architecture Equivalence & Outbound Command Protocol)  
 **Effective Date:** 7 ตุลาคม 2026 (07/10/2026)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
 **Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
-**Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636)
+**Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636) / OAuth 2.0 Security BCP (RFC 9700)
 
 ---
 
@@ -14,12 +14,13 @@
 
 | เวอร์ชัน (Version) | วันที่มีผล (Date) | สถานะ (Status) | สรุปรายการปรับปรุงจากเวอร์ชันก่อนหน้า (Change Summary & Key Differences) |
 | :---: | :---: | :---: | :--- |
-| **v2.5.0** | 07/10/2026 | **Current Active** | • **Dual-Mode SSO & Portal Launch Support (หมวด B.3):** แก้ปัญหา Spoke App ขึ้น Error *"SSO session ไม่ถูกต้องหรือหมดอายุ"* เมื่อเปิดจากการ์ดใน Central IAM Portal โดยกำหนดให้ระบบลูกต้องรองรับทั้ง Spoke-Initiated (มี sessionStorage) และ IdP-Initiated / Portal Launch (ไม่มี sessionStorage)<br/>• **Frontend Standard (`/auth/callback`):** กำหนดกฎเหล็กห้ามบล็อกผู้ใช้หรือขึ้น Error เมื่อไม่มี `sessionStorage` และให้ fallback ส่งค่าว่างไปยัง Backend<br/>• **Backend Standard (`POST /api/auth/sso/callback`):** กำหนดให้ `code_verifier` และ `state` เป็น Optional ไม่บังคับตรวจ Session Memory ในหน่วยความจำ และแนบ `code_verifier` เฉพาะเมื่อมีค่าจริง<br/>• **Responsive Login UX Standard (หมวด 5):** กำหนด UX ให้หน้าจอมือถือคงรูปแบบเดิม 100% ไม่เปลี่ยนให้ผู้ใช้สับสน และบน Desktop ปรับปุ่ม SSO ให้กะทัดรัดขึ้น<br/>• **Ready-to-Use Code Snippets (ภาคผนวก 10.3 - 10.5):** เพิ่มตัวอย่าง Frontend Callback (Next.js 14) และปรับปรุงตัวอย่าง FastAPI / Express ให้รองรับ Portal Launch 100% |
-| **v2.4.0** | 05/10/2026 | Superseded | • **Mode C Outbound Agent Specification (หมวด 1.2, หมวด D):** เพิ่มมาตรฐาน Reverse Heartbeat & Command Pull (`POST /api/v1/agent/heartbeat`) สำหรับระบบ On-Premise ที่ไม่มี Inbound Public Port (Zero Inbound Ports)<br/>• **Automated 1-Click Offboarding:** กำหนดโครงสร้างคำสั่ง `DISABLE_USER` และ `ENABLE_USER` ผ่าน Outbound Heartbeat Queue พร้อมตัวอย่างสคริปต์ `ciam_agent.py` |
-| **v2.3.0** | 03/10/2026 | Superseded | • **Zero-Trust Network Policy (หมวด 1.3):** กำหนดมาตรฐานการจำกัดการเข้าถึงผ่าน VPN (`VPN_ONLY`, `HIDE`, `LOCK_WITH_BANNER`) พร้อมระบุรายการ Corporate Subnets / Gateway CIDRs |
-| **v2.2.0** | 01/10/2026 | Superseded | • **Local Account Management:** รองรับบัญชีที่ไม่ใช่ Active Directory (เช่น Supplier ใน IRM) ผ่านฟิลด์ `use_ad_auth: false` เพื่อจัดการสิทธิ์เฉพาะระบบผ่าน Portal |
-| **v2.1.0** | 28/09/2026 | Superseded | • **Break-Glass Emergency Switch (หมวด B.4):** กำหนดมาตรฐานโหมดปลดระบบฉุกเฉินระดับ ISO 27001 ให้สลับไปใช้ Direct AD Gateway หรือ Local Credential ได้ทันทีเมื่อระบบกลางขัดข้อง |
-| **v2.0.0** | 25/09/2026 | Superseded | • **OIDC PKCE S256 & Asymmetric RS256 Verification:** ยกระดับความปลอดภัยการยืนยันตัวตนด้วย Asymmetric RS256 Public Key ผ่าน JWKS Endpoint |
+| **v2.6.0** | 07/10/2026 | **Current Active** | • **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`) เพื่อให้ Spoke ผูก Client State & PKCE กับเบราว์เซอร์ได้สมบูรณ์ 100% ตามคำแนะนำ RFC 9700 โดยคงประสบการณ์ Seamless 1-Click สำหรับผู้ใช้<br/>• **Architecture Equivalence Principles (หมวด 1.4):** บรรจุหลักการยอมรับสถาปัตยกรรมภายในที่เทียบเท่า เช่น การเก็บ PKCE ฝั่ง Backend (Session/Redis/DB), การใช้ HttpOnly Session Cookie แทน JavaScript Tokens, และการ Resolve บัญชีด้วย `sub` / `preferred_username`<br/>• **Mode C Full Sync Trigger Protocol (หมวด D.2):** เพิ่มคำสั่ง `REQUEST_FULL_SYNC` ใน Heartbeat Command Queue เพื่อรองรับการสั่ง Sync ทันทีจาก CIAM หรือรอบ 04:00 น. โดยไม่ต้องเปิด Inbound Port<br/>• **Asynchronous Deprovisioning & Admin Protection (หมวด D.3):** กำหนด Lifecycle สถานะคำสั่ง (`PENDING` ➔ `SENT` ➔ `COMPLETED` / `FAILED`) และรับรองสิทธิ์ของ Spoke ในการปฏิเสธคำสั่งปิดบัญชีฉุกเฉิน (Local Admin Protection) |
+| **v2.5.0** | 07/10/2026 | Superseded | • **Dual-Mode SSO & Portal Launch Support:** เพิ่มข้อกำหนดการรองรับการเปิดจาก Portal และข้อกำหนดความปลอดภัยของ Callback |
+| **v2.4.0** | 05/10/2026 | Superseded | • **Mode C Outbound Agent Specification:** เพิ่มมาตรฐาน Reverse Heartbeat & Command Pull (`POST /api/v1/agent/heartbeat`) สำหรับระบบ On-Premise ที่ไม่มี Inbound Public Port |
+| **v2.3.0** | 03/10/2026 | Superseded | • **Zero-Trust Network Policy:** กำหนดมาตรฐานการจำกัดการเข้าถึงผ่าน VPN (`VPN_ONLY`, `HIDE`, `LOCK_WITH_BANNER`) พร้อมระบุ Corporate Subnets |
+| **v2.2.0** | 01/10/2026 | Superseded | • **Local Account Management:** รองรับบัญชีที่ไม่ใช่ Active Directory ผ่านฟิลด์ `use_ad_auth: false` |
+| **v2.1.0** | 28/09/2026 | Superseded | • **Break-Glass Emergency Switch:** กำหนดมาตรฐานโหมดปลดระบบฉุกเฉินระดับ ISO 27001 ให้สลับไปใช้ Direct AD Gateway หรือ Local Credential |
+| **v2.0.0** | 25/09/2026 | Superseded | • **OIDC PKCE S256 & Asymmetric RS256 Verification:** ยกระดับความปลอดภัยการยืนยันตัวตนด้วย Asymmetric RS256 Public Key ผ่าน JWKS |
 | **v1.0.0** | 15/09/2026 | Superseded | • ร่างข้อกำหนดการเชื่อมต่อระบบลูกเวอร์ชันแรก (REST M2M API, Two-Way Directory Sync และ System Settings) |
 
 ---
@@ -73,8 +74,23 @@ Central IAM รองรับสภาพแวดล้อมระบบล�
 ### ❌ ข้อห้ามสำคัญ (Zero `.env` Dependency):
 * **ห้าม Hardcode ค่าการเชื่อมต่อ Central IAM ลงในไฟล์ `.env` บน Production:**  
   การเปลี่ยน URL, หมุนเวียน Client Secret หรือสลับโหมด Break-Glass จะต้องทำได้ทันทีผ่านฐานข้อมูล/หน้าจอ System Setting **โดยไม่ต้อง SSH เข้าเซิร์ฟเวอร์ VPS, ไม่ต้องแก้ไฟล์ `.env`, และไม่ต้องสั่ง Rebuild หรือ Restart Docker Containers**
-* **Dynamic In-Memory Caching:**  
-  ระบบลูกจะอ่านค่าคอนฟิกจากตารางฐานข้อมูล `system_settings` และแคชไว้ในหน่วยความจำ โดยจะโหลดใหม่ทันทีเมื่อมีการอัปเดตผ่าน API Channel
+* **Dynamic Configuration:**  
+  ระบบลูกสามารถอ่านค่าคอนฟิกจากตารางฐานข้อมูล `system_settings` ตรงต่อคำขอ หรือแคชไว้ในหน่วยความจำ/Redis โดยต้องอัปเดตทันทีเมื่อมีการแก้ไขค่า
+
+### 1.4 หลักความยืดหยุ่นเชิงสถาปัตยกรรมภายในระบบลูก (Architecture Equivalence Principles)
+
+เอกสารฉบับนี้กำหนดมาตรฐานในเชิง **สัญญาการเชื่อมต่อและความปลอดภัย (Contract & Security Outcome)** เป็นหลัก โค้ดตัวอย่างที่แนบในเอกสารเป็นแนวทางอ้างอิง (Reference Implementation) ระบบลูกแต่ละระบบ**ไม่จำเป็นต้องแก้ไขระบบเดิมให้เหมือนตัวอย่างทุกบรรทัด** หากระบบลูกมีสถาปัตยกรรมภายในที่บรรลุผลลัพธ์ความปลอดภัยเทียบเท่าหรือรัดกุมกว่าตามมาตรฐานสากล:
+
+1. **การจัดเก็บ PKCE State & Verifier:**
+   * ตัวอย่างเอกสารแสดงการใช้ `sessionStorage` ฝั่ง Frontend
+   * *รูปแบบเทียบเท่าที่ยอมรับและสนับสนุน:* ระบบลูกสามารถสร้างและจัดเก็บ PKCE Verifier ไว้บน Backend เช่น ใน Encrypted Session Cookie (HttpOnly, SameSite=Lax), Server-side Session Cache หรือตารางในฐานข้อมูล ซึ่งเป็นรูปแบบที่มีความปลอดภัยสูง ป้องกัน XSS ได้ดียิ่งขึ้น
+2. **การจัดการ Session หลังยืนยันตัวตนสำเร็จ:**
+   * ตัวอย่างเอกสารแสดงการส่ง Access Token คืนให้ Frontend
+   * *รูปแบบเทียบเท่าที่ยอมรับ:* ระบบลูกสามารถออก Session Cookie แบบ HttpOnly เพื่อควบคุมสิทธิ์การเข้าใช้งานภายในระบบของตนเอง โดยไม่ต้องส่งต่อ Token ให้ JavaScript ฝั่ง Frontend
+3. **การจับคู่ตัวตนผู้ใช้งาน (Identity Resolution):**
+   * ระบบลูกสามารถผูกบัญชีเข้ากับตัวตนหลักใน Central IAM ได้โดยใช้ Claim: `sub` (CIAM Master ID), `preferred_username` (AD Username) หรือ `email` ตามความเหมาะสมของโครงสร้างฐานข้อมูลระบบลูก
+4. **ความถี่และการอ่านค่าการตั้งค่า:**
+   * ระบบลูกสามารถอ่านค่าจากฐานข้อมูลในแต่ละ Request หรือทำ In-memory Caching ก็ได้ ตราบใดที่ยังคงหลักการ **Zero `.env` Dependency** (เปลี่ยนการเชื่อมต่อได้ทันทีโดยไม่ต้อง Rebuild หรือ Deploy ใหม่)
 
 ---
 
@@ -138,7 +154,10 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 ## 3. ช่องทาง API มาตรฐานที่ระบบลูกต้องพัฒนา (Required API Channels)
 
-ระบบลูกต้องเปิดหรือใช้งาน Endpoint ตามโครงสร้างมาตรฐาน **4 กลุ่มหลัก** (ขึ้นอยู่กับ Mode ที่เลือก):
+ระบบลูกต้องเปิดหรือใช้งาน Endpoint ตามโครงสร้างมาตรฐาน **4 กลุ่มหลัก** (ขึ้นอยู่กับ Mode ที่เลือกตามข้อ 1.1):
+* **Mode A (Cloud Two-Way):** พัฒนา **Group A, Group B และ Group C** (มี Public IP/Tunnel ให้ CIAM ยิงเข้ามา)
+* **Mode B (On-Prem SSO-Only):** พัฒนา **Group A และ Group B** (ไม่มี Inbound Port, ผู้ใช้เข้าผ่าน SSO)
+* **Mode C (On-Prem Outbound Agent เช่น MTPulse):** พัฒนา **Group A, Group B และ Group D** (**❌ ไม่ต้องเปิด Group C ใดๆ ทั้งสิ้น** ให้ใช้สคริปต์ Agent หมวด D ยิงออกไปรายงานตัวและดึงคำสั่งแทน)
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -146,13 +165,14 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 ├──────────────────────────────┬──────────────────────────────────┬──────────────────┬───────────────────┤
 │ Group A: Settings Channel    │ Group B: SSO Authentication Flow │ Group C: Inbound │ Group D: Outbound │
 │ (สิทธิ์เฉพาะ Admin ของระบบ)   │ (ยืนยันตัวตนกับ AD ผ่าน CIAM)     │ Directory (Mode A)│ Agent (Mode C)    │
+│ [ทุกระบบต้องมี]               │ [ทุกระบบต้องมี]                   │ [เฉพาะ Mode A]   │ [เฉพาะ Mode C]    │
 ├──────────────────────────────┼──────────────────────────────────┼──────────────────┼───────────────────┤
 │ • GET  /api/settings/ciam-sso│ • GET  /api/auth/sso/config      │ • GET  accounts  │ • POST /api/v1/   │
 │ • PUT  /api/settings/ciam-sso│ • POST /api/auth/sso/            │ • POST accounts  │   agent/heartbeat │
 │ • POST /api/settings/ciam-sso│         authorize-url            │ • PATCH accounts │ (On-Prem ยิงขึ้นหา│
 │        /test-connection      │ • POST /api/auth/sso/callback    │   /{user}/status │  CIAM ทุก 120s)   │
-│                              │ • POST /api/auth/sso/            │ (CIAM ยิงเข้า    │ (ดึงคำสั่ง &      │
-│                              │         break-glass-toggle       │  หา Spoke Direct)│  Sync บัญชี)      │
+│                              │ • POST /api/auth/sso/            │ (CIAM ยิงตรงเข้า │ (ดึงคำสั่ง &      │
+│                              │         break-glass-toggle       │  หา Spoke Server)│  Sync บัญชี)      │
 └──────────────────────────────┴──────────────────────────────────┴──────────────────┴───────────────────┘
 ```
 
@@ -278,15 +298,31 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 #### B.3 `POST /api/auth/sso/callback` (แลกเปลี่ยน One-Time Code และออก Session ประจำระบบลูก)
 * **การจำกัดสิทธิ์:** Public (เบราว์เซอร์ส่งมาหลัง Redirect จาก Central IAM)
-* **ข้อกำหนดสำคัญระดับ Enterprise: การรองรับ 2 รูปแบบการเข้าใช้งาน (Dual SSO Launch Modes):**
+* **ข้อกำหนดสำคัญระดับ Enterprise: รูปแบบการเข้าใช้งาน SSO (SSO Launch Modes):**
+
   1. **แบบที่ 1: Spoke-Initiated SSO (ผู้ใช้กดปุ่ม SSO จากหน้า Login ของระบบลูกเอง):**
-     * Frontend สร้าง `code_verifier` (PKCE) และ `state` บันทึกใน `sessionStorage` แล้ว Redirect ไปยัง CIAM
-     * เมื่อ CIAM Redirect กลับมา Frontend จะมี `code_verifier` ส่งมาให้ Backend
-  2. **แบบที่ 2: IdP-Initiated SSO / Employee Portal Launch (ผู้ใช้คลิกเปิดแอปจากการ์ดใน Central IAM Portal):**
-     * Central IAM จะสร้าง Authorization Code ให้อัตโนมัติ และ Redirect บราวเซอร์ตรงไปยัง URL Callback ของระบบลูก (`https://spoke.windowasia.com/auth/callback?code=...&state=ciam_launch_...`)
-     * **กรณีนี้บนโดเมนของระบบลูกจะไม่มีค่า `sessionStorage` อยู่เลย (ว่างเปล่า)**
-     * ⚠️ **กฎเหล็กฝั่ง Frontend (`/auth/callback`):** หากอ่าน `sessionStorage` แล้วไม่พบ `sso_code_verifier` หรือค่า `state` ไม่ตรง **ห้ามบล็อกผู้ใช้และห้ามเตะกลับหน้า Login ด้วยข้อความ Error ("SSO session ไม่ถูกต้องหรือหมดอายุ")** ให้ระบุ `code_verifier: ""` (หรือ null) แล้วส่งไปให้ Backend ประมวลผลต่อตามปกติ
-     * ⚠️ **กฎเหล็กฝั่ง Backend (`/api/auth/sso/callback`):** ฟิลด์ `code_verifier` และ `state` ต้องเป็น **Optional** หาก `code_verifier` มีค่า ให้แนบส่งไปตอนแลก Token กับ CIAM แต่หากเป็นค่าว่าง (Portal Launch) **ไม่ต้องแนบฟิลด์ `code_verifier` ไปใน Request Body** เพราะเซิร์ฟเวอร์ CIAM ฝั่ง Portal อนุญาตให้ออก ID Token ได้ทันที และ**ห้ามบังคับเช็คว่า state ต้องอยู่ใน Session Memory** จนเกิด HTTP 400
+     * เบราว์เซอร์เรียกขอ URL จาก `/api/auth/sso/authorize-url`
+     * ระบบลูกสร้าง `code_verifier` (PKCE) และ `state` บันทึกผูกกับ Client Browser (ผ่าน `sessionStorage`, HttpOnly Session Cookie หรือ Backend Database ตามความเหมาะสม)
+     * Redirect เบราว์เซอร์ไปยัง Central IAM เพื่อยืนยันตัวตน และรับ Authorization Code กลับมาที่ Callback พร้อมส่ง `code_verifier` และ `state` ไปตรวจสอบความถูกต้อง 100%
+
+  2. **แบบที่ 2: Employee Portal Launch (ผู้ใช้คลิกเปิดแอปจากการ์ดใน Central IAM Portal):**
+     
+     * **🏆 แนวทางมาตรฐานแนะนำสูงสุด (RFC 9700 Compliant: Seamless SSO Initiation Bounce):**
+       เพื่อป้องกันปัญหา CSRF และ Login Injection ตามคำแนะนำด้านความปลอดภัยระดับสากล [RFC 9700 §4.7](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.7) โดยยังคงประสบการณ์ผู้ใช้งานแบบ **คลิกครั้งเดียวเข้าใช้งานได้ทันที (Seamless 1-Click Launch):**
+       1. การ์ดบน Central IAM Portal จะกำหนด Launch URL เป็น SSO Start Endpoint ของระบบลูก เช่น `https://spoke.windowasia.com/auth/start` (หรือเส้นทางที่ Spoke กำหนดไว้บนหน้าทะเบียนแอป)
+       2. เมื่อผู้ใช้คลิกการ์ด เบราว์เซอร์จะเปิดไปยัง `/auth/start` ของระบบลูก
+       3. ระบบลูกสร้างรายการ Login ใหม่ตามกลไกมาตรฐานเดิมของตนเอง (สร้าง `code_verifier`, `code_challenge` และ `state` ผูกกับ Session ของเบราว์เซอร์นั้น 100%)
+       4. ระบบลูกสั่ง 302 Redirect เบราว์เซอร์ไปยัง Central IAM:  
+          `${ciam_base_url}/oauth/authorize?response_type=code&client_id=...&redirect_uri=...&state=...&code_challenge=...&code_challenge_method=S256`
+       5. **Zero-Prompt Auto-Approval:** เนื่องจากผู้ใช้ล็อกอินอยู่บนหน้า Central IAM Portal อยู่แล้ว CIAM จะตรวจสอบ Active Session Cookie บนเบราว์เซอร์ และทำ Auto-Approval ให้ทันทีโดยไม่ต้องถามรหัสผ่านซ้ำ
+       6. CIAM ส่ง 302 Redirect พร้อม Authorization Code และ `state` เดิม กลับมายัง `/auth/callback` ของระบบลูก
+       7. ระบบลูกตรวจสอบ `state` และ `code_verifier` ได้อย่างสมบูรณ์แบบตาม RFC 7636 ปลอดภัย ไร้ช่องโหว่ และผู้ใช้เข้าใช้งานระบบได้ภายในเวลาไม่เกิน 400ms
+
+     * **แนวทางรอง (Legacy Direct Callback Launch):**
+       กรณีที่ระบบลูกยังไม่ได้จัดเตรียม Endpoint เริ่มต้น SSO (`/auth/start`) และตั้งค่าให้ Portal ยิง Code ตรงเข้า Callback:
+       * ในกรณีนี้ บนโดเมนของระบบลูกจะไม่มีค่า verifier หรือ state ผูกกับ Session มาก่อน
+       * ⚠️ หากเลือกใช้แนวทางนี้ Backend ของระบบลูกต้องผ่อนปรนให้ฟิลด์ `code_verifier` และ `state` เป็น Optional และตรวจสอบความถูกต้องของ Token ผ่าน RS256 Signature และ Claims (`iss`, `aud`, `exp`) แทน
+       * *ข้อแนะนำ:* แนะนำให้ทุกระบบลูกปรับมาใช้ **แนวทางมาตรฐาน RFC 9700 Seamless SSO Initiation Bounce (`/auth/start`)** เพื่อให้มีการผูก State กับเบราว์เซอร์อย่างถูกต้องตามมาตรฐานความปลอดภัยร่วมกัน
 
 * **ขั้นตอนการประมวลผล (Backend-to-Backend):**
   0. **SSO Active & Break-Glass Guard:** ตรวจสอบว่า `ciam_sso_enabled == true` และ `ciam_break_glass_active == false` หากปิดอยู่ ให้ตอบกลับ `HTTP 503 Service Unavailable` และบันทึก `transaction_logs` หมวด `ciam_sso` ทันที เพื่อป้องกันไม่ให้ผู้ใช้แอบล็อกอินผ่าน Central IAM Portal เข้ามาได้ในขณะที่ระบบลูกปิดรับ SSO ชั่วคราว
@@ -360,11 +396,14 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 ### หมวด C: Directory Governance & Remote Provisioning Channel (CIAM สั่งการเข้ามาแบบ M2M)
 
 > [!IMPORTANT]
-> **ความปลอดภัยระดับองค์กร (Enterprise Security Constraints):**
+> **ความปลอดภัยระดับองค์กร (Enterprise Security Constraints สำหรับ Mode A):**
 > 1. **IP Whitelist:** ไฟร์วอลล์และ Reverse Proxy ของระบบลูกต้องอนุญาตเฉพาะ IP VPS ของ Central IAM: **`157.173.219.153`** (ระบบ CIAM จะแนบ Header `X-Forwarded-For: 157.173.219.153` มาด้วยเสมอ)
 > 2. **Authentication Header:** ทุก Endpoint ในหมวด C ต้องส่ง HTTP Header: **`X-Management-API-Key: <SPOKE_API_KEY>`** (นำมาจากปุ่ม `🔑 M2M Key` ในหน้าทะเบียนระบบลูกของ Central IAM)
 > 3. **Timestamp Verification:** CIAM จะส่ง `X-Request-Timestamp` เพื่อตรวจสอบและป้องกัน Replay Attacks
 > 4. **Idempotent:** ทุก Endpoint ต้องรองรับการเรียกซ้ำได้โดยไม่เกิด Error ซ้ำซ้อน (Idempotent Execution)
+>
+> 💡 **ข้อกำหนดสำคัญสำหรับระบบ Mode C (เช่น MTPulse):**
+> ระบบที่ใช้ **Mode C (On-Prem Outbound Agent)** ไม่ต้องพัฒนาหรือเปิด Endpoint ในหมวด C นี้ใดๆ ทั้งสิ้น การส่งรายชื่อบัญชี (Directory Sync) และการรับคำสั่งระงับสิทธิ์จะทำผ่าน **หมวด D (Reverse Heartbeat & Outbound Sync)** แทน 100% เพื่อความปลอดภัยโดยไม่ต้องเปิด Inbound Port
 
 ---
 
@@ -565,15 +604,55 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
       "username": "resigned_user_01",
       "reason": "1-Click Offboarding via Central IAM",
       "issued_at": "2026-10-02T09:58:30Z"
+    },
+    {
+      "command_id": "cmd_sync_0912",
+      "action": "REQUEST_FULL_SYNC",
+      "username": "ALL_ACCOUNTS",
+      "reason": "On-demand Full Directory Sync triggered from Central IAM (or 04:00 AM Reconciliation)",
+      "issued_at": "2026-10-02T10:00:00Z"
     }
   ],
-  "message": "Heartbeat received for วิเคราะห์การขาย Modern Trade. 1 pending command(s) dispatched."
+  "message": "Heartbeat received for วิเคราะห์การขาย Modern Trade. 2 pending command(s) dispatched."
 }
 ```
 
+##### รายการคำสั่งมาตรฐานใน Pending Commands Queue (`action`):
+| Action | ค่า `username` | คำอธิบาย & พฤติกรรมที่ระบบลูกต้องปฏิบัติ |
+| :--- | :---: | :--- |
+| `DISABLE_USER` | ชื่อ Username พนักงาน | สั่งระงับสิทธิ์บัญชีผู้ใช้ในระบบลูก (`is_active = false`) และ Revoke Session/Refresh Token ทั้งหมดทันที |
+| `ENABLE_USER` | ชื่อ Username พนักงาน | สั่งเปิดหรือคืนสิทธิ์การใช้งานบัญชีผู้ใช้ในระบบลูก (`is_active = true`) |
+| `REQUEST_FULL_SYNC` | `"ALL_ACCOUNTS"` | **คำสั่งขอ Full Directory Sync จาก CIAM:** เกิดขึ้นเมื่อ Admin กดปุ่ม "⚡ ซิงค์ข้อมูล" บน Central IAM หรือรอบตรวจสอบ 04:00 น. Reconciliation โดย Agent ต้องดึงรายชื่อผู้ใช้ทั้งหมดจากฐานข้อมูลภายใน แล้วส่งคืนใน Heartbeat รอบถัดไปด้วย `sync_type: "FULL_SYNC"` พร้อม Payload `accounts: [...]` |
+
 ---
 
-#### D.3 กฎเกณฑ์การตรวจจับ Online / Offline (Dead Man's Switch)
+#### D.3 กฎเกณฑ์วงจรชีวิตคำสั่งและความปลอดภัย (Command Lifecycle & Safety Governance)
+
+##### 1. วงจรชีวิตสถานะคำสั่งแบบ Asynchronous (Asynchronous Deprovisioning Lifecycle)
+เนื่องจากการเชื่อมต่อ Mode C เป็นการที่เซิร์ฟเวอร์ On-Premise ยิง Outbound ออกมาติดต่อ CIAM การส่งคำสั่งจึงเป็นแบบ Asynchronous ซึ่งมีขั้นตอนดังนี้:
+1. **`PENDING` (รอส่งคำสั่ง):** เมื่อผู้ดูแลระบบคลิก 1-Click Offboard บน Central IAM คำสั่งจะถูกบันทึกเข้าสู่ Command Queue ของแอปพลิเคชันนั้น
+2. **`SENT` (ส่งคำสั่งแล้ว):** เมื่อ Agent ของระบบลูกยิง Heartbeat เข้ามา CIAM จะส่งคำสั่งในคิวออกไปพร้อม Response และเปลี่ยนสถานะคำสั่งเป็น `SENT`
+3. **`COMPLETED` (ระบบลูกดำเนินการสำเร็จ):** Agent นำคำสั่งไปประมวลผล อัปเดตฐานข้อมูล ยกเลิก Session และรายงานผล `status: "COMPLETED"` กลับมาใน Heartbeat รอบถัดไป CIAM จึงจะบันทึกสถานะ Success และปิด Job คำสั่งนั้น
+4. **`FAILED` (ระบบลูกดำเนินการไม่สำเร็จ):** หากเกิดข้อผิดพลาดในการประมวลผล หรือคำสั่งขัดต่อนโยบายความปลอดภัยของระบบลูก Agent จะรายงาน `status: "FAILED"` พร้อมระบุ `message` เหตุผล
+* **ระยะเวลาประมวลผล (SLA):** ในสภาวะเครือข่ายปกติ กระบวนการจะเสร็จสิ้นภายใน **รอบ Heartbeat ไม่เกิน 2 นาที + เวลาประมวลผลภายในระบบลูก** หากเครือข่ายสำนักงานขัดข้อง คำสั่งจะรออยู่ในคิวจนกว่า Agent จะติดต่อกลับมา
+* **การแสดงผลบนหน้าจอ Central IAM:** หน้าจอ Central IAM จะแยกแยะระหว่างการตัดสิทธิ์ Single Sign-On ส่วนกลาง (ตัดสิทธิ์ทันที) กับสถานะการปิดบัญชีภายในระบบลูก (แสดงสถานะตามจริง: "รอส่งคำสั่งไปยัง Agent" ➔ "ส่งคำสั่งแล้ว" ➔ "ระบบลูกยืนยันสำเร็จ")
+
+##### 2. นโยบายการปกป้องบัญชี Local Admin ฉุกเฉิน (Local & Break-Glass Administrator Protection)
+Central IAM ตระหนักและสนับสนุนอย่างยิ่งให้นโยบายความปลอดภัยภายในของระบบลูกมีกลไกป้องกันตนเอง (Local Guardrails):
+* ระบบลูก**ต้องไม่อนุญาต**ให้คำสั่งภายนอกระงับสิทธิ์บัญชีผู้ดูแลระบบฉุกเฉิน (Break-Glass / Emergency Local Administrator) หรือบัญชี Admin คนสุดท้ายของระบบลูกได้
+* หาก Central IAM ส่งคำสั่ง `DISABLE_USER` ไปยังบัญชีที่ได้รับการปกป้องดังกล่าว Agent ของระบบลูกสามารถปฏิเสธคำสั่ง โดยส่งผลลัพธ์:
+  ```json
+  {
+    "command_id": "cmd_e5f6g7h8",
+    "action": "DISABLE_USER",
+    "username": "emergency_admin",
+    "status": "FAILED",
+    "message": "Protected account: Cannot disable emergency local administrator"
+  }
+  ```
+* **การจัดการฝั่ง Central IAM:** Engine ของ Central IAM รองรับสถานะ `FAILED` นี้โดยสมบูรณ์ จะบันทึกเหตุผลลงใน Audit Trail (`IamAuditLog`) และแสดงข้อความเตือนให้ผู้ดูแลระบบ CIAM ทราบอย่างชัดเจน โดยไม่ถือว่าเป็น Error ของระบบเชื่อมต่อ
+
+##### 3. กฎเกณฑ์การตรวจจับ Online / Offline (Dead Man's Switch)
 * **ความถี่ Heartbeat:** แนะนำให้ Spoke ยิง Heartbeat ทุก **120 วินาที (2 นาที)**
 * **เงื่อนไขสถานะออนไลน์ (`ONLINE`):** เมื่อ CIAM ได้รับ Heartbeat ล่าสุดภายใน **300 วินาที (5 นาที)**
 * **เงื่อนไขสถานะออฟไลน์ (`OFFLINE`):** หากเซิร์ฟเวอร์ On-Premise ไฟดับ, อินเทอร์เน็ตสำนักงานขัดข้อง หรือ Agent หยุดทำงานเกิน **5 นาที** CIAM จะปรับสถานะของระบบนี้เป็น **`🔴 ออฟไลน์`** โดยอัตโนมัติ และปุ่มบนหน้า Employee Portal จะถูกล็อกเป็น *"ระบบปิดปรับปรุงชั่วคราว (Offline)"* ทันที เพื่อป้องกันพนักงานเข้าใช้งานระบบที่ล่ม
@@ -614,7 +693,13 @@ def execute_local_command(action: str, username: str) -> tuple[bool, str]:
         logger.info(f"⚡ กำลังดำเนินการคำสั่ง '{action}' สำหรับผู้ใช้ '{username}' ในระบบภายใน...")
         
         if action == "DISABLE_USER":
-            # ตัวอย่าง SQL หรือ ORM:
+            # 🛡️ Local Admin & Safety Protection: ป้องกันการปิดบัญชีผู้ดูแลระบบฉุกเฉิน
+            PROTECTED_ACCOUNTS = {"admin", "superadmin", "emergency_admin", "local_admin"}
+            if username.lower() in PROTECTED_ACCOUNTS:
+                logger.warning(f"🛡️ ปฏิเสธคำสั่ง DISABLE_USER: บัญชี '{username}' เป็น Emergency Local Administrator ประจำระบบลูก")
+                return False, f"Protected account: Cannot disable emergency local administrator '{username}'"
+
+            # ตัวอย่าง SQL หรือ ORM ดำเนินการระงับสิทธิ์จริงในระบบลูก:
             # db.execute("UPDATE users SET is_active = FALSE WHERE username = ?", (username,))
             # db.execute("DELETE FROM user_active_sessions WHERE username = ?", (username,))
             return True, f"User '{username}' disabled and sessions revoked successfully."
@@ -671,31 +756,45 @@ def run_agent_cycle(is_full_sync: bool = False, previous_results: list = None) -
             # ตรวจสอบและประมวลผลคำสั่งที่ส่งมาจาก CIAM
             pending_commands = data.get("pending_commands", [])
             new_results = []
+            should_sync_next = False
             for cmd in pending_commands:
                 cmd_id = cmd["command_id"]
                 action = cmd["action"]
                 target_user = cmd["username"]
-                success, msg = execute_local_command(action, target_user)
-                new_results.append({
-                    "command_id": cmd_id,
-                    "action": action,
-                    "username": target_user,
-                    "status": "COMPLETED" if success else "FAILED",
-                    "message": msg
-                })
-            return new_results
+
+                # รองรับคำสั่งขอ Full Sync จากหน้าจอ CIAM หรือรอบ 04:00 น.
+                if action == "REQUEST_FULL_SYNC":
+                    logger.info("⚡ ได้รับคำสั่ง REQUEST_FULL_SYNC: เตรียมส่งข้อมูลบัญชีทั้งหมดในรอบถัดไป")
+                    should_sync_next = True
+                    new_results.append({
+                        "command_id": cmd_id,
+                        "action": action,
+                        "username": target_user,
+                        "status": "COMPLETED",
+                        "message": "Full sync command acknowledged. Directory inventory will be pushed."
+                    })
+                else:
+                    success, msg = execute_local_command(action, target_user)
+                    new_results.append({
+                        "command_id": cmd_id,
+                        "action": action,
+                        "username": target_user,
+                        "status": "COMPLETED" if success else "FAILED",
+                        "message": msg
+                    })
+            return new_results, should_sync_next
         else:
             logger.warning(f"⚠️ CIAM ตอบกลับสถานะ {res.status_code}: {res.text[:200]}")
-            return previous_results or []
+            return previous_results or [], False
     except Exception as exc:
         logger.error(f"❌ ไม่สามารถเชื่อมต่อไปยัง Central IAM: {exc}")
-        return previous_results or []
+        return previous_results or [], False
 
 def main():
     logger.info(f"🚀 เริ่มต้นการทำงาน Window Asia CIAM Agent สำหรับระบบ '{APP_CODE}'")
     
-    # รอบแรกสุด: ทำ Full Sync กวาดบัญชีขึ้น CIAM
-    pending_results = run_agent_cycle(is_full_sync=True)
+    # รอบแรกสุด: ทำ Full Sync กวาดบัญชีขึ้น CIAM ทันทีที่สตาร์ท
+    pending_results, force_sync = run_agent_cycle(is_full_sync=True)
     
     sync_counter = 0
     while True:
@@ -703,10 +802,10 @@ def main():
             time.sleep(HEARTBEAT_INTERVAL)
             sync_counter += 1
             
-            # กวาด Full Directory Sync ทุกๆ 720 รอบ (ประมาณ 24 ชั่วโมง)
-            is_daily_sync = (sync_counter % 720 == 0)
+            # กวาด Full Directory Sync ทุกๆ 720 รอบ (ประมาณ 24 ชั่วโมง) หรือเมื่อได้รับคำสั่ง REQUEST_FULL_SYNC
+            is_daily_sync = (sync_counter % 720 == 0) or force_sync
             
-            pending_results = run_agent_cycle(is_full_sync=is_daily_sync, previous_results=pending_results)
+            pending_results, force_sync = run_agent_cycle(is_full_sync=is_daily_sync, previous_results=pending_results)
         except KeyboardInterrupt:
             logger.info("หยุดการทำงานของ Agent")
             break

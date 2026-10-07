@@ -378,4 +378,23 @@ docker compose up -d api web
      - เพิ่มหมวด **0. ประวัติการแก้ไขเอกสาร (Document Revision History)** ในไฟล์ markdown แสดงประวัติตั้งแต่ v1.0.0 จนถึง v2.5.0 พร้อมสรุปสิ่งที่เปลี่ยนแปลง
      - เพิ่มแท็บ **"📜 ประวัติการปรับปรุงสเปก (Revision Changelog)"** ใน Modal คู่มือสำหรับ Dev บนหน้าจอ `/applications` ให้ผู้ดูแลระบบและ Dev เปิดดู Log ความแตกต่างย้อนหลังผ่านหน้าเว็บได้ทันที
 
+### ลำดับที่ 8: ยกระดับสเปกกลางสู่ Version 2.6.0 ตามข้อเสนอแนะเชิงสถาปัตยกรรมของทีม MTPulse
+- **การปรับปรุงครบ 4 ประเด็น:**
+  1. **RFC 9700 Seamless SSO Initiation Bounce (หมวด B.3):**
+     - กำหนดให้ Portal Card เปิดไปที่ SSO Start Endpoint ของระบบลูก (เช่น `/auth/start`)
+     - Spoke สร้าง PKCE & State ผูกกับเบราว์เซอร์ 100% -> Redirect ไปยัง CIAM `/oauth/authorize`
+     - CIAM อาศัย Active Portal Session ทำ Seamless Auto-Approval (<400ms) แล้วส่งกลับ Callback
+     - คงประสบการณ์ Seamless 1-Click Launch โดยไม่เสียมาตรฐานความปลอดภัย RFC 9700 §4.7
+  2. **Architecture Equivalence Principles (หมวด 1.4):**
+     - ระบุชัดเจนว่าระบบลูกไม่จำเป็นต้องแก้โค้ดให้เหมือนตัวอย่างทุกบรรทัด หากมีผลลัพธ์ความปลอดภัยเทียบเท่า
+     - ยอมรับการเก็บ PKCE ฝั่ง Backend, การใช้ HttpOnly Session Cookie แทน JS Tokens, การอ่าน DB ต่อ Request, และการผูกตัวตนด้วย `sub` หรือ `preferred_username`
+  3. **Mode C Outbound Sync Protocol & REQUEST_FULL_SYNC (หมวด D.2 & Backend):**
+     - ระบบ Mode C ไม่ต้องเปิด Inbound Port และไม่ต้องเปิด Group C API
+     - การสั่ง Sync สดจากหน้าจอ CIAM หรือรอบ 04:00 น. จะสร้างคำสั่ง `REQUEST_FULL_SYNC` เข้า Command Queue
+     - Agent ตรวจพบคำสั่งและส่ง Full Directory Push ในรอบ Heartbeat ถัดไป
+  4. **Asynchronous Deprovisioning & Local Admin Protection (หมวด D.3):**
+     - กำหนด Lifecycle คำสั่งอย่างเป็นทางการ (`PENDING` ➔ `SENT` ➔ `COMPLETED` / `FAILED`)
+     - รับรองสิทธิ์ของ Spoke ในการปฏิเสธคำสั่ง `DISABLE_USER` สำหรับ Emergency Local Admin หรือ Admin คนสุดท้าย โดยส่งผลลัพธ์ `FAILED` พร้อมเหตุผล
+
+
 

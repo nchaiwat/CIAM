@@ -245,6 +245,23 @@ FRONTEND_URL=http://localhost:3000
   3. Dynamic Failover: Spoke apps can fallback directly to AD Gateway (`http://172.18.0.1:3100/api/v2/login` per `ADAuthen.md`) if CIAM health check fails.
   4. Real-time Telegram/LINE alert triggered on break-glass activation.
 
+### 6.1 Enterprise Spoke Specification Standard (Version 2.6.0)
+* **RFC 9700 Seamless SSO Initiation Bounce:**
+  - กำหนดให้การ์ดใน Central IAM Portal ชี้ไปยัง SSO Start Endpoint ของระบบลูก (เช่น `/auth/start`)
+  - เบราว์เซอร์ของผู้ใช้เริ่ม SSO ในระบบลูก -> ระบบลูกสร้าง PKCE และ State ผูกกับเบราว์เซอร์ 100% -> Redirect ไปยัง CIAM `/oauth/authorize`
+  - CIAM มี Active Session Cookie บนเบราว์เซอร์อยู่แล้ว จึงทำ **Auto-Approval (Zero-Prompt)** ให้อัตโนมัติใน <400ms และ Redirect กลับ Callback ของระบบลูก
+  - ป้องกัน CSRF / Login Injection ตาม RFC 9700 §4.7 โดยผู้ใช้ยังคงได้ประสบการณ์ Seamless Single-Click เสมือนเดิม
+* **Architecture Equivalence Principles (ความยืดหยุ่นเชิงสถาปัตยกรรม):**
+  - ไม่บังคับให้ระบบลูกแก้โค้ดให้เหมือนตัวอย่างทุกบรรทัด หากระบบลูกมีสถาปัตยกรรมภายในที่บรรลุมาตรฐานความปลอดภัยเทียบเท่า
+  - รองรับ Backend PKCE Storage (Session / DB), การใช้ HttpOnly Session Cookie แทน JavaScript Tokens, การ Query DB ต่อ Request, และการผูกตัวตนด้วย `sub` หรือ `preferred_username`
+* **Mode C Outbound Sync & Command Queue Protocol:**
+  - ระบบ On-Premise (Mode C เช่น MTPulse) ไม่ต้องเปิดพอร์ต Inbound และไม่ต้องเปิด API หมวด C
+  - การสั่ง Sync สดจาก CIAM หรือรอบ 04:00 น. Reconciliation จะสร้างคำสั่ง `REQUEST_FULL_SYNC` เข้า Command Queue
+  - เมื่อ Agent ยิง Heartbeat เข้ามาจะดึงคำสั่งไปส่งข้อมูล Full Sync ในรอบถัดไป
+* **Asynchronous Deprovisioning Lifecycle & Local Admin Protection:**
+  - สถานะคำสั่ง: `PENDING` ➔ `SENT` ➔ `COMPLETED` / `FAILED`
+  - รองรับการปฏิเสธคำสั่ง `DISABLE_USER` (ตอบกลับ `FAILED`) สำหรับบัญชีผู้ดูแลระบบฉุกเฉิน (Emergency Local Admin) หรือ Admin คนสุดท้าย
+
 ---
 
 ## 7. VPS Deployment Commands & Docker Service Names
