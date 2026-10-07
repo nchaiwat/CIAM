@@ -261,9 +261,25 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 #### B.3 `POST /api/auth/sso/callback` (แลกเปลี่ยน One-Time Code และออก Session ประจำระบบลูก)
 * **การจำกัดสิทธิ์:** Public (เบราว์เซอร์ส่งมาหลัง Redirect จาก Central IAM)
+* **ข้อกำหนดสำคัญระดับ Enterprise: การรองรับ 2 รูปแบบการเข้าใช้งาน (Dual SSO Launch Modes):**
+  1. **แบบที่ 1: Spoke-Initiated SSO (ผู้ใช้กดปุ่ม SSO จากหน้า Login ของระบบลูกเอง):**
+     * Frontend สร้าง `code_verifier` (PKCE) และ `state` บันทึกใน `sessionStorage` แล้ว Redirect ไปยัง CIAM
+     * เมื่อ CIAM Redirect กลับมา Frontend จะมี `code_verifier` ส่งมาให้ Backend
+  2. **แบบที่ 2: IdP-Initiated SSO / Employee Portal Launch (ผู้ใช้คลิกเปิดแอปจากการ์ดใน Central IAM Portal):**
+     * Central IAM จะสร้าง Authorization Code ให้อัตโนมัติ และ Redirect บราวเซอร์ตรงไปยัง URL Callback ของระบบลูก (`https://spoke.windowasia.com/auth/callback?code=...&state=ciam_launch_...`)
+     * **กรณีนี้บนโดเมนของระบบลูกจะไม่มีค่า `sessionStorage` อยู่เลย (ว่างเปล่า)**
+     * ⚠️ **กฎเหล็กฝั่ง Frontend (`/auth/callback`):** หากอ่าน `sessionStorage` แล้วไม่พบ `sso_code_verifier` หรือค่า `state` ไม่ตรง **ห้ามบล็อกผู้ใช้และห้ามเตะกลับหน้า Login ด้วยข้อความ Error ("SSO session ไม่ถูกต้องหรือหมดอายุ")** ให้ระบุ `code_verifier: ""` (หรือ null) แล้วส่งไปให้ Backend ประมวลผลต่อตามปกติ
+     * ⚠️ **กฎเหล็กฝั่ง Backend (`/api/auth/sso/callback`):** ฟิลด์ `code_verifier` และ `state` ต้องเป็น **Optional** หาก `code_verifier` มีค่า ให้แนบส่งไปตอนแลก Token กับ CIAM แต่หากเป็นค่าว่าง (Portal Launch) **ไม่ต้องแนบฟิลด์ `code_verifier` ไปใน Request Body** เพราะเซิร์ฟเวอร์ CIAM ฝั่ง Portal อนุญาตให้ออก ID Token ได้ทันที และ**ห้ามบังคับเช็คว่า state ต้องอยู่ใน Session Memory** จนเกิด HTTP 400
+
 * **ขั้นตอนการประมวลผล (Backend-to-Backend):**
   0. **SSO Active & Break-Glass Guard:** ตรวจสอบว่า `ciam_sso_enabled == true` และ `ciam_break_glass_active == false` หากปิดอยู่ ให้ตอบกลับ `HTTP 503 Service Unavailable` และบันทึก `transaction_logs` หมวด `ciam_sso` ทันที เพื่อป้องกันไม่ให้ผู้ใช้แอบล็อกอินผ่าน Central IAM Portal เข้ามาได้ในขณะที่ระบบลูกปิดรับ SSO ชั่วคราว
-  1. Backend ของระบบลูกส่งคำขอ HTTP POST (พร้อม `code`, `code_verifier`, `client_id`, `client_secret`) ตรงไปยัง `${ciam_base_url}/api/v1/oauth/token`
+  1. **แลกเปลี่ยน Authorization Code:** Backend ของระบบลูกส่งคำขอ HTTP POST ไปยัง `${ciam_base_url}/api/v1/oauth/token` พร้อม:
+     * `grant_type`: `"authorization_code"`
+     * `client_id`: ค่า Client ID ของตนเอง
+     * `client_secret`: ค่า Client Secret ของตนเอง
+     * `code`: รหัสที่ได้รับมา
+     * `redirect_uri`: Callback URL ที่ลงทะเบียนไว้
+     * `code_verifier`: (แนบเฉพาะกรณีที่มีค่าส่งมาจาก Frontend หากเปิดจาก Portal และไม่มีค่า verifier ให้ละเว้นฟิลด์นี้)
   2. ตรวจสอบ Asymmetric Signature ของ `id_token` ที่ได้รับด้วย Public Key จาก `${ciam_base_url}/.well-known/jwks.json` (อัลกอริทึม RS256)
   3. ตรวจสอบค่า Claims:
      * `iss` ต้องตรงกับ `ciam_base_url`
@@ -280,9 +296,11 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 {
   "code": "auth_code_9a8b7c6d5e...",
   "code_verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk...",
-  "redirect_uri": "https://irm.windowasia.com/auth/callback"
+  "redirect_uri": "https://irm.windowasia.com/auth/callback",
+  "state": "state_1726038491"
 }
 ```
+*(หมายเหตุ: `code_verifier` และ `state` เป็น Optional สามารถส่งเป็น string เปล่าหรือ null ได้เมื่อเป็นการเปิดใช้งานผ่าน Central IAM Portal)*
 
 **Response Example (200 OK):**
 ```json
@@ -1221,11 +1239,13 @@ def sso_login():
 
 class CallbackPayload(BaseModel):
     code: str
-    state: str
+    state: Optional[str] = None
+    code_verifier: Optional[str] = None
+    redirect_uri: Optional[str] = None
 
 @router.post("/callback")
 async def sso_callback(payload: CallbackPayload, db: Session = Depends(get_db)):
-    """Step 2: รับ Code จาก Central IAM แลกเปลี่ยน Token และดึง Claims จาก AD"""
+    """Step 2: รับ Code จาก Central IAM แลกเปลี่ยน Token และดึง Claims จาก AD (รองรับทั้ง Spoke-Initiated และ Portal Launch)"""
     # 0. ตรวจสอบว่าระบบลูกเปิดใช้งาน SSO อยู่หรือไม่ (Break-Glass Active Guard)
     sso_cfg = get_spoke_sso_settings(db)
     if not sso_cfg.get("sso_enabled", True) or sso_cfg.get("break_glass_active", False):
@@ -1234,22 +1254,25 @@ async def sso_callback(payload: CallbackPayload, db: Session = Depends(get_db)):
             detail="Single Sign-On is currently disabled on this application (Break-Glass Mode Active)."
         )
 
-    verifier = pkce_sessions.pop(payload.state, None)
-    if not verifier:
-        raise HTTPException(status_code=400, detail="Invalid state session or CSRF detected")
+    # ดึง code_verifier: ใช้จาก payload ก่อน ถ้าไม่มีจึงลองดึงจาก pkce_sessions (ถ้ามาจาก Portal verifier จะเป็น None ซึ่งอนุญาตให้ผ่านได้)
+    verifier = payload.code_verifier or (pkce_sessions.pop(payload.state, None) if payload.state else None)
 
-    # 1. แลก Authorization Code เป็น Tokens
+    # 1. แลก Authorization Code เป็น Tokens กับ Central IAM (Backend-to-Backend)
+    token_request_data = {
+        "grant_type": "authorization_code",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "code": payload.code,
+        "redirect_uri": payload.redirect_uri or REDIRECT_URI,
+    }
+    # แนบ code_verifier เฉพาะเมื่อมีค่า (กรณี Spoke-Initiated PKCE)
+    if verifier:
+        token_request_data["code_verifier"] = verifier
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         token_res = await client.post(
             f"{CIAM_BASE_URL}/api/v1/oauth/token",
-            data={
-                "grant_type": "authorization_code",
-                "client_id": CLIENT_ID,
-                "client_secret": CLIENT_SECRET,
-                "code": payload.code,
-                "redirect_uri": REDIRECT_URI,
-                "code_verifier": verifier
-            }
+            data=token_request_data
         )
 
         if token_res.status_code != 200:
@@ -1357,23 +1380,29 @@ router.get('/login', (req, res) => {
   res.redirect(authUrl);
 });
 
-// 2. Endpoint รับ Callback และดึงข้อมูลพนักงานจาก AD
+// 2. Endpoint รับ Callback และดึงข้อมูลพนักงานจาก AD (รองรับทั้ง Spoke-Initiated และ Portal Launch)
 router.post('/callback', async (req, res) => {
-  const { code } = req.body;
-  const verifier = req.cookies['sso_verifier'];
+  const { code, code_verifier } = req.body;
+  const verifier = code_verifier || req.cookies['sso_verifier'];
 
   try {
     // 2.1 แลก Authorization Code เป็น Tokens
-    const tokenRes = await axios.post(`${CIAM_BASE_URL}/api/v1/oauth/token`, new URLSearchParams({
+    const tokenPayload = {
       grant_type: 'authorization_code',
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
       code: code,
       redirect_uri: REDIRECT_URI,
-      code_verifier: verifier
-    }).toString(), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
+    };
+    if (verifier) {
+      tokenPayload.code_verifier = verifier;
+    }
+
+    const tokenRes = await axios.post(
+      `${CIAM_BASE_URL}/api/v1/oauth/token`,
+      new URLSearchParams(tokenPayload).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
 
     const { id_token } = tokenRes.data;
 
@@ -1406,7 +1435,116 @@ module.exports = router;
 
 ---
 
-### 10.5 ตัวอย่างการจัดการ Logout และ 401 Session Expired บน Frontend (React / Next.js / Vue)
+### 10.5 ตัวอย่างหน้า Frontend Callback มาตรฐาน (Next.js 14 / React App Router)
+ทีมพัฒนา Frontend สามารถนำโค้ดนี้ไปวางที่ `src/app/auth/callback/page.tsx` ได้ทันที ซึ่งถูกออกแบบให้รองรับทั้งการกด SSO จากหน้า Login ของระบบลูกเอง และการกดเปิดผ่าน Central IAM Employee Portal โดยไม่เกิดปัญหา *"SSO session ไม่ถูกต้องหรือหมดอายุ"*:
+
+```tsx
+'use client';
+
+import React, { useEffect, useState, useRef } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+
+export default function SsoCallbackPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [statusText, setStatusText] = useState('กำลังยืนยันตัวตนกับ Central IAM...');
+  const [error, setError] = useState<string | null>(null);
+  const executedRef = useRef(false);
+
+  useEffect(() => {
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+
+    if (!code) {
+      setError('ไม่พบ Authorization Code ใน URL Redirect จาก Central IAM');
+      return;
+    }
+
+    // ป้องกันการยิง API ซ้ำ 2 รอบใน React StrictMode
+    if (executedRef.current) return;
+    executedRef.current = true;
+
+    const exchangeToken = async () => {
+      try {
+        // ดึง code_verifier และ state จาก sessionStorage (ถ้าเปิดมาจาก Portal ค่านี้จะว่าง)
+        const codeVerifier = sessionStorage.getItem('sso_code_verifier') || '';
+        const savedState = sessionStorage.getItem('sso_state');
+
+        // หาก state ไม่ตรงกับที่เซฟไว้ ให้เตือนใน Console พอ ห้ามบล็อกการเข้าสู่ระบบ
+        if (savedState && state && savedState !== state) {
+          console.warn('SSO state mismatch warning (Continuing for Portal Launch compatibility)');
+        }
+
+        setStatusText('กำลังแลกเปลี่ยนรหัสและยืนยัน Asymmetric RS256 Signature...');
+
+        const redirectUri = window.location.origin + '/auth/callback';
+        const res = await fetch('/api/auth/sso/callback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            code_verifier: codeVerifier,
+            redirect_uri: redirectUri,
+            state: state || undefined,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || 'การยืนยันตัวตนกับระบบลูกล้มเหลว');
+        }
+
+        const data = await res.json();
+
+        // ล้าง sessionStorage
+        sessionStorage.removeItem('sso_code_verifier');
+        sessionStorage.removeItem('sso_state');
+
+        setStatusText('ยืนยันตัวตนสำเร็จ! กำลังนำเข้าสู่ระบบ...');
+
+        // บันทึก Session Token ของระบบลูก และพาเข้าหน้าหลัก
+        localStorage.setItem('access_token', data.access_token);
+        router.push('/');
+      } catch (err: any) {
+        console.error('SSO Callback error:', err);
+        setError(err.message || 'เกิดข้อผิดพลาดในการยืนยันตัวตน');
+      }
+    };
+
+    exchangeToken();
+  }, [searchParams, router]);
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-white">
+        <div className="max-w-md w-full bg-slate-800 p-6 rounded-2xl border border-rose-500/30 text-center space-y-4">
+          <div className="text-rose-400 font-bold text-lg">เข้าสู่ระบบไม่สำเร็จ</div>
+          <p className="text-xs text-slate-300">{error}</p>
+          <button
+            onClick={() => router.push('/login')}
+            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer transition"
+          >
+            กลับสู่หน้าเข้าสู่ระบบ
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-white">
+      <div className="text-center space-y-3">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-xs text-slate-400">{statusText}</p>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+### 10.6 ตัวอย่างการจัดการ Logout และ 401 Session Expired บน Frontend (React / Next.js / Vue)
 
 ตัวอย่างโค้ดฝั่ง Client ของระบบลูกที่ช่วยให้รองรับ Seamless Return to Portal:
 

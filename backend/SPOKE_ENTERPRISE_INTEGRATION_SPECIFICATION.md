@@ -261,9 +261,25 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 #### B.3 `POST /api/auth/sso/callback` (แลกเปลี่ยน One-Time Code และออก Session ประจำระบบลูก)
 * **การจำกัดสิทธิ์:** Public (เบราว์เซอร์ส่งมาหลัง Redirect จาก Central IAM)
+* **ข้อกำหนดสำคัญระดับ Enterprise: การรองรับ 2 รูปแบบการเข้าใช้งาน (Dual SSO Launch Modes):**
+  1. **แบบที่ 1: Spoke-Initiated SSO (ผู้ใช้กดปุ่ม SSO จากหน้า Login ของระบบลูกเอง):**
+     * Frontend สร้าง `code_verifier` (PKCE) และ `state` บันทึกใน `sessionStorage` แล้ว Redirect ไปยัง CIAM
+     * เมื่อ CIAM Redirect กลับมา Frontend จะมี `code_verifier` ส่งมาให้ Backend
+  2. **แบบที่ 2: IdP-Initiated SSO / Employee Portal Launch (ผู้ใช้คลิกเปิดแอปจากการ์ดใน Central IAM Portal):**
+     * Central IAM จะสร้าง Authorization Code ให้อัตโนมัติ และ Redirect บราวเซอร์ตรงไปยัง URL Callback ของระบบลูก (`https://spoke.windowasia.com/auth/callback?code=...&state=ciam_launch_...`)
+     * **กรณีนี้บนโดเมนของระบบลูกจะไม่มีค่า `sessionStorage` อยู่เลย (ว่างเปล่า)**
+     * ⚠️ **กฎเหล็กฝั่ง Frontend (`/auth/callback`):** หากอ่าน `sessionStorage` แล้วไม่พบ `sso_code_verifier` หรือค่า `state` ไม่ตรง **ห้ามบล็อกผู้ใช้และห้ามเตะกลับหน้า Login ด้วยข้อความ Error ("SSO session ไม่ถูกต้องหรือหมดอายุ")** ให้ระบุ `code_verifier: ""` (หรือ null) แล้วส่งไปให้ Backend ประมวลผลต่อตามปกติ
+     * ⚠️ **กฎเหล็กฝั่ง Backend (`/api/auth/sso/callback`):** ฟิลด์ `code_verifier` และ `state` ต้องเป็น **Optional** หาก `code_verifier` มีค่า ให้แนบส่งไปตอนแลก Token กับ CIAM แต่หากเป็นค่าว่าง (Portal Launch) **ไม่ต้องแนบฟิลด์ `code_verifier` ไปใน Request Body** เพราะเซิร์ฟเวอร์ CIAM ฝั่ง Portal อนุญาตให้ออก ID Token ได้ทันที และ**ห้ามบังคับเช็คว่า state ต้องอยู่ใน Session Memory** จนเกิด HTTP 400
+
 * **ขั้นตอนการประมวลผล (Backend-to-Backend):**
   0. **SSO Active & Break-Glass Guard:** ตรวจสอบว่า `ciam_sso_enabled == true` และ `ciam_break_glass_active == false` หากปิดอยู่ ให้ตอบกลับ `HTTP 503 Service Unavailable` และบันทึก `transaction_logs` หมวด `ciam_sso` ทันที เพื่อป้องกันไม่ให้ผู้ใช้แอบล็อกอินผ่าน Central IAM Portal เข้ามาได้ในขณะที่ระบบลูกปิดรับ SSO ชั่วคราว
-  1. Backend ของระบบลูกส่งคำขอ HTTP POST (พร้อม `code`, `code_verifier`, `client_id`, `client_secret`) ตรงไปยัง `${ciam_base_url}/api/v1/oauth/token`
+  1. **แลกเปลี่ยน Authorization Code:** Backend ของระบบลูกส่งคำขอ HTTP POST ไปยัง `${ciam_base_url}/api/v1/oauth/token` พร้อม:
+     * `grant_type`: `"authorization_code"`
+     * `client_id`: ค่า Client ID ของตนเอง
+     * `client_secret`: ค่า Client Secret ของตนเอง
+     * `code`: รหัสที่ได้รับมา
+     * `redirect_uri`: Callback URL ที่ลงทะเบียนไว้
+     * `code_verifier`: (แนบเฉพาะกรณีที่มีค่าส่งมาจาก Frontend หากเปิดจาก Portal และไม่มีค่า verifier ให้ละเว้นฟิลด์นี้)
   2. ตรวจสอบ Asymmetric Signature ของ `id_token` ที่ได้รับด้วย Public Key จาก `${ciam_base_url}/.well-known/jwks.json` (อัลกอริทึม RS256)
   3. ตรวจสอบค่า Claims:
      * `iss` ต้องตรงกับ `ciam_base_url`
@@ -280,9 +296,11 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 {
   "code": "auth_code_9a8b7c6d5e...",
   "code_verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk...",
-  "redirect_uri": "https://irm.windowasia.com/auth/callback"
+  "redirect_uri": "https://irm.windowasia.com/auth/callback",
+  "state": "state_1726038491"
 }
 ```
+*(หมายเหตุ: `code_verifier` และ `state` เป็น Optional สามารถส่งเป็น string เปล่าหรือ null ได้เมื่อเป็นการเปิดใช้งานผ่าน Central IAM Portal)*
 
 **Response Example (200 OK):**
 ```json
@@ -765,29 +783,145 @@ sudo systemctl start ciam-agent
 
 ---
 
-### 5.2 มาตรฐานหน้าจอล็อกอินและพฤติกรรมเมื่อปิด SSO (Zero-Confusion Single-Button Standard)
+### 5.2 มาตรฐานหน้าจอล็อกอินแบบ Responsive: คุ้นเคยเดิมบน Mobile 100% & เลือกได้ยืดหยุ่นบน Desktop (Mobile Familiarity & Desktop Dual-Option)
 
 > [!IMPORTANT]
-> **กฎความเรียบง่ายและไม่ทำให้ผู้ใช้สับสน (Zero-Confusion Standard):**  
-> หน้าจอล็อกอินของระบบลูก (Spoke Login Page) จะต้องปรับเปลี่ยนการแสดงผลตามสถานะของ `ciam_sso_enabled` และ `ciam_break_glass_active` อย่างเคร่งครัดตาม 3 สถานการณ์ดังนี้:
+> **หลักการออกแบบหน้าจอล็อกอินระบบลูก (User-Centric Responsive Login Standard):**  
+> จากการใช้งานจริงในองค์กร พนักงานแบ่งออกเป็น 2 กลุ่มอย่างชัดเจน:
+> 1. **ผู้ใช้งานผ่าน Mobile (หน้างาน / คลังสินค้า / จัดซื้อ / ฝ่ายผลิต):** มักเข้าใช้งานแอปพลิเคชันนั้นๆ เพียงแอปเดียวบนโทรศัพท์มือถือ **หน้าตา Login ต้องแทบจะเหมือนเดิม 100%** เพื่อไม่ให้พนักงานรู้สึกว่ามีอะไรเปลี่ยนแปลงไปจากเดิมที่เคยใช้งาน
+> 2. **ผู้ใช้งานผ่าน Desktop (สำนักงาน / แล็ปท็อป):** มักทำงานหลายระบบพร้อมกัน **ปุ่ม SSO ต้องมีขนาดกะทัดรัด (Compact)** และแสดงควบคู่ไปกับฟอร์มมาตรฐาน เพื่อเปิดโอกาสให้พนักงานเลือกวิธีล็อกอินตามความต้องการได้อย่างอิสระ
 
-#### สถานการณ์ที่ 1: เปิดใช้งาน SSO ปกติ (`ciam_sso_enabled = true` และ `ciam_break_glass_active = false`)
-* **ปุ่มหลักเพียงปุ่มเดียว (Single Primary CTA):** แสดงปุ่มเด่นชัดสีน้ำเงิน/ฟ้า **`[ 🛡️ เข้าสู่ระบบด้วย Window Asia SSO ✨ ]`** เป็นปุ่มหลักเพียงปุ่มเดียวในหน้าจอ
-* **ซ่อนฟอร์ม Local Login เริ่มต้น (Hidden by Default):** **ซ่อนช่อง Username, Password และปุ่ม Sign In ดั้งเดิมไว้โดยเริ่มต้น** เพื่อไม่ให้พนักงานทั่วไปเกิดความสับสนว่าต้องพิมพ์รหัสตรงนี้หรือกดปุ่ม SSO ด้านบน
-* **ลิงก์สำรองสำหรับผู้ดูแลระบบ (Local Admin Link):** ทำเป็นข้อความลิงก์เล็กๆ ด้านล่าง เช่น *"เข้าสู่ระบบด้วยบัญชี Local (กรณีฉุกเฉิน) →"* สำหรับให้แอดมินคลิกเพื่อกางฟอร์มกรอกรหัสผ่านในกรณีพิเศษ (เช่น บัญชี `admin`)
-* **รองรับ Seamless True SSO:** เมื่อพนักงานมีเซสชันเดิมบน Central IAM (หรือเปิดมาจาก Portal) การคลิกปุ่ม SSO จะทำการยืนยันตัวตนและนำทางเข้าสู่ระบบลูกโดยอัตโนมัติใน ~0.8 วินาทีโดยไม่ต้องพิมพ์ชื่อและรหัสผ่านซ้ำอีก
+---
 
-#### สถานการณ์ที่ 2: ปิดใช้งาน SSO ในระบบลูก (`ciam_sso_enabled = false`)
-* ❌ **ห้ามแสดงปุ่ม SSO โดยเด็ดขาด:** ไม่ต้องเรนเดอร์ปุ่ม SSO สีฟ้า
-* ❌ **ห้ามแสดงแบนเนอร์แจ้งเตือน SSO:** ห้ามมีกล่องข้อความเตือนใดๆ เช่น *"Central IAM SSO ปิดใช้งานชั่วคราว"* หรือ *"SSO Disabled"*
-* ❌ **ห้ามแสดงเส้นคั่น Break-Glass:** ห้ามแสดงข้อความ *"หรือเข้าสู่ระบบสำรอง (Break-Glass Login)"*
-* ❌ **ห้ามมีคำว่า "สำรอง" บนปุ่มกดยืนยัน:** ปุ่ม Submit ด้านล่างต้องแสดงข้อความมาตรฐานคือ **`เข้าสู่ระบบ (Sign In)`** เท่านั้น (ไม่ใช่ "เข้าสู่ระบบสำรอง")
-* ❌ **ห้ามแสดง Footer เกี่ยวกับ Break-Glass:** ซ่อนข้อความ *"Break-Glass Ready"* ท้ายหน้าจอ
-* **ผลลัพธ์ที่ต้องการ:** หน้าจอจะกลายเป็นฟอร์ม Login แบบมาตรฐานดั้งเดิม 100% (ช่อง Username, Password และปุ่มเข้าสู่ระบบ) ผู้ใช้ทั่วไปจะไม่เห็นคำว่า SSO หรือคำว่า "สำรอง" ใดๆ ทั้งสิ้น
+#### 1. รายละเอียดการแสดงผลแยกตามขนาดหน้าจอ (Responsive Behavior)
 
-#### สถานการณ์ที่ 3: โหมดฉุกเฉิน Break-Glass (`ciam_break_glass_active = true`)
-* แสดงกล่องแจ้งเตือนสีเหลือง/ส้มด้านบน: `⚠️ ระบบอยู่ในโหมดฉุกเฉิน (Break-Glass Active) - เข้าใช้งานด้วยรหัสผ่านตรง`
-* เปิดฟอร์ม Username และ Password ให้อัตโนมัติ โดยปุ่มกดยืนยันแสดงข้อความ: `เข้าสู่ระบบฉุกเฉิน (Break-Glass Sign In)`
+| มิติ / หน้าจอ | 📱 เข้าใช้งานด้วย Mobile (จอมือถือ / แท็บเล็ตหน้างาน) | 💻 เข้าใช้งานด้วย Desktop (คอมพิวเตอร์ / แล็ปท็อป) |
+| :--- | :--- | :--- |
+| **เป้าหมายประสบการณ์ (UX Goal)** | **คงความคุ้นเคยเดิม 100%** ไม่สะดุด ไม่สับสน | **เปิดโอกาสให้เลือก (Freedom of Choice)** รวดเร็วและสะดวก |
+| **ฟอร์ม Username & Password** | **แสดงเด่นชัดเป็นฟอร์มหลักทันทีตั้งแต่เปิดหน้าจอ** (ไม่ต้องกดลิงก์ใดๆ เพื่อเปิด) | **แสดงควบคู่กันบนหน้าจอทันที** สามารถกรอกข้อมูลเข้าใช้งานได้ทันที |
+| **ปุ่ม Sign In ของระบบเดิม** | เป็นปุ่มหลัก (Primary CTA) สีเด่นชัด ขนาดเต็มแผง | เป็นปุ่มมาตรฐานด้านล่างฟอร์ม |
+| **ตำแหน่งและขนาดปุ่ม SSO** | **อยู่ด้านล่างต่อจากฟอร์มหลัก** คั่นด้วยเส้นแบ่ง `— หรือเข้าสู่ระบบด้วย —` ปุ่มขนาดกะทัดรัด (Secondary Option) ไม่แย่งความเด่น | **วางไว้ด้านบนฟอร์มหลัก** คั่นด้วย `— หรือเข้าสู่ระบบด้วยชื่อผู้ใช้งาน —` **ปุ่มขนาดเล็กลง (Compact height `py-2.5`, text-xs/sm)** ไม่ครอบงำหน้าจอ |
+
+---
+
+#### 2. พฤติกรรมตามสถานะระบบ (State-Driven Logic)
+
+##### สถานการณ์ที่ 1: เปิดใช้งาน SSO ปกติ (`ciam_sso_enabled = true` และ `ciam_break_glass_active = false`)
+* **บน Desktop:** แสดงปุ่ม SSO ขนาดกะทัดรัด (Compact Button) ด้านบนฟอร์ม คั่นด้วยเส้นแบ่ง `— หรือเข้าสู่ระบบด้วยชื่อผู้ใช้งาน —` ตามด้วยฟอร์ม Username & Password ปกติ
+* **บน Mobile:** แสดงฟอร์ม Username & Password ดั้งเดิมเป็นหลัก พร้อมปุ่ม Submit สีเด่นชัด และมีเส้นแบ่ง `— หรือเข้าสู่ระบบด้วย —` พร้อมปุ่ม SSO ขนาดย่อมด้านล่างสุด
+* **True SSO:** เมื่อกดปุ่ม SSO หากมีเซสชันเดิมบน Central IAM ระบบจะ Redirect แลก Token และเข้าสู่ระบบทันทีภายใน ~0.8 วินาที
+
+##### สถานการณ์ที่ 2: ปิดใช้งาน SSO ในระบบลูก (`ciam_sso_enabled = false`)
+* ❌ **ซ่อนปุ่ม SSO และเส้นแบ่งทั้งหมด 100%:** ไม่ต้องเรนเดอร์ปุ่ม SSO และไม่ต้องมีเส้นคั่นใดๆ ทั้งบน Desktop และ Mobile
+* ❌ **ห้ามแสดงข้อความเตือนหรือคำว่า "สำรอง":** ห้ามขึ้นว่า "SSO Disabled" หรือ "เข้าสู่ระบบสำรอง"
+* **ผลลัพธ์:** หน้าจอจะกลายเป็นฟอร์ม Login ดั้งเดิมของระบบลูก 100%
+
+##### สถานการณ์ที่ 3: โหมดฉุกเฉิน Break-Glass (`ciam_break_glass_active = true`)
+* แสดงกล่องแจ้งเตือนสีส้ม/เหลืองด้านบน: `⚠️ ระบบอยู่ในโหมดฉุกเฉิน (Break-Glass Active) - กรุณาเข้าใช้งานด้วยรหัสผ่านตรง`
+* ซ่อนปุ่ม SSO และให้พนักงานล็อกอินผ่านฟอร์ม Username / Password ดั้งเดิมตรงไปยังระบบหรือ AD Gateway
+
+---
+
+#### 3. ตัวอย่างโค้ดมาตรฐานสำหรับ Dev ระบบลูก (React / Next.js + Tailwind CSS)
+
+ทีมพัฒนาของแต่ละ Spoke สามารถนำโครงสร้าง JSX และ Tailwind Responsive Classes (`hidden md:block` และ `block md:hidden`) ไปปรับใช้ได้ทันที:
+
+```tsx
+export default function SpokeLoginPage() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [ssoConfig, setSsoConfig] = useState({ sso_enabled: true, break_glass_active: false });
+
+  return (
+    <div className="w-full max-w-md bg-slate-900 rounded-2xl p-6 sm:p-8 border border-slate-800">
+      {/* 1. Header & Logo ระบบลูก */}
+      <div className="text-center mb-6">
+        <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white">
+          APP
+        </div>
+        <h1 className="text-xl font-bold text-white">ชื่อระบบงาน (Spoke App)</h1>
+        <p className="text-xs text-slate-400 mt-1">คำอธิบายระบบงาน</p>
+      </div>
+
+      {/* 2. Desktop SSO Button: ขนาดย่อมลงมา (Compact) อยู่ด้านบนสำหรับ Desktop */}
+      {ssoConfig?.sso_enabled && !ssoConfig.break_glass_active && (
+        <div className="hidden md:block mb-5">
+          <button
+            type="button"
+            onClick={handleCiamSso}
+            className="w-full py-2.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition cursor-pointer"
+          >
+            <span>🛡️ เข้าสู่ระบบด้วย Window Asia SSO ✨</span>
+          </button>
+          
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-800" />
+            </div>
+            <div className="relative flex justify-center text-[11px]">
+              <span className="bg-slate-900 px-3 text-slate-500">หรือเข้าสู่ระบบด้วยชื่อผู้ใช้งาน</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Standard Login Form: แสดงเด่นชัดเสมอ ทั้งบน Mobile และ Desktop */}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-xs font-semibold text-slate-300 mb-1.5">ชื่อผู้ใช้งาน (Username)</label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="ชื่อผู้ใช้งาน AD หรือ Local"
+            className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-300 mb-1.5">รหัสผ่าน (Password)</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="กรอกรหัสผ่าน"
+            className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        {/* ปุ่มเข้าสู่ระบบหลัก (Primary CTA) */}
+        <button
+          type="submit"
+          className="w-full mt-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-xl shadow-md transition cursor-pointer"
+        >
+          เข้าสู่ระบบ (Sign In)
+        </button>
+      </form>
+
+      {/* 4. Mobile Secondary SSO: อยู่ด้านล่างฟอร์มหลักในขนาดกะทัดรัด สำหรับจอมือถือ */}
+      {ssoConfig?.sso_enabled && !ssoConfig.break_glass_active && (
+        <div className="block md:hidden pt-4 mt-1">
+          <div className="relative mb-3">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-800" />
+            </div>
+            <div className="relative flex justify-center text-[10px]">
+              <span className="bg-slate-900 px-2.5 text-slate-500">หรือเข้าสู่ระบบด้วย</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleCiamSso}
+            className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer"
+          >
+            <span>🛡️ Window Asia SSO ✨</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+```
 
 ---
 
@@ -1105,11 +1239,13 @@ def sso_login():
 
 class CallbackPayload(BaseModel):
     code: str
-    state: str
+    state: Optional[str] = None
+    code_verifier: Optional[str] = None
+    redirect_uri: Optional[str] = None
 
 @router.post("/callback")
 async def sso_callback(payload: CallbackPayload, db: Session = Depends(get_db)):
-    """Step 2: รับ Code จาก Central IAM แลกเปลี่ยน Token และดึง Claims จาก AD"""
+    """Step 2: รับ Code จาก Central IAM แลกเปลี่ยน Token และดึง Claims จาก AD (รองรับทั้ง Spoke-Initiated และ Portal Launch)"""
     # 0. ตรวจสอบว่าระบบลูกเปิดใช้งาน SSO อยู่หรือไม่ (Break-Glass Active Guard)
     sso_cfg = get_spoke_sso_settings(db)
     if not sso_cfg.get("sso_enabled", True) or sso_cfg.get("break_glass_active", False):
@@ -1118,22 +1254,25 @@ async def sso_callback(payload: CallbackPayload, db: Session = Depends(get_db)):
             detail="Single Sign-On is currently disabled on this application (Break-Glass Mode Active)."
         )
 
-    verifier = pkce_sessions.pop(payload.state, None)
-    if not verifier:
-        raise HTTPException(status_code=400, detail="Invalid state session or CSRF detected")
+    # ดึง code_verifier: ใช้จาก payload ก่อน ถ้าไม่มีจึงลองดึงจาก pkce_sessions (ถ้ามาจาก Portal verifier จะเป็น None ซึ่งอนุญาตให้ผ่านได้)
+    verifier = payload.code_verifier or (pkce_sessions.pop(payload.state, None) if payload.state else None)
 
-    # 1. แลก Authorization Code เป็น Tokens
+    # 1. แลก Authorization Code เป็น Tokens กับ Central IAM (Backend-to-Backend)
+    token_request_data = {
+        "grant_type": "authorization_code",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "code": payload.code,
+        "redirect_uri": payload.redirect_uri or REDIRECT_URI,
+    }
+    # แนบ code_verifier เฉพาะเมื่อมีค่า (กรณี Spoke-Initiated PKCE)
+    if verifier:
+        token_request_data["code_verifier"] = verifier
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         token_res = await client.post(
             f"{CIAM_BASE_URL}/api/v1/oauth/token",
-            data={
-                "grant_type": "authorization_code",
-                "client_id": CLIENT_ID,
-                "client_secret": CLIENT_SECRET,
-                "code": payload.code,
-                "redirect_uri": REDIRECT_URI,
-                "code_verifier": verifier
-            }
+            data=token_request_data
         )
 
         if token_res.status_code != 200:
@@ -1241,23 +1380,29 @@ router.get('/login', (req, res) => {
   res.redirect(authUrl);
 });
 
-// 2. Endpoint รับ Callback และดึงข้อมูลพนักงานจาก AD
+// 2. Endpoint รับ Callback และดึงข้อมูลพนักงานจาก AD (รองรับทั้ง Spoke-Initiated และ Portal Launch)
 router.post('/callback', async (req, res) => {
-  const { code } = req.body;
-  const verifier = req.cookies['sso_verifier'];
+  const { code, code_verifier } = req.body;
+  const verifier = code_verifier || req.cookies['sso_verifier'];
 
   try {
     // 2.1 แลก Authorization Code เป็น Tokens
-    const tokenRes = await axios.post(`${CIAM_BASE_URL}/api/v1/oauth/token`, new URLSearchParams({
+    const tokenPayload = {
       grant_type: 'authorization_code',
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
       code: code,
       redirect_uri: REDIRECT_URI,
-      code_verifier: verifier
-    }).toString(), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
+    };
+    if (verifier) {
+      tokenPayload.code_verifier = verifier;
+    }
+
+    const tokenRes = await axios.post(
+      `${CIAM_BASE_URL}/api/v1/oauth/token`,
+      new URLSearchParams(tokenPayload).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
 
     const { id_token } = tokenRes.data;
 
@@ -1290,7 +1435,116 @@ module.exports = router;
 
 ---
 
-### 10.5 ตัวอย่างการจัดการ Logout และ 401 Session Expired บน Frontend (React / Next.js / Vue)
+### 10.5 ตัวอย่างหน้า Frontend Callback มาตรฐาน (Next.js 14 / React App Router)
+ทีมพัฒนา Frontend สามารถนำโค้ดนี้ไปวางที่ `src/app/auth/callback/page.tsx` ได้ทันที ซึ่งถูกออกแบบให้รองรับทั้งการกด SSO จากหน้า Login ของระบบลูกเอง และการกดเปิดผ่าน Central IAM Employee Portal โดยไม่เกิดปัญหา *"SSO session ไม่ถูกต้องหรือหมดอายุ"*:
+
+```tsx
+'use client';
+
+import React, { useEffect, useState, useRef } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+
+export default function SsoCallbackPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [statusText, setStatusText] = useState('กำลังยืนยันตัวตนกับ Central IAM...');
+  const [error, setError] = useState<string | null>(null);
+  const executedRef = useRef(false);
+
+  useEffect(() => {
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+
+    if (!code) {
+      setError('ไม่พบ Authorization Code ใน URL Redirect จาก Central IAM');
+      return;
+    }
+
+    // ป้องกันการยิง API ซ้ำ 2 รอบใน React StrictMode
+    if (executedRef.current) return;
+    executedRef.current = true;
+
+    const exchangeToken = async () => {
+      try {
+        // ดึง code_verifier และ state จาก sessionStorage (ถ้าเปิดมาจาก Portal ค่านี้จะว่าง)
+        const codeVerifier = sessionStorage.getItem('sso_code_verifier') || '';
+        const savedState = sessionStorage.getItem('sso_state');
+
+        // หาก state ไม่ตรงกับที่เซฟไว้ ให้เตือนใน Console พอ ห้ามบล็อกการเข้าสู่ระบบ
+        if (savedState && state && savedState !== state) {
+          console.warn('SSO state mismatch warning (Continuing for Portal Launch compatibility)');
+        }
+
+        setStatusText('กำลังแลกเปลี่ยนรหัสและยืนยัน Asymmetric RS256 Signature...');
+
+        const redirectUri = window.location.origin + '/auth/callback';
+        const res = await fetch('/api/auth/sso/callback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            code_verifier: codeVerifier,
+            redirect_uri: redirectUri,
+            state: state || undefined,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || 'การยืนยันตัวตนกับระบบลูกล้มเหลว');
+        }
+
+        const data = await res.json();
+
+        // ล้าง sessionStorage
+        sessionStorage.removeItem('sso_code_verifier');
+        sessionStorage.removeItem('sso_state');
+
+        setStatusText('ยืนยันตัวตนสำเร็จ! กำลังนำเข้าสู่ระบบ...');
+
+        // บันทึก Session Token ของระบบลูก และพาเข้าหน้าหลัก
+        localStorage.setItem('access_token', data.access_token);
+        router.push('/');
+      } catch (err: any) {
+        console.error('SSO Callback error:', err);
+        setError(err.message || 'เกิดข้อผิดพลาดในการยืนยันตัวตน');
+      }
+    };
+
+    exchangeToken();
+  }, [searchParams, router]);
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-white">
+        <div className="max-w-md w-full bg-slate-800 p-6 rounded-2xl border border-rose-500/30 text-center space-y-4">
+          <div className="text-rose-400 font-bold text-lg">เข้าสู่ระบบไม่สำเร็จ</div>
+          <p className="text-xs text-slate-300">{error}</p>
+          <button
+            onClick={() => router.push('/login')}
+            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer transition"
+          >
+            กลับสู่หน้าเข้าสู่ระบบ
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-white">
+      <div className="text-center space-y-3">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-xs text-slate-400">{statusText}</p>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+### 10.6 ตัวอย่างการจัดการ Logout และ 401 Session Expired บน Frontend (React / Next.js / Vue)
 
 ตัวอย่างโค้ดฝั่ง Client ของระบบลูกที่ช่วยให้รองรับ Seamless Return to Portal:
 

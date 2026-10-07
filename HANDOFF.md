@@ -368,3 +368,11 @@ docker compose up -d api web
      - ชื่อระบบ (ก-ฮ / A-Z)
      - รหัสระบบ (App Code)
 
+### ลำดับที่ 7: ปรับปรุงเอกสารสเปกกลางมาตรฐาน (`SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`)
+- **การปรับปรุง:**
+  1. **Dual SSO Launch Modes:** ระบุมาตรฐานการรองรับทั้ง Spoke-Initiated (มี PKCE ใน sessionStorage) และ IdP-Initiated / Portal Launch (ไม่มี sessionStorage) ไว้อย่างชัดเจนในหมวด B.3
+  2. **กฎเหล็ก Frontend `/auth/callback`:** ห้ามบล็อกผู้ใช้หรือขึ้น Error "SSO session ไม่ถูกต้อง" เมื่อเปิดผ่าน Portal โดยให้ fallback ส่ง `code_verifier: ""` ไปยัง Backend ทันที
+  3. **กฎเหล็ก Backend `/api/auth/sso/callback`:** กำหนด `code_verifier` และ `state` เป็น Optional ไม่บังคับตรวจ Session Memory และแนบ `code_verifier` เฉพาะเมื่อมีค่า
+  4. **แจกโค้ดมาตรฐานพร้อมใช้:** เพิ่ม Section 10.5 ตัวอย่างโค้ด Frontend Callback (Next.js 14 / React App Router) และปรับโค้ดตัวอย่าง Backend (FastAPI, Express/Node.js) ในภาคผนวกให้เป็นมาตรฐานเดียวกับที่ IRM ใช้งานจริง
+
+
