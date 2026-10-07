@@ -71,6 +71,7 @@ export default function ApplicationsPage() {
   const [allowedNetworkCidrs, setAllowedNetworkCidrs] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [showSpecModal, setShowSpecModal] = useState(false);
+  const [sortBy, setSortBy] = useState<"id" | "name" | "code">("id");
 
 
   const handleDownloadSpec = () => {
@@ -276,13 +277,24 @@ export default function ApplicationsPage() {
     try {
       setLoading(true);
       const data = await ciamApi.getApplications();
-      setApps(data);
+      const sorted = [...data].sort((a, b) => a.id - b.id);
+      setApps(sorted);
     } catch (err) {
       console.error("Failed to load applications:", err);
     } finally {
       setLoading(false);
     }
   };
+
+  const sortedApps = [...apps].sort((a, b) => {
+    if (sortBy === "name") {
+      return a.app_name.localeCompare(b.app_name, "th");
+    }
+    if (sortBy === "code") {
+      return a.app_code.localeCompare(b.app_code);
+    }
+    return a.id - b.id; // default: registration ID order (fixed forever)
+  });
 
   const fetchSchedule = async () => {
     try {
@@ -577,6 +589,20 @@ export default function ApplicationsPage() {
             <span>{syncingAll ? "กำลังซิงก์ทุกระบบ..." : "⚡ ซิงก์ทุกระบบทันที"}</span>
           </button>
 
+          {/* Sort Selector */}
+          <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-100 border border-slate-300 rounded-md text-xs sm:text-sm font-bold shadow-2xs">
+            <span className="text-slate-600 text-xs">เรียงตาม:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-800 cursor-pointer focus:outline-none focus:border-indigo-600"
+            >
+              <option value="id">ลำดับระบบ (ID คงที่)</option>
+              <option value="name">ชื่อระบบ (ก-ฮ / A-Z)</option>
+              <option value="code">รหัสระบบ (App Code)</option>
+            </select>
+          </div>
+
           {/* Register New App Button */}
           <button
             onClick={() => {
@@ -600,7 +626,7 @@ export default function ApplicationsPage() {
             กำลังโหลดข้อมูลระบบที่เชื่อมต่อ...
           </div>
         ) : (
-          apps.map((app) => (
+          sortedApps.map((app) => (
             <div key={app.id} className="bg-white p-6 rounded-lg border-2 border-slate-300 shadow-sm flex flex-col justify-between space-y-4 hover:border-blue-400 transition-all">
               {/* Card Top */}
               <div>

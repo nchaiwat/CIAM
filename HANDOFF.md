@@ -359,8 +359,12 @@ docker compose up -d api web
 2. **1-Click Offboard:** แอดมินทดลองกดตัดสิทธิ์ผู้ใช้จากหน้า CIAM Offboarding Hub ➔ ตรวจสอบว่ามีแถวคำสั่ง `DISABLE_USER` สถานะ `PENDING` ในตาราง `spoke_pending_commands`
 3. **Command Execution:** เมื่อ MTPulse Agent ยิง Heartbeat รอบถัดไป ➔ ตรวจสอบว่าได้รับคำสั่ง `DISABLE_USER` ใน Response ก้อน `pending_commands` และสั่งระงับสิทธิ์ใน DB ของ MTPulse สำเร็จ พร้อมส่งผลลัพธ์ `COMPLETED` กลับมา
 
-### ลำดับที่ 4: พัฒนาระบบ Background Dead Man's Switch Worker บน CIAM
-- สร้าง Background Task หรือ Scheduler ตรวจสอบแอปพลิเคชันที่เป็น Mode C ทุกๆ 1 นาที หาก `last_health_check_at` ขาดการติดต่อนานเกิน 5 นาที (300 วินาที) ให้ปรับสถานะเป็น `health_status="OFFLINE"` อัตโนมัติ
+### ลำดับที่ 6: อัปเดตความเสถียรของ UI หน้าระบบเชื่อมต่อ (Deterministic Card Sorting)
+- **ปัญหาเดิม:** เมื่อกด Trigger ซิงค์ข้อมูล, Ping หรือแก้ไขระบบลูก การ์ดบนหน้าจอจะกระโดดสลับตำแหน่งไปมา เกิดจาก PostgreSQL อัปเดตตำแหน่ง Heap Tuple ของแถวในตาราง `connected_applications` โดยที่ API ไม่ได้ระบุ `order_by`
+- **การแก้ไข:**
+  1. **Backend:** ใส่ `.order_by(ConnectedApplication.id.asc())` ใน `list_applications` (`applications.py`) และ `get_portal_apps` (`oauth.py`)
+  2. **Frontend:** เพิ่ม `sortedApps` ที่คงตำแหน่งตาม ID เริ่มต้นเสมอ พร้อมเพิ่ม Dropdown เมนูให้ผู้ใช้เลือกเรียงตาม:
+     - ลำดับระบบ (ID คงที่ - ค่าเริ่มต้น)
+     - ชื่อระบบ (ก-ฮ / A-Z)
+     - รหัสระบบ (App Code)
 
-### ลำดับที่ 5: พัฒนา UI Outbound Agent Commands ในหน้า Admin Console
-- ใน Modal "ตรวจสอบบัญชี (Inspect)" บนหน้า `/applications` เพิ่มแท็บ **"Outbound Agent Commands"** แสดงสถานะคิวคำสั่ง (`PENDING`, `SENT`, `COMPLETED`, `FAILED`) พร้อม Timestamp เพื่อให้แอดมินตรวจสอบย้อนหลังได้ง่าย

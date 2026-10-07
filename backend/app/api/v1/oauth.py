@@ -348,7 +348,7 @@ def get_portal_apps(
     base_query = db.query(ConnectedApplication).filter(
         ConnectedApplication.is_active == True,
         ConnectedApplication.sso_enabled == True
-    )
+    ).order_by(ConnectedApplication.id.asc())
 
     if current_user and current_user.role not in ["SUPER_ADMIN", "ADMIN"]:
         # Find employee's MasterIdentity

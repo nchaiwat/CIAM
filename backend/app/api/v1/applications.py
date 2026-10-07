@@ -36,7 +36,7 @@ def list_applications(
     current_admin: AdminUser = Depends(get_current_admin)
 ):
     """List all registered child applications (REST and RPA)."""
-    apps = db.query(ConnectedApplication).all()
+    apps = db.query(ConnectedApplication).order_by(ConnectedApplication.id.asc()).all()
     from sqlalchemy import func
     counts = dict(
         db.query(AppAccountMapping.application_id, func.count(AppAccountMapping.id))
