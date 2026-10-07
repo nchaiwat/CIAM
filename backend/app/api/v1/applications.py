@@ -604,18 +604,6 @@ async def sync_application_inventory(
                     seen_lower.add(low)
             db.flush()
 
-            # If syncing AD, mark MasterIdentity as inactive in AD if they are no longer in AD inventory
-            if app.app_code.lower() == "ad":
-                stale_identities = (
-                    db.query(MasterIdentity)
-                    .filter(
-                        MasterIdentity.is_active_in_ad == True,
-                        ~func.lower(MasterIdentity.username).in_(live_usernames)
-                    )
-                    .all()
-                )
-                for st_id in stale_identities:
-                    st_id.is_active_in_ad = False
 
         app.last_sync_at = now
         app.health_status = "ONLINE"
@@ -712,7 +700,7 @@ def download_spoke_spec():
             return FileResponse(
                 path=p,
                 media_type="text/markdown; charset=utf-8",
-                filename="CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md"
+                filename="CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.6.0.md"
             )
     raise HTTPException(status_code=404, detail="Specification file not found.")
 

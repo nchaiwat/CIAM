@@ -502,3 +502,28 @@ FRONTEND_URL=http://localhost:3000
 * **AD Status Mirroring:** สิทธิ์ของ `AD` ในคอลัมน์ระบบลูกจะสะท้อนค่าจริงของ `MasterIdentity.is_active_in_ad` เสมอ และมีการ Auto-heal ใน Backend ป้องกันปัญหา AD แสดงผลเป็นสีแดง/Disable โดยไม่ตั้งใจ
 * **Broad Department & AD Detection:** ขยายขอบเขตการตรวจจับตัวตน AD ครอบคลุมพนักงานขาย (`Sale`, `Sale Admin`), จัดซื้อ (`Purchasing`), ฯลฯ ไม่ให้ตกหล่นเป็น "ระบบลูกเท่านั้น"
 
+---
+
+## 16. Versioned Spec Download, Non-Destructive AD Sync & Responsive Loading Feedback (Version 2.0.3)
+
+### 16.1 Versioned Specification Filename
+* **Download Filename:** กำหนดชื่อไฟล์ที่ดาวน์โหลดจากระบบให้ระบุเลขเวอร์ชันชัดเจนเสมอคือ `CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.6.0.md` เพื่อป้องกันปัญหา Dev นำไฟล์ไปใช้ผิดเวอร์ชัน
+* **Download Feedback:** เพิ่ม `isDownloadingSpec` State บนหน้าจอพร้อมแสดง Animated Spinner และข้อความ `กำลังเตรียมไฟล์ (v2.6.0)...`
+
+### 16.2 Non-Destructive AD Sync & Startup Auto-Healing (แก้ไขถาวรปัญหา AD แสดง Inactive / บัญชีผี)
+* **Root Cause:** ก่อนหน้านี้ ใน `scheduler.py` (รอบ 04:00 น.) และ `applications.py` มีโค้ดค้นหา `stale_identities` โดยเทียบ `~func.lower(MasterIdentity.username).in_(live_usernames)` และสั่ง `st_id.is_active_in_ad = False` ส่งผลให้ผู้ใช้ใดๆ ที่ไม่ได้ถูกส่งกลับมาในรอบ Batch Sync ของ AD ถูกปรับเป็น Inactive ทันที ทำให้ตอนเช้ากลายเป็น "บัญชีผี"
+* **Permanent Fix:**
+  1. ลบ Logic ตัดสิทธิ์ `stale_identities` สำหรับ Active Directory ออก 100% ทั้งใน `scheduler.py` และ `applications.py` โดยในมาตรฐาน IAM การปรับ `is_active_in_ad = False` ต้องเกิดจากการที่ AD ส่งสถานะปิดใช้งาน (`is_active: False` / `userAccountControl & 2`) มาอย่างชัดเจน หรือจากการ Offboard ของแอดมินเท่านั้น
+  2. ปรับให้รอบ Sync AD อัปเดต `identity.is_active_in_ad = is_active` อย่างถูกต้อง
+  3. เพิ่มระบบ **Auto-Healing Routine** ใน `init_db()` (`initial_data.py`) ให้กวาดคืนค่า `is_active_in_ad = True` ให้กับพนักงานองค์กร (ฝ่าย Sale, Purchasing, PU, IT, Admin, หรือมีอีเมล `@windowasia.com` และมีบัญชีในระบบลูก) ที่ไม่ได้ถูกบันทึกประวัติการ Offboard อย่างเป็นทางการ พร้อมเชื่อมต่อ mapping ใน AD ให้ Active อัตโนมัติ
+
+### 16.3 Instant UI Loading & Responsive Feedback ("ดูบัญชีสด", "ซิงค์", "ดาวน์โหลด")
+* **ปัญหาเดิม:** การกด "ดูบัญชีสด" บนการ์ดระบบลูก (เช่น SAP B1 Service Layer) ต้องรอการเชื่อมต่อภายนอก 1-2 วินาที โดยที่ Modal ยังไม่เปิดและปุ่มไม่มี Spinner ทำให้ผู้ใช้รู้สึกว่าระบบค้าง (Freeze)
+* **การแก้ไข:**
+  1. เพิ่ม `inspectingApp` และ `inspectingId` เพื่อควบคุมการทำงานแบบ Real-Time
+  2. บนปุ่มการ์ด: แสดง Spinner หมุน `<RefreshCw className="animate-spin" />` พร้อมข้อความ `กำลังดึงข้อมูล...` ทันทีที่คลิก
+  3. บนหน้าจอ: **เปิด Modal ทันที 0ms (Instant Open)** โดยแสดงหน้าจอ Loading State ที่สวยงามทันสมัย:
+     - Header แสดงชื่อระบบและสถานะ `⏳ กำลังเชื่อมต่อ Service Layer / REST API...`
+     - Body แสดง Glowing Spinner + ข้อมูลอธิบาย + Shimmer Skeleton Placeholder 3 แถว
+     - เมื่อข้อมูลโหลดเสร็จ จะสลับไปแสดงตารางบัญชีสดพร้อมสถิติอย่างลื่นไหล
+

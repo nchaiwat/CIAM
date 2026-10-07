@@ -9,6 +9,7 @@ from app.models.mapping import AppAccountMapping
 from app.models.audit import IamAuditLog
 from app.models.oauth import OAuthAuthorizationCode
 from app.models.setting import SystemSetting
+from sqlalchemy import func
 from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
@@ -263,18 +264,75 @@ def init_db():
                 db.flush()
             app_objs[item["app_code"]] = app
 
-        # Auto-heal AD spoke account mappings: ensure is_active_in_app strictly mirrors MasterIdentity.is_active_in_ad
+        # Auto-heal AD master identities and spoke account mappings:
+        # Recover corporate identities wrongly set to inactive in AD due to 04:00 AM sync-absence bug
         ad_app_obj = app_objs.get("ad")
+        offboarded_usernames = set()
+        try:
+            offboard_logs = db.query(IamAuditLog).filter(
+                IamAuditLog.action_type == "OFFBOARD",
+                IamAuditLog.status == "SUCCESS"
+            ).all()
+            for l in offboard_logs:
+                if l.target_username:
+                    offboarded_usernames.add(l.target_username.strip().lower())
+        except Exception as e:
+            logger.warning("Could not query offboard audit logs: %s", e)
+
+        corporate_depts = (
+            "sale", "sales", "purchasing", "pu", "it", "administrator", "admin",
+            "accounting", "hr", "executive", "management", "general", "qa", "warehouse"
+        )
+        corrupted_ad_identities = db.query(MasterIdentity).filter(MasterIdentity.is_active_in_ad == False).all()
+        restored_count = 0
+        now = datetime.now(timezone.utc)
+        for cid in corrupted_ad_identities:
+            u_low = (cid.username or "").strip().lower()
+            if u_low in offboarded_usernames:
+                continue  # Legitimately offboarded via Central-IAM
+
+            dept_low = (cid.department or "").strip().lower()
+            email_val = (cid.email or "").strip().lower()
+            has_corp_email = "@windowasia.com" in email_val
+            has_corp_dept = any(cd in dept_low for cd in corporate_depts)
+            has_active_spoke = any(m.is_active_in_app for m in (cid.accounts or []))
+            is_dotted_username = "." in cid.username and not cid.username.startswith(".")
+
+            if has_corp_dept or has_corp_email or has_active_spoke or is_dotted_username:
+                cid.is_active_in_ad = True
+                restored_count += 1
+                if ad_app_obj:
+                    ad_m = db.query(AppAccountMapping).filter(
+                        AppAccountMapping.application_id == ad_app_obj.id,
+                        (AppAccountMapping.identity_id == cid.id) |
+                        (func.lower(AppAccountMapping.app_username) == cid.username.lower())
+                    ).first()
+                    if ad_m:
+                        ad_m.is_active_in_app = True
+                        ad_m.last_sync_status = "IN_SYNC"
+                    else:
+                        ad_m = AppAccountMapping(
+                            identity_id=cid.id,
+                            application_id=ad_app_obj.id,
+                            app_username=cid.username,
+                            app_group_name="Domain Users",
+                            is_active_in_app=True,
+                            last_sync_status="IN_SYNC",
+                            created_at=now
+                        )
+                        db.add(ad_m)
+
+        if restored_count > 0:
+            db.flush()
+            logger.info("Auto-healed %d corporate identities to Active in AD (recovering from 04:00 AM sync bug)", restored_count)
+
+        # Synchronize remaining AD spoke account mappings to match MasterIdentity AD status
         if ad_app_obj:
             ad_mappings = db.query(AppAccountMapping).filter(AppAccountMapping.application_id == ad_app_obj.id).all()
-            healed_count = 0
             for m in ad_mappings:
                 if m.identity and m.is_active_in_app != m.identity.is_active_in_ad:
                     m.is_active_in_app = m.identity.is_active_in_ad
-                    healed_count += 1
-            if healed_count > 0:
-                db.flush()
-                logger.info("Auto-healed %d AD spoke account mappings to match MasterIdentity AD status", healed_count)
+            db.flush()
 
         # 3. Seed Real Master Identities from Active Directory & IRM
         now = datetime.now(timezone.utc)
@@ -361,6 +419,8 @@ def init_db():
                         )
                         db.add(mapping)
                 logger.info("Seeded real master identity: %s (%s)", ident.full_name, ident.username)
+            else:
+                ident.is_active_in_ad = item["is_active_in_ad"]
  
         # 4. Seed Corporate VPN / Office Network Subnets
         vpn_setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "corporate_vpn_networks").first()

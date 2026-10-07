@@ -322,12 +322,14 @@ def test_download_spoke_spec():
     assert res.status_code == 200
     assert "text/markdown" in res.headers["content-type"]
     assert "Central IAM" in res.text
+    assert "v2.6.0" in res.headers.get("content-disposition", "")
 
     # 2. Resilient double-prefix fallback endpoint
     res2 = client.get("/api/v1/api/v1/applications/spec/download")
     assert res2.status_code == 200
     assert "text/markdown" in res2.headers["content-type"]
     assert "Central IAM" in res2.text
+    assert "v2.6.0" in res2.headers.get("content-disposition", "")
 
 def test_user_create_with_telegram_id():
     login_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
@@ -614,6 +616,27 @@ def test_granular_spoke_status_toggle_and_alphabetical_sorting():
         json={"is_active": initial_status, "reason": "Restore original status"}
     )
     assert restore_res.status_code == 200
+
+def test_ad_account_status_preservation_and_auto_heal():
+    from app.core.database import SessionLocal
+    from app.models.identity import MasterIdentity
+    from app.initial_data import init_db
+
+    # 1. Simulate a corporate identity having is_active_in_ad = False
+    with SessionLocal() as db:
+        test_user = db.query(MasterIdentity).filter(MasterIdentity.username == "Patcha.S").first()
+        if test_user:
+            test_user.is_active_in_ad = False
+            db.commit()
+
+    # 2. Run init_db auto-heal
+    init_db()
+
+    # 3. Verify that Patcha.S was auto-healed back to Active
+    with SessionLocal() as db:
+        healed_user = db.query(MasterIdentity).filter(MasterIdentity.username == "Patcha.S").first()
+        assert healed_user is not None
+        assert healed_user.is_active_in_ad is True
 
 
 

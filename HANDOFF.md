@@ -396,5 +396,16 @@ docker compose up -d api web
      - กำหนด Lifecycle คำสั่งอย่างเป็นทางการ (`PENDING` ➔ `SENT` ➔ `COMPLETED` / `FAILED`)
      - รับรองสิทธิ์ของ Spoke ในการปฏิเสธคำสั่ง `DISABLE_USER` สำหรับ Emergency Local Admin หรือ Admin คนสุดท้าย โดยส่งผลลัพธ์ `FAILED` พร้อมเหตุผล
 
+### ลำดับที่ 9: ปรับปรุงชื่อไฟล์ Spec ติด Version, แก้ถาวร AD Sync Inactive Bug & เพิ่ม UI Loading Feedback
+- **การปรับปรุง 3 จุดสำคัญ:**
+  1. **Spec Filename Versioning:** ปรับชื่อไฟล์ที่ดาวน์โหลดออกมาให้มีเวอร์ชันติดที่ชื่อไฟล์เสมอ: `CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.6.0.md` ทั้งใน Backend (`applications.py`) และ Frontend พร้อมแสดง Loading State บนปุ่ม
+  2. **ถอนการตัดสิทธิ์ Stale AD Identity อัตโนมัติ (AD Inactive Root Cause Fix):**
+     - ลบโค้ด `stale_identities` deactivation ใน `scheduler.py` (รอบ 04:00 น.) และ `applications.py` เพื่อไม่ให้ปิดสิทธิ์พนักงาน AD เพียงเพราะไม่มีชื่อใน Sync Batch ชั่วคราว
+     - ปรับให้รอบ Sync AD อัปเดต `identity.is_active_in_ad = is_active` อย่างถูกต้อง
+     - เพิ่มระบบ Auto-Healing ใน `init_db()` (`initial_data.py`) ฟื้นฟูสถานะ Active ให้พนักงานที่ถูกตั้งเป็น Inactive ผิดพลาดโดยอัตโนมัติเมื่อสตาร์ทเซิร์ฟเวอร์
+  3. **Instant Loading Feedback เมื่อกด "ดูบัญชีสด" & Actions อื่นๆ:**
+     - เพิ่ม State `inspectingApp` และ `inspectingId` ให้ปุ่มบนการ์ดหมุน Spinner `<RefreshCw className="animate-spin" />` พร้อมข้อความ "กำลังดึงข้อมูล..." ทันที
+     - เปิด Modal ทันที 0ms แสดง Loading State หน้าจอเชื่อมต่อ Service Layer / API แบบ Real-Time พร้อม Skeleton Shimmer Placeholder เพื่อให้ผู้ใช้รับรู้ว่าระบบกำลังทำงาน ไม่ได้ Freeze/ค้าง
+
 
 

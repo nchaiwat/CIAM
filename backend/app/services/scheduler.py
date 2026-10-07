@@ -156,6 +156,12 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
                         identity.full_name = item.get("full_name")
 
                 is_active = bool(item.get("is_active", True))
+                is_ad_app = app.app_code.lower() == "ad"
+                if is_ad_app:
+                    identity.is_active_in_ad = is_active
+                    if item.get("employee_id"):
+                        identity.employee_id = item.get("employee_id")
+
                 is_exception = bool(
                     getattr(mapping, "is_approved_exception", False) or getattr(identity, "is_approved_exception", False)
                 )
@@ -236,17 +242,6 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
                         seen_lower.add(low)
                 db.flush()
 
-                if app.app_code.lower() == "ad":
-                    stale_identities = (
-                        db.query(MasterIdentity)
-                        .filter(
-                            MasterIdentity.is_active_in_ad == True,
-                            ~func.lower(MasterIdentity.username).in_(live_usernames)
-                        )
-                        .all()
-                    )
-                    for st_id in stale_identities:
-                        st_id.is_active_in_ad = False
 
             app.last_sync_at = now_utc
             app.health_status = "ONLINE"
