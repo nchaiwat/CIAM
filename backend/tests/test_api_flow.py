@@ -322,14 +322,14 @@ def test_download_spoke_spec():
     assert res.status_code == 200
     assert "text/markdown" in res.headers["content-type"]
     assert "Central IAM" in res.text
-    assert "v2.6.0" in res.headers.get("content-disposition", "")
+    assert "v2.7.0" in res.headers.get("content-disposition", "")
 
     # 2. Resilient double-prefix fallback endpoint
     res2 = client.get("/api/v1/api/v1/applications/spec/download")
     assert res2.status_code == 200
     assert "text/markdown" in res2.headers["content-type"]
     assert "Central IAM" in res2.text
-    assert "v2.6.0" in res2.headers.get("content-disposition", "")
+    assert "v2.7.0" in res2.headers.get("content-disposition", "")
 
 def test_user_create_with_telegram_id():
     login_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})

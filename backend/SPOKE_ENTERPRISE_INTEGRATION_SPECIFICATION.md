@@ -1,7 +1,7 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Current Version:** 2.6.0 (RFC 9700 Seamless SSO Bounce, Architecture Equivalence & Outbound Command Protocol)  
-**Effective Date:** 7 ตุลาคม 2026 (07/10/2026)  
+**Current Version:** 2.7.0 (Mode C Two-Way Directory Reconciliation, Immediate Sync Button & RFC 9700 SSO)  
+**Effective Date:** 8 ตุลาคม 2026 (08/10/2026)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
 **Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
 **Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636) / OAuth 2.0 Security BCP (RFC 9700)
@@ -14,7 +14,8 @@
 
 | เวอร์ชัน (Version) | วันที่มีผล (Date) | สถานะ (Status) | สรุปรายการปรับปรุงจากเวอร์ชันก่อนหน้า (Change Summary & Key Differences) |
 | :---: | :---: | :---: | :--- |
-| **v2.6.0** | 07/10/2026 | **Current Active** | • **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`) เพื่อให้ Spoke ผูก Client State & PKCE กับเบราว์เซอร์ได้สมบูรณ์ 100% ตามคำแนะนำ RFC 9700 โดยคงประสบการณ์ Seamless 1-Click สำหรับผู้ใช้<br/>• **Architecture Equivalence Principles (หมวด 1.4):** บรรจุหลักการยอมรับสถาปัตยกรรมภายในที่เทียบเท่า เช่น การเก็บ PKCE ฝั่ง Backend (Session/Redis/DB), การใช้ HttpOnly Session Cookie แทน JavaScript Tokens, และการ Resolve บัญชีด้วย `sub` / `preferred_username`<br/>• **Mode C Full Sync Trigger Protocol (หมวด D.2):** เพิ่มคำสั่ง `REQUEST_FULL_SYNC` ใน Heartbeat Command Queue เพื่อรองรับการสั่ง Sync ทันทีจาก CIAM หรือรอบ 04:00 น. โดยไม่ต้องเปิด Inbound Port<br/>• **Asynchronous Deprovisioning & Admin Protection (หมวด D.3):** กำหนด Lifecycle สถานะคำสั่ง (`PENDING` ➔ `SENT` ➔ `COMPLETED` / `FAILED`) และรับรองสิทธิ์ของ Spoke ในการปฏิเสธคำสั่งปิดบัญชีฉุกเฉิน (Local Admin Protection) |
+| **v2.7.0** | 08/10/2026 | **Current Active** | • **Mode C Two-Way Directory Reconciliation & Auto-Provisioning (หมวด D.2, D.4):** กำหนดให้การเชื่อมต่อ Mode C เป็นแบบ Two-Way Reconciliation อย่างแท้จริง โดยเมื่อ Spoke ส่ง Heartbeat / Full Sync ขึ้นมา CIAM จะเปรียบเทียบกับบัญชีที่ได้รับสิทธิ์ใน CIAM (`AppAccountMapping`). หาก CIAM มีบัญชีใหม่ที่ Spoke ยังไม่มี CIAM จะส่ง `assigned_accounts` และคำสั่ง `PROVISION_USER` กลับไปเพื่อให้ Spoke สร้างบัญชีใน Local Database ทันที (Role เริ่มต้นตาม `ciam_auto_provision_group`, `is_active: true`) และส่งคำสั่ง `DISABLE_USER` หากถูกระงับสิทธิ์ ทำให้จำนวนและสถานะตรงกัน 100% โดยไม่ต้องรอ User ล็อกอิน<br/>• **Mandatory Spoke Mode C Immediate Sync Button (หมวด D.4, 5.1):** ข้อบังคับสำหรับ Spoke Mode C ต้องมีปุ่ม **`[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]` (Immediate Account Sync)** บนหน้าจอ System Setting เพื่อให้ Admin สั่งแลกเปลี่ยนข้อมูลและปรับยอดจำนวนบัญชีรวมถึงสถานะ Active/Inactive ให้ตรงกันได้แบบเรียลไทม์โดยไม่ต้องรอรอบเวลา 120 วินาที<br/>• **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`) เพื่อให้ Spoke ผูก Client State & PKCE กับเบราว์เซอร์ได้สมบูรณ์ 100% ตามคำแนะนำ RFC 9700 |
+| **v2.6.0** | 07/10/2026 | Superseded | • **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`)<br/>• **Architecture Equivalence Principles (หมวด 1.4):** บรรจุหลักการยอมรับสถาปัตยกรรมภายในที่เทียบเท่า<br/>• **Mode C Full Sync Trigger Protocol (หมวด D.2):** เพิ่มคำสั่ง `REQUEST_FULL_SYNC` ใน Heartbeat Command Queue |
 | **v2.5.0** | 07/10/2026 | Superseded | • **Dual-Mode SSO & Portal Launch Support:** เพิ่มข้อกำหนดการรองรับการเปิดจาก Portal และข้อกำหนดความปลอดภัยของ Callback |
 | **v2.4.0** | 05/10/2026 | Superseded | • **Mode C Outbound Agent Specification:** เพิ่มมาตรฐาน Reverse Heartbeat & Command Pull (`POST /api/v1/agent/heartbeat`) สำหรับระบบ On-Premise ที่ไม่มี Inbound Public Port |
 | **v2.3.0** | 03/10/2026 | Superseded | • **Zero-Trust Network Policy:** กำหนดมาตรฐานการจำกัดการเข้าถึงผ่าน VPN (`VPN_ONLY`, `HIDE`, `LOCK_WITH_BANNER`) พร้อมระบุ Corporate Subnets |
@@ -38,9 +39,9 @@ Central IAM รองรับสภาพแวดล้อมระบบล�
 | **การเข้าถึงจากภายนอก** | มี Public Domain / IP เข้าถึงได้จากอินเทอร์เน็ต | **ไม่มี Inbound Tunnel จากภายนอก** (Private IP/Local) | **ไม่มี Inbound Tunnel จากภายนอก** (Private IP/Local) |
 | **พอร์ต Inbound ขาเข้า** | ต้องเปิด Inbound HTTPS (Port 443) ให้ CIAM ยิงเข้ามาได้ | **❌ ไม่ต้องเปิด Inbound Port ใดๆ จากภายนอก** | **❌ ไม่ต้องเปิด Inbound Port ใดๆ จากภายนอก** |
 | **พอร์ต Outbound ขาออก** | HTTPS (Port 443) ออกอินเทอร์เน็ต | HTTPS (Port 443) ออกอินเทอร์เน็ตเพื่อแลก Token | HTTPS (Port 443) ออกอินเทอร์เน็ตเพื่อแลก Token และยิง Heartbeat |
-| **การจัดการบัญชีผู้ใช้** | CIAM กวาด Directory Sync และสั่ง 1-Click Offboard ตรง | Just-In-Time (JIT) Provisioning เมื่อ User ล็อกอินครั้งแรก | **กวาด Directory Sync ได้ + สั่ง 1-Click Offboard ได้จริง** |
+| **การจัดการบัญชีผู้ใช้** | CIAM กวาด Directory Sync และสั่ง 1-Click Offboard ตรง | Just-In-Time (JIT) Provisioning เมื่อ User ล็อกอินครั้งแรก | **Two-Way Reconciliation (CIAM ส่งบัญชีที่เพิ่มขึ้นไปให้ Spoke สร้างทันที + กวาด Sync + 1-Click Offboard)** |
 | **ตรวจสถานะ Online/Offline** | CIAM ยิง Ping Inbound ตรง | ระบบมองเป็น Client Mode (พร้อมรับ SSO เสมอ) | **มี Heartbeat แท้จริง** (ถ้าไม่ส่งตามเวลาระบบจะปรับเป็น Offline) |
-| **ความซับซ้อนฝั่ง Dev** | ทำ Endpoint กลุ่ม A, B, C | ทำ Endpoint กลุ่ม A, B (ไม่ต้องเขียน Background Service) | ทำกลุ่ม A, B + รันสคริปต์ **Agent เล็กๆ ยิง Heartbeat (กลุ่ม D)** |
+| **ความซับซ้อนฝั่ง Dev** | ทำ Endpoint กลุ่ม A, B, C | ทำ Endpoint กลุ่ม A, B (ไม่ต้องเขียน Background Service) | ทำกลุ่ม A, B + รันสคริปต์ **Agent เล็กๆ ยิง Heartbeat (กลุ่ม D)** + ปุ่ม Sync ทันที |
 | **นโยบายเครือข่ายบน CIAM** | `network_policy: ANYWHERE` | `network_policy: VPN_ONLY` | `network_policy: VPN_ONLY` |
 
 ### 1.2 โหมดการเชื่อมต่อของระบบลูก (Spoke Integration Modes)
@@ -595,31 +596,57 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 {
   "status": "ACKNOWLEDGED",
   "app_code": "mtpulse",
-  "server_time": "2026-10-02T10:00:00Z",
+  "server_time": "2026-10-08T10:00:00Z",
   "next_heartbeat_seconds": 120,
   "pending_commands": [
+    {
+      "command_id": "cmd_prov_9a8b",
+      "action": "PROVISION_USER",
+      "username": "ronnakorn.p",
+      "reason": "Auto-Reconciliation: Account assigned on Central IAM for วิเคราะห์การขาย Modern Trade",
+      "issued_at": "2026-10-08T10:00:00Z"
+    },
     {
       "command_id": "cmd_e5f6g7h8",
       "action": "DISABLE_USER",
       "username": "resigned_user_01",
       "reason": "1-Click Offboarding via Central IAM",
-      "issued_at": "2026-10-02T09:58:30Z"
+      "issued_at": "2026-10-08T09:58:30Z"
     },
     {
       "command_id": "cmd_sync_0912",
       "action": "REQUEST_FULL_SYNC",
       "username": "ALL_ACCOUNTS",
       "reason": "On-demand Full Directory Sync triggered from Central IAM (or 04:00 AM Reconciliation)",
-      "issued_at": "2026-10-02T10:00:00Z"
+      "issued_at": "2026-10-08T10:00:00Z"
     }
   ],
-  "message": "Heartbeat received for วิเคราะห์การขาย Modern Trade. 2 pending command(s) dispatched."
+  "assigned_accounts": [
+    {
+      "username": "chaiwat.n",
+      "full_name": "Chaiwat Nilawan",
+      "email": "chaiwat.n@windowasia.com",
+      "department": "Purchasing",
+      "role": "System Admin",
+      "is_active": true
+    },
+    {
+      "username": "ronnakorn.p",
+      "full_name": "Ronnakorn Pattarakrittanon",
+      "email": "ronnakorn.p@windowasia.com",
+      "department": "Supply Chain Analysis",
+      "role": "Viewer",
+      "is_active": true
+    }
+  ],
+  "message": "Heartbeat received for วิเคราะห์การขาย Modern Trade. 3 pending command(s) dispatched."
 }
 ```
 
 ##### รายการคำสั่งมาตรฐานใน Pending Commands Queue (`action`):
 | Action | ค่า `username` | คำอธิบาย & พฤติกรรมที่ระบบลูกต้องปฏิบัติ |
 | :--- | :---: | :--- |
+| `PROVISION_USER` | ชื่อ Username พนักงาน | **คำสั่งสร้างบัญชีผู้ใช้ใหม่จาก CIAM (Two-Way Reconciliation):** เมื่อ CIAM มีการมอบสิทธิ์การเข้าใช้งาน Spoke ให้แก่พนักงาน แต่ใน Spoke ยังไม่มีบัญชีนี้ Agent ของ Spoke ต้องสร้างบัญชีนี้ลงในฐานข้อมูลภายในทันที โดยกำหนดสิทธิ์เริ่มต้นตามค่า `ciam_auto_provision_group` (เช่น `Viewer`) และตั้งสถานะ `is_active = true` เพื่อให้จำนวนบัญชีตรงกันทันทีโดยไม่ต้องรอพนักงานล็อกอิน |
 | `DISABLE_USER` | ชื่อ Username พนักงาน | สั่งระงับสิทธิ์บัญชีผู้ใช้ในระบบลูก (`is_active = false`) และ Revoke Session/Refresh Token ทั้งหมดทันที |
 | `ENABLE_USER` | ชื่อ Username พนักงาน | สั่งเปิดหรือคืนสิทธิ์การใช้งานบัญชีผู้ใช้ในระบบลูก (`is_active = true`) |
 | `REQUEST_FULL_SYNC` | `"ALL_ACCOUNTS"` | **คำสั่งขอ Full Directory Sync จาก CIAM:** เกิดขึ้นเมื่อ Admin กดปุ่ม "⚡ ซิงค์ข้อมูล" บน Central IAM หรือรอบตรวจสอบ 04:00 น. Reconciliation โดย Agent ต้องดึงรายชื่อผู้ใช้ทั้งหมดจากฐานข้อมูลภายใน แล้วส่งคืนใน Heartbeat รอบถัดไปด้วย `sync_type: "FULL_SYNC"` พร้อม Payload `accounts: [...]` |
@@ -659,7 +686,41 @@ Central IAM ตระหนักและสนับสนุนอย่า�
 
 ---
 
-#### D.4 ตัวอย่างโค้ดมาตรฐานสำหรับ Developer ระบบลูก (Production-Ready Python Agent)
+#### D.4 มาตรฐานการซิงก์แบบสองทางและการสร้างปุ่มซิงก์ทันทีบนหน้าจอ Spoke (Two-Way Directory Reconciliation & Mandatory Immediate Sync Button)
+
+เพื่อให้การจัดการบัญชีผู้ใช้งานระหว่าง Central IAM และระบบลูก Mode C ทำงานสอดประสานกันได้อย่างสมบูรณ์เทียบเท่าระบบ Cloud (Two-Way Equivalence):
+
+##### 1. หลักการทำงาน Two-Way Reconciliation สำหรับ Mode C
+1. **เมื่อมีการเพิ่มหรือมอบสิทธิ์บัญชีบน Central IAM:**  
+   เช่น Admin กำหนดสิทธิ์ให้ `Ronnakorn.P` เข้าใช้งาน MTPulse ในระบบ CIAM (แสดงแท็ก `• MTPULSE` บนหน้าจอ CIAM)
+2. **การตรวจจับความแตกต่าง (Reconciliation Diff):**  
+   เมื่อ Spoke ส่งรายชื่อบัญชีขึ้นมาในรอบ Full Sync หรือ Heartbeat:
+   * **กรณี CIAM มี แต่ Spoke ยังไม่มี:** CIAM จะส่งรายชื่อบัญชีที่ได้รับสิทธิ์ในฟิลด์ `assigned_accounts` และออกคำสั่ง **`PROVISION_USER`** ส่งกลับไปใน `pending_commands`
+   * **กรณีพนักงานถูกระงับสิทธิ์บน CIAM (ลาออก / ย้ายแผนก):** หากใน Spoke บัญชียังเปิดใช้งานอยู่ (`is_active = true`) CIAM จะส่งคำสั่ง **`DISABLE_USER`** กลับไปสั่งปิดทันที
+   * **กรณีพนักงานได้รับการเปิดสิทธิ์คืน:** หากใน Spoke บัญชีถูกปิดอยู่ CIAM จะส่งคำสั่ง **`ENABLE_USER`** กลับไปเปิดใช้งาน
+3. **การประมวลผลฝั่ง Spoke (Local Auto-Creation):**  
+   เมื่อ Spoke ได้รับคำสั่ง `PROVISION_USER`:
+   * ให้สร้างบัญชีนั้นลงในตาราง `users` ของฐานข้อมูลตนเองทันที
+   * กำหนด Role เริ่มต้นตามค่า `ciam_auto_provision_group` (เช่น `Viewer`)
+   * ตั้งสถานะ `active = true`
+   * **ผลลัพธ์:** ทั้ง Central IAM และ Spoke จะมี **จำนวนบัญชีผู้ใช้เท่ากัน และสถานะ Active/Inactive ของแต่ละบัญชีตรงกัน 100% ในทันที** โดยไม่จำเป็นต้องรอให้พนักงานคนนั้นกดล็อกอิน SSO เข้ามาก่อน
+
+##### 2. ข้อบังคับหน้าจอ Spoke UI: ปุ่ม "ซิงก์บัญชีผู้ใช้กับ CIAM ทันที" (Mandatory Immediate Sync Button)
+ระบบลูกที่เป็น Mode C **ต้องมีปุ่มสำหรับสั่งซิงก์ข้อมูลทันทีบนหน้าจอ System Setting** (ในแท็บ User Management หรือแท็บ Central IAM / AD):
+
+* **ข้อความบนปุ่ม:** **`[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]`** (Immediate Account Sync)
+* **พฤติกรรมเมื่อผู้ดูแลระบบกดปุ่ม:**
+  1. Frontend เรียก Internal API ของตนเอง เช่น `POST /api/settings/ciam-agent/sync-now`
+  2. Spoke Backend สั่งให้ Agent ทำงานรอบพิเศษทันทีแบบ Synchronous (ไม่ต้องรอรอบเวลา 120 วินาที) โดยกำหนด `sync_type: "FULL_SYNC"`
+  3. Agent ส่งรายชื่อบัญชีทั้งหมดที่มีในเครื่องขึ้นไปรายงานตัวที่ CIAM
+  4. CIAM คำนวณความต่าง (Diff) และส่งคำสั่ง `PROVISION_USER`, `DISABLE_USER`, `ENABLE_USER` พร้อม `assigned_accounts` กลับมาใน Response ทันที
+  5. Spoke Backend นำคำสั่งไปสร้างบัญชีที่ขาดลงฐานข้อมูล และปรับสถานะ Active/Inactive ให้ตรงกับ CIAM ทันที
+  6. Frontend ทำการรีเฟรชตารางรายชื่อผู้ใช้ และแสดง Alert แจ้งผลสำเร็จ เช่น:  
+     *"ซิงก์ข้อมูลกับ Central IAM สำเร็จ: ปรับปรุงสถานะตรงกัน 100% (สร้างใหม่ 1 บัญชี, ปรับสถานะ 0 บัญชี)"*
+
+---
+
+#### D.5 ตัวอย่างโค้ดมาตรฐานสำหรับ Developer ระบบลูก (Production-Ready Python Agent)
 ทีมพัฒนา Spoke สามารถนำไฟล์สคริปต์นี้ (เช่น `ciam_agent.py`) ไปวางในโปรเจกต์ของระบบตนเอง และตั้งเวลารันได้ทันที:
 
 ```python
@@ -896,6 +957,9 @@ sudo systemctl start ciam-agent
 3. **การ์ดสวิตช์ฉุกเฉิน (Break-Glass Emergency Panel):**
    * กล่องสีเหลือง/แดง พร้อมคำเตือน
    * สวิตช์เปิดโหมด Break-Glass (ต้องพิมพ์ยืนยันเหตุผลก่อนกดยืนยัน)
+4. **ปุ่มสั่งซิงก์บัญชีผู้ใช้กับ CIAM ทันที (Mandatory Immediate Sync Button for Mode C):**
+   * สำหรับระบบลูกที่เป็น Mode C (เช่น MTPulse): ต้องมีปุ่ม **`[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]`** ในแท็บ User Management หรือแท็บ Central IAM
+   * เมื่อคลิก ระบบจะส่ง Full Sync ไปยัง CIAM เพื่อตรวจเทียบและนำบัญชีที่ CIAM มอบหมายเพิ่มมาสร้างในเครื่องตนเองทันที รวมถึงปรับสถานะ Active/Inactive ให้ตรงกัน 100% โดยไม่ต้องรอรอบ 120 วินาที
 
 ---
 

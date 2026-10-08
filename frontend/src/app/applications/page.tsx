@@ -98,7 +98,7 @@ export default function ApplicationsPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.6.0.md";
+      a.download = "CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.7.0.md";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -571,12 +571,12 @@ export default function ApplicationsPage() {
             {isDownloadingSpec ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
-                <span>กำลังเตรียมไฟล์ (v2.6.0)...</span>
+                <span>กำลังเตรียมไฟล์ (v2.7.0)...</span>
               </>
             ) : (
               <>
                 <Download className="w-4 h-4 text-emerald-600" />
-                <span>📥 สเปกเชื่อมต่อ (.md v2.6.0)</span>
+                <span>📥 สเปกเชื่อมต่อ (.md v2.7.0)</span>
               </>
             )}
           </button>
@@ -3039,7 +3039,7 @@ export default function ApplicationsPage() {
                 <Clock className="w-3.5 h-3.5" />
                 <span>📜 ประวัติการปรับปรุงสเปก (Revision Changelog)</span>
                 <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1">
-                  v2.6.0
+                  v2.7.0
                 </span>
               </button>
             </div>
@@ -3051,14 +3051,14 @@ export default function ApplicationsPage() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center space-x-2.5">
                       <span className="px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-500 text-slate-950">
-                        v2.6.0 ล่าสุด
+                        v2.7.0 ล่าสุด
                       </span>
                       <h4 className="font-extrabold text-sm text-white">
                         Enterprise Spoke Integration Standard
                       </h4>
                     </div>
                     <div className="text-[11px] text-slate-300 font-medium">
-                      วันที่มีผล: <span className="font-bold text-white">7 ตุลาคม 2026</span> • มาตรฐานความปลอดภัย ISO 27001
+                      วันที่มีผล: <span className="font-bold text-white">8 ตุลาคม 2026</span> • มาตรฐานความปลอดภัย ISO 27001
                     </div>
                   </div>
                   <p className="text-xs text-slate-300 leading-relaxed">
@@ -3068,15 +3068,30 @@ export default function ApplicationsPage() {
 
                 {/* Changelog Timeline */}
                 <div className="space-y-3">
-                  {/* v2.6.0 */}
+                  {/* v2.7.0 */}
                   <div className="p-3.5 rounded-lg border-2 border-emerald-300 bg-emerald-50/40 space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center space-x-2">
-                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.6.0</span>
-                        <span className="font-bold text-emerald-950">RFC 9700 Seamless SSO Bounce, Architecture Equivalence & Outbound Command Protocol</span>
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.7.0</span>
+                        <span className="font-bold text-emerald-950">Mode C Two-Way Directory Reconciliation &amp; Mandatory Immediate Sync Button</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                           Active Current
                         </span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">08/10/2026</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-700 text-[11.5px] leading-relaxed">
+                      <li><strong>Mode C Two-Way Directory Reconciliation &amp; Auto-Provisioning:</strong> เมื่อ Spoke ส่ง Heartbeat / Full Sync ขึ้นมา CIAM จะตรวจ Diff กับบัญชีที่ได้รับสิทธิ์ใน CIAM (<code>AppAccountMapping</code>) หาก CIAM มีบัญชีเพิ่มขึ้น CIAM จะส่ง <code>assigned_accounts</code> และคำสั่ง <code>PROVISION_USER</code> กลับไปให้ Spoke สร้างใน Local Database ทันที (Role เริ่มต้น <code>Viewer</code>, <code>is_active = true</code>) และส่งคำสั่ง <code>DISABLE_USER</code> หากถูกระงับสิทธิ์ ทำให้จำนวนและสถานะตรงกัน 100% โดยไม่ต้องรอ User ล็อกอิน</li>
+                      <li><strong>Mandatory Immediate Sync Button on Spoke UI:</strong> ข้อบังคับสำหรับ Spoke Mode C ทุกระบบ ต้องมีปุ่ม <code>[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]</code> บนหน้าจอ System Setting เพื่อให้ Admin สั่งแลกเปลี่ยนข้อมูลและปรับยอดจำนวนบัญชีรวมถึงสถานะ Active/Inactive ให้ตรงกันได้แบบเรียลไทม์โดยไม่ต้องรอรอบเวลา 120 วินาที</li>
+                    </ul>
+                  </div>
+
+                  {/* v2.6.0 */}
+                  <div className="p-3.5 rounded-lg border-2 border-slate-200 bg-white space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-slate-700 text-white">v2.6.0</span>
+                        <span className="font-bold text-slate-900">RFC 9700 Seamless SSO Bounce, Architecture Equivalence &amp; Outbound Command Protocol</span>
                       </div>
                       <span className="text-[11px] text-slate-500 font-medium">07/10/2026</span>
                     </div>

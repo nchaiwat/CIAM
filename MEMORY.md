@@ -507,8 +507,8 @@ FRONTEND_URL=http://localhost:3000
 ## 16. Versioned Spec Download, Non-Destructive AD Sync & Responsive Loading Feedback (Version 2.0.3)
 
 ### 16.1 Versioned Specification Filename
-* **Download Filename:** กำหนดชื่อไฟล์ที่ดาวน์โหลดจากระบบให้ระบุเลขเวอร์ชันชัดเจนเสมอคือ `CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.6.0.md` เพื่อป้องกันปัญหา Dev นำไฟล์ไปใช้ผิดเวอร์ชัน
-* **Download Feedback:** เพิ่ม `isDownloadingSpec` State บนหน้าจอพร้อมแสดง Animated Spinner และข้อความ `กำลังเตรียมไฟล์ (v2.6.0)...`
+* **Download Filename:** กำหนดชื่อไฟล์ที่ดาวน์โหลดจากระบบให้ระบุเลขเวอร์ชันชัดเจนเสมอคือ `CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.7.0.md` (ดึงเลขเวอร์ชันแบบไดนามิกจากหัวเอกสารสเปก) เพื่อป้องกันปัญหา Dev นำไฟล์ไปใช้ผิดเวอร์ชัน
+* **Download Feedback:** เพิ่ม `isDownloadingSpec` State บนหน้าจอพร้อมแสดง Animated Spinner และข้อความ `กำลังเตรียมไฟล์ (v2.7.0)...` และปุ่ม `📥 สเปกเชื่อมต่อ (.md v2.7.0)`
 
 ### 16.2 Non-Destructive AD Sync & Startup Auto-Healing (แก้ไขถาวรปัญหา AD แสดง Inactive / บัญชีผี)
 * **Root Cause:** ก่อนหน้านี้ ใน `scheduler.py` (รอบ 04:00 น.) และ `applications.py` มีโค้ดค้นหา `stale_identities` โดยเทียบ `~func.lower(MasterIdentity.username).in_(live_usernames)` และสั่ง `st_id.is_active_in_ad = False` ส่งผลให้ผู้ใช้ใดๆ ที่ไม่ได้ถูกส่งกลับมาในรอบ Batch Sync ของ AD ถูกปรับเป็น Inactive ทันที ทำให้ตอนเช้ากลายเป็น "บัญชีผี"

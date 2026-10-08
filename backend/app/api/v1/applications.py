@@ -703,10 +703,21 @@ def download_spoke_spec():
     ]
     for p in possible_paths:
         if os.path.exists(p) and os.path.isfile(p):
+            import re
+            version_str = "v2.7.0"
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    header_sample = f.read(600)
+                    m = re.search(r"\*\*Current Version:\*\*\s*([^\s\(]+)", header_sample)
+                    if m:
+                        v = m.group(1).strip()
+                        version_str = f"v{v}" if not v.startswith("v") else v
+            except Exception:
+                pass
             return FileResponse(
                 path=p,
                 media_type="text/markdown; charset=utf-8",
-                filename="CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.6.0.md"
+                filename=f"CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_{version_str}.md"
             )
     raise HTTPException(status_code=404, detail="Specification file not found.")
 
