@@ -404,8 +404,8 @@ def get_portal_apps(
                 is_vpn_locked = True
                 vpn_lock_message = f"กรุณาเชื่อมต่อ VPN หรือเข้าใช้งานจากเครือข่ายองค์กร (ตรวจพบ IP: {client_ip})"
 
-        launch_url = app.base_url
-        if app.redirect_uris:
+        launch_url = app.portal_launch_url or app.base_url
+        if not app.portal_launch_url and app.redirect_uris:
             first_uri = app.redirect_uris.split(",")[0].strip()
             if first_uri:
                 launch_url = first_uri
@@ -425,6 +425,7 @@ def get_portal_apps(
                 health_status=app.health_status,
                 latency_ms=app.latency_ms,
                 launch_url=launch_url,
+                portal_launch_url=app.portal_launch_url,
                 redirect_uris=app.redirect_uris,
                 network_policy=getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
                 is_vpn_locked=is_vpn_locked,
@@ -521,6 +522,21 @@ def launch_portal_app(
             launch_username = mapping.app_username or current_user.username
         else:
             launch_username = current_user.username
+
+    # 1. Dedicated Portal Launch URL (RFC 9700 Seamless SSO Initiation Bounce, e.g. /auth/start)
+    if app.portal_launch_url:
+        logger.info(
+            "Portal launch for user '%s' to app '%s' via configured portal_launch_url: %s",
+            launch_username, app.app_code, app.portal_launch_url
+        )
+        return PortalLaunchResponse(
+            status="SUCCESS",
+            app_code=app.app_code,
+            app_name=app.app_name,
+            launch_url=app.portal_launch_url,
+            code=None,
+            expires_in=60
+        )
 
     # Determine callback URI
     redirect_uri = None

@@ -24,6 +24,7 @@ class ConnectedApplication(Base):
     client_id = Column(String(100), unique=True, index=True, nullable=True)
     client_secret = Column(String(255), nullable=True)
     redirect_uris = Column(String(1000), nullable=True) # Comma-separated allowed callback URLs
+    portal_launch_url = Column(String(500), nullable=True) # Specific initiation URL for Employee Portal Launch (e.g. /auth/start)
     sso_enabled = Column(Boolean, default=True, nullable=False)
     spoke_sso_status = Column(String(50), default="UNKNOWN", nullable=True) # 'ACTIVE', 'DISABLED', 'UNKNOWN'
 

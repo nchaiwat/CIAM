@@ -12,6 +12,7 @@ class AppCreate(BaseModel):
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
     redirect_uris: Optional[str] = None
+    portal_launch_url: Optional[str] = None
     sso_enabled: bool = True
     sap_company_db: Optional[str] = None
     sap_username: Optional[str] = None
@@ -31,6 +32,7 @@ class AppUpdate(BaseModel):
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
     redirect_uris: Optional[str] = None
+    portal_launch_url: Optional[str] = None
     sso_enabled: Optional[bool] = None
     sap_company_db: Optional[str] = None
     sap_username: Optional[str] = None
@@ -55,6 +57,7 @@ class AppOut(BaseModel):
     total_linked_accounts: int = 0
     client_id: Optional[str] = None
     redirect_uris: Optional[str] = None
+    portal_launch_url: Optional[str] = None
     sso_enabled: bool = True
     spoke_sso_status: Optional[str] = "UNKNOWN"
     sap_company_db: Optional[str] = None
@@ -85,6 +88,7 @@ class AppCredentialOut(BaseModel):
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
     redirect_uris: Optional[str] = None
+    portal_launch_url: Optional[str] = None
     sso_enabled: bool = True
     sap_company_db: Optional[str] = None
     sap_username: Optional[str] = None

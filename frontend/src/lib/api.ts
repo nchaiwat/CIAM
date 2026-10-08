@@ -186,6 +186,7 @@ export interface ConnectedApp {
   total_linked_accounts: number;
   client_id?: string | null;
   redirect_uris?: string | null;
+  portal_launch_url?: string | null;
   sso_enabled?: boolean;
   spoke_sso_status?: "ACTIVE" | "DISABLED" | "UNKNOWN" | string;
   sap_company_db?: string | null;
@@ -472,6 +473,7 @@ export const ciamApi = {
     network_policy?: string;
     vpn_restriction_mode?: string;
     allowed_network_cidrs?: string;
+    portal_launch_url?: string;
   }) =>
     fetchApi<ConnectedApp>("/applications", {
       method: "POST",
@@ -490,6 +492,7 @@ export const ciamApi = {
       client_id?: string | null;
       client_secret?: string | null;
       redirect_uris?: string | null;
+      portal_launch_url?: string | null;
       sso_enabled?: boolean;
       sap_company_db?: string | null;
       sap_username?: string | null;
@@ -511,6 +514,7 @@ export const ciamApi = {
       client_id?: string;
       client_secret?: string;
       redirect_uris?: string;
+      portal_launch_url?: string;
       sso_enabled?: boolean;
       sap_company_db?: string;
       sap_username?: string;
@@ -700,6 +704,7 @@ export interface PortalAppItem {
   health_status: string;
   latency_ms?: number;
   launch_url?: string;
+  portal_launch_url?: string | null;
   redirect_uris?: string;
   network_policy?: string;
   is_vpn_locked?: boolean;
@@ -712,7 +717,7 @@ export interface PortalLaunchResponse {
   app_code: string;
   app_name: string;
   launch_url: string;
-  code: string;
+  code?: string | null;
   expires_in: number;
 }
 

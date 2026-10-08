@@ -92,6 +92,7 @@ class PortalAppItem(BaseModel):
     health_status: str = "UNKNOWN"
     latency_ms: Optional[int] = None
     launch_url: Optional[str] = None
+    portal_launch_url: Optional[str] = None
     redirect_uris: Optional[str] = None
     network_policy: Optional[str] = "ANYWHERE"
     is_vpn_locked: Optional[bool] = False
@@ -110,7 +111,7 @@ class PortalLaunchResponse(BaseModel):
     app_code: str
     app_name: str
     launch_url: str
-    code: str
+    code: Optional[str] = None
     expires_in: int = 60
 
 

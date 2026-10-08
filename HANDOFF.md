@@ -98,6 +98,21 @@
 
 ---
 
+### 9) รองรับ Portal Launch URL แยกจาก Callback สำหรับการเปิดระบบแบบ RFC 9700 Seamless SSO Bounce (Complete & Verified)
+- **ปัญหา & ข้อเสนอแนะจากทีม MTPulse:** เมื่อคลิกการ์ด MTPulse จากหน้า Central IAM Portal (`/portal`) เกิดข้อความเตือน "SSO session ไม่ถูกต้องหรือหมดอายุ กรุณาเริ่มใหม่" เนื่องจากโค้ดเดิมของ CIAM ส่ง Code ตรงเข้า `/auth/callback` โดยที่ MTPulse ยังไม่มี `SsoAttempt` และ Cookie `__Host-mtpulse_sso` ในเบราว์เซอร์
+- **ทีม MTPulse ยืนยันสถาปัตยกรรม:** MTPulse มี Endpoint `/auth/start` พร้อมใช้งานแล้วบน Production (commit `0e852d7`) สำหรับเริ่ม SSO อัตโนมัติ (Seamless SSO Initiation Bounce ตาม RFC 9700) โดยต้องแยก URL สำหรับเปิดการ์ด (`Portal Launch URL: https://wa-mtpulse.wa.net/auth/start`) ออกจาก URL รับผลหลังยืนยันตัวตน (`Redirect URIs / Callback: https://wa-mtpulse.wa.net/auth/callback`)
+- **การแก้ไขใน Central IAM:**
+  - **Database & Model (`application.py`):** เพิ่มคอลัมน์ `portal_launch_url VARCHAR(500)` ในตาราง `connected_applications` พร้อม Safe Auto-Migration
+  - **Data Seeding & Auto-Upgrade (`initial_data.py`):** บันทึกค่าเริ่มต้นสำหรับ MTPulse: `portal_launch_url = "https://wa-mtpulse.wa.net/auth/start"` และคง `redirect_uris = "https://wa-mtpulse.wa.net/auth/callback,..."`
+  - **Backend API (`oauth.py`, `applications.py`):**
+    - ใน `POST /oauth/portal/launch`: หากแอปมี `portal_launch_url` ให้ตอบกลับ URL ดังกล่าวทันที เพื่อให้เบราว์เซอร์เปิดเข้าสู่จุดเริ่มต้นสร้าง State/PKCE/Cookie ของระบบลูกอย่างถูกต้อง
+    - ใน `GET /oauth/portal/apps`: เพิ่มฟิลด์ `portal_launch_url` ใน `PortalAppItem`
+    - ใน `GET/PATCH /applications`: รองรับการอ่านและแก้ไข `portal_launch_url` ผ่าน API
+  - **Frontend UI (`applications/page.tsx`):** เพิ่มช่องกรอก **`Portal Launch URL`** ใน Modal แก้ไขแอปพลิเคชัน (แท็บ SSO / OIDC) แยกจาก Whitelisted Redirect URIs พร้อมคำอธิบายการทำงาน RFC 9700
+  - **การทดสอบ:** `pytest` ผ่าน 41/41 (100%), `tsc` 0 errors
+
+---
+
 
 ### 7) แก้ไขสถานะ AD ในสิทธิ์ระบบลูก (Spokes), การจัดเรียงตัวอักษร A-Z, และระบบระงับสิทธิ์รายระบบ (Granular Access Control) (Complete & Verified)
 - **1. แก้ไขสถานะ AD Badge ไม่ให้แสดงแดง/Disabled:**

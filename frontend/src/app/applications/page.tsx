@@ -161,6 +161,7 @@ export default function ApplicationsPage() {
   const [editClientId, setEditClientId] = useState("");
   const [editClientSecret, setEditClientSecret] = useState("");
   const [editRedirectUris, setEditRedirectUris] = useState("");
+  const [editPortalLaunchUrl, setEditPortalLaunchUrl] = useState("");
   const [editSsoEnabled, setEditSsoEnabled] = useState(true);
   const [showSecret, setShowSecret] = useState(false);
   const [showClientSecret, setShowClientSecret] = useState(false);
@@ -230,6 +231,7 @@ export default function ApplicationsPage() {
         creds.redirect_uris ||
           `${defaultBase}/auth/callback,${defaultBase}/api/auth/callback,http://localhost:3000/portal/callback`
       );
+      setEditPortalLaunchUrl(creds.portal_launch_url || app.portal_launch_url || "");
       setEditSsoEnabled(creds.sso_enabled ?? true);
       setEditSapCompanyDb(creds.sap_company_db || (isAd ? "157.173.219.153" : "WA_PROD"));
       setEditSapUsername(creds.sap_username || "");
@@ -242,6 +244,7 @@ export default function ApplicationsPage() {
       setEditClientId(isAd ? "CIAM" : `${app.app_code.toLowerCase()}-spoke-client`);
       setEditClientSecret("");
       setEditRedirectUris("");
+      setEditPortalLaunchUrl("");
       setEditSsoEnabled(true);
       setEditSapCompanyDb(isAd ? "157.173.219.153" : "WA_PROD");
       setEditSapUsername("");
@@ -265,6 +268,7 @@ export default function ApplicationsPage() {
         client_id: editClientId || undefined,
         client_secret: editClientSecret || undefined,
         redirect_uris: editRedirectUris || undefined,
+        portal_launch_url: editPortalLaunchUrl.trim() || undefined,
         sso_enabled: editSsoEnabled,
         sap_company_db: editSapCompanyDb || undefined,
         sap_username: editSapUsername || undefined,
@@ -1298,10 +1302,32 @@ export default function ApplicationsPage() {
                       </div>
                     </div>
 
+                    {/* Portal Launch URL (RFC 9700 Seamless SSO Initiation Bounce) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-slate-700">
+                          Portal Launch URL (URL ที่เปิดเมื่อคลิกการ์ดจาก Employee Portal)
+                        </label>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          RFC 9700 Seamless SSO
+                        </span>
+                      </div>
+                      <input
+                        type="url"
+                        value={editPortalLaunchUrl}
+                        onChange={(e) => setEditPortalLaunchUrl(e.target.value)}
+                        placeholder="https://wa-mtpulse.wa.net/auth/start"
+                        className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono text-xs focus:outline-none focus:border-blue-600"
+                      />
+                      <span className="text-[11px] text-slate-500 mt-0.5 block">
+                        ระบุ URL เริ่มต้นเมื่อผู้ใช้คลิกการ์ดระบบ เช่น <code className="text-blue-600 font-bold">https://wa-mtpulse.wa.net/auth/start</code> เพื่อให้ระบบลูกสร้าง State/PKCE และ Cookie ผูกกับเบราว์เซอร์ แล้วเด้งกลับมารับ Token จาก CIAM ได้อย่างสมบูรณ์
+                      </span>
+                    </div>
+
                     {/* Redirect URIs */}
                     <div>
                       <label className="block font-bold text-slate-700 mb-1">
-                        Whitelisted Redirect URIs (คั่นด้วยจุลภาค ,)
+                        Whitelisted Redirect URIs / Callback (คั่นด้วยจุลภาค ,)
                       </label>
                       <textarea
                         rows={2}
@@ -1311,7 +1337,7 @@ export default function ApplicationsPage() {
                         className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-mono text-xs focus:outline-none focus:border-blue-600"
                       />
                       <span className="text-[11px] text-slate-500 mt-0.5 block">
-                        ระบุ URL ปลายทางที่อนุญาตให้ส่ง One-Time Authorization Code กลับไปหลังล็อกอินสำเร็จ
+                        ระบุ URL ปลายทางที่อนุญาตให้ส่ง One-Time Authorization Code กลับไปหลังล็อกอินสำเร็จ (เช่น <code className="text-blue-600 font-bold">https://wa-mtpulse.wa.net/auth/callback</code>)
                       </span>
                     </div>
                   </div>

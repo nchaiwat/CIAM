@@ -99,6 +99,7 @@ def register_application(
         client_id=client_id,
         client_secret=client_secret,
         redirect_uris=data.redirect_uris,
+        portal_launch_url=data.portal_launch_url.strip() if data.portal_launch_url else None,
         sso_enabled=data.sso_enabled,
         sap_company_db=data.sap_company_db.strip() if data.sap_company_db else None,
         sap_username=data.sap_username.strip() if data.sap_username else None,
@@ -129,6 +130,7 @@ def register_application(
         last_sync_at=new_app.last_sync_at,
         client_id=new_app.client_id,
         redirect_uris=new_app.redirect_uris,
+        portal_launch_url=new_app.portal_launch_url,
         sso_enabled=new_app.sso_enabled,
         spoke_sso_status=getattr(new_app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN",
         sap_company_db=new_app.sap_company_db,
@@ -190,6 +192,7 @@ def get_application_credentials(
         client_id=app.client_id,
         client_secret=app.client_secret,
         redirect_uris=app.redirect_uris,
+        portal_launch_url=getattr(app, "portal_launch_url", None),
         sso_enabled=app.sso_enabled,
         sap_company_db=app.sap_company_db,
         sap_username=app.sap_username,
@@ -231,6 +234,8 @@ def update_application(
         app.client_secret = data.client_secret.strip() or None
     if data.redirect_uris is not None:
         app.redirect_uris = data.redirect_uris.strip() or None
+    if data.portal_launch_url is not None:
+        app.portal_launch_url = data.portal_launch_url.strip() or None
     if data.sso_enabled is not None:
         app.sso_enabled = data.sso_enabled
     if data.rpa_adapter_name is not None:
@@ -280,6 +285,7 @@ def update_application(
         last_sync_at=app.last_sync_at,
         client_id=app.client_id,
         redirect_uris=app.redirect_uris,
+        portal_launch_url=app.portal_launch_url,
         sso_enabled=app.sso_enabled,
         spoke_sso_status=getattr(app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN",
         sap_company_db=app.sap_company_db,

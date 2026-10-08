@@ -72,6 +72,8 @@ def init_db():
                 conn.execute(text("ALTER TABLE connected_applications ADD COLUMN vpn_restriction_mode VARCHAR(50) DEFAULT 'HIDE';"))
             if "allowed_network_cidrs" not in app_columns:
                 conn.execute(text("ALTER TABLE connected_applications ADD COLUMN allowed_network_cidrs VARCHAR(500);"))
+            if "portal_launch_url" not in app_columns:
+                conn.execute(text("ALTER TABLE connected_applications ADD COLUMN portal_launch_url VARCHAR(500);"))
 
             # Safe auto-migration for oauth_authorization_codes
             if inspector.has_table("oauth_authorization_codes"):
@@ -210,6 +212,7 @@ def init_db():
                 "base_url": "https://wa-mtpulse.wa.net",
                 "client_id": "mtpulse-spoke-client",
                 "client_secret": "sec_mtpulse_oauth_secret_2026",
+                "portal_launch_url": "https://wa-mtpulse.wa.net/auth/start",
                 "redirect_uris": "https://wa-mtpulse.wa.net/auth/callback,https://wa-mtpulse.wa.net/api/auth/callback,http://localhost:3000/portal/callback",
                 "sso_enabled": True,
                 "health_status": "ONLINE",
@@ -234,6 +237,7 @@ def init_db():
                     client_id=item.get("client_id"),
                     client_secret=item.get("client_secret"),
                     redirect_uris=item.get("redirect_uris"),
+                    portal_launch_url=item.get("portal_launch_url"),
                     sso_enabled=item.get("sso_enabled", True),
                     health_status=item["health_status"],
                     latency_ms=item["latency_ms"],
@@ -255,6 +259,7 @@ def init_db():
                     app.client_id = item.get("client_id")
                     app.client_secret = item.get("client_secret")
                     app.redirect_uris = item.get("redirect_uris")
+                    app.portal_launch_url = item.get("portal_launch_url")
                     app.sso_enabled = item.get("sso_enabled", True)
                 elif item.get("redirect_uris"):
                     target_redirects = item["redirect_uris"]
@@ -273,7 +278,7 @@ def init_db():
                         app.client_secret = item.get("client_secret")
                     if not app.client_id:
                         app.client_id = "CIAM"
-                # Auto-upgrade MTPulse redirect_uris to ensure wa-mtpulse.wa.net is permitted
+                # Auto-upgrade MTPulse redirect_uris and portal_launch_url
                 if item["app_code"] == "mtpulse":
                     needed_mt = [
                         "https://wa-mtpulse.wa.net/auth/callback",
@@ -285,12 +290,13 @@ def init_db():
                         if nu not in cur_uris:
                             cur_uris.append(nu)
                     app.redirect_uris = ",".join(cur_uris)
+                    app.portal_launch_url = "https://wa-mtpulse.wa.net/auth/start"
                     if not app.client_id:
                         app.client_id = "mtpulse-spoke-client"
                     if not app.base_url:
                         app.base_url = "https://wa-mtpulse.wa.net"
                     app.sso_enabled = True
-                    logger.info("Ensured MTPulse redirect_uris configured: %s", app.redirect_uris)
+                    logger.info("Ensured MTPulse portal_launch_url configured: %s and redirect_uris: %s", app.portal_launch_url, app.redirect_uris)
                 db.flush()
             app_objs[item["app_code"]] = app
 
