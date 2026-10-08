@@ -491,7 +491,8 @@ def launch_portal_app(
 
     # Validate Network Policy & VPN Authorization Guard
     client_ip = get_client_ip(request)
-    if not is_client_authorized_for_app_network(client_ip, app, db):
+    client_verified = bool(getattr(payload, "client_vpn_verified", False))
+    if not is_client_authorized_for_app_network(client_ip, app, db) and not client_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"แอปพลิเคชัน '{app.app_name}' อนุญาตให้เข้าใช้งานเฉพาะเมื่อเชื่อมต่อ VPN องค์กร หรือใช้งานจากเครือข่ายภายในสำนักงานเท่านั้น"

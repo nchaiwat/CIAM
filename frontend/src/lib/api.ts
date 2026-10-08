@@ -591,10 +591,15 @@ export const ciamApi = {
   // Portal & SSO
   getPortalApps: () => fetchApi<PortalAppItem[]>("/oauth/portal/apps"),
 
-  launchPortalApp: (clientId: string, state?: string, targetRedirectUri?: string) =>
+  launchPortalApp: (clientId: string, state?: string, targetRedirectUri?: string, clientVpnVerified?: boolean) =>
     fetchApi<PortalLaunchResponse>("/oauth/portal/launch", {
       method: "POST",
-      body: JSON.stringify({ client_id: clientId, state, target_redirect_uri: targetRedirectUri }),
+      body: JSON.stringify({
+        client_id: clientId,
+        state,
+        target_redirect_uri: targetRedirectUri,
+        client_vpn_verified: clientVpnVerified,
+      }),
     }),
 
   exchangePortalCode: (code: string, redirectUri: string) =>

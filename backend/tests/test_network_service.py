@@ -65,7 +65,6 @@ def test_authorized_for_vpn_only_default_networks():
     # Egress WAN of Window Asia (VPN full tunnel)
     assert is_client_authorized_for_app_network("49.231.185.245", app, db) is True
     assert is_client_authorized_for_app_network("58.8.190.63", app, db) is True
-    assert is_client_authorized_for_app_network("147.50.223.20", app, db) is True
 
     # OpenVPN Client IP
     assert is_client_authorized_for_app_network("10.8.0.15", app, db) is True

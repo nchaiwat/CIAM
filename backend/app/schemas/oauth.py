@@ -104,6 +104,7 @@ class PortalLaunchRequest(BaseModel):
     client_id: str
     state: Optional[str] = None
     target_redirect_uri: Optional[str] = None
+    client_vpn_verified: Optional[bool] = False
 
 
 class PortalLaunchResponse(BaseModel):

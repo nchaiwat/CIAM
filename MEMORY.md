@@ -540,11 +540,16 @@ FRONTEND_URL=http://localhost:3000
 * **AD Heuristic Refinement:** ตัดเงื่อนไข `is_dotted_username` ออกจากตัวตรวจจับ AD ใน `initial_data.py` เพื่อไม่ให้บัญชี Local Spoke ที่มีจุด `.` ถูกดึงเข้า AD อัตโนมัติ พร้อมทั้งปรับแก้ `Winmonpan.P` ให้เป็น `Local Acc` ที่ถูกต้องและลบ AD mapping ออก
 * **Local Acc UI Label:** ปรับคำแสดงผลใน Directory Web UI จาก "ระบบลูกเท่านั้น" / "ระบบลูก" ➔ **"Local Acc"** เพื่อความเข้าใจที่ชัดเจน และคงปุ่ม `[ผูกกับ AD]` ให้ผู้ดูแลระบบคลิกเพื่อเชื่อมโยงเข้ากับตัวตนจริงใน AD ได้อย่างสะดวก
 
-### 16.6 VPN Egress Public IP Whitelisting for Portal Launch (147.50.223.20)
-* **ปัญหา:** พนักงานต่อ OpenVPN ได้วง `192.168.42.0/24` แต่เมื่อเปิดหน้า App Portal ของ CIAM บน Cloud VPS บัตร MTPulse แจ้งเตือน `🔒 กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน (IP ตรวจพบ: 147.50.223.20)`
-* **สาเหตุ:** CIAM โฮสต์อยู่บน Cloud VPS อินเทอร์เน็ตสาธารณะ จึงมองเห็นเฉพาะ Public Egress IP (`147.50.223.20`) ของเกตเวย์ออฟฟิศ/ผู้ใช้ โดยไม่สามารถเห็น Private IP `192.168.42.x` ได้
-* **การแก้ไข:**
-  1. เพิ่ม `147.50.223.20/32` เข้าใน `DEFAULT_CORPORATE_NETWORKS` ([network_service.py](file:///d:/Python/Central-IAM/backend/app/services/network_service.py))
-  2. เพิ่ม Auto-upgrade ใน `initial_data.py` ปรับค่า `corporate_vpn_networks` ใน `SystemSetting` และ `allowed_network_cidrs` ของ `mtpulse` ให้อัตโนมัติเมื่อสตาร์ท container
-  3. ทางเลือก: ผู้ดูแลระบบสามารถปรับ `network_policy` ของ MTPulse บนหน้าจอ `/applications` ให้เป็น `ANYWHERE` ได้โดยตรง เพื่อให้ Spoke (ที่ตั้งอยู่ On-prem) ตรวจสอบวง VPN ของตนเอง 100%
+### 16.6 Client-Side Reachability Probe Engine for Modern Automated Zero-Trust Access (Version 2.0.5)
+* **ปัญหาของ Public IP Whitelist แบบเดิม:** การฮาร์ดโค้ดหรือนำ Public IP ของ ISP/บ้าน (`147.50.223.20`) มาใส่ Whitelist ไม่ถูกต้องตามหลัก Enterprise Security เนื่องจากพนักงานสามารถทำงานได้จากหลากหลายสถานที่ทั่วโลก และ Private IP ของ OpenVPN (`192.168.42.0/24`) ไม่สามารถส่งต่อข้าม Public Internet มายัง Cloud VPS ได้โดยตรง
+* **สถาปัตยกรรมใหม่ (Client-Side Reachability Probe — แนวทางที่ 1):**
+  1. **ถอด Public IP ชั่วคราวออก:** นำ `147.50.223.20/32` ออกจาก `DEFAULT_CORPORATE_NETWORKS` และการตั้งค่าระบบทั้งหมด
+  2. **Automated Browser Probe:** เมื่อเปิดหน้า `/portal` เบราว์เซอร์ของผู้ใช้ (ซึ่งทำงานอยู่บนเครื่อง Client ที่ต่อ OpenVPN `192.168.42.x`) จะยิงทดสอบการเข้าถึงบริการ On-Premise (เช่น `https://wa-mtpulse.wa.net`) โดยตรงแบบ Non-blocking ด้วย `fetch(targetUrl, { mode: 'no-cors', cache: 'no-store' })`
+  3. **Dynamic Responsive UI (สว่างใสโทนสีฟ้าเมื่อพร้อม):**
+     - **กำลังตรวจสอบ (`checking`):** ป้ายสถานะสีเทาอ่อน `ตรวจสอบ VPN...` พร้อม Spinner
+     - **VPN พร้อมใช้งาน (`connected`):** การ์ดและป้ายสถานะปรับเป็น **สีฟ้า (Sky/Blue)** `🛡️ VPN พร้อม` พร้อมปุ่มกดสีฟ้า Gradient `เข้าใช้งานระบบ (VPN พร้อม) ↗` โดยอัตโนมัติ
+     - **ยังไม่ต่อ VPN (`disconnected`):** ป้ายเตือนสีส้ม `🔒 ต้องต่อ VPN` พร้อมปุ่มกดสีส้ม `🔒 กรุณาต่อ VPN แล้วคลิกตรวจใหม่` ที่สามารถคลิกเพื่อ Re-probe ได้ทันที
+     - **Auto-Recheck on Focus:** ระบบดักจับ Event `window.focus` เมื่อผู้ใช้งานสลับหน้าต่างไปต่อ OpenVPN แล้วกลับมาที่แท็บเบราว์เซอร์ ระบบจะตรวจจับและปลดล็อกเป็นสีฟ้าให้อัตโนมัติทันที
+  4. **Backend Portal Launch Authorization:** API `POST /oauth/portal/launch` และสคีมา `PortalLaunchRequest` รองรับฟิลด์ `client_vpn_verified: bool` ซึ่งเมื่อผ่านการตรวจเช็กจริงจาก Client-side Probe ระบบจะอนุมัติการสร้าง SSO Ticket และส่งต่อไปยัง URL ปลายทางได้อย่างราบรื่น
+
 

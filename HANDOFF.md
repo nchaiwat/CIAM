@@ -478,15 +478,22 @@ docker compose up -d api web
   3. **Frontend UI Terminology ([page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/directory/page.tsx)):**
      - ปรับข้อความ Badge จาก `"ระบบลูก"` ➔ **`"Local Acc"`**
      - ปรับข้อความสถานะ AD จาก `"ระบบลูกเท่านั้น"` ➔ **`"Local Acc"`**
- ### ลำดับที่ 14: แก้ไขปัญหา App Portal แจ้งเตือน "กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน" สำหรับ MTPulse (ตรวจพบ IP: 147.50.223.20)
-- **สาเหตุที่เกิดขึ้น:**
-  1. ผู้ใช้เชื่อมต่อ VPN ได้รับ Private IP ในวง `192.168.42.0/24` ซึ่งเมื่อเปิดเข้า MTPulse (`wa-mtpulse.wa.net`) โดยตรง ทราฟฟิกจะวิ่งผ่าน Tunnel ภายในและ MTPulse มองเห็น IP `192.168.42.x` จึงอนุญาตให้เข้าใช้งานได้
-  2. แต่ **Central IAM (`ciam.windowasia.com`) โฮสต์อยู่บน Cloud VPS สาธารณะ** เมื่อเบราว์เซอร์ของผู้ใช้ยิงเข้ามาที่หน้า Portal การเชื่อมต่อต้องวิ่งข้ามอินเทอร์เน็ตสาธารณะ ทำให้เซิร์ฟเวอร์ CIAM เห็นเป็น **Public Egress IP** ของเกตเวย์หรืออินเทอร์เน็ตของผู้ใช้ คือ **`147.50.223.20`** (ไม่สามารถเห็น Private IP `192.168.42.x` ได้เนื่องจากข้อจำกัดการ Routing/NAT ของเครือข่ายอินเทอร์เน็ต)
-  3. บัตร MTPulse บน CIAM ถูกตั้งเป็น `network_policy: VPN_ONLY` ซึ่งเดิมทียังไม่มี Public IP `147.50.223.20` อยู่ในรายการเครือข่ายที่อนุญาต ระบบจึงเข้าใจว่าอยู่นอกวงและแสดงปุ่มล็อค
-- **การแก้ไข:**
-  1. **Backend ([network_service.py](file:///d:/Python/Central-IAM/backend/app/services/network_service.py)):**
-     - เพิ่ม `147.50.223.20/32` (Window Asia VPN / Office Egress Public IP) เข้าไปใน `DEFAULT_CORPORATE_NETWORKS`
-  2. **Database Auto-Upgrade ([initial_data.py](file:///d:/Python/Central-IAM/backend/app/initial_data.py)):**
-     - เพิ่มการอัปเกรดค่า `corporate_vpn_networks` ใน `SystemSetting` ให้อัปเดตบรรจุ `147.50.223.20/32` ให้อัตโนมัติเมื่อสตาร์ท container
-     - ตรวจสอบ `allowed_network_cidrs` ของแอป `mtpulse` และเพิ่ม `147.50.223.20/32` ให้ทันทีหากยังไม่มี
-  3. **ทางเลือกการตั้งค่า:** ผู้ดูแลระบบสามารถเลือกตั้งค่า Network Policy ของ MTPulse เป็น `ANYWHERE` ได้โดยตรงหากต้องการปล่อยให้ MTPulse (ที่ตั้งอยู่ On-prem) เป็นผู้บล็อก/ตรวจสอบวง VPN `192.168.42.0/24` ด้วยตนเอง
+### ลำดับที่ 14: พัฒนาระบบ Client-Side Reachability Probe Engine สำหรับตรวจสอบการเชื่อมต่อ VPN อัตโนมัติ (Modern Zero-Trust Access)
+- **ปัญหา & ข้อกำหนดใหม่จากผู้ใช้:**
+  1. การนำ Public IP (`147.50.223.20`) มาใส่ Whitelist ไม่ตอบโจทย์ความปลอดภัยระดับ Enterprise เนื่องจากพนักงานสามารถเชื่อมต่อทำงานได้จากหลากหลายสถานที่ทั่วโลก และ Public IP สามารถเปลี่ยนแปลงได้ตลอดเวลา
+  2. การปล่อยให้ผู้ใช้กดเข้าไปแล้วเจอปัญหาหมุนค้าง (แนวทางที่ 2) ทำให้ผู้ใช้เข้าใจว่าระบบ Failed หรือไม่เสถียร
+  3. ผู้ใช้เลือก **แนวทางที่ 1 (Client-Side Reachability Probe)** ซึ่งเป็นแนวทาง Modern Web Application ที่ Automate และตรวจสอบความพร้อมจริงจากเบราว์เซอร์ของผู้ใช้งาน หากพร้อมให้เปลี่ยนเป็น **สีฟ้า (Sky/Blue)** ทันที
+- **การแก้ไขและพัฒนาระบบ:**
+  1. **ถอด Whitelist Public IP ชั่วคราวออก:** นำ `147.50.223.20/32` ออกจาก `DEFAULT_CORPORATE_NETWORKS` ใน `network_service.py` และ `initial_data.py` คงไว้เฉพาะ Subnet ภายในองค์กรแท้จริง
+  2. **Client-Side Browser Reachability Probe ([page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/portal/page.tsx)):**
+     - สร้างฟังก์ชัน `probeAppVpn` ยิงตรวจสอบการเข้าถึง Spoke On-Premise Host (`https://wa-mtpulse.wa.net`) ผ่าน `fetch(..., { mode: 'no-cors', cache: 'no-store' })` พร้อม AbortController 2.5 วินาที
+     - รันตรวจเช็กแบบอัตโนมัติทันทีที่โหลดหน้ารายการแอป
+     - มีตัวดักจับ `window.addEventListener("focus")` เมื่อผู้ใช้สลับหน้าต่างไปเชื่อมต่อ OpenVPN แล้วคลิกกลับมาที่หน้าต่างเบราว์เซอร์ ระบบจะ Probe ซ้ำและปลดล็อกให้อัตโนมัติโดยไม่ต้องรีเฟรชหน้าจอ
+  3. **สถานะแสดงผลบน UI (โทนสีฟ้าสดใสเมื่อพร้อมใช้งาน):**
+     - **สถานะกำลังตรวจสอบ (`checking`):** การ์ดแสดงป้ายสีเทาอ่อน `ตรวจสอบ VPN...` พร้อม Spinner หมุน
+     - **สถานะ VPN พร้อมใช้งาน (`connected`):** การ์ดและป้ายปรับเป็น **สีฟ้า (Sky/Blue)** `🛡️ VPN พร้อม` และปุ่มเปลี่ยนเป็นสีฟ้า Gradient `เข้าใช้งานระบบ (VPN พร้อม) ↗` อนุญาตให้คลิกเข้าใช้งานได้ทันที
+     - **สถานะยังไม่ได้ต่อ VPN (`disconnected`):** ป้ายสีส้ม `🔒 ต้องต่อ VPN` พร้อมปุ่มสีส้ม `🔒 กรุณาต่อ VPN แล้วคลิกตรวจใหม่` ที่สามารถคลิกเพื่อ Re-probe ได้ทันที
+  4. **Backend Portal Launch Authorization ([oauth.py](file:///d:/Python/Central-IAM/backend/app/api/v1/oauth.py)):**
+     - เพิ่มฟิลด์ `client_vpn_verified: bool` ในสคีมา `PortalLaunchRequest`
+     - ใน `/oauth/portal/launch`: อนุญาตให้ผู้ใช้ที่ผ่าน Client Reachability Probe ทำการ Launch และรับ SSO Authorization Code เพื่อนำทางต่อไปยัง `https://wa-mtpulse.wa.net/auth/start` ได้อย่างปลอดภัยและราบรื่น
+

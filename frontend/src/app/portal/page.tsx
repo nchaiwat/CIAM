@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -43,6 +43,85 @@ export default function PortalPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // Client-Side VPN Reachability Probe Engine
+  type VpnState = "checking" | "connected" | "disconnected";
+  const [vpnReachability, setVpnReachability] = useState<Record<string, VpnState>>({});
+  const appsRef = useRef<PortalAppItem[]>([]);
+
+  useEffect(() => {
+    appsRef.current = apps;
+  }, [apps]);
+
+  const probeAppVpn = async (targetUrl: string, timeoutMs: number = 2500): Promise<boolean> => {
+    if (!targetUrl) return false;
+    try {
+      let cleanUrl = targetUrl.trim();
+      try {
+        const parsed = new URL(cleanUrl);
+        cleanUrl = `${parsed.protocol}//${parsed.host}`;
+      } catch {}
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      await fetch(cleanUrl, {
+        method: "GET",
+        mode: "no-cors",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const checkVpnForApp = async (app: PortalAppItem) => {
+    if (app.network_policy !== "VPN_ONLY") return;
+    setVpnReachability((prev) => ({ ...prev, [app.app_code]: "checking" }));
+    const targetUrl = app.base_url || app.portal_launch_url || app.launch_url || "";
+    const reachable = await probeAppVpn(targetUrl);
+    setVpnReachability((prev) => ({
+      ...prev,
+      [app.app_code]: reachable ? "connected" : "disconnected",
+    }));
+  };
+
+  const checkVpnForApps = async (appsList: PortalAppItem[]) => {
+    const vpnApps = appsList.filter((a) => a.network_policy === "VPN_ONLY");
+    if (vpnApps.length === 0) return;
+
+    setVpnReachability((prev) => {
+      const next = { ...prev };
+      for (const a of vpnApps) {
+        next[a.app_code] = "checking";
+      }
+      return next;
+    });
+
+    await Promise.all(
+      vpnApps.map(async (a) => {
+        const targetUrl = a.base_url || a.portal_launch_url || a.launch_url || "";
+        const reachable = await probeAppVpn(targetUrl);
+        setVpnReachability((prev) => ({
+          ...prev,
+          [a.app_code]: reachable ? "connected" : "disconnected",
+        }));
+      })
+    );
+  };
+
+  // Automatically re-probe whenever the user switches back to this browser tab (e.g. after connecting VPN in desktop app)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (appsRef.current.length > 0) {
+        checkVpnForApps(appsRef.current);
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, []);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   // Load user profile & authorized apps
@@ -78,6 +157,7 @@ export default function PortalPage() {
     try {
       const data = await api.getPortalApps();
       setApps(data);
+      checkVpnForApps(data);
     } catch (err: any) {
       console.error("Failed to load portal apps:", err);
       setErrorMsg("ไม่สามารถโหลดรายการระบบงานได้ กรุณาลองใหม่อีกครั้ง");
@@ -127,7 +207,8 @@ export default function PortalPage() {
     if (!app.client_id) return;
     setLaunchingAppCode(app.app_code);
     try {
-      const res = await api.launchPortalApp(app.client_id);
+      const isVerified = app.network_policy === "VPN_ONLY" ? vpnReachability[app.app_code] === "connected" : true;
+      const res = await api.launchPortalApp(app.client_id, undefined, undefined, isVerified);
       if (res && res.launch_url) {
         // Navigate directly in the same tab to save RAM and avoid spawning duplicate browser tabs
         window.location.href = res.launch_url;
@@ -311,7 +392,12 @@ export default function PortalPage() {
               const isSsoClientMode = app.connector_type === "SSO_ONLY" || app.connector_type === "SSO_CLIENT";
               const isOffline = app.health_status === "OFFLINE" && !isSsoClientMode;
               const isSpokeSsoDisabled = app.spoke_sso_status === "DISABLED" && !isSsoClientMode;
-              const isVpnLocked = Boolean(app.is_vpn_locked);
+              
+              const isVpnRequired = app.network_policy === "VPN_ONLY";
+              const vpnStatus = isVpnRequired ? (vpnReachability[app.app_code] || (app.is_vpn_locked ? "disconnected" : "checking")) : "connected";
+              const isVpnChecking = isVpnRequired && vpnStatus === "checking";
+              const isVpnConnected = isVpnRequired && vpnStatus === "connected";
+              const isVpnLocked = isVpnRequired && !isVpnConnected;
               const isLaunchDisabled = isLaunching || isOffline || isSpokeSsoDisabled || isVpnLocked;
 
               return (
@@ -322,6 +408,10 @@ export default function PortalPage() {
                       ? "border-rose-200/80 bg-slate-50/50"
                       : isSpokeSsoDisabled
                       ? "border-amber-200/80 bg-amber-50/20"
+                      : isVpnChecking
+                      ? "border-slate-200/80 bg-slate-50/20"
+                      : isVpnConnected
+                      ? "border-sky-300/90 hover:border-sky-500 hover:shadow-lg hover:shadow-sky-500/10 bg-sky-50/10"
                       : isVpnLocked
                       ? "border-amber-300/80 bg-amber-50/15"
                       : "border-slate-200/90 hover:border-blue-400/80 hover:shadow-lg"
@@ -334,6 +424,10 @@ export default function PortalPage() {
                         className={`w-14 h-14 rounded-2xl flex items-center justify-center border shrink-0 transition-colors ${
                           isOffline
                             ? "bg-slate-200/60 border-slate-300 text-slate-400"
+                            : isVpnChecking
+                            ? "bg-slate-100 border-slate-200 text-slate-500"
+                            : isVpnConnected
+                            ? "bg-sky-50 border-sky-200 text-sky-600"
                             : isVpnLocked
                             ? "bg-amber-100/70 border-amber-300 text-amber-700"
                             : theme.bg
@@ -357,11 +451,23 @@ export default function PortalPage() {
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                               Break-Glass
                             </span>
-                          ) : isVpnLocked ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
-                              <Lock className="w-3 h-3 text-amber-600" />
-                              ต้องต่อ VPN
-                            </span>
+                          ) : isVpnRequired ? (
+                            isVpnChecking ? (
+                              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 animate-pulse">
+                                <RefreshCw className="w-3 h-3 animate-spin text-slate-500" />
+                                ตรวจสอบ VPN...
+                              </span>
+                            ) : isVpnConnected ? (
+                              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-300">
+                                <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span>
+                                🛡️ VPN พร้อม
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                                <Lock className="w-3 h-3 text-amber-600" />
+                                ต้องต่อ VPN
+                              </span>
+                            )
                           ) : null}
                         </div>
                         <h2 className={`font-bold text-base leading-snug transition-colors ${
@@ -406,15 +512,25 @@ export default function PortalPage() {
                   {/* Bottom: Single Launch Button */}
                   <div>
                     <button
-                      onClick={() => handleLaunch(app)}
-                      disabled={isLaunchDisabled}
+                      onClick={() => {
+                        if (isVpnLocked) {
+                          checkVpnForApp(app);
+                        } else {
+                          handleLaunch(app);
+                        }
+                      }}
+                      disabled={isLaunching || isOffline || isSpokeSsoDisabled || isVpnChecking}
                       className={`w-full py-3 px-4 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 active:scale-[0.98] ${
                         isOffline
                           ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
                           : isSpokeSsoDisabled
                           ? "bg-amber-50 text-amber-700 border border-amber-300 cursor-not-allowed shadow-none"
+                          : isVpnChecking
+                          ? "bg-slate-100 text-slate-600 border border-slate-200 cursor-wait shadow-none font-semibold"
+                          : isVpnConnected
+                          ? "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-sky-500/25 cursor-pointer"
                           : isVpnLocked
-                          ? "bg-amber-50 text-amber-800 border border-amber-300 cursor-not-allowed shadow-none font-semibold"
+                          ? "bg-amber-50 hover:bg-amber-100/80 text-amber-900 border border-amber-300 cursor-pointer shadow-none font-semibold"
                           : `${theme.btn} cursor-pointer`
                       }`}
                     >
@@ -427,17 +543,21 @@ export default function PortalPage() {
                         <span>ระบบปิดปรับปรุงชั่วคราว (Offline)</span>
                       ) : isSpokeSsoDisabled ? (
                         <span>ระบบปิดรับ SSO ชั่วคราว</span>
+                      ) : isVpnChecking ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <RefreshCw className="w-4 h-4 animate-spin text-slate-500" />
+                          <span>กำลังตรวจสอบการเชื่อมต่อ VPN...</span>
+                        </span>
+                      ) : isVpnConnected ? (
+                        <>
+                          <span>เข้าใช้งานระบบ (VPN พร้อม)</span>
+                          <ArrowUpRight className="w-4 h-4 opacity-80" />
+                        </>
                       ) : isVpnLocked ? (
-                        <span className="flex flex-col items-center justify-center gap-0.5 text-center">
-                          <span className="flex items-center gap-1.5">
-                            <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span>กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน</span>
-                          </span>
-                          {app.detected_client_ip && (
-                            <span className="text-[10px] text-amber-700/80 font-mono font-normal">
-                              (IP ตรวจพบ: {app.detected_client_ip})
-                            </span>
-                          )}
+                        <span className="flex items-center justify-center gap-1.5 text-center">
+                          <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>กรุณาต่อ VPN แล้วคลิกตรวจใหม่</span>
+                          <RefreshCw className="w-3 h-3 ml-1 text-amber-700 shrink-0" />
                         </span>
                       ) : (
                         <>
