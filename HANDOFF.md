@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 7 ตุลาคม 2026 (Local Time: ~08:30 ICT)  
+> **Date Updated:** 8 ตุลาคม 2026 (Local Time: ~23:05 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -496,4 +496,49 @@ docker compose up -d api web
   4. **Backend Portal Launch Authorization ([oauth.py](file:///d:/Python/Central-IAM/backend/app/api/v1/oauth.py)):**
      - เพิ่มฟิลด์ `client_vpn_verified: bool` ในสคีมา `PortalLaunchRequest`
      - ใน `/oauth/portal/launch`: อนุญาตให้ผู้ใช้ที่ผ่าน Client Reachability Probe ทำการ Launch และรับ SSO Authorization Code เพื่อนำทางต่อไปยัง `https://wa-mtpulse.wa.net/auth/start` ได้อย่างปลอดภัยและราบรื่น
+
+---
+
+## 4. สถานะระบบปัจจุบัน และ แผนงานที่จะปรับปรุงต่อในรอบถัดไป (Current Status & Next Steps Roadmap)
+
+### 4.1 สถานะระบบที่ตรวจสอบและส่งมอบแล้ว (Verified & Production Ready)
+* **Git Commits ล่าสุด:**
+  - `223100d` — `feat(portal): implement client-side VPN reachability probe with automated sky blue ready state`
+  - Push สู่ `origin/main` เรียบร้อยแล้ว 100%
+* **ผลการทดสอบความถูกต้อง (Test & Type Integrity):**
+  - **Backend:** `pytest backend\tests` ผ่านครบ **43/43 tests (100% Passed)**
+  - **Frontend:** `npx tsc --noEmit` ผ่าน **0 errors**
+* **สรุปฟังก์ชันที่พร้อมใช้งานในปัจจุบัน:**
+  1. ถอด Whitelist IP สาธารณะ `147.50.223.20` ออกหมดจด เพื่อความปลอดภัย Enterprise Zero-Trust รองรับพนักงานที่เชื่อมต่อจากทุกเครือข่าย
+  2. ระบบ Probe อัตโนมัติจากเบราว์เซอร์ผู้ใช้ ตรวจสอบ Reachability ไปยัง On-Premise Spoke (`wa-mtpulse.wa.net`)
+  3. เมื่อต่อ VPN พร้อม การ์ด ป้ายสถานะ และปุ่มจะเปลี่ยนเป็น **สีฟ้าสดใส (Sky/Blue)** `🛡️ VPN พร้อม` และ `เข้าใช้งานระบบ (VPN พร้อม) ↗` โดยอัตโนมัติ
+  4. ดักจับ Event `window.focus` ทำให้เมื่อผู้ใช้สลับไปต่อ OpenVPN แล้วคลิกกลับมาที่หน้าเว็บ CIAM ระบบจะ Re-check ปลดล็อกเป็นสีฟ้าให้อัตโนมัติทันที
+  5. หากยังไม่ต่อ VPN แสดงปุ่มสีส้มพร้อมฟังก์ชันคลิกตรวจเช็กซ้ำได้ทันที
+
+### 4.2 แผนงานและข้อสังเกตสำหรับการปรับปรุงในรอบถัดไป (Next Iteration Roadmap)
+เมื่อกลับมาพัฒนาต่อ ให้โฟกัสและตรวจสอบตามประเด็นต่อไปนี้:
+1. **User Acceptance Testing (UAT) การเชื่อมต่อ MTPulse จริงบน Production:**
+   - **ทดสอบเคสที่ 1 (ยังไม่ต่อ VPN):** เข้าหน้า `/portal` จากภายนอก ➔ การ์ด MTPulse ต้องขึ้นสีส้ม `🔒 ต้องต่อ VPN` และมีปุ่ม `🔒 กรุณาต่อ VPN แล้วคลิกตรวจใหม่`
+   - **ทดสอบเคสที่ 2 (ต่อ VPN OpenVPN 192.168.42.0/24):** เปิด OpenVPN Connect บนเครื่อง ➔ สลับแท็บกลับมาหน้า CIAM ➔ การ์ดต้องสลับเป็นสีฟ้า `🛡️ VPN พร้อม` และปุ่มเปลี่ยนเป็น `เข้าใช้งานระบบ (VPN พร้อม) ↗` ทันที
+   - **ทดสอบเคสที่ 3 (กดเข้าใช้งาน):** คลิกปุ่มสีฟ้า ➔ CIAM ต้องออก Single-use Authorization Code และ Redirect ไปยัง `https://wa-mtpulse.wa.net/auth/start` เข้าสู่ระบบ MTPulse ได้อย่างราบรื่นโดยไม่ขึ้น error เซสชันหมดอายุ
+2. **การปรับแต่ง Edge Cases ของ Client Probe (Fine-tuning):**
+   - ตรวจสอบค่า Probe Timeout (ปัจจุบันตั้งไว้ 2.5 วินาที) หากพบว่าการต่อ VPN ผ่านเครือข่ายมือถือบางค่ายมี Latency สูง สามารถขยายเป็น 3.0-3.5 วินาที หรือปรับเป็น Adaptive Timeout
+   - หาก Spoke มีการพัฒนา endpoint เฉพาะ เช่น `/api/health` หรือ `/auth/ping` สามารถปรับเป้าหมาย Probe ให้เจาะจงยิ่งขึ้น
+   - หากมีระบบลูก On-Premise อื่นๆ ในอนาคต (เช่น WMS, ERP โรงงาน) ที่ตั้งเป็น `VPN_ONLY` สามารถนำ Probe Engine นี้ไปใช้ได้ทันที
+3. **การติดตามความร่วมมือกับทีม Spoke Mode C (MTPulse):**
+   - ตรวจสอบว่าทีม MTPulse ได้เพิ่มปุ่ม **`[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]`** ในหน้า User Management หรือ Central IAM ตามสเปก v2.7.0 เรียบร้อยแล้วหรือไม่
+   - ทดสอบรอบ Two-Way Reconciliation เมื่อ Admin สร้างหรือเปิดสิทธิ์ User ใหม่บน CIAM เพื่อให้ Spoke Mode C นำไป Provision สร้างในเครื่องลูกแบบ Real-Time
+
+---
+
+## 5. คำสั่ง Deploy บน VPS ประจำรอบ (Deploy Instructions)
+
+เมื่อต้องการ Deploy โค้ดล่าสุดขึ้นสู่ VPS Ubuntu (`/var/www/Ciam`):
+
+```bash
+cd /var/www/Ciam
+git pull
+docker compose build api web
+docker compose up -d api web
+```
 
