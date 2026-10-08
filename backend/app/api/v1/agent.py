@@ -4,6 +4,7 @@ import logging
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -148,16 +149,18 @@ def handle_agent_heartbeat(
                     username=username_clean,
                     full_name=acc.full_name or username_clean,
                     email=acc.email,
-                    department=acc.department,
-                    is_active_in_ad=True,
+                    department=acc.department or "ทั่วไป",
+                    is_active_in_ad=False,
                     created_at=now
                 )
                 db.add(ident)
                 db.flush()
 
+            # Find existing mapping by (application_id, identity_id) OR case-insensitive username
             mapping = db.query(AppAccountMapping).filter(
                 AppAccountMapping.application_id == app.id,
-                AppAccountMapping.app_username == username_clean
+                (AppAccountMapping.identity_id == ident.id) |
+                (func.lower(AppAccountMapping.app_username) == username_clean.lower())
             ).first()
 
             if not mapping:
@@ -170,11 +173,23 @@ def handle_agent_heartbeat(
                     last_sync_status="IN_SYNC"
                 )
                 db.add(mapping)
+                db.flush()
             else:
                 mapping.identity_id = ident.id
+                mapping.app_username = username_clean
                 mapping.app_group_name = acc.role or mapping.app_group_name
                 mapping.is_active_in_app = acc.is_active if acc.is_active is not None else mapping.is_active_in_app
                 mapping.last_sync_status = "IN_SYNC"
+
+            # Prune any redundant duplicate mappings for this identity and application
+            redundant_mappings = db.query(AppAccountMapping).filter(
+                AppAccountMapping.application_id == app.id,
+                AppAccountMapping.identity_id == ident.id,
+                AppAccountMapping.id != mapping.id
+            ).all()
+            for r in redundant_mappings:
+                db.delete(r)
+
             synced_count += 1
 
         app.total_linked_accounts = db.query(AppAccountMapping).filter(

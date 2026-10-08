@@ -462,5 +462,23 @@ docker compose up -d api web
      - เพิ่ม `AssignedAccountItem` และ `assigned_accounts` ใน `AgentHeartbeatResponse`
      - เพิ่ม Logic คำนวณ Two-Way Reconciliation และสร้างคำสั่ง `PROVISION_USER` / `DISABLE_USER` ส่งกลับให้อัตโนมัติ
 
+### ลำดับที่ 13: แก้ปัญหา Badge ซ้ำซ้อน (MTPulse Duplication), บัญชีสะกดผิดใน Spoke ถูกนับเป็น AD (Winmonpan.P), และปรับคำเรียกเป็น Local Acc
+- **ปัญหา 3 ประเด็นที่ตรวจพบ:**
+  1. **Badge สิทธิ์ระบบลูกเบิ้ล 2 อัน:** เช่น `Wimonpan.P` และ `Ronnakorn.P` แสดง `• MTPULSE` ซ้ำกันสองแถบ เนื่องจากการเปรียบเทียบใน Agent Heartbeat ใช้ exact match (`app_username == username_clean`) โดยไม่ได้เทียบ case-insensitive หรือ identity_id ทำให้สร้าง mapping ซ้ำ และ `_build_app_summaries` เดิมไม่ได้ทำการ deduplicate ตาม `app_code`
+  2. **บัญชี `Winmonpan.P` ไม่มีใน AD แต่ถูกระบุเป็น Active ใน AD:** เกิดจากใน MTPulse สะกดชื่อพนักงานผิดเป็น `Winmonpan.P` (มีตัว `n`) เมื่อซิงก์มายัง CIAM โค้ดใน `agent.py` เดิมสร้าง MasterIdentity ใหม่โดยใส่ `is_active_in_ad = True` ประกอบกับฟังก์ชัน auto-heal เดิมตรวจพบจุด `.` ในชื่อผู้ใช้ (`is_dotted_username`) จึงสร้าง mapping ของ AD ให้โดยเข้าใจว่าเป็นบัญชี AD
+  3. **คำแสดงผลสถานะ:** คำว่า "ระบบลูกเท่านั้น" / "ระบบลูก" สื่อสารยาก ผู้ใช้ต้องการให้แสดงเป็นคำว่า **"Local Acc"** ให้ชัดเจน
+- **การแก้ไข:**
+  1. **Deduplication ระบบลูก ([directory.py](file:///d:/Python/Central-IAM/backend/app/api/v1/directory.py) & [agent.py](file:///d:/Python/Central-IAM/backend/app/api/v1/agent.py)):**
+     - ใน `_build_app_summaries`: รวม mapping และ deduplicate ตาม `app_code.upper()` ให้แสดงแอปละ 1 badge เสมอ โดยเลือกอันที่มีสถานะ Active หรือมีประวัติ Login ล่าสุด
+     - ใน `agent.py`: ตรวจสอบ mapping ที่มีอยู่แล้วด้วย `(identity_id == ident.id | func.lower(app_username) == username_clean.lower())` และลบแถว mapping ที่ซ้ำซ้อนในฐานข้อมูล
+  2. **สิทธิ์บัญชีจาก Spoke ([agent.py](file:///d:/Python/Central-IAM/backend/app/api/v1/agent.py) & [initial_data.py](file:///d:/Python/Central-IAM/backend/app/initial_data.py)):**
+     - ใน `agent.py`: กำหนดให้บัญชีที่ถูกส่งขึ้นมาจาก Spoke Agent มี `is_active_in_ad = False` โดยเด็ดขาด
+     - ใน `initial_data.py`: ตัดเงื่อนไข `is_dotted_username` ออกจากตัวตรวจจับ AD เพื่อไม่ให้บัญชีระบบลูกที่มีจุด `.` ถูกดึงเข้า AD อัตโนมัติ พร้อมทั้งปรับแก้ `Winmonpan.P` ให้มี `is_active_in_ad = False` และลบ mapping ของ AD ออก
+     - เพิ่มตัวเก็บกวาด Mapping ซ้ำซ้อน (`AppAccountMapping` deduplication) อัตโนมัติเมื่อรัน `init_db()`
+  3. **Frontend UI Terminology ([page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/directory/page.tsx)):**
+     - ปรับข้อความ Badge จาก `"ระบบลูก"` ➔ **`"Local Acc"`**
+     - ปรับข้อความสถานะ AD จาก `"ระบบลูกเท่านั้น"` ➔ **`"Local Acc"`**
+     - ปรับข้อความ Tooltip และ Modal ข้อมูลผู้ใช้ให้ระบุ **`"Local Acc (ไม่มีใน AD)"`** และแสดงปุ่ม **`[ผูกกับ AD]`** ให้ผู้ดูแลระบบสามารถผูกรวมบัญชีเข้ากับตัวตนจริงใน AD ได้อย่างสะดวก
+
 
 

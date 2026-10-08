@@ -59,8 +59,29 @@ def _get_identity_activity(identity: MasterIdentity, mappings: list, now=None):
 def _build_app_summaries(mappings: list, identity_is_active_in_ad: Optional[bool] = None, now=None):
     if now is None:
         now = datetime.now(timezone.utc)
-    summaries = []
+
+    # Deduplicate mappings by app_code so each spoke application appears at most once
+    # Preference: active mapping > exception approved > latest login/update
+    best_mappings_by_code = {}
     for m, app in mappings:
+        code_key = (app.app_code or "").strip().upper()
+        if not code_key:
+            continue
+        if code_key not in best_mappings_by_code:
+            best_mappings_by_code[code_key] = (m, app)
+        else:
+            prev_m, prev_app = best_mappings_by_code[code_key]
+            # Preference ranking: active in app beats inactive
+            if m.is_active_in_app and not prev_m.is_active_in_app:
+                best_mappings_by_code[code_key] = (m, app)
+            elif m.is_active_in_app == prev_m.is_active_in_app:
+                m_t = m.last_app_login_at or getattr(m, "updated_at", None) or getattr(m, "created_at", None)
+                prev_t = prev_m.last_app_login_at or getattr(prev_m, "updated_at", None) or getattr(prev_m, "created_at", None)
+                if m_t and (not prev_t or m_t > prev_t):
+                    best_mappings_by_code[code_key] = (m, app)
+
+    summaries = []
+    for code_key, (m, app) in best_mappings_by_code.items():
         days_login = None
         if m.last_app_login_at:
             t = m.last_app_login_at

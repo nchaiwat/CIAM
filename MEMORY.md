@@ -534,3 +534,9 @@ FRONTEND_URL=http://localhost:3000
   2. อนุญาต Same-Origin Matching สำหรับ standard callback paths (`/auth/callback`, `/api/auth/callback`) หากมี Origin/Host ตรงกับระบบลูกที่ลงทะเบียนไว้
   3. บรรจุ `mtpulse` ใน `apps_data` และรัน Auto-Upgrade ใน `initial_data.py` รับประกันว่า callback URIs สำหรับ MTPulse จะถูกบันทึกในฐานข้อมูลเสมอ
 
+### 16.5 Spoke Badge Deduplication & Local Acc Terminology (Version 2.0.4)
+* **Badge Deduplication:** ใน `_build_app_summaries` ([directory.py](file:///d:/Python/Central-IAM/backend/app/api/v1/directory.py)) ทำการ deduplicate ตาม `app_code.upper()` เพื่อรับประกันว่าระบบลูกแต่ละระบบจะแสดงเพียง 1 Badge เสมอ แม้ในฐานข้อมูลจะมี mapping ซ้ำจากการ Sync หรือตัวพิมพ์เล็ก/ใหญ่
+* **Spoke Agent Non-AD Creation:** ใน `agent.py` กำหนดให้บัญชีใหม่ที่ซิงก์มาจาก Outbound Spoke Agent มี `is_active_in_ad = False` เสมอ (ป้องกันกรณีบัญชีที่สะกดผิดบนเครื่องลูก เช่น `Winmonpan.P` ถูกเข้าใจผิดว่าเป็นผู้ใช้ AD)
+* **AD Heuristic Refinement:** ตัดเงื่อนไข `is_dotted_username` ออกจากตัวตรวจจับ AD ใน `initial_data.py` เพื่อไม่ให้บัญชี Local Spoke ที่มีจุด `.` ถูกดึงเข้า AD อัตโนมัติ พร้อมทั้งปรับแก้ `Winmonpan.P` ให้เป็น `Local Acc` ที่ถูกต้องและลบ AD mapping ออก
+* **Local Acc UI Label:** ปรับคำแสดงผลใน Directory Web UI จาก "ระบบลูกเท่านั้น" / "ระบบลูก" ➔ **"Local Acc"** เพื่อความเข้าใจที่ชัดเจน และคงปุ่ม `[ผูกกับ AD]` ให้ผู้ดูแลระบบคลิกเพื่อเชื่อมโยงเข้ากับตัวตนจริงใน AD ได้อย่างสะดวก
+

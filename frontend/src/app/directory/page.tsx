@@ -844,8 +844,11 @@ export default function DirectoryPage() {
                             <span>{user.full_name}</span>
                             {renderRoleBadge(user.username)}
                             {user.is_ad_account === false && (
-                              <span className="bg-slate-200 text-slate-700 border border-slate-300 px-1.5 py-0.2 rounded text-[10px] font-bold">
-                                ระบบลูก
+                              <span
+                                className="bg-slate-200 text-slate-700 border border-slate-300 px-1.5 py-0.2 rounded text-[10px] font-bold"
+                                title="Local Account (ไม่มีบัญชีใน Active Directory)"
+                              >
+                                Local Acc
                               </span>
                             )}
                             {user.is_approved_exception ? (
@@ -890,9 +893,12 @@ export default function DirectoryPage() {
                           <span>Local Portal</span>
                         </span>
                       ) : user.is_ad_account === false ? (
-                        <span className="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5">
+                        <span
+                          className="bg-slate-100 text-slate-700 border border-slate-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5"
+                          title="Local Account (ไม่มีบัญชีใน Active Directory)"
+                        >
                           <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                          <span>ระบบลูกเท่านั้น</span>
+                          <span>Local Acc</span>
                         </span>
                       ) : user.is_active_in_ad ? (
                         <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5">
@@ -979,7 +985,7 @@ export default function DirectoryPage() {
                         {(user.is_ad_account === false || user.has_discrepancy) && (
                           <button
                             onClick={() => handleOpenLinkModalForUser(user)}
-                            title="ผูกบัญชีระบบลูกนี้เข้ากับตัวตนหลักใน AD (เช่น สะกดชื่อต่างกัน)"
+                            title="ผูกบัญชี Local Acc นี้เข้ากับตัวตนหลักใน AD (เช่น สะกดชื่อต่างกัน)"
                             className="px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 text-xs font-bold transition-colors cursor-pointer flex items-center space-x-1"
                           >
                             <LinkIcon className="w-3 h-3" />
@@ -1284,7 +1290,7 @@ export default function DirectoryPage() {
                 <span className="text-slate-600 font-medium">สถานะใน Active Directory:</span>
                 {selectedUser.is_ad_account === false ? (
                   <span className="text-slate-600 font-bold bg-slate-200 px-2 py-0.5 rounded border border-slate-300 text-xs">
-                    เฉพาะระบบลูก (ไม่มีใน AD)
+                    Local Acc (ไม่มีใน AD)
                   </span>
                 ) : (
                   <span className={selectedUser.is_active_in_ad ? "text-emerald-800 font-extrabold" : "text-rose-800 font-extrabold"}>
