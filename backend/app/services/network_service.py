@@ -15,6 +15,7 @@ DEFAULT_CORPORATE_NETWORKS = [
     "172.18.0.0/16",      # Internal Docker / Gateway subnet
     "49.231.185.245/32",  # Window Asia HQ Gateway IP
     "58.8.190.63/32",     # Secondary Office IP
+    "147.50.223.20/32",   # Window Asia VPN / Office Egress Public IP
 ]
 
 def get_client_ip(request) -> str:

@@ -296,6 +296,8 @@ def init_db():
                     if not app.base_url:
                         app.base_url = "https://wa-mtpulse.wa.net"
                     app.sso_enabled = True
+                    if app.allowed_network_cidrs and "147.50.223.20" not in app.allowed_network_cidrs:
+                        app.allowed_network_cidrs = f"{app.allowed_network_cidrs.strip()}, 147.50.223.20/32"
                     logger.info("Ensured MTPulse portal_launch_url configured: %s and redirect_uris: %s", app.portal_launch_url, app.redirect_uris)
                 db.flush()
             app_objs[item["app_code"]] = app
@@ -499,6 +501,7 @@ def init_db():
                     "cidrs": [
                         "49.231.185.245/32",
                         "58.8.190.63/32",
+                        "147.50.223.20/32",
                         "10.8.0.0/24",
                         "192.168.0.0/16",
                         "172.18.0.0/16",
@@ -510,6 +513,14 @@ def init_db():
             )
             db.add(vpn_setting)
             logger.info("Seeded corporate_vpn_networks setting")
+        else:
+            val = vpn_setting.setting_value
+            if isinstance(val, dict) and "cidrs" in val:
+                cidrs = val.get("cidrs", [])
+                if "147.50.223.20/32" not in cidrs:
+                    cidrs.append("147.50.223.20/32")
+                    vpn_setting.setting_value = {"cidrs": cidrs}
+                    logger.info("Auto-upgraded corporate_vpn_networks with 147.50.223.20/32")
 
         db.commit()
         logger.info("Database initialization and seeding complete with real data!")

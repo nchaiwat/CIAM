@@ -540,3 +540,11 @@ FRONTEND_URL=http://localhost:3000
 * **AD Heuristic Refinement:** ตัดเงื่อนไข `is_dotted_username` ออกจากตัวตรวจจับ AD ใน `initial_data.py` เพื่อไม่ให้บัญชี Local Spoke ที่มีจุด `.` ถูกดึงเข้า AD อัตโนมัติ พร้อมทั้งปรับแก้ `Winmonpan.P` ให้เป็น `Local Acc` ที่ถูกต้องและลบ AD mapping ออก
 * **Local Acc UI Label:** ปรับคำแสดงผลใน Directory Web UI จาก "ระบบลูกเท่านั้น" / "ระบบลูก" ➔ **"Local Acc"** เพื่อความเข้าใจที่ชัดเจน และคงปุ่ม `[ผูกกับ AD]` ให้ผู้ดูแลระบบคลิกเพื่อเชื่อมโยงเข้ากับตัวตนจริงใน AD ได้อย่างสะดวก
 
+### 16.6 VPN Egress Public IP Whitelisting for Portal Launch (147.50.223.20)
+* **ปัญหา:** พนักงานต่อ OpenVPN ได้วง `192.168.42.0/24` แต่เมื่อเปิดหน้า App Portal ของ CIAM บน Cloud VPS บัตร MTPulse แจ้งเตือน `🔒 กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน (IP ตรวจพบ: 147.50.223.20)`
+* **สาเหตุ:** CIAM โฮสต์อยู่บน Cloud VPS อินเทอร์เน็ตสาธารณะ จึงมองเห็นเฉพาะ Public Egress IP (`147.50.223.20`) ของเกตเวย์ออฟฟิศ/ผู้ใช้ โดยไม่สามารถเห็น Private IP `192.168.42.x` ได้
+* **การแก้ไข:**
+  1. เพิ่ม `147.50.223.20/32` เข้าใน `DEFAULT_CORPORATE_NETWORKS` ([network_service.py](file:///d:/Python/Central-IAM/backend/app/services/network_service.py))
+  2. เพิ่ม Auto-upgrade ใน `initial_data.py` ปรับค่า `corporate_vpn_networks` ใน `SystemSetting` และ `allowed_network_cidrs` ของ `mtpulse` ให้อัตโนมัติเมื่อสตาร์ท container
+  3. ทางเลือก: ผู้ดูแลระบบสามารถปรับ `network_policy` ของ MTPulse บนหน้าจอ `/applications` ให้เป็น `ANYWHERE` ได้โดยตรง เพื่อให้ Spoke (ที่ตั้งอยู่ On-prem) ตรวจสอบวง VPN ของตนเอง 100%
+

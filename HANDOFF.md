@@ -478,7 +478,15 @@ docker compose up -d api web
   3. **Frontend UI Terminology ([page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/directory/page.tsx)):**
      - ปรับข้อความ Badge จาก `"ระบบลูก"` ➔ **`"Local Acc"`**
      - ปรับข้อความสถานะ AD จาก `"ระบบลูกเท่านั้น"` ➔ **`"Local Acc"`**
-     - ปรับข้อความ Tooltip และ Modal ข้อมูลผู้ใช้ให้ระบุ **`"Local Acc (ไม่มีใน AD)"`** และแสดงปุ่ม **`[ผูกกับ AD]`** ให้ผู้ดูแลระบบสามารถผูกรวมบัญชีเข้ากับตัวตนจริงใน AD ได้อย่างสะดวก
-
-
-
+ ### ลำดับที่ 14: แก้ไขปัญหา App Portal แจ้งเตือน "กรุณาเชื่อมต่อ VPN ก่อนเข้าใช้งาน" สำหรับ MTPulse (ตรวจพบ IP: 147.50.223.20)
+- **สาเหตุที่เกิดขึ้น:**
+  1. ผู้ใช้เชื่อมต่อ VPN ได้รับ Private IP ในวง `192.168.42.0/24` ซึ่งเมื่อเปิดเข้า MTPulse (`wa-mtpulse.wa.net`) โดยตรง ทราฟฟิกจะวิ่งผ่าน Tunnel ภายในและ MTPulse มองเห็น IP `192.168.42.x` จึงอนุญาตให้เข้าใช้งานได้
+  2. แต่ **Central IAM (`ciam.windowasia.com`) โฮสต์อยู่บน Cloud VPS สาธารณะ** เมื่อเบราว์เซอร์ของผู้ใช้ยิงเข้ามาที่หน้า Portal การเชื่อมต่อต้องวิ่งข้ามอินเทอร์เน็ตสาธารณะ ทำให้เซิร์ฟเวอร์ CIAM เห็นเป็น **Public Egress IP** ของเกตเวย์หรืออินเทอร์เน็ตของผู้ใช้ คือ **`147.50.223.20`** (ไม่สามารถเห็น Private IP `192.168.42.x` ได้เนื่องจากข้อจำกัดการ Routing/NAT ของเครือข่ายอินเทอร์เน็ต)
+  3. บัตร MTPulse บน CIAM ถูกตั้งเป็น `network_policy: VPN_ONLY` ซึ่งเดิมทียังไม่มี Public IP `147.50.223.20` อยู่ในรายการเครือข่ายที่อนุญาต ระบบจึงเข้าใจว่าอยู่นอกวงและแสดงปุ่มล็อค
+- **การแก้ไข:**
+  1. **Backend ([network_service.py](file:///d:/Python/Central-IAM/backend/app/services/network_service.py)):**
+     - เพิ่ม `147.50.223.20/32` (Window Asia VPN / Office Egress Public IP) เข้าไปใน `DEFAULT_CORPORATE_NETWORKS`
+  2. **Database Auto-Upgrade ([initial_data.py](file:///d:/Python/Central-IAM/backend/app/initial_data.py)):**
+     - เพิ่มการอัปเกรดค่า `corporate_vpn_networks` ใน `SystemSetting` ให้อัปเดตบรรจุ `147.50.223.20/32` ให้อัตโนมัติเมื่อสตาร์ท container
+     - ตรวจสอบ `allowed_network_cidrs` ของแอป `mtpulse` และเพิ่ม `147.50.223.20/32` ให้ทันทีหากยังไม่มี
+  3. **ทางเลือกการตั้งค่า:** ผู้ดูแลระบบสามารถเลือกตั้งค่า Network Policy ของ MTPulse เป็น `ANYWHERE` ได้โดยตรงหากต้องการปล่อยให้ MTPulse (ที่ตั้งอยู่ On-prem) เป็นผู้บล็อก/ตรวจสอบวง VPN `192.168.42.0/24` ด้วยตนเอง
