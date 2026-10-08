@@ -39,9 +39,17 @@ class AgentHeartbeatRequest(BaseModel):
     command_results: Optional[List[CommandResultItem]] = None
     accounts: Optional[List[HeartbeatAccountItem]] = None
 
+class AssignedAccountItem(BaseModel):
+    username: str
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    department: Optional[str] = None
+    role: Optional[str] = "Viewer"
+    is_active: bool = True
+
 class PendingCommandItem(BaseModel):
     command_id: str
-    action: str  # 'DISABLE_USER', 'ENABLE_USER'
+    action: str  # 'DISABLE_USER', 'ENABLE_USER', 'PROVISION_USER', 'REQUEST_FULL_SYNC'
     username: str
     reason: Optional[str] = None
     issued_at: str
@@ -52,6 +60,7 @@ class AgentHeartbeatResponse(BaseModel):
     server_time: str
     next_heartbeat_seconds: int = 120
     pending_commands: List[PendingCommandItem] = []
+    assigned_accounts: Optional[List[AssignedAccountItem]] = None
     message: Optional[str] = None
 
 @router.post("/heartbeat", response_model=AgentHeartbeatResponse)
@@ -174,22 +183,105 @@ def handle_agent_heartbeat(
         app.last_sync_at = now
         logger.info("Spoke agent %s pushed directory sync: %d accounts", app.app_code, synced_count)
 
-    # 5. Retrieve Pending Commands to send to the on-premise application
+    # 5. Two-Way Directory Reconciliation (Mode C Two-Way Sync)
+    assigned_accounts_list: Optional[List[AssignedAccountItem]] = None
+    outgoing_cmds: List[PendingCommandItem] = []
+    dispatched_cmd_keys = set()
+
+    if payload.accounts is not None:
+        assigned_accounts_list = []
+        # Query all active mapped accounts on CIAM for this app
+        ciam_mappings = (
+            db.query(AppAccountMapping, MasterIdentity)
+            .join(MasterIdentity, AppAccountMapping.identity_id == MasterIdentity.id)
+            .filter(
+                AppAccountMapping.application_id == app.id,
+                AppAccountMapping.is_active_in_app == True,
+                MasterIdentity.is_active_in_ad == True
+            )
+            .all()
+        )
+
+        spoke_map = {acc.username.strip().lower(): acc for acc in payload.accounts}
+
+        for mapping, ident in ciam_mappings:
+            assigned_accounts_list.append(AssignedAccountItem(
+                username=ident.username,
+                full_name=ident.full_name or ident.username,
+                email=ident.email,
+                department=ident.department,
+                role=mapping.app_group_name or "Viewer",
+                is_active=True
+            ))
+
+            # If CIAM has assigned an account that Spoke does not have, issue PROVISION_USER
+            if ident.username.lower() not in spoke_map:
+                cmd_id = f"cmd_prov_{secrets.token_hex(4)}"
+                outgoing_cmds.append(PendingCommandItem(
+                    command_id=cmd_id,
+                    action="PROVISION_USER",
+                    username=ident.username,
+                    reason=f"Auto-Reconciliation: Account assigned on Central IAM for {app.app_name}",
+                    issued_at=now.isoformat()
+                ))
+                dispatched_cmd_keys.add(("PROVISION_USER", ident.username.lower()))
+                db.add(SpokePendingCommand(
+                    command_id=cmd_id,
+                    app_code=app.app_code,
+                    action="PROVISION_USER",
+                    username=ident.username,
+                    reason="Auto-Reconciliation: Account assigned on Central IAM",
+                    status="SENT",
+                    created_at=now
+                ))
+
+        # Check for accounts active in Spoke but deactivated in CIAM (Offboarded or AD Disabled)
+        for acc in payload.accounts:
+            if acc.is_active:
+                uname_lower = acc.username.strip().lower()
+                ident = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(uname_lower)).first()
+                mapping = db.query(AppAccountMapping).filter(
+                    AppAccountMapping.application_id == app.id,
+                    AppAccountMapping.app_username.ilike(uname_lower)
+                ).first()
+
+                is_disabled_in_ciam = (ident and not ident.is_active_in_ad) or (mapping and not mapping.is_active_in_app)
+                if is_disabled_in_ciam and ("DISABLE_USER", uname_lower) not in dispatched_cmd_keys:
+                    cmd_id = f"cmd_dis_{secrets.token_hex(4)}"
+                    outgoing_cmds.append(PendingCommandItem(
+                        command_id=cmd_id,
+                        action="DISABLE_USER",
+                        username=acc.username,
+                        reason="Auto-Reconciliation: Account deactivated or offboarded in Central IAM",
+                        issued_at=now.isoformat()
+                    ))
+                    dispatched_cmd_keys.add(("DISABLE_USER", uname_lower))
+                    db.add(SpokePendingCommand(
+                        command_id=cmd_id,
+                        app_code=app.app_code,
+                        action="DISABLE_USER",
+                        username=acc.username,
+                        reason="Auto-Reconciliation: Account deactivated in Central IAM",
+                        status="SENT",
+                        created_at=now
+                    ))
+
+    # 6. Retrieve Pending Commands from DB queue
     pending_db_cmds = db.query(SpokePendingCommand).filter(
         SpokePendingCommand.app_code == app.app_code,
         SpokePendingCommand.status == "PENDING"
     ).order_by(SpokePendingCommand.created_at.asc()).limit(10).all()
 
-    outgoing_cmds = []
     for cmd in pending_db_cmds:
-        outgoing_cmds.append(PendingCommandItem(
-            command_id=cmd.command_id,
-            action=cmd.action,
-            username=cmd.username,
-            reason=cmd.reason,
-            issued_at=cmd.created_at.isoformat()
-        ))
-        cmd.status = "SENT"
+        if (cmd.action, cmd.username.lower()) not in dispatched_cmd_keys:
+            outgoing_cmds.append(PendingCommandItem(
+                command_id=cmd.command_id,
+                action=cmd.action,
+                username=cmd.username,
+                reason=cmd.reason,
+                issued_at=cmd.created_at.isoformat()
+            ))
+            cmd.status = "SENT"
 
     db.commit()
 
@@ -199,5 +291,6 @@ def handle_agent_heartbeat(
         server_time=now.isoformat(),
         next_heartbeat_seconds=120,
         pending_commands=outgoing_cmds,
+        assigned_accounts=assigned_accounts_list,
         message=f"Heartbeat received for {app.app_name}. {len(outgoing_cmds)} pending command(s) dispatched."
     )

@@ -441,7 +441,26 @@ docker compose up -d api web
   2. **Database Auto-Upgrade ([initial_data.py](file:///d:/Python/Central-IAM/backend/app/initial_data.py)):**
      - บรรจุ `mtpulse` เข้า `apps_data`
      - เพิ่มบล็อก Auto-Upgrade ใน `init_db()` ตรวจสอบแอป `mtpulse-spoke-client` และเพิ่ม `https://wa-mtpulse.wa.net/auth/callback,https://wa-mtpulse.wa.net/api/auth/callback,http://localhost:3000/portal/callback` ให้อัตโนมัติเมื่อสตาร์ท container
-  3. **Frontend UI ([page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/applications/page.tsx)):** ปรับ Default Redirect URIs ตอนเปิดหน้าต่างแก้ไขแอปให้ใส่ทั้ง `/auth/callback` และ `/api/auth/callback` เป็นมาตรฐาน
+### ลำดับที่ 11: เพิ่มฟิลด์ Portal Launch URL รองรับ RFC 9700 Seamless SSO Bounce ไปยัง /auth/start
+- **ปัญหา:** เมื่อคลิกการ์ด MTPulse จาก Central IAM Portal เดิมที CIAM ยิงตรงเข้า `/auth/callback?code=...` ทำให้ MTPulse ไม่มี `SsoAttempt` และ Cookie ที่ผูกกับเบราว์เซอร์ จึงขึ้น Error สีแดง *"SSO session ไม่ถูกต้องหรือหมดอายุ"*
+- **การแก้ไข:**
+  1. เพิ่มฟิลด์ `portal_launch_url` ใน `ConnectedApplication` (Model, Schemas, DB Auto-Migration, UI)
+  2. กำหนดให้ `mtpulse` ใช้ `portal_launch_url = "https://wa-mtpulse.wa.net/auth/start"` แยกต่างหากจาก `redirect_uris = "https://wa-mtpulse.wa.net/auth/callback"`
+  3. เมื่อคลิกการ์ด CIAM Portal ระบบจะส่งผู้ใช้ไปที่ `portal_launch_url` เพื่อให้ Spoke สร้าง State/PKCE และ Cookie ผูกกับเบราว์เซอร์ แล้วเด้งมาแลก Token กับ CIAM ได้อย่างราบรื่น
+
+### ลำดับที่ 12: ยกระดับสเปกกลางสู่ Version 2.7.0 — Two-Way Directory Reconciliation & Mandatory Immediate Sync Button
+- **ปัญหา & ข้อกำหนดใหม่:** เมื่อผู้ดูแลระบบมอบหมายสิทธิ์ให้พนักงานบน CIAM (เช่น `Ronnakorn.P` ได้รับแท็ก `• MTPULSE`) ในระบบ Spoke Mode C (เช่น MTPulse) กลับยังไม่มี Account นี้จนกว่าจะล็อกอิน และไม่มีปุ่มให้สั่ง Sync แลกเปลี่ยนสถานะกันได้ทันทีแบบ Two-Way
+- **การแก้ไขและกำหนดมาตรฐานกลาง:**
+  1. **Two-Way Directory Reconciliation for Mode C:**
+     - ใน `/api/v1/agent/heartbeat` เมื่อ Spoke ส่ง `FULL_SYNC` หรือรายชื่อบัญชีขึ้นมา CIAM จะตรวจสอบ Diff กับบัญชีที่ได้รับสิทธิ์ใน CIAM (`AppAccountMapping`)
+     - หาก CIAM มีบัญชีที่ได้รับสิทธิ์เพิ่มขึ้นที่ Spoke ยังไม่มี CIAM จะส่ง `assigned_accounts` และออกคำสั่ง **`PROVISION_USER`** ให้ Spoke นำไปสร้างใน Local Database ทันที (Role เริ่มต้น `Viewer`, `is_active: true`)
+     - หากพนักงานถูกปิดสิทธิ์บน CIAM แต่ใน Spoke ยังเปิดอยู่ CIAM จะส่งคำสั่ง **`DISABLE_USER`** ไปปิดทันที
+  2. **Mandatory Immediate Sync Button on Spoke UI:**
+     - กำหนดข้อบังคับในหมวด D.4 และ 5.1 ให้ Spoke ใน Mode C ทุกระบบ **ต้องมีปุ่ม `[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]` (Immediate Account Sync)** บนหน้าจอ System Setting (User Management หรือ Central IAM)
+     - เมื่อกดปุ่ม ระบบลูกจะรัน Outbound Full Sync ไปยัง CIAM ทันที นำบัญชีที่ขาดมาสร้าง และปรับสถานะ Active/Inactive ให้ตรงกัน 100% แบบเรียลไทม์ โดยไม่ต้องรอรอบ Background 120 วินาที
+  3. **Backend CIAM ([agent.py](file:///d:/Python/Central-IAM/backend/app/api/v1/agent.py)):**
+     - เพิ่ม `AssignedAccountItem` และ `assigned_accounts` ใน `AgentHeartbeatResponse`
+     - เพิ่ม Logic คำนวณ Two-Way Reconciliation และสร้างคำสั่ง `PROVISION_USER` / `DISABLE_USER` ส่งกลับให้อัตโนมัติ
 
 
 
