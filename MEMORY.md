@@ -537,19 +537,20 @@ FRONTEND_URL=http://localhost:3000
 ### 16.5 Spoke Badge Deduplication & Local Acc Terminology (Version 2.0.4)
 * **Badge Deduplication:** ใน `_build_app_summaries` ([directory.py](file:///d:/Python/Central-IAM/backend/app/api/v1/directory.py)) ทำการ deduplicate ตาม `app_code.upper()` เพื่อรับประกันว่าระบบลูกแต่ละระบบจะแสดงเพียง 1 Badge เสมอ แม้ในฐานข้อมูลจะมี mapping ซ้ำจากการ Sync หรือตัวพิมพ์เล็ก/ใหญ่
 * **Spoke Agent Non-AD Creation:** ใน `agent.py` กำหนดให้บัญชีใหม่ที่ซิงก์มาจาก Outbound Spoke Agent มี `is_active_in_ad = False` เสมอ (ป้องกันกรณีบัญชีที่สะกดผิดบนเครื่องลูก เช่น `Winmonpan.P` ถูกเข้าใจผิดว่าเป็นผู้ใช้ AD)
-* **AD Heuristic Refinement:** ตัดเงื่อนไข `is_dotted_username` ออกจากตัวตรวจจับ AD ใน `initial_data.py` เพื่อไม่ให้บัญชี Local Spoke ที่มีจุด `.` ถูกดึงเข้า AD อัตโนมัติ พร้อมทั้งปรับแก้ `Winmonpan.P` ให้เป็น `Local Acc` ที่ถูกต้องและลบ AD mapping ออก
-* **Local Acc UI Label:** ปรับคำแสดงผลใน Directory Web UI จาก "ระบบลูกเท่านั้น" / "ระบบลูก" ➔ **"Local Acc"** เพื่อความเข้าใจที่ชัดเจน และคงปุ่ม `[ผูกกับ AD]` ให้ผู้ดูแลระบบคลิกเพื่อเชื่อมโยงเข้ากับตัวตนจริงใน AD ได้อย่างสะดวก
-
-### 16.6 Client-Side Reachability Probe Engine for Modern Automated Zero-Trust Access (Version 2.0.5)
-* **ปัญหาของ Public IP Whitelist แบบเดิม:** การฮาร์ดโค้ดหรือนำ Public IP ของ ISP/บ้าน (`147.50.223.20`) มาใส่ Whitelist ไม่ถูกต้องตามหลัก Enterprise Security เนื่องจากพนักงานสามารถทำงานได้จากหลากหลายสถานที่ทั่วโลก และ Private IP ของ OpenVPN (`192.168.42.0/24`) ไม่สามารถส่งต่อข้าม Public Internet มายัง Cloud VPS ได้โดยตรง
-* **สถาปัตยกรรมใหม่ (Client-Side Reachability Probe — แนวทางที่ 1):**
-  1. **ถอด Public IP ชั่วคราวออก:** นำ `147.50.223.20/32` ออกจาก `DEFAULT_CORPORATE_NETWORKS` และการตั้งค่าระบบทั้งหมด
-  2. **Automated Browser Probe:** เมื่อเปิดหน้า `/portal` เบราว์เซอร์ของผู้ใช้ (ซึ่งทำงานอยู่บนเครื่อง Client ที่ต่อ OpenVPN `192.168.42.x`) จะยิงทดสอบการเข้าถึงบริการ On-Premise (เช่น `https://wa-mtpulse.wa.net`) โดยตรงแบบ Non-blocking ด้วย `fetch(targetUrl, { mode: 'no-cors', cache: 'no-store' })`
-  3. **Dynamic Responsive UI (สว่างใสโทนสีฟ้าเมื่อพร้อม):**
-     - **กำลังตรวจสอบ (`checking`):** ป้ายสถานะสีเทาอ่อน `ตรวจสอบ VPN...` พร้อม Spinner
-     - **VPN พร้อมใช้งาน (`connected`):** การ์ดและป้ายสถานะปรับเป็น **สีฟ้า (Sky/Blue)** `🛡️ VPN พร้อม` พร้อมปุ่มกดสีฟ้า Gradient `เข้าใช้งานระบบ (VPN พร้อม) ↗` โดยอัตโนมัติ
-     - **ยังไม่ต่อ VPN (`disconnected`):** ป้ายเตือนสีส้ม `🔒 ต้องต่อ VPN` พร้อมปุ่มกดสีส้ม `🔒 กรุณาต่อ VPN แล้วคลิกตรวจใหม่` ที่สามารถคลิกเพื่อ Re-probe ได้ทันที
-     - **Auto-Recheck on Focus:** ระบบดักจับ Event `window.focus` เมื่อผู้ใช้งานสลับหน้าต่างไปต่อ OpenVPN แล้วกลับมาที่แท็บเบราว์เซอร์ ระบบจะตรวจจับและปลดล็อกเป็นสีฟ้าให้อัตโนมัติทันที
-  4. **Backend Portal Launch Authorization:** API `POST /oauth/portal/launch` และสคีมา `PortalLaunchRequest` รองรับฟิลด์ `client_vpn_verified: bool` ซึ่งเมื่อผ่านการตรวจเช็กจริงจาก Client-side Probe ระบบจะอนุมัติการสร้าง SSO Ticket และส่งต่อไปยัง URL ปลายทางได้อย่างราบรื่น
+### 16.7 Enterprise Identity Status Source of Truth & Local vs AD Accounts Architecture (Version 2.0.6)
+* **หลักการ Source of Truth (Top-Down vs Bottom-Up):**
+  1. **Corporate AD Accounts (พนักงานองค์กร):**
+     - **Source of Truth คือ Active Directory / Central IAM**
+     - การกำหนดสถานะเป็นไปในทิศทาง Top-Down จาก CIAM ไปยังระบบลูก (Spokes)
+     - ระบบ Spoke ไม่มีสิทธิ์ปิด/เปลี่ยนสถานะ `is_active_in_ad` ของพนักงาน
+  2. **Local Spoke Accounts (บัญชีเฉพาะระบบย่อย):**
+     - **Source of Truth คือ Spoke Application นั้นๆ** (เช่น บัญชี Vendor, Maintenance Local Pass ใน IRM)
+     - CIAM รับรู้สถานะเฉพาะระดับ `is_active_in_app` เท่านั้น และไม่นำ Local Account ไปเปรียบเทียบกับ `is_active_in_ad` เพื่อตัดสินว่าเป็นบัญชีผี (Ghost Account False Positives)
+* **การแก้ไขปัญหา AD Inactive และ Ghost Discrepancy:**
+  - **`pinyada.r` vs `Pinyada.S`:** แก้ไขการ Seed ที่ผิดพลาด โดยกำหนดให้ `pinyada.r` (Pinyada Rungrattanaporn) เป็นพนักงาน AD Active ที่ถูกต้อง และแยก `Pinyada.S` เป็น Local Pass ของ IRM ที่ถูก Inactive โดยไม่ผูกกับ AD
+  - **เพิ่มพนักงาน AD ที่ถูกต้อง:** `Patcha.S`, `Apichai.P`, `Praewwalee.K`, `pinyada.r`, `Ronnakorn.P`, `Wimonpan.P` ในรายการ Identity ศูนย์กลาง
+  - **Agent Sync Refinement (`agent.py`):** เมื่อ MTPulse หรือ Spoke Agent ยิงส่งบัญชีเข้ามา หากมีอีเมลองค์กร `@windowasia.com` จะกำหนดเป็น `is_active_in_ad = True` แทนการตั้งค่า `False` อัตโนมัติ
+  - **Context-Aware Directory Filtering (`directory.py`):** ตัวกรองผสม เช่น `app_code="irm"` ร่วมกับ `status="active"` จะตรวจสอบสถานะ Active ภายในระบบ IRM โดยตรง (`spoke_active == True`) ทำให้บัญชีที่ปิดใช้งานใน IRM ไม่โผล่มาแสดงผล
+  - **Ghost Account Guardrails (`reconciliation.py`):** ป้องกันไม่ให้ Local Spoke Accounts ถูกนำไปประเมินเป็น Discrepancy หรือ Ghost Account
 
 

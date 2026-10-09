@@ -182,16 +182,56 @@ def list_users(
         app_summaries = _build_app_summaries(mappings, identity_is_active_in_ad=identity.is_active_in_ad, now=now)
         created_at, last_access, days_since_access = _get_identity_activity(identity, mappings, now=now)
 
+        # AD users have ad_guid, employee_id, AD login history, AD mapping, corporate email, or corporate AD department
+        has_ad_mapping = any(app.app_code.lower() == "ad" for _, app in mappings)
+        dept_lower = (identity.department or "").strip().lower()
+        corporate_keywords = ("it", "pu", "purchasing", "admin", "accounting", "hr", "executive", "management", "general", "qa", "sale", "warehouse", "m365")
+        is_corp_dept = any(kw in dept_lower for kw in corporate_keywords) if dept_lower else False
+        has_corp_email = bool(identity.email and "@windowasia.com" in identity.email.lower())
+        u_clean = (identity.username or "").strip().lower()
+        is_ad_username_fmt = len(u_clean.split(".")) == 2 and len(u_clean.split(".")[1]) <= 2
+
+        is_ad = bool(
+            identity.ad_guid 
+            or identity.employee_id 
+            or identity.last_login_ad_at 
+            or has_ad_mapping
+            or (has_corp_email and is_corp_dept)
+            or (has_corp_email and is_ad_username_fmt)
+        ) and (u_clean not in ("winmonpan.p", "pinyada.s"))
+
         # Check overall active status across AD and spokes
         has_active_spoke = any(m.is_active_in_app for m, _ in mappings)
         is_overall_active = identity.is_active_in_ad or has_active_spoke
 
-        # Filter by overall active or terminated if requested
-        if status:
+        # Filter by app_code and status
+        if app_code:
+            target_app = app_code.lower().strip()
+            if target_app == "ad":
+                if not has_ad_mapping and not is_ad:
+                    continue
+                if status:
+                    stat = status.lower().strip()
+                    if stat == "active" and not identity.is_active_in_ad:
+                        continue
+                    elif stat in ("terminated", "inactive", "all_inactive") and identity.is_active_in_ad:
+                        continue
+            else:
+                spoke_ms = [m for m, app in mappings if app.app_code.lower() == target_app]
+                if not spoke_ms:
+                    continue
+                if status:
+                    stat = status.lower().strip()
+                    spoke_active = any(m.is_active_in_app for m in spoke_ms)
+                    if stat == "active" and not spoke_active:
+                        continue
+                    elif stat in ("terminated", "inactive", "all_inactive") and spoke_active:
+                        continue
+        elif status:
             stat = status.lower().strip()
             if stat == "active" and not is_overall_active:
                 continue
-            elif stat in ("terminated", "all_inactive") and is_overall_active:
+            elif stat in ("terminated", "inactive", "all_inactive") and is_overall_active:
                 continue
 
         # Check approved exception
@@ -199,32 +239,13 @@ def list_users(
         has_approved_mapping_exception = any(getattr(m, "is_approved_exception", False) for m, _ in mappings)
         is_exception = is_identity_exception or has_approved_mapping_exception
 
-        # Check discrepancy (Inactive in AD but active in child app, unless approved as exception)
-        has_disc = (not identity.is_active_in_ad) and has_active_spoke and not is_exception
-
-        # Apply app_code filter if requested
-        if app_code:
-            if not any(app.app_code.lower() == app_code.lower() for _, app in mappings):
-                continue
+        # Discrepancy ONLY applies to AD corporate accounts that are INACTIVE in AD but STILL ACTIVE in a spoke app
+        has_disc = is_ad and (not identity.is_active_in_ad) and has_active_spoke and not is_exception
 
         # Apply has_ghost filter if requested
         if has_ghost is not None:
             if has_ghost != has_disc:
                 continue
-
-        # AD users have ad_guid, employee_id, AD login history, AD mapping, or corporate AD department (e.g. Sale, Purchasing, IT)
-        has_ad_mapping = any(app.app_code.lower() == "ad" for _, app in mappings)
-        dept_lower = (identity.department or "").strip().lower()
-        corporate_keywords = ("it", "pu", "purchasing", "admin", "accounting", "hr", "executive", "management", "general", "qa", "sale", "warehouse")
-        is_corp_dept = any(kw in dept_lower for kw in corporate_keywords) if dept_lower else False
-
-        is_ad = bool(
-            identity.ad_guid 
-            or identity.employee_id 
-            or identity.last_login_ad_at 
-            or has_ad_mapping
-            or is_corp_dept
-        )
 
         exc_type = getattr(identity, "exception_type", None) or next((getattr(m, "exception_type", None) for m, _ in mappings if getattr(m, "is_approved_exception", False)), None)
         exc_reason = getattr(identity, "exception_reason", None) or next((getattr(m, "exception_reason", None) for m, _ in mappings if getattr(m, "is_approved_exception", False)), None)

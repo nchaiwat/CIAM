@@ -144,13 +144,14 @@ def handle_agent_heartbeat(
             username_clean = acc.username.strip()
             # Match master identity or create local spoke identity
             ident = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(username_clean)).first()
+            is_corp = bool(acc.email and "@windowasia.com" in acc.email.lower())
             if not ident:
                 ident = MasterIdentity(
                     username=username_clean,
                     full_name=acc.full_name or username_clean,
                     email=acc.email,
-                    department=acc.department or "ทั่วไป",
-                    is_active_in_ad=False,
+                    department=acc.department or ("Corporate" if is_corp else "ทั่วไป"),
+                    is_active_in_ad=True if is_corp else False,
                     created_at=now
                 )
                 db.add(ident)

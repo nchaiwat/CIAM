@@ -1,11 +1,35 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 8 ตุลาคม 2026 (Local Time: ~23:05 ICT)  
+> **Date Updated:** 9 ตุลาคม 2026 (Local Time: ~09:00 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0. อัปเดตล่าสุด: แก้ไขปัญหา AD Inactive, Ghost Account False Positives และ Pinyada.S (9 ต.ค. 2026)
+### ปัญหาที่พบและสาเหตุ:
+1. **บัญชี `Patcha.S`, `Apichai.P`, `Praewwalee.K`, `pinyada.r`, `Ronnakorn.P`, `Wimonpan.P` ขึ้น AD Inactive / บัญชีผี (Ghost Account):**
+   - สาเหตุ 1: ใน `agent.py` เมื่อ MTPulse ยิง heartbeat ส่งรายชื่อผู้ใช้ โค้ดสร้าง MasterIdentity โดยตั้งค่า `is_active_in_ad = False` ส่งผลให้กลายเป็น Inactive ใน AD ทันที
+   - สาเหตุ 2: ใน `initial_data.py` auto-heal ข้ามผู้ใช้ที่แผนกไม่ได้อยู่ในกลุ่มเดิม หรือสะกดผิด เช่น `pinyada.r` มีแผนกเป็น `M365 User`
+   - สาเหตุ 3: เมื่อ `is_active_in_ad == False` แต่ใน Spoke (IRM, MTPulse) มีสถานะ Active ระบบจึงตัดสินว่าเป็นบัญชีผี (Discrepancy)
+2. **กรณี `Pinyada.S` สับสนกับ `Pinyada.R` และกลับมา On เสมอ:**
+   - ใน IRM มี 2 บัญชี: `pinyada.r` (AD, Active) และ `Pinyada.S` (Local Pass, Inactive)
+   - แต่ใน `initial_data.py` มีการ hardcode seed ข้อมูลว่า `Pinyada.S` คือ `Pinyada Rungrattanaporn` และตั้ง `is_active_in_ad = True` ทับข้อมูลทุกครั้งที่ start
+   - ใน `directory.py` ตัวกรอง `status="active"` ตรวจเพียง overall active และตัวกรอง `app_code="irm"` ไม่ได้ตรวจว่าใน IRM เป็น Active หรือไม่ ทำให้ `Pinyada.S` ยังคงแสดงผลในตัวกรอง Active
+
+### การแก้ไขและปรับปรุง:
+- **`initial_data.py`:** 
+  - ลบการ hardcode AD Active ของ `Pinyada.S` และตั้งให้ `Pinyada.S` เป็น Local Spoke Account โดยลบ AD mapping ออก
+  - ใส่บัญชี AD ที่ถูกต้อง: `pinyada.r` (Pinyada Rungrattanaporn), `Praewwalee.K`, `Ronnakorn.P`, `Wimonpan.P` ใน `real_identities`
+  - ปรับ auto-heal ให้ครอบคลุมทุกแผนกองค์กรรวมถึง M365 และ format พนักงานบริษัท (`Firstname.L`)
+- **`agent.py`:** ตรวจสอบอีเมลองค์กร `@windowasia.com` หากเป็นพนักงานองค์กรจะตั้ง `is_active_in_ad = True` ส่วน Local Account จะไม่ถูกดึงเข้า AD
+- **`directory.py` & `reconciliation.py`:**
+  - ปรับตัวกรองร่วมระหว่าง `app_code` และ `status`: หากเลือกระบบงานเฉพาะ เช่น `app_code="irm"` และ `status="active"` จะคัดกรองเฉพาะบัญชีที่ Active ภายในระบบ IRM เท่านั้น (ผู้ใช้ที่ Inactive ใน IRM อย่าง `Pinyada.S` จะไม่แสดงผล)
+  - ปรับเงื่อนไข Ghost Account / Discrepancy: ตรวจจับเฉพาะบัญชีที่เป็น AD Corporate Account จริงๆ เท่านั้น บัญชี Local Spoke จะไม่ถูกตีเป็นบัญชีผี
+- **ผลการทดสอบ:** Backend Pytest ผ่าน 43/43 (100%), Frontend tsc 0 errors (100%)
 
 ---
 

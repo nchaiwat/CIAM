@@ -320,23 +320,25 @@ def init_db():
 
         corporate_depts = (
             "sale", "sales", "purchasing", "pu", "it", "administrator", "admin",
-            "accounting", "hr", "executive", "management", "qa", "warehouse"
+            "accounting", "hr", "executive", "management", "qa", "warehouse",
+            "m365", "m365 user", "general", "user", "office"
         )
         corrupted_ad_identities = db.query(MasterIdentity).filter(MasterIdentity.is_active_in_ad == False).all()
         restored_count = 0
         now = datetime.now(timezone.utc)
         for cid in corrupted_ad_identities:
             u_low = (cid.username or "").strip().lower()
-            if u_low in offboarded_usernames or u_low == "winmonpan.p":
+            if u_low in offboarded_usernames or u_low in ("winmonpan.p", "pinyada.s"):
                 continue  # Legitimately offboarded via Central-IAM or local spoke account
 
             dept_low = (cid.department or "").strip().lower()
             email_val = (cid.email or "").strip().lower()
             has_corp_email = "@windowasia.com" in email_val
             has_corp_dept = any(cd in dept_low for cd in corporate_depts)
+            is_ad_format = len(u_low.split(".")) == 2 and len(u_low.split(".")[1]) <= 2
 
-            # Only restore true corporate employees with both corp email and corp department or AD GUID
-            if (has_corp_dept and has_corp_email) or cid.ad_guid:
+            # Restore true corporate employees with corp email, corp department, AD GUID, or AD format
+            if (has_corp_dept and has_corp_email) or cid.ad_guid or (has_corp_email and is_ad_format):
                 cid.is_active_in_ad = True
                 restored_count += 1
                 if ad_app_obj:
@@ -362,21 +364,22 @@ def init_db():
 
         if restored_count > 0:
             db.flush()
-            logger.info("Auto-healed %d corporate identities to Active in AD (recovering from 04:00 AM sync bug)", restored_count)
+            logger.info("Auto-healed %d corporate identities to Active in AD", restored_count)
 
-        # Ensure Winmonpan.P (synced with spelling mistake from MTPulse local) is treated as Local Acc, not AD
-        winmonpan_ident = db.query(MasterIdentity).filter(MasterIdentity.username.ilike("Winmonpan.P")).first()
-        if winmonpan_ident:
-            winmonpan_ident.is_active_in_ad = False
-            winmonpan_ident.ad_guid = None
-            winmonpan_ident.employee_id = None
-            winmonpan_ident.last_login_ad_at = None
-            if ad_app_obj:
-                db.query(AppAccountMapping).filter(
-                    AppAccountMapping.identity_id == winmonpan_ident.id,
-                    AppAccountMapping.application_id == ad_app_obj.id
-                ).delete()
-            db.flush()
+        # Ensure Winmonpan.P and Pinyada.S (local spoke accounts) are treated as Local Acc, not AD
+        for local_u in ["winmonpan.p", "pinyada.s"]:
+            local_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == local_u).first()
+            if local_ident:
+                local_ident.is_active_in_ad = False
+                local_ident.ad_guid = None
+                local_ident.employee_id = None
+                local_ident.last_login_ad_at = None
+                if ad_app_obj:
+                    db.query(AppAccountMapping).filter(
+                        AppAccountMapping.identity_id == local_ident.id,
+                        AppAccountMapping.application_id == ad_app_obj.id
+                    ).delete()
+                db.flush()
 
         # Prune duplicate AppAccountMapping records for the same (identity_id, application_id)
         duplicate_groups = (
@@ -419,9 +422,9 @@ def init_db():
                 ]
             },
             {
-                "username": "Pinyada.S",
+                "username": "pinyada.r",
                 "full_name": "Pinyada Rungrattanaporn",
-                "email": "pinyada.s@windowasia.com",
+                "email": "pinyada.r@windowasia.com",
                 "department": "Purchasing",
                 "is_active_in_ad": True,
                 "mappings": [
@@ -451,6 +454,36 @@ def init_db():
                 ]
             },
             {
+                "username": "Praewwalee.K",
+                "full_name": "Praewwalee Khunthong",
+                "email": "praewwalee.k@windowasia.com",
+                "department": "Purchasing",
+                "is_active_in_ad": True,
+                "mappings": [
+                    {"app": "irm", "role": "PU User", "active": True}
+                ]
+            },
+            {
+                "username": "Ronnakorn.P",
+                "full_name": "Ronnakorn Pinwiset",
+                "email": "ronnakorn.p@windowasia.com",
+                "department": "IT",
+                "is_active_in_ad": True,
+                "mappings": [
+                    {"app": "mtpulse", "role": "User", "active": True}
+                ]
+            },
+            {
+                "username": "Wimonpan.P",
+                "full_name": "Wimonpan Promsuwan",
+                "email": "wimonpan.p@windowasia.com",
+                "department": "IT",
+                "is_active_in_ad": True,
+                "mappings": [
+                    {"app": "mtpulse", "role": "User", "active": True}
+                ]
+            },
+            {
                 "username": "Hermes.N",
                 "full_name": "Hermess Nilawan",
                 "email": "hermes.n@windowasia.com",
@@ -463,7 +496,7 @@ def init_db():
         ]
 
         for item in real_identities:
-            ident = db.query(MasterIdentity).filter(MasterIdentity.username == item["username"]).first()
+            ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == item["username"].lower()).first()
             if not ident:
                 ident = MasterIdentity(
                     username=item["username"],
