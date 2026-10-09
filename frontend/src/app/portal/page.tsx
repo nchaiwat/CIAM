@@ -550,7 +550,7 @@ export default function PortalPage() {
                         </span>
                       ) : isVpnConnected ? (
                         <>
-                          <span>เข้าใช้งานระบบ (VPN พร้อม)</span>
+                          <span>เข้าใช้งานระบบ</span>
                           <ArrowUpRight className="w-4 h-4 opacity-80" />
                         </>
                       ) : isVpnLocked ? (

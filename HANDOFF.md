@@ -29,6 +29,8 @@
 - **`directory.py` & `reconciliation.py`:**
   - ปรับตัวกรองร่วมระหว่าง `app_code` และ `status`: หากเลือกระบบงานเฉพาะ เช่น `app_code="irm"` และ `status="active"` จะคัดกรองเฉพาะบัญชีที่ Active ภายในระบบ IRM เท่านั้น (ผู้ใช้ที่ Inactive ใน IRM อย่าง `Pinyada.S` จะไม่แสดงผล)
   - ปรับเงื่อนไข Ghost Account / Discrepancy: ตรวจจับเฉพาะบัญชีที่เป็น AD Corporate Account จริงๆ เท่านั้น บัญชี Local Spoke จะไม่ถูกตีเป็นบัญชีผี
+- **Frontend SSO Portal (`portal/page.tsx`):**
+  - นำข้อความ `(VPN พร้อม)` ออกจากปุ่มกดเข้าใช้งานระบบ เหลือเพียง `เข้าใช้งานระบบ ↗` เพื่อลดความซ้ำซ้อนกับ Badge สถานะ `🛡️ VPN พร้อม` ที่มีอยู่แล้วบริเวณมุมขวาบนของการ์ด
 - **ผลการทดสอบ:** Backend Pytest ผ่าน 43/43 (100%), Frontend tsc 0 errors (100%)
 
 ---
