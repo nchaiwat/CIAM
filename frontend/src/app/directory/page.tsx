@@ -698,27 +698,25 @@ export default function DirectoryPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header (Point 5: Compact ~50% vertical height) */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2.5 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">
-              ทะเบียนผู้ใช้และสิทธิ์ระบบ
-            </h1>
-            <span className="px-2 py-0.5 text-[11px] font-bold bg-blue-100 text-blue-900 border border-blue-300 rounded-full shadow-2xs">
-              {users.length} บัญชี
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-500 font-medium">
-            ข้อมูลตัวตนพนักงานใน Active Directory, สิทธิ์ระบบลูก (Spokes), และ Power User ใน CIAM
-          </p>
+    <div className="space-y-2">
+      {/* Header (Ultra-compact, no wasted space) */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 pb-0.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900">
+            ทะเบียนผู้ใช้และสิทธิ์ระบบ
+          </h1>
+          <span className="px-2 py-0.2 text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-300 rounded-full shadow-2xs">
+            {users.length} บัญชี
+          </span>
+          <span className="hidden md:inline text-[11px] text-slate-400 font-medium">
+            • ข้อมูลตัวตนพนักงานใน AD, สิทธิ์ระบบลูก (Spokes), และ Power User
+          </span>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1.5 shrink-0">
           <button
             onClick={handleOpenCreateModal}
-            className="flex items-center space-x-1 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-xs cursor-pointer"
+            className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
           >
             <UserPlus className="w-3.5 h-3.5" />
             <span>+ เพิ่มผู้ใช้</span>
@@ -726,7 +724,7 @@ export default function DirectoryPage() {
 
           <Link
             href="/offboarding"
-            className="flex items-center space-x-1 px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors shadow-xs"
+            className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors shadow-2xs"
           >
             <UserX className="w-3.5 h-3.5" />
             <span>ศูนย์ระงับสิทธิ์</span>
@@ -734,53 +732,42 @@ export default function DirectoryPage() {
         </div>
       </div>
 
-      {/* KPI Summary Cards (Point 5: Compact ~50% vertical height) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-        <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">ผู้ใช้ทั้งหมด</span>
-            <span className="text-base font-black text-slate-900">{totalUsers}</span>
-          </div>
-          <span className="text-[10px] text-slate-400 font-medium truncate block">ทั้ง AD และระบบลูก</span>
+      {/* KPI Summary Cards (Ultra-compact single-row cards) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="bg-white px-3 py-1.5 rounded-md border border-slate-200 shadow-2xs flex items-center justify-between">
+          <span className="text-[11px] font-bold text-slate-600">ผู้ใช้ทั้งหมด</span>
+          <span className="text-sm font-black text-slate-900 font-mono">{totalUsers}</span>
         </div>
 
-        <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Active ใน AD</span>
-            <span className="text-base font-black text-emerald-700">{activeAdCount}</span>
-          </div>
-          <span className="text-[10px] text-slate-400 font-medium truncate block">เปิดใช้งานใน AD</span>
+        <div className="bg-white px-3 py-1.5 rounded-md border border-slate-200 shadow-2xs flex items-center justify-between">
+          <span className="text-[11px] font-bold text-emerald-800">ACTIVE ใน AD</span>
+          <span className="text-sm font-black text-emerald-700 font-mono">{activeAdCount}</span>
         </div>
 
         <div
           onClick={handleGhostToggle}
-          className={`px-3 py-2 rounded-lg border cursor-pointer transition-colors shadow-2xs ${
+          className={`px-3 py-1.5 rounded-md border cursor-pointer transition-colors shadow-2xs flex items-center justify-between ${
             ghostOnly
               ? "bg-amber-100 border-amber-400"
               : "bg-white border-slate-200 hover:border-amber-300"
           }`}
+          title="คลิกเพื่อกรองเฉพาะรายการตกค้าง"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider">บัญชีผี / ตกค้าง</span>
-            <span className="text-base font-black text-amber-700">{ghostCount}</span>
+          <div className="flex items-center space-x-1">
+            <span className="text-[11px] font-bold text-amber-900">บัญชีผี / ตกค้าง</span>
+            {ghostOnly && <span className="text-[9px] font-black bg-amber-400 text-amber-950 px-1 rounded">กรองอยู่</span>}
           </div>
-          <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
-            <span>{ghostOnly ? "กำลังกรองอยู่" : "คลิกเพื่อกรอง"}</span>
-            {ghostOnly && <span className="text-[9px] font-black bg-amber-400 text-amber-950 px-1 rounded">ON</span>}
-          </div>
+          <span className="text-sm font-black text-amber-700 font-mono">{ghostCount}</span>
         </div>
 
-        <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider">Power User / Admin</span>
-            <span className="text-base font-black text-blue-700">{powerUserCount}</span>
-          </div>
-          <span className="text-[10px] text-slate-400 font-medium truncate block">สิทธิ์ใน CIAM</span>
+        <div className="bg-white px-3 py-1.5 rounded-md border border-slate-200 shadow-2xs flex items-center justify-between">
+          <span className="text-[11px] font-bold text-blue-800">POWER USER / ADMIN</span>
+          <span className="text-sm font-black text-blue-700 font-mono">{powerUserCount}</span>
         </div>
       </div>
 
-      {/* Search & Filters Toolbar (Point 5 & 6: Sticky Freeze on Scroll + Persistent filter) */}
-      <div className="sticky top-11 z-20 bg-white/95 backdrop-blur-xs p-2.5 rounded-lg border border-slate-300 shadow-xs">
+      {/* Search & Filters Toolbar (Sticky Freeze on Scroll) */}
+      <div className="sticky top-11 z-20 bg-white/95 backdrop-blur-xs p-2 rounded-md border border-slate-300 shadow-xs">
         <form onSubmit={handleSearchSubmit} className="flex flex-col md:flex-row items-center gap-2">
           {/* Search Input */}
           <div className="relative flex-1 w-full">
