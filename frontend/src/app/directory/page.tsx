@@ -38,6 +38,32 @@ import {
   LocalPortalAccountResponse,
 } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/date";
+import * as XLSX from "xlsx";
+
+function ExcelIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M14 2H6C4.89543 2 4 2.89543 4 4V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V8L14 2Z"
+        fill="#107C41"
+      />
+      <path
+        d="M14 2V8H20"
+        fill="#185C37"
+      />
+      <path
+        d="M7.5 12.5L10.5 17.5M10.5 12.5L7.5 17.5"
+        stroke="white"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <rect x="13" y="12.5" width="4.5" height="1.2" fill="white" rx="0.3" />
+      <rect x="13" y="14.5" width="4.5" height="1.2" fill="white" rx="0.3" />
+      <rect x="13" y="16.5" width="4.5" height="1.2" fill="white" rx="0.3" />
+    </svg>
+  );
+}
 
 export default function DirectoryPage() {
   const [users, setUsers] = useState<UserListItem[]>([]);
@@ -660,6 +686,88 @@ export default function DirectoryPage() {
   const ghostCount = users.filter((u) => u.has_discrepancy).length;
   const powerUserCount = Object.values(adminRoles).filter((r) => r === "SUPER_ADMIN" || r === "ADMIN").length;
 
+  const handleExportExcel = () => {
+    if (!users || users.length === 0) {
+      alert("ไม่พบข้อมูลผู้ใช้สำหรับดาวน์โหลด");
+      return;
+    }
+
+    const exportData = users.map((u, idx) => {
+      const role = adminRoles[u.username.toLowerCase()] || "PORTAL_USER";
+      const roleText =
+        role === "SUPER_ADMIN"
+          ? "Super Admin"
+          : role === "ADMIN"
+          ? "Power User"
+          : role === "IT_HELPDESK"
+          ? "IT Helpdesk"
+          : role === "AUDITOR"
+          ? "Auditor"
+          : "Portal User";
+
+      const spokeNames = u.connected_apps.map((a) => a.app_name).join(", ");
+      const spokeDetails = u.connected_apps
+        .map(
+          (a) =>
+            `${a.app_name} (${a.is_active_in_app ? "Active" : "Inactive"}${a.sso_enabled ? " - SSO" : " - Direct"})`
+        )
+        .join("; ");
+
+      return {
+        "ลำดับ": idx + 1,
+        "รหัสพนักงาน": u.employee_id || "-",
+        "Username": u.username,
+        "ชื่อ - นามสกุล": u.full_name,
+        "อีเมล": u.email || "-",
+        "แผนก": u.department || "-",
+        "เบอร์โทรศัพท์": u.telephone || "-",
+        "Telegram ID": u.telegram_id || "-",
+        "สถานะ AD": u.is_active_in_ad ? "Active (เปิดใช้งาน)" : "Inactive (ระงับสิทธิ์)",
+        "สิทธิ์ในระบบ CIAM": roleText,
+        "จำนวนระบบลูกที่ผูกสิทธิ์": u.connected_apps.length,
+        "รายชื่อระบบลูก (Spokes)": spokeNames || "-",
+        "รายละเอียดสิทธิ์รายระบบ": spokeDetails || "-",
+        "สถานะความผิดปกติ": u.has_discrepancy ? "⚠️ บัญชีตกค้าง (Discrepancy)" : "ปกติ (In Sync)",
+        "ข้อยกเว้น": u.is_approved_exception ? `ข้อยกเว้น: ${u.exception_type || "LOCAL"}` : "ไม่มี",
+        "เข้าสู่ระบบ AD ล่าสุด": u.last_login_ad_at ? formatDateTime(u.last_login_ad_at) : "-",
+        "เข้าใช้งานระบบลูกล่าสุด": u.last_access_at ? formatDateTime(u.last_access_at) : "-",
+        "วันที่บันทึกในระบบ": u.created_at ? formatDate(u.created_at) : "-",
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    ws["!cols"] = [
+      { wch: 6 },  // ลำดับ
+      { wch: 14 }, // รหัสพนักงาน
+      { wch: 18 }, // Username
+      { wch: 28 }, // ชื่อ - นามสกุล
+      { wch: 30 }, // อีเมล
+      { wch: 18 }, // แผนก
+      { wch: 15 }, // เบอร์โทรศัพท์
+      { wch: 15 }, // Telegram ID
+      { wch: 20 }, // สถานะ AD
+      { wch: 16 }, // สิทธิ์ในระบบ CIAM
+      { wch: 14 }, // จำนวนระบบลูก
+      { wch: 35 }, // รายชื่อระบบลูก
+      { wch: 50 }, // รายละเอียดสิทธิ์รายระบบ
+      { wch: 24 }, // สถานะความผิดปกติ
+      { wch: 18 }, // ข้อยกเว้น
+      { wch: 22 }, // เข้าสู่ระบบ AD ล่าสุด
+      { wch: 22 }, // เข้าใช้งานระบบลูกล่าสุด
+      { wch: 18 }, // วันที่บันทึก
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "ทะเบียนผู้ใช้งาน");
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filterDesc = appFilter ? `_${appFilter.toUpperCase()}` : "";
+    const filename = `CIAM_User_Directory${filterDesc}_${dateStr}.xlsx`;
+
+    XLSX.writeFile(wb, filename);
+  };
+
   const renderRoleBadge = (username: string) => {
     const role = adminRoles[username.toLowerCase()];
     if (!role || role === "PORTAL_USER") return null;
@@ -714,6 +822,15 @@ export default function DirectoryPage() {
         </div>
 
         <div className="flex items-center space-x-1.5 shrink-0">
+          <button
+            onClick={handleExportExcel}
+            title="ดาวน์โหลดทะเบียนผู้ใช้เป็นไฟล์ Excel (.xlsx)"
+            className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+          >
+            <ExcelIcon className="w-3.5 h-3.5" />
+            <span>ดาวน์โหลด Excel</span>
+          </button>
+
           <button
             onClick={handleOpenCreateModal}
             className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
@@ -826,6 +943,16 @@ export default function DirectoryPage() {
               className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-bold transition-colors shadow-xs cursor-pointer"
             >
               ค้นหา
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              title="ดาวน์โหลดข้อมูลตามเงื่อนไขที่เลือกเป็นไฟล์ Excel (.xlsx)"
+              className="flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-bold transition-colors shadow-xs cursor-pointer shrink-0"
+            >
+              <ExcelIcon className="w-3.5 h-3.5" />
+              <span>ดาวน์โหลด Excel</span>
             </button>
           </div>
         </form>

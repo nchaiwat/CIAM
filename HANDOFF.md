@@ -9,7 +9,30 @@
 
 ---
 
-## 0.0 อัปเดตล่าสุด: Data Analytics & Spoke Accounts Breakdown & IAM Operational KPIs (/page.tsx, /applications) (10 ต.ค. 2026)
+## 0.00 อัปเดตล่าสุด: เพิ่มปุ่มและฟังก์ชันดาวน์โหลดทะเบียนผู้ใช้เป็น Excel (.xlsx) พร้อมไอคอน Excel (/directory) (10 ต.ค. 2026)
+### รายละเอียดฟีเจอร์การส่งออก Excel:
+1. **ไอคอน Microsoft Excel เฉพาะตัว (Custom Green Spreadsheet Icon):**
+   - ออกแบบไอคอน SVG คมชัดสีเขียวเข้มสไตล์ Microsoft Excel พร้อมตัวอักษร X และตารางสเปรดชีต
+   - วางปุ่มดาวน์โหลดใน 2 จุดยุทธศาสตร์ที่เข้าถึงง่าย:
+     1. **Header Action Bar:** วางเคียงข้างปุ่ม `+ เพิ่มผู้ใช้` และ `ศูนย์ระงับสิทธิ์`
+     2. **Search & Filter Toolbar:** วางถัดจากปุ่ม `ค้นหา` สะดวกต่อการค้นหา/กรองแล้วกดดาวน์โหลดทันที
+2. **การรวบรวมข้อมูลครบถ้วน 17 คอลัมน์ (Comprehensive Columns):**
+   - ลำดับ, รหัสพนักงาน, Username, ชื่อ-นามสกุล, อีเมล, แผนก, เบอร์โทรศัพท์, Telegram ID
+   - สถานะใน Active Directory (`Active` / `Inactive`)
+   - บทบาทใน CIAM (`Super Admin`, `Power User`, `IT Helpdesk`, `Auditor`, `Portal User`)
+   - จำนวนระบบลูก และรายชื่อระบบลูกที่ผูกสิทธิ์ (Spokes)
+   - รายละเอียดสิทธิ์รายระบบ (แสดงทั้งสถานะ Active/Inactive และประเภท SSO/Direct)
+   - สถานะความผิดปกติ (Discrepancy / บัญชีตกค้าง)
+   - สถานะการได้รับข้อยกเว้น (Exception Type)
+   - ประวัติการเข้าสู่ระบบ AD ล่าสุด, ประวัติเข้าใช้งานระบบลูกล่าสุด, และวันที่บันทึก
+3. **การจัดฟอร์แมตเอกสาร Excel:**
+   - ปรับความกว้างคอลัมน์อัตโนมัติ (`!cols` auto-width) เพื่อให้อ่านง่ายเมื่อเปิดใน Microsoft Excel หรือ Google Sheets
+   - ตั้งชื่อไฟล์อัตโนมัติระบุระบบที่กรองและวันที่ปัจจุบัน: `CIAM_User_Directory_[APP]_[YYYY-MM-DD].xlsx`
+- **ผลการทดสอบ:** Backend Pytest ผ่าน 43/43 (100%), Frontend TypeScript `tsc --noEmit` ผ่าน 0 errors (100%)
+
+---
+
+## 0.0 อัปเดตก่อนหน้า: Data Analytics & Spoke Accounts Breakdown & IAM Operational KPIs (/page.tsx, /applications) (10 ต.ค. 2026)
 ### รายละเอียดฟีเจอร์และการวิเคราะห์ข้อมูล (KPI & Roadmap):
 1. **การแจกแจงสัดส่วนบัญชีแต่ละระบบลูก (Spoke Account Breakdown):**
    - **Backend API (`GET /api/v1/applications`):** เชื่อมโยง `AppAccountMapping` เข้ากับ `MasterIdentity` เพื่อประมวลผลตัวเลขจริงแบบเรียลไทม์:
