@@ -51,6 +51,7 @@ export interface AppAccountSummary {
   last_app_login_at: string | null;
   created_at?: string | null;
   days_since_last_login?: number | null;
+  sso_enabled?: boolean;
   is_approved_exception?: boolean;
   exception_type?: string | null;
   exception_reason?: string | null;

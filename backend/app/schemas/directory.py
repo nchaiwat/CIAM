@@ -15,6 +15,7 @@ class AppAccountSummary(BaseModel):
     last_app_login_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     days_since_last_login: Optional[int] = None
+    sso_enabled: bool = False
     is_approved_exception: bool = False
     exception_type: Optional[str] = None
     exception_reason: Optional[str] = None

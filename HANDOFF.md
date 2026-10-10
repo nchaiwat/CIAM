@@ -9,7 +9,33 @@
 
 ---
 
-## 0. อัปเดตล่าสุด: แก้ไขปัญหา QOL Account ขึ้น AD Disable, Wimonpan.P/Ronnakorn.P ถูก Auto-Disable และถอด Rogue Autonomous Loop ออกถาวร (10 ต.ค. 2026)
+## 0. อัปเดตล่าสุด: ปรับปรุงหน้าแสดงทะเบียนผู้ใช้ (/directory), Header กะทัดรัด Sticky Freeze, และแดชบอร์ดกราฟวิเคราะห์ (/page.tsx) (10 ต.ค. 2026)
+### รายการปรับปรุงตามความต้องการของผู้ใช้ (9 ข้อ):
+1. **ช่องสถานะ AD (`/directory`):** เปลี่ยนจากป้ายตัวหนังสือ `Active`/`Inactive` เป็นจุดกลมคลีน:
+   - 🟢 **กลมสีเขียว (พัลส์เรืองแสง):** เมื่อเปิดใช้งานใน AD (`is_active_in_ad == true`)
+   - ⚪ **กลมสีเทา:** เมื่อปิดใช้งานใน AD หรือไม่มีบัญชีใน AD
+2. **สิทธิ์ระบบลูก (`/directory`):** แยกการแสดงผลชัดเจนระหว่างระบบที่ **รองรับ SSO (ป้ายฟ้า `SSO`)** กับระบบที่ **Non-SSO / Direct (ป้ายเทา `Direct`)**
+3. **คอลัมน์การจัดการ (`/directory`):** รวมทุกปุ่มกระจัดกระจาย (`ผูกกับ AD`, `อนุมัติยกเว้น`, `คืนสิทธิ์`, `ดูสิทธิ์`, `ระงับสิทธิ์`) ให้เหลือ **ปุ่มเดียว `[ จัดการสิทธิ์ ⚙️ ]`** โดยเมื่อกดจะเปิด Popup ที่มีเครื่องมือจัดการครบถ้วนทุกฟังก์ชัน
+4. **คำอธิบายเรื่องแผนก:** 
+   - Central IAM ยึดแผนกจาก Active Directory (`wa.net`) หรือตอนสร้างผู้ใช้ในระบบ CIAM (`MasterIdentity.department`) เป็น Single Source of Truth
+   - ระบบลูกที่ซิงก์กลับมาจะไม่สามารถเขียนทับแผนกของ Master Identity ได้หากมีอยู่แล้ว จึง **ไม่เกิด Conflict ข้ามระบบ**
+5. **ย่อ Header เล็กลง 50% และ Freeze ส่วนหัว:**
+   - ย่อแถบ Header หลักจาก `h-16` (64px) เหลือ `h-11` (44px)
+   - ย่อการ์ดสรุป KPI ด้านบนของหน้า `/directory` ลง 50%
+   - ตรึง Search/Filter Toolbar (`sticky top-11 z-20`) และหัวตาราง `<thead>` (`sticky top-0 z-10`) ให้อยู่กับที่เมื่อเลื่อน Scroll ข้อมูลลงมาด้านล่าง
+6. **คงค่าสถานะตัวกรอง (Sticky Filter Persistence):** จดจำค่าที่เลือก (`statusFilter`, `appFilter`, `ghostOnly`) ลงใน `localStorage` เข้ามาใหม่ค่าเดิมยังอยู่ครบ
+7. **ปุ่มออกจากระบบ:** ปรับเป็นไอคอนรูปประตู (`LogOut`) เพียงอย่างเดียว ไม่มีข้อความตัวหนังสือ
+8. **สถานะ AD Sync Agent บน Header:** แสดงปุ่มสถานะสีเขียว 🟢 `AD Sync Agent: ONLINE (2ms)` พร้อมตรวจจับ Latency อัตโนมัติทุก 30 วินาที
+9. **เปลี่ยนหน้าแรกเป็น Graphs & Analytics Dashboard (`/`):**
+   - **Donut Graph (SVG):** สัดส่วนระบบลูก SSO vs Non-SSO และเปอร์เซ็นต์ Adoption
+   - **Horizontal Bar Graph:** จำนวนและสัดส่วนบัญชีในแต่ละระบบลูก (Accounts per Spoke)
+   - **Security Architecture Matrix:** ข้อมูล Gateway 3100, OIDC PKCE และ Audit Trail
+   - ถอด Recent Activity Feed ด้านล่างออกเพื่อความสะอาดตาตามคำสั่ง
+- **ผลการทดสอบ:** Backend Pytest ผ่าน 43/43 (100%), Frontend TypeScript `tsc --noEmit` ผ่าน 0 errors (100%)
+
+---
+
+## 0.1 อัปเดตก่อนหน้า (10 ต.ค. 2026): แก้ไขปัญหา QOL Account ขึ้น AD Disable, Wimonpan.P/Ronnakorn.P ถูก Auto-Disable และถอด Rogue Autonomous Loop ออกถาวร
 ### ปัญหาที่พบและสาเหตุรากเหง้า (Root Cause Analysis):
 1. **บัญชีบน QOL (เช่น `Patcharakorn.T`, `Thidarat.S`, `Patsara.P`, `Worakit.K`, `Natthaset.S`, `Sompon.P`, `Punyanut.T`, `Supitchaya.P`) ที่เป็นบัญชีใน AD แต่แสดงสถานะ AD เป็น Inactive และติดป้าย "บัญชีผี" (Ghost Account):**
    - **สาเหตุ 1 (Sync Stale Absence Bug เดิม):** บัญชีเหล่านี้เคยถูกโค้ดซิงก์รอบ 04:00 น. เดิมตั้ง `is_active_in_ad = False` ค้างในฐานข้อมูล เมื่อ AD Sync ส่งข้อมูลมาไม่ครบ

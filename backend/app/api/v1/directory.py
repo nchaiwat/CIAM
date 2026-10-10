@@ -111,6 +111,7 @@ def _build_app_summaries(mappings: list, identity_is_active_in_ad: Optional[bool
                 last_app_login_at=m.last_app_login_at,
                 created_at=m_created,
                 days_since_last_login=days_login,
+                sso_enabled=bool(getattr(app, "sso_enabled", False)),
                 is_approved_exception=bool(getattr(m, "is_approved_exception", False)),
                 exception_type=getattr(m, "exception_type", None),
                 exception_reason=getattr(m, "exception_reason", None),

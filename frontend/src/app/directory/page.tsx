@@ -47,9 +47,46 @@ export default function DirectoryPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("active");
   const [appFilter, setAppFilter] = useState("");
-
   const [ghostOnly, setGhostOnly] = useState(false);
+  const [filtersReady, setFiltersReady] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
+
+  // Load persistent filter preferences from localStorage (Point 6)
+  useEffect(() => {
+    try {
+      const savedStatus = localStorage.getItem("ciam_dir_status");
+      if (savedStatus) setStatusFilter(savedStatus);
+      const savedApp = localStorage.getItem("ciam_dir_app");
+      if (savedApp !== null) setAppFilter(savedApp);
+      const savedGhost = localStorage.getItem("ciam_dir_ghost");
+      if (savedGhost !== null) setGhostOnly(savedGhost === "true");
+    } catch {}
+    setFiltersReady(true);
+  }, []);
+
+  const handleStatusFilterChange = (val: string) => {
+    setStatusFilter(val);
+    try {
+      localStorage.setItem("ciam_dir_status", val);
+    } catch {}
+  };
+
+  const handleAppFilterChange = (val: string) => {
+    setAppFilter(val);
+    try {
+      localStorage.setItem("ciam_dir_app", val);
+    } catch {}
+  };
+
+  const handleGhostToggle = () => {
+    setGhostOnly((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("ciam_dir_ghost", String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Role Management State
   const [selectedRole, setSelectedRole] = useState("PORTAL_USER");
@@ -187,9 +224,10 @@ export default function DirectoryPage() {
   }, []);
 
   useEffect(() => {
+    if (!filtersReady) return;
     setCurrentPage(1);
     fetchUsers();
-  }, [statusFilter, appFilter, ghostOnly]);
+  }, [filtersReady, statusFilter, appFilter, ghostOnly]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -661,99 +699,107 @@ export default function DirectoryPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b-2 border-slate-300">
+      {/* Header (Point 5: Compact ~50% vertical height) */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2.5 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">
               ทะเบียนผู้ใช้และสิทธิ์ระบบ
             </h1>
-            <span className="px-2.5 py-0.5 text-xs font-bold bg-blue-100 text-blue-900 border border-blue-300 rounded-full shadow-2xs">
-              {users.length} บัญชีในระบบ
+            <span className="px-2 py-0.5 text-[11px] font-bold bg-blue-100 text-blue-900 border border-blue-300 rounded-full shadow-2xs">
+              {users.length} บัญชี
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
-            ข้อมูลตัวตนพนักงานใน Active Directory, สิทธิ์ระบบลูก (Spokes), และการกำหนดสิทธิ์ Power User ใน CIAM
+          <p className="text-[11px] text-slate-500 font-medium">
+            ข้อมูลตัวตนพนักงานใน Active Directory, สิทธิ์ระบบลูก (Spokes), และ Power User ใน CIAM
           </p>
         </div>
 
         <div className="flex items-center space-x-2">
           <button
             onClick={handleOpenCreateModal}
-            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold transition-colors shadow-sm cursor-pointer"
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-xs cursor-pointer"
           >
-            <UserPlus className="w-4 h-4" />
-            <span>+ เพิ่มผู้ใช้ใหม่</span>
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>+ เพิ่มผู้ใช้</span>
           </button>
 
           <Link
             href="/offboarding"
-            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold transition-colors shadow-sm"
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors shadow-xs"
           >
-            <UserX className="w-4 h-4" />
+            <UserX className="w-3.5 h-3.5" />
             <span>ศูนย์ระงับสิทธิ์</span>
           </Link>
         </div>
       </div>
 
-      {/* KPI Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-white p-4 rounded-lg border-2 border-slate-300 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">ผู้ใช้ทั้งหมด</span>
-          <div className="text-2xl font-black text-slate-900 mt-1">{totalUsers}</div>
-          <span className="text-[11px] text-slate-500 font-medium">ครอบคลุมทั้ง AD และระบบลูก</span>
+      {/* KPI Summary Cards (Point 5: Compact ~50% vertical height) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">ผู้ใช้ทั้งหมด</span>
+            <span className="text-base font-black text-slate-900">{totalUsers}</span>
+          </div>
+          <span className="text-[10px] text-slate-400 font-medium truncate block">ทั้ง AD และระบบลูก</span>
         </div>
 
-        <div className="bg-white p-4 rounded-lg border-2 border-slate-300 shadow-xs">
-          <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">Active ใน AD</span>
-          <div className="text-2xl font-black text-emerald-700 mt-1">{activeAdCount}</div>
-          <span className="text-[11px] text-slate-500 font-medium">เปิดใช้งานใน Active Directory</span>
+        <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Active ใน AD</span>
+            <span className="text-base font-black text-emerald-700">{activeAdCount}</span>
+          </div>
+          <span className="text-[10px] text-slate-400 font-medium truncate block">เปิดใช้งานใน AD</span>
         </div>
 
         <div
-          onClick={() => setGhostOnly(!ghostOnly)}
-          className={`p-4 rounded-lg border-2 cursor-pointer transition-colors shadow-xs ${
+          onClick={handleGhostToggle}
+          className={`px-3 py-2 rounded-lg border cursor-pointer transition-colors shadow-2xs ${
             ghostOnly
-              ? "bg-amber-100 border-amber-500"
-              : "bg-white border-slate-300 hover:border-amber-400"
+              ? "bg-amber-100 border-amber-400"
+              : "bg-white border-slate-200 hover:border-amber-300"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider block">บัญชีผี / ตกค้าง</span>
-            {ghostOnly && <span className="text-[10px] font-black bg-amber-400 text-amber-950 px-1.5 py-0.2 rounded">กรองอยู่</span>}
+            <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider">บัญชีผี / ตกค้าง</span>
+            <span className="text-base font-black text-amber-700">{ghostCount}</span>
           </div>
-          <div className="text-2xl font-black text-amber-700 mt-1">{ghostCount}</div>
-          <span className="text-[11px] text-slate-500 font-medium">คลิกเพื่อกรองเฉพาะรายการตกค้าง</span>
+          <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+            <span>{ghostOnly ? "กำลังกรองอยู่" : "คลิกเพื่อกรอง"}</span>
+            {ghostOnly && <span className="text-[9px] font-black bg-amber-400 text-amber-950 px-1 rounded">ON</span>}
+          </div>
         </div>
 
-        <div className="bg-white p-4 rounded-lg border-2 border-slate-300 shadow-xs">
-          <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider block">Power User & Admin</span>
-          <div className="text-2xl font-black text-blue-700 mt-1">{powerUserCount}</div>
-          <span className="text-[11px] text-slate-500 font-medium">มีสิทธิ์จัดการข้อมูลใน CIAM</span>
+        <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider">Power User / Admin</span>
+            <span className="text-base font-black text-blue-700">{powerUserCount}</span>
+          </div>
+          <span className="text-[10px] text-slate-400 font-medium truncate block">สิทธิ์ใน CIAM</span>
         </div>
       </div>
 
-      {/* Search & Filters Toolbar */}
-      <div className="bg-white p-4 rounded-lg border-2 border-slate-300 shadow-xs">
-        <form onSubmit={handleSearchSubmit} className="flex flex-col md:flex-row items-center gap-3">
+      {/* Search & Filters Toolbar (Point 5 & 6: Sticky Freeze on Scroll + Persistent filter) */}
+      <div className="sticky top-11 z-20 bg-white/95 backdrop-blur-xs p-2.5 rounded-lg border border-slate-300 shadow-xs">
+        <form onSubmit={handleSearchSubmit} className="flex flex-col md:flex-row items-center gap-2">
           {/* Search Input */}
           <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="ค้นหาด้วย รหัสพนักงาน, ชื่อ, Username หรือ แผนก..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-3.5 py-2 bg-white border-2 border-slate-300 rounded-md text-xs sm:text-sm text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-100"
             />
           </div>
 
           {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-600"
+              onChange={(e) => handleStatusFilterChange(e.target.value)}
+              className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-600"
             >
               <option value="active">🟢 เฉพาะที่ยังใช้งานอยู่ (Active)</option>
               <option value="terminated">⚪ ปิดใช้งานทั้งหมดแล้ว (Terminated)</option>
@@ -764,8 +810,8 @@ export default function DirectoryPage() {
 
             <select
               value={appFilter}
-              onChange={(e) => setAppFilter(e.target.value)}
-              className="px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-600"
+              onChange={(e) => handleAppFilterChange(e.target.value)}
+              className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-600"
             >
               <option value="">ทุกระบบลูก</option>
               {apps.map((app) => (
@@ -777,20 +823,20 @@ export default function DirectoryPage() {
 
             <button
               type="button"
-              onClick={() => setGhostOnly(!ghostOnly)}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-md text-xs font-bold transition-all border-2 cursor-pointer ${
+              onClick={handleGhostToggle}
+              className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-md text-xs font-bold transition-all border cursor-pointer ${
                 ghostOnly
                   ? "bg-amber-400 text-amber-950 border-amber-500 shadow-2xs"
                   : "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200"
               }`}
             >
-              <AlertTriangle className={`w-4 h-4 ${ghostOnly ? "text-amber-950" : "text-slate-500"}`} />
+              <AlertTriangle className={`w-3.5 h-3.5 ${ghostOnly ? "text-amber-950" : "text-slate-500"}`} />
               <span>เฉพาะบัญชีตกค้าง</span>
             </button>
 
             <button
               type="submit"
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-bold transition-colors shadow-xs cursor-pointer"
+              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-bold transition-colors shadow-xs cursor-pointer"
             >
               ค้นหา
             </button>
@@ -799,17 +845,18 @@ export default function DirectoryPage() {
       </div>
 
       {/* Directory Table */}
-      <div className="bg-white rounded-lg border-2 border-slate-300 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs sm:text-sm text-slate-800">
-            <thead className="bg-slate-100 border-b-2 border-slate-300 text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+      <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto max-h-[calc(100vh-210px)]">
+          <table className="w-full text-left text-xs text-slate-800">
+            {/* Table Header (Point 5: Sticky Header freeze) */}
+            <thead className="sticky top-0 z-10 bg-slate-100 border-b-2 border-slate-300 text-xs font-extrabold text-slate-800 uppercase tracking-wider shadow-2xs">
               <tr>
-                <th className="py-3 px-4">พนักงาน / บัญชีผู้ใช้</th>
-                <th className="py-3 px-4">แผนก</th>
-                <th className="py-3 px-4">สถานะ AD</th>
-                <th className="py-3 px-4">สิทธิ์ระบบลูก (Spokes)</th>
-                <th className="py-3 px-4">การเข้าใช้งาน</th>
-                <th className="py-3 px-4 text-right">การจัดการ</th>
+                <th className="py-2.5 px-4">พนักงาน / บัญชีผู้ใช้</th>
+                <th className="py-2.5 px-4">แผนก</th>
+                <th className="py-2.5 px-3 text-center w-24">สถานะ AD</th>
+                <th className="py-2.5 px-4">สิทธิ์ระบบลูก (Spokes)</th>
+                <th className="py-2.5 px-4">การเข้าใช้งาน</th>
+                <th className="py-2.5 px-4 text-right w-28">การจัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -834,13 +881,13 @@ export default function DirectoryPage() {
                     }`}
                   >
                     {/* Identity Details */}
-                    <td className="py-3 px-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-9 h-9 rounded-full bg-blue-100 border border-blue-300 flex items-center justify-center font-bold text-sm text-blue-800 shrink-0">
+                    <td className="py-2.5 px-4">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 border border-blue-300 flex items-center justify-center font-bold text-xs text-blue-800 shrink-0">
                           {user.full_name.charAt(0)}
                         </div>
                         <div>
-                          <div className="font-bold text-slate-900 flex items-center space-x-2">
+                          <div className="font-bold text-slate-900 flex items-center space-x-1.5">
                             <span>{user.full_name}</span>
                             {renderRoleBadge(user.username)}
                             {user.is_ad_account === false && (
@@ -864,8 +911,8 @@ export default function DirectoryPage() {
                               </span>
                             ) : null}
                           </div>
-                          <div className="text-xs text-slate-600 font-medium flex items-center space-x-1.5 mt-0.5">
-                            <span className="font-mono text-blue-700 font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                          <div className="text-[11px] text-slate-600 font-medium flex items-center space-x-1.5 mt-0.5">
+                            <span className="font-mono text-blue-700 font-bold bg-blue-50 px-1 py-0.2 rounded border border-blue-200">
                               {user.username}
                             </span>
                             <span>•</span>
@@ -876,95 +923,135 @@ export default function DirectoryPage() {
                     </td>
 
                     {/* Department */}
-                    <td className="py-3 px-4 text-xs font-semibold text-slate-700">
+                    <td className="py-2.5 px-4 text-xs font-semibold text-slate-700">
                       <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-800 text-xs">
                         {user.department || "ทั่วไป"}
                       </span>
                     </td>
 
-                    {/* AD Status */}
-                    <td className="py-3 px-4">
-                      {user.is_approved_exception && user.exception_type === "LOCAL_ACCOUNT" ? (
-                        <span
-                          className="bg-emerald-100 text-emerald-950 border border-emerald-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5"
-                          title="บัญชี Local Portal (เปิดใช้งานรหัสผ่านกลางแล้ว)"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                          <span>Local Portal</span>
-                        </span>
-                      ) : user.is_ad_account === false ? (
-                        <span
-                          className="bg-slate-100 text-slate-700 border border-slate-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5"
-                          title="Local Account (ไม่มีบัญชีใน Active Directory)"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                          <span>Local Acc</span>
-                        </span>
-                      ) : user.is_active_in_ad ? (
-                        <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                          <span>Active</span>
-                        </span>
-                      ) : (
-                        <span className="bg-rose-100 text-rose-900 border border-rose-300 px-2 py-0.5 rounded text-xs font-bold inline-flex items-center space-x-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
-                          <span>Inactive</span>
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Connected Apps Badges */}
-                    <td className="py-3 px-4">
-                      <div className="flex flex-wrap gap-1">
-                        {user.connected_apps.length === 0 ? (
-                          <span className="text-xs text-slate-400 font-medium">-</span>
+                    {/* AD Status (Point 1: Green circle if active in AD, Gray circle if inactive) */}
+                    <td className="py-2.5 px-3 text-center">
+                      <div className="flex items-center justify-center">
+                        {user.is_active_in_ad ? (
+                          <span
+                            className="inline-flex items-center justify-center"
+                            title="Active: บัญชีเปิดใช้งานปกติใน Active Directory"
+                          >
+                            <span className="relative flex h-3.5 w-3.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40"></span>
+                              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 shadow-2xs border border-white ring-2 ring-emerald-200"></span>
+                            </span>
+                          </span>
                         ) : (
-                          [...user.connected_apps]
-                            .sort((a, b) => a.app_code.localeCompare(b.app_code))
-                            .map((app) => {
-                              const isEffectiveActive =
-                                app.app_code.toLowerCase() === "ad"
-                                  ? (user.is_active_in_ad ?? app.is_active_in_app)
-                                  : app.is_active_in_app;
-
-                              return (
-                                <div
-                                  key={`${app.application_id}-${app.app_username}`}
-                                  title={
-                                    app.is_approved_exception
-                                      ? `ข้อยกเว้น: ${app.exception_type} (${app.exception_reason})`
-                                      : undefined
-                                  }
-                                  className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center space-x-1 border ${
-                                    app.is_approved_exception
-                                      ? "bg-purple-100 text-purple-950 border-purple-300"
-                                      : !user.is_active_in_ad && isEffectiveActive && app.app_code.toLowerCase() !== "ad"
-                                      ? "bg-amber-200 text-amber-950 border-amber-400"
-                                      : isEffectiveActive
-                                      ? "bg-slate-100 text-slate-800 border-slate-300"
-                                      : "bg-slate-50 text-slate-400 border-slate-200 line-through"
-                                  }`}
-                                >
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full ${
-                                      app.is_approved_exception
-                                        ? "bg-purple-600"
-                                        : isEffectiveActive
-                                        ? "bg-emerald-600"
-                                        : "bg-rose-600"
-                                    }`}
-                                  ></span>
-                                  <span className="uppercase">{app.app_code}</span>
-                                  {app.is_approved_exception && <span className="text-[9px]">🛡️</span>}
-                                </div>
-                              );
-                            })
+                          <span
+                            className="inline-flex items-center justify-center"
+                            title={
+                              user.is_ad_account === false
+                                ? "Local Account: ไม่มีบัญชีใน Active Directory"
+                                : "Inactive: บัญชีถูกปิดใช้งานใน Active Directory"
+                            }
+                          >
+                            <span className="inline-flex rounded-full h-3.5 w-3.5 bg-slate-300 shadow-2xs border border-white ring-2 ring-slate-200"></span>
+                          </span>
                         )}
                       </div>
                     </td>
 
+                    {/* Connected Apps Badges (Point 2: Separate SSO vs Non-SSO spokes) */}
+                    <td className="py-2.5 px-4">
+                      {user.connected_apps.length === 0 ? (
+                        <span className="text-xs text-slate-400 font-medium">-</span>
+                      ) : (() => {
+                        const ssoList = user.connected_apps.filter(
+                          (ca) =>
+                            (ca.sso_enabled ??
+                              apps.find(
+                                (a) =>
+                                  a.id === ca.application_id ||
+                                  a.app_code.toLowerCase() === ca.app_code.toLowerCase()
+                              )?.sso_enabled) === true
+                        );
+                        const nonSsoList = user.connected_apps.filter(
+                          (ca) =>
+                            (ca.sso_enabled ??
+                              apps.find(
+                                (a) =>
+                                  a.id === ca.application_id ||
+                                  a.app_code.toLowerCase() === ca.app_code.toLowerCase()
+                              )?.sso_enabled) !== true
+                        );
+
+                        const renderAppBadge = (app: typeof user.connected_apps[0], isSsoGroup: boolean) => {
+                          const isEffectiveActive =
+                            app.app_code.toLowerCase() === "ad"
+                              ? (user.is_active_in_ad ?? app.is_active_in_app)
+                              : app.is_active_in_app;
+
+                          return (
+                            <span
+                              key={`${app.application_id}-${app.app_username}`}
+                              title={
+                                app.is_approved_exception
+                                  ? `ข้อยกเว้น: ${app.exception_type} (${app.exception_reason})`
+                                  : `${app.app_name} (${isSsoGroup ? "รองรับ SSO" : "Non-SSO / Direct"}): ${
+                                      isEffectiveActive ? "Active" : "Inactive"
+                                    }`
+                              }
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold inline-flex items-center space-x-1 border shadow-2xs ${
+                                app.is_approved_exception
+                                  ? "bg-purple-50 text-purple-900 border-purple-200"
+                                  : !user.is_active_in_ad && isEffectiveActive && app.app_code.toLowerCase() !== "ad"
+                                  ? "bg-amber-100 text-amber-950 border-amber-300"
+                                  : isSsoGroup
+                                  ? isEffectiveActive
+                                    ? "bg-sky-50 text-sky-900 border-sky-300"
+                                    : "bg-slate-50 text-slate-400 border-slate-200 line-through"
+                                  : isEffectiveActive
+                                  ? "bg-slate-100 text-slate-800 border-slate-300"
+                                  : "bg-slate-50 text-slate-400 border-slate-200 line-through"
+                              }`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  app.is_approved_exception
+                                    ? "bg-purple-600"
+                                    : isEffectiveActive
+                                    ? isSsoGroup
+                                      ? "bg-sky-500"
+                                      : "bg-emerald-600"
+                                    : "bg-rose-500"
+                                }`}
+                              ></span>
+                              <span className="uppercase">{app.app_code}</span>
+                            </span>
+                          );
+                        };
+
+                        return (
+                          <div className="flex flex-col gap-1">
+                            {ssoList.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="text-[9px] font-black tracking-wider uppercase text-sky-700 bg-sky-100 px-1 py-0.2 rounded border border-sky-200 shrink-0">
+                                  SSO
+                                </span>
+                                {ssoList.map((app) => renderAppBadge(app, true))}
+                              </div>
+                            )}
+                            {nonSsoList.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="text-[9px] font-black tracking-wider uppercase text-slate-600 bg-slate-100 px-1 py-0.2 rounded border border-slate-200 shrink-0">
+                                  Direct
+                                </span>
+                                {nonSsoList.map((app) => renderAppBadge(app, false))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </td>
+
                     {/* Activity */}
-                    <td className="py-3 px-4 text-xs">
+                    <td className="py-2.5 px-4 text-xs">
                       <div>
                         {user.days_since_last_access !== null && user.days_since_last_access !== undefined ? (
                           user.days_since_last_access === 0 ? (
@@ -978,62 +1065,16 @@ export default function DirectoryPage() {
                       </div>
                     </td>
 
-                    {/* Actions */}
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end space-x-1.5">
-                        {/* Quick link to AD button for spoke-only or discrepancy */}
-                        {(user.is_ad_account === false || user.has_discrepancy) && (
-                          <button
-                            onClick={() => handleOpenLinkModalForUser(user)}
-                            title="ผูกบัญชี Local Acc นี้เข้ากับตัวตนหลักใน AD (เช่น สะกดชื่อต่างกัน)"
-                            className="px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 text-xs font-bold transition-colors cursor-pointer flex items-center space-x-1"
-                          >
-                            <LinkIcon className="w-3 h-3" />
-                            <span>ผูกกับ AD</span>
-                          </button>
-                        )}
-
-                        {user.is_approved_exception ? (
-                          <button
-                            onClick={() => handleRevokeException(user)}
-                            title="ยกเลิกข้อยกเว้น"
-                            className="px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            ยกเลิกยกเว้น
-                          </button>
-                        ) : (user.is_ad_account === false || user.has_discrepancy) ? (
-                          <button
-                            onClick={() => handleOpenExceptionModalForUser(user)}
-                            title="อนุมัติเป็นข้อยกเว้น (ไม่นับเป็นบัญชีผี)"
-                            className="px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            อนุมัติยกเว้น
-                          </button>
-                        ) : null}
-
-                        {(!user.is_active_in_ad || user.connected_apps.some((a) => !a.is_active_in_app)) && (
-                          <button
-                            onClick={() => handleOpenActivateModal(user)}
-                            title="เปิดใช้งานสิทธิ์คืน"
-                            className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            คืนสิทธิ์
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setSelectedUser(user)}
-                          className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 text-xs font-bold transition-colors cursor-pointer"
-                        >
-                          ดูสิทธิ์ & ตั้งค่า
-                        </button>
-                        <Link
-                          href={`/offboarding?username=${user.username}`}
-                          className="px-2 py-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 text-xs font-bold transition-colors"
-                          title="ไปที่หน้าศูนย์ระงับสิทธิ์"
-                        >
-                          ระงับสิทธิ์
-                        </Link>
-                      </div>
+                    {/* Actions (Point 3: Single unified button opening popup with all controls) */}
+                    <td className="py-2.5 px-4 text-right">
+                      <button
+                        onClick={() => setSelectedUser(user)}
+                        className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 border border-blue-200 hover:border-blue-300 text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer"
+                        title="คลิกเพื่อจัดการสิทธิ์, ผูก AD, อนุมัติข้อยกเว้น, คืนสิทธิ์ หรือระงับสิทธิ์"
+                      >
+                        <span>จัดการสิทธิ์</span>
+                        <span className="text-xs">⚙️</span>
+                      </button>
                     </td>
                   </tr>
                 ))
