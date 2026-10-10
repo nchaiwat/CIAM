@@ -9,7 +9,32 @@
 
 ---
 
-## 0. อัปเดตล่าสุด: ปรับปรุงหน้าแสดงทะเบียนผู้ใช้ (/directory), Header กะทัดรัด Sticky Freeze, และแดชบอร์ดกราฟวิเคราะห์ (/page.tsx) (10 ต.ค. 2026)
+## 0.0 อัปเดตล่าสุด: Data Analytics & Spoke Accounts Breakdown & IAM Operational KPIs (/page.tsx, /applications) (10 ต.ค. 2026)
+### รายละเอียดฟีเจอร์และการวิเคราะห์ข้อมูล (KPI & Roadmap):
+1. **การแจกแจงสัดส่วนบัญชีแต่ละระบบลูก (Spoke Account Breakdown):**
+   - **Backend API (`GET /api/v1/applications`):** เชื่อมโยง `AppAccountMapping` เข้ากับ `MasterIdentity` เพื่อประมวลผลตัวเลขจริงแบบเรียลไทม์:
+     - `active_accounts_count`: บัญชีที่มีสิทธิ์ใช้งานจริงในแอป
+     - `inactive_accounts_count`: บัญชีที่ถูกระงับสิทธิ์ (Disabled/Suspended)
+     - `synced_ad_accounts_count`: บัญชีที่ผูกกับตัวตน AD องค์กรและสถานะ In-Sync
+     - `unsynced_ad_accounts_count`: บัญชีที่สถานะไม่สอดคล้องกับ AD (รอ Reconcile)
+     - `local_accounts_count`: บัญชี Local/Service Account เฉพาะระบบ ที่ไม่มีตัวตน AD
+   - **Frontend UI (`/page.tsx`):** เพิ่มโหมดสลับมุมมอง 3 มิติ:
+     - 🔵 **มิติ AD Sync & Local:** แสดงสัดส่วนแถบ 3 สี (น้ำเงิน = AD Synced, ส้ม = Pending Sync, เทาเข้ม = Local Account)
+     - 🟢 **มิติ Active / Inactive:** แสดงสัดส่วนแถบ 2 สี (เขียว = Active, เทา = Inactive/Suspended)
+     - 📋 **ตาราง Matrix:** ตารางเปรียบเทียบทุกมิติพร้อมป้ายสถานะ Badge และ Action Link เข้าสู่การจัดการ
+2. **IAM Data Analytics & Operational KPIs:**
+   - **AD Coverage Ratio (อัตราการผูก AD):** วัดการกำจัด Silo บัญชีแบบดั้งเดิม
+   - **Deprovision Backlog (สัดส่วนบัญชี Inactive ค้าง):** ตรวจจับบัญชีที่พ้นสภาพแต่ยังไม่ถูก Revoke ออกจากระบบลูก
+   - **SSO Adoption Rate:** สัดส่วนระบบลูกที่รองรับ Centralized SSO
+3. **IAM Strategic Improvement Roadmap (จุดที่จะนำไปพัฒนา ปรับปรุงต่อ):**
+   - 🛡️ **Shadow Account Elimination:** แผนลดบัญชี Local บน SAP B1 และ Spoke ต่างๆ
+   - ⚡ **Inactive Deprovision Backlog:** แผนล้างบัญชี Inactive ค้างท่อเพื่อลดค่าใช้จ่าย License
+   - 🚀 **SSO Modernization Roadmap:** ยกระดับ QMS และระบบ Direct Connector สู่ OIDC SSO Standard
+- **ผลการทดสอบ:** Backend Pytest ผ่าน 43/43 (100%), Frontend TypeScript `tsc --noEmit` ผ่าน 0 errors (100%)
+
+---
+
+## 0.1 อัปเดตก่อนหน้า: ปรับปรุงหน้าแสดงทะเบียนผู้ใช้ (/directory), Header กะทัดรัด Sticky Freeze, และแดชบอร์ดกราฟวิเคราะห์ (/page.tsx) (10 ต.ค. 2026)
 ### รายการปรับปรุงตามความต้องการของผู้ใช้ (9 ข้อ):
 1. **ช่องสถานะ AD (`/directory`):** เปลี่ยนจากป้ายตัวหนังสือ `Active`/`Inactive` เป็นจุดกลมคลีน:
    - 🟢 **กลมสีเขียว (พัลส์เรืองแสง):** เมื่อเปิดใช้งานใน AD (`is_active_in_ad == true`)

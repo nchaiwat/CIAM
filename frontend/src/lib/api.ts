@@ -185,6 +185,11 @@ export interface ConnectedApp {
   last_health_check_at: string | null;
   last_sync_at: string | null;
   total_linked_accounts: number;
+  active_accounts_count?: number;
+  inactive_accounts_count?: number;
+  synced_ad_accounts_count?: number;
+  unsynced_ad_accounts_count?: number;
+  local_accounts_count?: number;
   client_id?: string | null;
   redirect_uris?: string | null;
   portal_launch_url?: string | null;

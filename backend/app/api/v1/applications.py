@@ -36,16 +36,85 @@ def list_applications(
     current_admin: AdminUser = Depends(get_current_admin)
 ):
     """List all registered child applications (REST and RPA)."""
+    from app.models.identity import MasterIdentity
+    from collections import defaultdict
+
     apps = db.query(ConnectedApplication).order_by(ConnectedApplication.id.asc()).all()
-    from sqlalchemy import func
-    counts = dict(
-        db.query(AppAccountMapping.application_id, func.count(AppAccountMapping.id))
-        .group_by(AppAccountMapping.application_id)
+
+    # Fetch mapping data joined with MasterIdentity for exact breakdown calculation
+    mapping_rows = (
+        db.query(
+            AppAccountMapping.application_id,
+            AppAccountMapping.is_active_in_app,
+            AppAccountMapping.last_sync_status,
+            AppAccountMapping.is_approved_exception,
+            AppAccountMapping.exception_type,
+            MasterIdentity.is_active_in_ad,
+            MasterIdentity.ad_guid,
+            MasterIdentity.employee_id,
+            MasterIdentity.department,
+            MasterIdentity.email,
+            MasterIdentity.username,
+        )
+        .join(MasterIdentity, AppAccountMapping.identity_id == MasterIdentity.id)
         .all()
     )
+
+    stats = defaultdict(lambda: {
+        "total": 0,
+        "active": 0,
+        "inactive": 0,
+        "synced_ad": 0,
+        "unsynced_ad": 0,
+        "local": 0,
+    })
+
+    for row in mapping_rows:
+        app_id = row.application_id
+        is_active = row.is_active_in_app
+        sync_status = row.last_sync_status
+        is_exc = row.is_approved_exception
+        exc_type = row.exception_type
+        ad_active = row.is_active_in_ad
+        ad_guid = row.ad_guid
+        emp_id = row.employee_id
+        email = (row.email or "").lower()
+
+        s = stats[app_id]
+        s["total"] += 1
+        if is_active:
+            s["active"] += 1
+        else:
+            s["inactive"] += 1
+
+        is_corp_ad = bool(ad_guid or emp_id or "@windowasia.com" in email or row.department)
+        is_local = (is_exc and exc_type == "LOCAL_ACCOUNT") or not is_corp_ad
+
+        if is_local:
+            s["local"] += 1
+        elif sync_status == "IN_SYNC" and (is_active == ad_active):
+            s["synced_ad"] += 1
+        else:
+            s["unsynced_ad"] += 1
+
     results = []
     for app in apps:
-        total_accounts = counts.get(app.id, 0)
+        s = stats[app.id]
+        # For the primary Active Directory gateway app itself
+        if app.app_code.lower() == "ad":
+            # In AD spoke, active status is strictly MasterIdentity's is_active_in_ad
+            ad_act = sum(1 for r in mapping_rows if r.application_id == app.id and r.is_active_in_ad)
+            ad_inact = s["total"] - ad_act
+            act_count = ad_act
+            inact_count = ad_inact
+            synced_count = s["total"] - s["local"]
+            unsynced_count = 0
+        else:
+            act_count = s["active"]
+            inact_count = s["inactive"]
+            synced_count = s["synced_ad"]
+            unsynced_count = s["unsynced_ad"]
+
         app_out = AppOut(
             id=app.id,
             app_code=app.app_code,
@@ -68,7 +137,12 @@ def list_applications(
             network_policy=getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
             vpn_restriction_mode=getattr(app, "vpn_restriction_mode", "HIDE") or "HIDE",
             allowed_network_cidrs=getattr(app, "allowed_network_cidrs", None),
-            total_linked_accounts=total_accounts,
+            total_linked_accounts=s["total"],
+            active_accounts_count=act_count,
+            inactive_accounts_count=inact_count,
+            synced_ad_accounts_count=synced_count,
+            unsynced_ad_accounts_count=unsynced_count,
+            local_accounts_count=s["local"],
             created_at=app.created_at
         )
         results.append(app_out)

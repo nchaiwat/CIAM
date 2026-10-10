@@ -55,6 +55,11 @@ class AppOut(BaseModel):
     last_health_check_at: Optional[datetime] = None
     last_sync_at: Optional[datetime] = None
     total_linked_accounts: int = 0
+    active_accounts_count: int = 0
+    inactive_accounts_count: int = 0
+    synced_ad_accounts_count: int = 0
+    unsynced_ad_accounts_count: int = 0
+    local_accounts_count: int = 0
     client_id: Optional[str] = None
     redirect_uris: Optional[str] = None
     portal_launch_url: Optional[str] = None
