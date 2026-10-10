@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 9 ตุลาคม 2026 (Local Time: ~09:00 ICT)  
+> **Date Updated:** 10 ตุลาคม 2026 (Local Time: ~09:30 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -9,7 +9,30 @@
 
 ---
 
-## 0. อัปเดตล่าสุด: แก้ไขปัญหา AD Inactive, Ghost Account False Positives และ Pinyada.S (9 ต.ค. 2026)
+## 0. อัปเดตล่าสุด: แก้ไขปัญหา QOL Account ขึ้น AD Disable, Wimonpan.P/Ronnakorn.P ถูก Auto-Disable และถอด Rogue Autonomous Loop ออกถาวร (10 ต.ค. 2026)
+### ปัญหาที่พบและสาเหตุรากเหง้า (Root Cause Analysis):
+1. **บัญชีบน QOL (เช่น `Patcharakorn.T`, `Thidarat.S`, `Patsara.P`, `Worakit.K`, `Natthaset.S`, `Sompon.P`, `Punyanut.T`, `Supitchaya.P`) ที่เป็นบัญชีใน AD แต่แสดงสถานะ AD เป็น Inactive และติดป้าย "บัญชีผี" (Ghost Account):**
+   - **สาเหตุ 1 (Sync Stale Absence Bug เดิม):** บัญชีเหล่านี้เคยถูกโค้ดซิงก์รอบ 04:00 น. เดิมตั้ง `is_active_in_ad = False` ค้างในฐานข้อมูล เมื่อ AD Sync ส่งข้อมูลมาไม่ครบ
+   - **สาเหตุ 2 (Auto-Heal บังคับ Email):** ใน `initial_data.py` ฟังก์ชัน Auto-Heal เดิมมีเงื่อนไข `(has_corp_dept and has_corp_email)` ซึ่งบังคับว่าต้องมี email `@windowasia.com` แต่ผู้ใช้จาก QOL ที่ซิงก์เข้ามานั้นมี email เป็น `None` (แสดงผล `N/A`) ทำให้ระบบ Auto-Heal ข้ามพนักงานกลุ่ม Sale/Sale Admin ไปทั้งหมด
+2. **บัญชี `Wimonpan.P` และ `Ronnakorn.P` อยู่ดีๆ CIAM สั่ง Disable ทั้ง AD และ MTPulse ไปเอง:**
+   - **สาเหตุ (Rogue Auto-Disable Feedback Loop ใน `agent.py`):** ใน `agent.py` (Mode C Reverse Heartbeat) มีบล็อกโค้ดที่ตรวจสอบว่า หาก `ident and not ident.is_active_in_ad` ให้ CIAM **สร้างคำสั่ง `DISABLE_USER` ส่งกลับไปให้ MTPulse อัตโนมัติทันที** โดยที่ไม่มี Admin สั่งการใดๆ! เมื่อ MTPulse ได้รับคำสั่งจึงสั่งระงับสิทธิ์ในเครื่องตนเอง แล้วรายงานกลับมาเป็น Inactive เกิดลูกโซ่ทำลายล้างอัตโนมัติ
+
+### การแก้ไขและปรับปรุงถาวร:
+1. **ถอด Rogue Auto-Disable Loop ใน `agent.py` ออก 100%:**
+   - การส่งคำสั่ง `DISABLE_USER` ไปยังระบบลูกจะเกิดขึ้นได้ **เฉพาะเมื่อ Admin สั่ง 1-Click Offboard หรือสั่งระงับสิทธิ์เฉพาะระบบผ่านหน้าจอเท่านั้น** (ผ่านคิว `spoke_pending_commands`) ยกเลิกการแอบสร้างคำสั่ง Disable อัตโนมัติใน Heartbeat
+   - เมื่อ Agent ส่งบัญชีใหม่เข้ามา ให้ตรวจจับความเป็น Corporate Identity จากทั้ง Email, Format พนักงาน (`Firstname.L`) และแผนกองค์กร โดยตั้ง `is_active_in_ad = True` อัตโนมัติ
+2. **ปรับปรุง Auto-Heal ใน `initial_data.py` ครอบคลุม 100%:**
+   - คลายเงื่อนไข Auto-Heal: หากมีแผนกองค์กร (Sale, Sale Admin, IT, PU, ฯลฯ) หรือ Username format `Firstname.L` หรือมีบัญชีในระบบงานลูก (QOL, IRM, M365, SAP B1) ระบบจะกู้คืนเป็น `is_active_in_ad = True` ทันทีโดยไม่ต้องมี Email
+   - เติม Email อัตโนมัติ `username@windowasia.com` ให้กับตัวตนที่ Email ว่าง เพื่อตัดปัญหา `N/A`
+   - เพิ่มการแมป AD ให้กับ `Wimonpan.P` และ `Ronnakorn.P` พร้อมส่งคำสั่ง `ENABLE_USER` ไปยัง MTPulse เพื่อปลดล็อกคืนสิทธิ์ทันที
+3. **ปรับปรุง `applications.py`, `scheduler.py`, และ `reconciliation.py`:**
+   - ตัวกรอง Discrepancy (บัญชีผี) ตรวจสอบเฉพาะบัญชี AD องค์กรจริง และไม่สร้าง Discrepancy มั่วซั่วกับบัญชีที่ไม่มี Email
+   - เมื่อ QOL หรือ Spoke ซิงก์รายชื่อเข้ามา จะสร้าง MasterIdentity เริ่มต้นด้วย `is_active_in_ad = True` เสมอ
+4. **ผลการทดสอบ:** Backend Pytest ผ่าน 43/43 (100%), Frontend tsc 0 errors (100%)
+
+---
+
+## 0.1 อัปเดตก่อนหน้า (9 ต.ค. 2026): แก้ไขปัญหา AD Inactive, Ghost Account False Positives และ Pinyada.S
 ### ปัญหาที่พบและสาเหตุ:
 1. **บัญชี `Patcha.S`, `Apichai.P`, `Praewwalee.K`, `pinyada.r`, `Ronnakorn.P`, `Wimonpan.P` ขึ้น AD Inactive / บัญชีผี (Ghost Account):**
    - สาเหตุ 1: ใน `agent.py` เมื่อ MTPulse ยิง heartbeat ส่งรายชื่อผู้ใช้ โค้ดสร้าง MasterIdentity โดยตั้งค่า `is_active_in_ad = False` ส่งผลให้กลายเป็น Inactive ใน AD ทันที

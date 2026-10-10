@@ -196,9 +196,10 @@ def list_users(
             or identity.employee_id 
             or identity.last_login_ad_at 
             or has_ad_mapping
-            or (has_corp_email and is_corp_dept)
-            or (has_corp_email and is_ad_username_fmt)
-        ) and (u_clean not in ("winmonpan.p", "pinyada.s"))
+            or is_corp_dept
+            or is_ad_username_fmt
+            or has_corp_email
+        ) and (u_clean != "pinyada.s")
 
         # Check overall active status across AD and spokes
         has_active_spoke = any(m.is_active_in_app for m, _ in mappings)

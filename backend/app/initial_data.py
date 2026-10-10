@@ -328,18 +328,34 @@ def init_db():
         now = datetime.now(timezone.utc)
         for cid in corrupted_ad_identities:
             u_low = (cid.username or "").strip().lower()
-            if u_low in offboarded_usernames or u_low in ("winmonpan.p", "pinyada.s"):
-                continue  # Legitimately offboarded via Central-IAM or local spoke account
+            if u_low in offboarded_usernames or u_low == "pinyada.s":
+                continue  # Legitimately offboarded via Central-IAM or local IRM-only account
 
             dept_low = (cid.department or "").strip().lower()
             email_val = (cid.email or "").strip().lower()
             has_corp_email = "@windowasia.com" in email_val
-            has_corp_dept = any(cd in dept_low for cd in corporate_depts)
+            has_corp_dept = any(cd in dept_low for cd in corporate_depts) if dept_low else False
             is_ad_format = len(u_low.split(".")) == 2 and len(u_low.split(".")[1]) <= 2
+            has_active_spoke = any(m.is_active_in_app for m in (cid.accounts or []))
 
-            # Restore true corporate employees with corp email, corp department, AD GUID, or AD format
-            if (has_corp_dept and has_corp_email) or cid.ad_guid or (has_corp_email and is_ad_format):
+            # A true corporate employee is recognized if:
+            # 1. They have a corporate department (Sale, IT, HR, etc.) OR
+            # 2. Their username follows standard AD naming convention (Firstname.L) OR
+            # 3. They have a corporate email (@windowasia.com) OR
+            # 4. They have an AD GUID OR
+            # 5. They have active accounts in corporate spoke applications (QOL, IRM, M365, SAP B1, MTPulse)
+            is_corporate = (
+                has_corp_dept
+                or is_ad_format
+                or has_corp_email
+                or cid.ad_guid
+                or has_active_spoke
+            )
+
+            if is_corporate:
                 cid.is_active_in_ad = True
+                if not cid.email:
+                    cid.email = f"{u_low}@windowasia.com"
                 restored_count += 1
                 if ad_app_obj:
                     ad_m = db.query(AppAccountMapping).filter(
@@ -364,22 +380,21 @@ def init_db():
 
         if restored_count > 0:
             db.flush()
-            logger.info("Auto-healed %d corporate identities to Active in AD", restored_count)
+            logger.info("Auto-healed %d corporate identities to Active in AD (including QOL, M365, Sales)", restored_count)
 
-        # Ensure Winmonpan.P and Pinyada.S (local spoke accounts) are treated as Local Acc, not AD
-        for local_u in ["winmonpan.p", "pinyada.s"]:
-            local_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == local_u).first()
-            if local_ident:
-                local_ident.is_active_in_ad = False
-                local_ident.ad_guid = None
-                local_ident.employee_id = None
-                local_ident.last_login_ad_at = None
-                if ad_app_obj:
-                    db.query(AppAccountMapping).filter(
-                        AppAccountMapping.identity_id == local_ident.id,
-                        AppAccountMapping.application_id == ad_app_obj.id
-                    ).delete()
-                db.flush()
+        # Ensure Pinyada.S (local spoke account in IRM) is treated as Local Acc, not AD
+        local_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "pinyada.s").first()
+        if local_ident:
+            local_ident.is_active_in_ad = False
+            local_ident.ad_guid = None
+            local_ident.employee_id = None
+            local_ident.last_login_ad_at = None
+            if ad_app_obj:
+                db.query(AppAccountMapping).filter(
+                    AppAccountMapping.identity_id == local_ident.id,
+                    AppAccountMapping.application_id == ad_app_obj.id
+                ).delete()
+            db.flush()
 
         # Prune duplicate AppAccountMapping records for the same (identity_id, application_id)
         duplicate_groups = (
@@ -470,6 +485,7 @@ def init_db():
                 "department": "IT",
                 "is_active_in_ad": True,
                 "mappings": [
+                    {"app": "ad", "role": "Domain Users", "active": True},
                     {"app": "mtpulse", "role": "User", "active": True}
                 ]
             },
@@ -480,6 +496,7 @@ def init_db():
                 "department": "IT",
                 "is_active_in_ad": True,
                 "mappings": [
+                    {"app": "ad", "role": "Domain Users", "active": True},
                     {"app": "mtpulse", "role": "User", "active": True}
                 ]
             },
@@ -524,6 +541,55 @@ def init_db():
                 logger.info("Seeded real master identity: %s (%s)", ident.full_name, ident.username)
             else:
                 ident.is_active_in_ad = item["is_active_in_ad"]
+                for map_spec in item.get("mappings", []):
+                    app_obj = app_objs.get(map_spec["app"])
+                    if app_obj:
+                        m = db.query(AppAccountMapping).filter(
+                            AppAccountMapping.application_id == app_obj.id,
+                            (AppAccountMapping.identity_id == ident.id) |
+                            (func.lower(AppAccountMapping.app_username) == ident.username.lower())
+                        ).first()
+                        if not m:
+                            m = AppAccountMapping(
+                                identity_id=ident.id,
+                                application_id=app_obj.id,
+                                app_username=ident.username,
+                                app_group_name=map_spec["role"],
+                                is_active_in_app=map_spec["active"],
+                                last_sync_status="IN_SYNC"
+                            )
+                            db.add(m)
+                        else:
+                            m.is_active_in_app = map_spec["active"]
+                            m.last_sync_status = "IN_SYNC"
+
+        # Auto-recover MTPulse commands for legitimate IT users
+        from app.models.application import SpokePendingCommand
+        import secrets
+        # Delete any accidental DISABLE_USER commands
+        db.query(SpokePendingCommand).filter(
+            SpokePendingCommand.app_code == "mtpulse",
+            SpokePendingCommand.action == "DISABLE_USER",
+            func.lower(SpokePendingCommand.username).in_(["wimonpan.p", "winmonpan.p", "ronnakorn.p"])
+        ).delete()
+        # Ensure ENABLE_USER commands exist so MTPulse re-activates them on next heartbeat
+        for legit_u in ["Wimonpan.P", "Ronnakorn.P"]:
+            exists_cmd = db.query(SpokePendingCommand).filter(
+                SpokePendingCommand.app_code == "mtpulse",
+                SpokePendingCommand.action == "ENABLE_USER",
+                func.lower(SpokePendingCommand.username) == legit_u.lower(),
+                SpokePendingCommand.status.in_(["PENDING", "SENT"])
+            ).first()
+            if not exists_cmd:
+                db.add(SpokePendingCommand(
+                    command_id=f"cmd_recov_{secrets.token_hex(4)}",
+                    app_code="mtpulse",
+                    action="ENABLE_USER",
+                    username=legit_u,
+                    reason="Auto-Recovery: Re-enable legitimate corporate identity in MTPulse",
+                    status="PENDING",
+                    issued_by="System-AutoHeal"
+                ))
  
         # 4. Seed Corporate VPN / Office Network Subnets
         vpn_setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "corporate_vpn_networks").first()

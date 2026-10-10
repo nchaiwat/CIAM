@@ -482,15 +482,21 @@ async def sync_application_inventory(
             is_ad_item = app.app_code.lower() == "ad"
             is_active = bool(item.get("is_active", True))
 
+            is_ad_format = len(uname.split(".")) == 2 and len(uname.split(".")[1]) <= 2
+            dept_low = (item.get("department") or "").strip().lower()
+            corporate_depts = ("sale", "sales", "purchasing", "pu", "it", "administrator", "admin", "accounting", "hr", "executive", "management", "qa", "warehouse", "m365", "office", "general")
+            is_corp_dept = any(cd in dept_low for cd in corporate_depts) if dept_low else False
+            is_corp = is_ad_format or is_corp_dept or ("@windowasia.com" in (item.get("email") or "").lower())
+
             if not identity:
                 # Create identity if user doesn't exist yet
                 identity = MasterIdentity(
                     username=uname,
                     full_name=item.get("full_name") or uname,
-                    email=item.get("email"),
-                    department=item.get("department"),
+                    email=item.get("email") or (f"{uname.lower()}@windowasia.com" if is_corp else None),
+                    department=item.get("department") or ("Sales" if is_corp_dept else None),
                     employee_id=item.get("employee_id"),
-                    is_active_in_ad=is_active if is_ad_item else True,
+                    is_active_in_ad=is_active if is_ad_item else (True if is_corp else False),
                     created_at=now
                 )
                 db.add(identity)
@@ -500,9 +506,12 @@ async def sync_application_inventory(
                     identity.is_active_in_ad = is_active
                     if item.get("employee_id"):
                         identity.employee_id = item.get("employee_id")
+                elif is_corp and not identity.is_active_in_ad and uname.lower() != "pinyada.s":
+                    identity.is_active_in_ad = True
+
                 # Enrich existing identity if empty
-                if not identity.email and item.get("email"):
-                    identity.email = item.get("email")
+                if not identity.email:
+                    identity.email = item.get("email") or (f"{uname.lower()}@windowasia.com" if is_corp else None)
                 if not identity.department and item.get("department"):
                     identity.department = item.get("department")
                 if (not identity.full_name or identity.full_name == identity.username) and item.get("full_name"):
@@ -534,7 +543,7 @@ async def sync_application_inventory(
             )
             if is_exception:
                 sync_status = "APPROVED_EXCEPTION"
-            elif not identity.is_active_in_ad and is_active:
+            elif not identity.is_active_in_ad and is_active and is_corp:
                 sync_status = "DISCREPANCY"
             else:
                 sync_status = "IN_SYNC"

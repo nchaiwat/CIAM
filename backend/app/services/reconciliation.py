@@ -28,7 +28,17 @@ def find_account_discrepancies(db: Session) -> List[DiscrepancyItem]:
             continue
 
         u_clean = (identity.username or "").strip().lower()
-        if u_clean in ("winmonpan.p", "pinyada.s"):
+        if u_clean == "pinyada.s":
+            continue
+
+        dept_low = (identity.department or "").strip().lower()
+        corporate_keywords = ("it", "pu", "purchasing", "admin", "accounting", "hr", "executive", "management", "general", "qa", "sale", "warehouse", "m365")
+        is_corp_dept = any(kw in dept_low for kw in corporate_keywords) if dept_low else False
+        is_ad_format = len(u_clean.split(".")) == 2 and len(u_clean.split(".")[1]) <= 2
+        has_corp_email = bool(identity.email and "@windowasia.com" in identity.email.lower())
+        is_ad_account = bool(identity.ad_guid or identity.employee_id or identity.last_login_ad_at or is_corp_dept or is_ad_format or has_corp_email)
+
+        if not is_ad_account:
             continue
 
         # Ghost Account Rule: Employee is inactive/disabled in Active Directory

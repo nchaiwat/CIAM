@@ -144,18 +144,27 @@ def handle_agent_heartbeat(
             username_clean = acc.username.strip()
             # Match master identity or create local spoke identity
             ident = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(username_clean)).first()
-            is_corp = bool(acc.email and "@windowasia.com" in acc.email.lower())
+            is_corp_email = bool(acc.email and "@windowasia.com" in acc.email.lower())
+            is_ad_format = len(username_clean.split(".")) == 2 and len(username_clean.split(".")[1]) <= 2
+            dept_val = (acc.department or "").strip().lower()
+            corporate_depts = ("sale", "sales", "purchasing", "pu", "it", "accounting", "hr", "qa", "warehouse", "m365", "office", "admin", "management", "general")
+            is_corp_dept = any(cd in dept_val for cd in corporate_depts) if dept_val else False
+            is_corp = is_corp_email or is_ad_format or is_corp_dept
+
             if not ident:
                 ident = MasterIdentity(
                     username=username_clean,
                     full_name=acc.full_name or username_clean,
-                    email=acc.email,
+                    email=acc.email or (f"{username_clean.lower()}@windowasia.com" if is_corp else None),
                     department=acc.department or ("Corporate" if is_corp else "ทั่วไป"),
                     is_active_in_ad=True if is_corp else False,
                     created_at=now
                 )
                 db.add(ident)
                 db.flush()
+            elif is_corp and not ident.is_active_in_ad and username_clean.lower() != "pinyada.s":
+                # Ensure legitimate corporate employee pushed from agent is active in AD
+                ident.is_active_in_ad = True
 
             # Find existing mapping by (application_id, identity_id) OR case-insensitive username
             mapping = db.query(AppAccountMapping).filter(
@@ -250,37 +259,6 @@ def handle_agent_heartbeat(
                     status="SENT",
                     created_at=now
                 ))
-
-        # Check for accounts active in Spoke but deactivated in CIAM (Offboarded or AD Disabled)
-        for acc in payload.accounts:
-            if acc.is_active:
-                uname_lower = acc.username.strip().lower()
-                ident = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(uname_lower)).first()
-                mapping = db.query(AppAccountMapping).filter(
-                    AppAccountMapping.application_id == app.id,
-                    AppAccountMapping.app_username.ilike(uname_lower)
-                ).first()
-
-                is_disabled_in_ciam = (ident and not ident.is_active_in_ad) or (mapping and not mapping.is_active_in_app)
-                if is_disabled_in_ciam and ("DISABLE_USER", uname_lower) not in dispatched_cmd_keys:
-                    cmd_id = f"cmd_dis_{secrets.token_hex(4)}"
-                    outgoing_cmds.append(PendingCommandItem(
-                        command_id=cmd_id,
-                        action="DISABLE_USER",
-                        username=acc.username,
-                        reason="Auto-Reconciliation: Account deactivated or offboarded in Central IAM",
-                        issued_at=now.isoformat()
-                    ))
-                    dispatched_cmd_keys.add(("DISABLE_USER", uname_lower))
-                    db.add(SpokePendingCommand(
-                        command_id=cmd_id,
-                        app_code=app.app_code,
-                        action="DISABLE_USER",
-                        username=acc.username,
-                        reason="Auto-Reconciliation: Account deactivated in Central IAM",
-                        status="SENT",
-                        created_at=now
-                    ))
 
     # 6. Retrieve Pending Commands from DB queue
     pending_db_cmds = db.query(SpokePendingCommand).filter(
