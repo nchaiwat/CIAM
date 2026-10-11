@@ -27,7 +27,6 @@ import {
   Key,
   Copy,
   XCircle,
-  RefreshCw,
 } from "lucide-react";
 import {
   ciamApi,
@@ -77,26 +76,7 @@ export default function DirectoryPage() {
   const [ghostOnly, setGhostOnly] = useState(false);
   const [filtersReady, setFiltersReady] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
-  const [syncingApp, setSyncingApp] = useState(false);
-  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
-  const handleSyncCurrentApp = async () => {
-    if (!appFilter) return;
-    const targetApp = apps.find((a) => a.app_code.toLowerCase() === appFilter.toLowerCase());
-    if (!targetApp) return;
-    try {
-      setSyncingApp(true);
-      setSyncNotice(null);
-      const res = await ciamApi.syncApplicationInventory(targetApp.id);
-      setSyncNotice(`ซิงก์สำเร็จ: ดึงข้อมูลมาได้ ${res.total_accounts_fetched} บัญชีจาก ${targetApp.app_name}`);
-      await fetchUsers();
-      setTimeout(() => setSyncNotice(null), 6000);
-    } catch (err: any) {
-      alert(`การซิงก์ข้อมูลล้มเหลว: ${err.message}`);
-    } finally {
-      setSyncingApp(false);
-    }
-  };
 
   // Load persistent filter preferences from localStorage (Point 6)
   useEffect(() => {
@@ -937,18 +917,7 @@ export default function DirectoryPage() {
               ))}
             </select>
 
-            {appFilter && (
-              <button
-                type="button"
-                onClick={handleSyncCurrentApp}
-                disabled={syncingApp}
-                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md text-xs font-bold transition-all border cursor-pointer bg-blue-50 hover:bg-blue-100 disabled:opacity-50 text-blue-700 border-blue-300 shadow-2xs"
-                title="กดเพื่อซิงก์ดึงข้อมูลบัญชีล่าสุดจากระบบนี้เข้าสู่ฐานข้อมูล Central IAM ทันที"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${syncingApp ? "animate-spin" : ""}`} />
-                <span>{syncingApp ? "กำลังซิงก์..." : "🔄 ซิงก์ข้อมูล"}</span>
-              </button>
-            )}
+
 
             <button
               type="button"
@@ -983,12 +952,7 @@ export default function DirectoryPage() {
         </form>
       </div>
 
-      {syncNotice && (
-        <div className="px-3 py-2 bg-emerald-50 border border-emerald-300 rounded-md text-xs font-bold text-emerald-900 flex items-center justify-between shadow-2xs">
-          <span>✅ {syncNotice}</span>
-          <button onClick={() => setSyncNotice(null)} className="text-emerald-700 hover:text-emerald-950 font-bold ml-2 cursor-pointer">✕</button>
-        </div>
-      )}
+
 
       {/* Directory Table */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
