@@ -9,7 +9,19 @@
 
 ---
 
-## 0.000 อัปเดตล่าสุด: เพิ่ม Spoke Connector สำหรับ pfSense FAC (Firewall, FreeRADIUS VPN & Captive Portal) (11 ต.ค. 2026)
+## 0.0000 อัปเดตล่าสุด: ปรับปรุงการแยกแยะบัญชี pfSense Local / FreeRADIUS และตัดปุ่ม Excel ซ้ำซ้อน (11 ต.ค. 2026)
+### รายละเอียดการปรับปรุง:
+1. **หน้าทะเบียนผู้ใช้ (`frontend/src/app/directory/page.tsx`):**
+   - ตัดปุ่ม "ดาวน์โหลด Excel" ใน Header ด้านบนออก เหลือเฉพาะปุ่มไอคอน Excel ถัดจากปุ่มค้นหาใน Toolbar
+   - ปรับการคำนวณ `ACTIVE ใน AD` และการแสดงผลคอลัมน์ "สถานะ AD" สำหรับบัญชีสาขา (WA Shop) ให้แสดงเป็น `-` (ไม่ใช่จุดเขียว Active ใน AD)
+2. **ระบบการจำแนกประเภทบัญชี (`backend/app/api/v1/directory.py` & `initial_data.py`):**
+   - แยกบัญชีสาขา pfSense Local / FreeRADIUS (`wa-shop...`, `ws-...`) ออกจากบัญชี AD องค์กรอย่างเด็ดขาด
+   - ป้องกันการสร้างสิทธิ์ `DIRECT • AD` ให้กับบัญชี Shop โดยไม่ตั้งใจ
+3. **ผลการทดสอบ:** Backend Pytest ผ่าน 43/43 (100%), Frontend TypeScript `tsc --noEmit` ผ่าน 0 errors (100%)
+
+---
+
+## 0.000 อัปเดตก่อนหน้า: เพิ่ม Spoke Connector สำหรับ pfSense FAC (Firewall, FreeRADIUS VPN & Captive Portal) (11 ต.ค. 2026)
 ### รายละเอียดฟีเจอร์การเชื่อมต่อ pfSense FAC:
 1. **PfSenseConnector Class (`backend/app/connectors/pfsense.py`):**
    - พัฒนา Connector เฉพาะทางสำหรับ pfSense สื่อสารผ่าน AD Sync Agent Security Proxy (`http://172.18.0.1:3100/api/v1/pfsense/fac`)

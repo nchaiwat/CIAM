@@ -186,21 +186,33 @@ def list_users(
         # AD users have ad_guid, employee_id, AD login history, AD mapping, corporate email, or corporate AD department
         has_ad_mapping = any(app.app_code.lower() == "ad" for _, app in mappings)
         dept_lower = (identity.department or "").strip().lower()
-        corporate_keywords = ("it", "pu", "purchasing", "admin", "accounting", "hr", "executive", "management", "general", "qa", "sale", "warehouse", "m365")
+        corporate_keywords = ("it", "pu", "purchasing", "admin", "accounting", "hr", "executive", "management", "general", "qa", "warehouse", "m365")
         is_corp_dept = any(kw in dept_lower for kw in corporate_keywords) if dept_lower else False
         has_corp_email = bool(identity.email and "@windowasia.com" in identity.email.lower())
         u_clean = (identity.username or "").strip().lower()
         is_ad_username_fmt = len(u_clean.split(".")) == 2 and len(u_clean.split(".")[1]) <= 2
 
+        is_shop_acc = (
+            u_clean.startswith("wa-shop")
+            or u_clean.startswith("ws-")
+            or "wa_shop" in u_clean
+            or "shop_" in u_clean
+            or (len(u_clean) > 2 and u_clean[:2].isdigit() and "-ws" in u_clean)
+        )
+
         is_ad = bool(
-            identity.ad_guid 
-            or identity.employee_id 
-            or identity.last_login_ad_at 
-            or has_ad_mapping
-            or is_corp_dept
-            or is_ad_username_fmt
-            or has_corp_email
-        ) and (u_clean != "pinyada.s")
+            not is_shop_acc
+            and (
+                identity.ad_guid 
+                or identity.employee_id 
+                or identity.last_login_ad_at 
+                or has_ad_mapping
+                or is_corp_dept
+                or is_ad_username_fmt
+                or (has_corp_email and not is_shop_acc)
+            )
+            and (u_clean != "pinyada.s")
+        )
 
         # Check overall active status across AD and spokes
         has_active_spoke = any(m.is_active_in_app for m, _ in mappings)

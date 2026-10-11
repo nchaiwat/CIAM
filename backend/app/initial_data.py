@@ -346,6 +346,26 @@ def init_db():
             if u_low in offboarded_usernames or u_low == "pinyada.s":
                 continue  # Legitimately offboarded via Central-IAM or local IRM-only account
 
+            is_shop_user = (
+                u_low.startswith("wa-shop")
+                or u_low.startswith("ws-")
+                or "wa_shop" in u_low
+                or "ws_" in u_low
+                or "shop_" in u_low
+                or (len(u_low) > 2 and u_low[:2].isdigit() and "-ws" in u_low)
+            )
+            if is_shop_user:
+                # Local pfSense / FreeRADIUS accounts for branch shops MUST NOT be AD accounts
+                cid.is_active_in_ad = False
+                cid.ad_guid = None
+                cid.employee_id = None
+                if ad_app_obj:
+                    db.query(AppAccountMapping).filter(
+                        AppAccountMapping.identity_id == cid.id,
+                        AppAccountMapping.application_id == ad_app_obj.id
+                    ).delete()
+                continue
+
             dept_low = (cid.department or "").strip().lower()
             email_val = (cid.email or "").strip().lower()
             has_corp_email = "@windowasia.com" in email_val

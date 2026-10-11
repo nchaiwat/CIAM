@@ -682,7 +682,7 @@ export default function DirectoryPage() {
   });
 
   // Metrics
-  const activeAdCount = users.filter((u) => u.is_active_in_ad).length;
+  const activeAdCount = users.filter((u) => u.is_ad_account !== false && u.is_active_in_ad).length;
   const ghostCount = users.filter((u) => u.has_discrepancy).length;
   const powerUserCount = Object.values(adminRoles).filter((r) => r === "SUPER_ADMIN" || r === "ADMIN").length;
 
@@ -822,15 +822,6 @@ export default function DirectoryPage() {
         </div>
 
         <div className="flex items-center space-x-1.5 shrink-0">
-          <button
-            onClick={handleExportExcel}
-            title="ดาวน์โหลดทะเบียนผู้ใช้เป็นไฟล์ Excel (.xlsx)"
-            className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-          >
-            <ExcelIcon className="w-3.5 h-3.5" />
-            <span>ดาวน์โหลด Excel</span>
-          </button>
-
           <button
             onClick={handleOpenCreateModal}
             className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
@@ -1046,7 +1037,14 @@ export default function DirectoryPage() {
                     {/* AD Status (Point 1: Green circle if active in AD, Gray circle if inactive) */}
                     <td className="py-2.5 px-3 text-center">
                       <div className="flex items-center justify-center">
-                        {user.is_active_in_ad ? (
+                        {user.is_ad_account === false ? (
+                          <span
+                            className="inline-flex items-center justify-center text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200"
+                            title="Local Account: ไม่มีบัญชีใน Active Directory (ไม่ใช่บัญชี AD)"
+                          >
+                            -
+                          </span>
+                        ) : user.is_active_in_ad ? (
                           <span
                             className="inline-flex items-center justify-center"
                             title="Active: บัญชีเปิดใช้งานปกติใน Active Directory"
@@ -1059,11 +1057,7 @@ export default function DirectoryPage() {
                         ) : (
                           <span
                             className="inline-flex items-center justify-center"
-                            title={
-                              user.is_ad_account === false
-                                ? "Local Account: ไม่มีบัญชีใน Active Directory"
-                                : "Inactive: บัญชีถูกปิดใช้งานใน Active Directory"
-                            }
+                            title="Inactive: บัญชีถูกปิดใช้งานใน Active Directory"
                           >
                             <span className="inline-flex rounded-full h-3.5 w-3.5 bg-slate-300 shadow-2xs border border-white ring-2 ring-slate-200"></span>
                           </span>
