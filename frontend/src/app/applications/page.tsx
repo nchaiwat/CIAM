@@ -2329,15 +2329,37 @@ export default function ApplicationsPage() {
                       <span className="text-slate-400">•</span>
                       <span>แสดง {filteredInventoryAccounts.length} จาก {allCount} บัญชี</span>
                     </span>
-                    <button
-                      onClick={() => {
-                        setLiveInventory(null);
-                        setInspectingApp(null);
-                      }}
-                      className="px-4 py-2 bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-800 rounded-md font-bold shadow-2xs cursor-pointer"
-                    >
-                      ปิด
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        disabled={syncingId === inspectingApp?.id}
+                        onClick={async () => {
+                          if (!inspectingApp) return;
+                          await handleSync(inspectingApp.id);
+                        }}
+                        className="flex items-center space-x-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md font-bold shadow-2xs cursor-pointer transition-colors"
+                      >
+                        {syncingId === inspectingApp?.id ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>กำลังซิงก์ {allCount} บัญชี...</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4" />
+                            <span>📥 ซิงก์ {allCount} บัญชีเข้าสู่ทะเบียนผู้ใช้</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setLiveInventory(null);
+                          setInspectingApp(null);
+                        }}
+                        className="px-4 py-2 bg-white border-2 border-slate-300 hover:bg-slate-100 text-slate-800 rounded-md font-bold shadow-2xs cursor-pointer"
+                      >
+                        ปิด
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : null}
