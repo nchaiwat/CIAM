@@ -217,6 +217,20 @@ def init_db():
                 "sso_enabled": True,
                 "health_status": "ONLINE",
                 "latency_ms": 30
+            },
+            {
+                "app_code": "pfsense_fac",
+                "app_name": "pfSense Firewall & VPN (Factory)",
+                "connector_type": "PFSENSE",
+                "base_url": "http://172.18.0.1:3100/api/v1/pfsense/fac",
+                "api_key": "mgmt_ciam_key_9a88b1c0d2e3f4a5",
+                "client_id": "pfsense-fac-spoke-client",
+                "client_secret": "sec_pfsense_fac_oauth_secret_2026",
+                "redirect_uris": "http://localhost:3000/portal/callback",
+                "sso_enabled": False,
+                "network_policy": "VPN_ONLY",
+                "health_status": "ONLINE",
+                "latency_ms": 25
             }
         ]
 
@@ -239,6 +253,7 @@ def init_db():
                     redirect_uris=item.get("redirect_uris"),
                     portal_launch_url=item.get("portal_launch_url"),
                     sso_enabled=item.get("sso_enabled", True),
+                    network_policy=item.get("network_policy", "ANYWHERE"),
                     health_status=item["health_status"],
                     latency_ms=item["latency_ms"],
                     last_health_check_at=datetime.now(timezone.utc),

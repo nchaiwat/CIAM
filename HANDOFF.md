@@ -9,7 +9,26 @@
 
 ---
 
-## 0.00 อัปเดตล่าสุด: เพิ่มปุ่มและฟังก์ชันดาวน์โหลดทะเบียนผู้ใช้เป็น Excel (.xlsx) พร้อมไอคอน Excel (/directory) (10 ต.ค. 2026)
+## 0.000 อัปเดตล่าสุด: เพิ่ม Spoke Connector สำหรับ pfSense FAC (Firewall, FreeRADIUS VPN & Captive Portal) (11 ต.ค. 2026)
+### รายละเอียดฟีเจอร์การเชื่อมต่อ pfSense FAC:
+1. **PfSenseConnector Class (`backend/app/connectors/pfsense.py`):**
+   - พัฒนา Connector เฉพาะทางสำหรับ pfSense สื่อสารผ่าน AD Sync Agent Security Proxy (`http://172.18.0.1:3100/api/v1/pfsense/fac`)
+   - รองรับ `health_check()` ตรวจสอบสถานะ Online และ Latency ของ pfSense
+   - รองรับ `sync_inventory()` กวาดบัญชี FreeRADIUS VPN และ Local Users ขึ้นมาแสดงบน CIAM
+   - รองรับ `set_account_status()` และ `deprovision()` ส่งคำสั่ง 1-Click Offboarding สั่งระงับสิทธิ์ VPN และตัดเซสชัน Captive Portal ทันที
+2. **Connector Factory & Initial Data (`factory.py` & `initial_data.py`):**
+   - ลงทะเบียนประเภท `PFSENSE` ใน Connector Factory
+   - เพิ่ม `pfsense_fac` ในรายการ Spoke เริ่มต้น:
+     - `app_code`: `pfsense_fac`
+     - `app_name`: `pfSense Firewall & VPN (Factory)`
+     - `connector_type`: `PFSENSE`
+     - `base_url`: `http://172.18.0.1:3100/api/v1/pfsense/fac`
+     - `network_policy`: `VPN_ONLY`
+- **ผลการทดสอบ:** Backend Pytest ผ่าน 43/43 (100%), Frontend TypeScript `tsc --noEmit` ผ่าน 0 errors (100%)
+
+---
+
+## 0.00 อัปเดตก่อนหน้า: เพิ่มปุ่มและฟังก์ชันดาวน์โหลดทะเบียนผู้ใช้เป็น Excel (.xlsx) พร้อมไอคอน Excel (/directory) (10 ต.ค. 2026)
 ### รายละเอียดฟีเจอร์การส่งออก Excel:
 1. **ไอคอน Microsoft Excel เฉพาะตัว (Custom Green Spreadsheet Icon):**
    - ออกแบบไอคอน SVG คมชัดสีเขียวเข้มสไตล์ Microsoft Excel พร้อมตัวอักษร X และตารางสเปรดชีต

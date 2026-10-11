@@ -44,6 +44,14 @@ def get_connector_for_app(app: ConnectedApplication) -> BaseConnector:
             app_name=app.app_name,
             base_url=app.base_url
         )
+    elif c_type in ["PFSENSE", "PFSENSE_REST", "FIREWALL"] or "pfsense" in app.app_code.lower():
+        from app.connectors.pfsense import PfSenseConnector
+        return PfSenseConnector(
+            app_code=app.app_code,
+            base_url=app.base_url or "http://172.18.0.1:3100/api/v1/pfsense/fac",
+            api_key=app.api_key or "mgmt_ciam_key_9a88b1c0d2e3f4a5",
+            origin_ip=app.sap_company_db or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
+        )
     elif c_type == "RPA_WORKER":
         if app.rpa_adapter_name == "mock_legacy_erp":
             return MockLegacyErpRpaAdapter()
