@@ -79,6 +79,202 @@ def update_sync_schedule(db: Session, update_data: Dict[str, Any]) -> Dict[str, 
     db.commit()
     return get_sync_schedule(db)
 
+def persist_spoke_inventory(
+    app: ConnectedApplication,
+    raw_accounts: list,
+    db: Session,
+    actor_username: str = "System-Scheduler"
+) -> int:
+    """
+    Persist account inventory from spoke system into Central IAM database:
+    Upserts master identities, app account mappings, and flags discrepancies.
+    """
+    synced_count = 0
+    now = datetime.now(timezone.utc)
+
+    for item in raw_accounts:
+        uname = (item.get("username") or "").strip()
+        if not uname:
+            continue
+
+        u_clean = uname.lower()
+        is_shop_acc = (
+            u_clean.startswith("wa-shop")
+            or u_clean.startswith("ws-")
+            or "wa_shop" in u_clean
+            or "shop_" in u_clean
+            or (len(u_clean) > 2 and u_clean[:2].isdigit() and "-ws" in u_clean)
+        )
+
+        is_ad_item = app.app_code.lower() == "ad"
+        is_active = bool(item.get("is_active", True))
+
+        is_ad_format = len(uname.split(".")) == 2 and len(uname.split(".")[1]) <= 2
+        dept_low = (item.get("department") or "").strip().lower()
+        corporate_depts = ("sale", "sales", "purchasing", "pu", "it", "administrator", "admin", "accounting", "hr", "executive", "management", "qa", "warehouse", "m365", "office", "general")
+        is_corp_dept = any(cd in dept_low for cd in corporate_depts) if dept_low else False
+        is_corp = (not is_shop_acc) and (is_ad_format or is_corp_dept or ("@windowasia.com" in (item.get("email") or "").lower()))
+
+        # Look for existing identity in AD (Master Identity)
+        identity = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(uname)).first()
+        if not identity and item.get("email"):
+            identity = db.query(MasterIdentity).filter(MasterIdentity.email.ilike(item.get("email").strip())).first()
+        if not identity and item.get("full_name") and item.get("full_name").strip() != uname:
+            identity = db.query(MasterIdentity).filter(MasterIdentity.full_name.ilike(item.get("full_name").strip())).first()
+
+        if not identity:
+            identity = MasterIdentity(
+                username=uname,
+                full_name=item.get("full_name") or uname,
+                email=item.get("email") or (f"{uname.lower()}@windowasia.com" if is_corp else None),
+                department=item.get("department") or ("Sales" if is_corp_dept else ("WA Shop" if is_shop_acc else None)),
+                employee_id=item.get("employee_id"),
+                is_active_in_ad=is_active if is_ad_item else (False if is_shop_acc else (True if is_corp else False)),
+                created_at=now
+            )
+            db.add(identity)
+            db.flush()
+        else:
+            if is_ad_item:
+                identity.is_active_in_ad = is_active
+                if item.get("employee_id"):
+                    identity.employee_id = item.get("employee_id")
+            elif is_shop_acc:
+                identity.is_active_in_ad = False
+            elif is_corp and not identity.is_active_in_ad and uname.lower() != "pinyada.s":
+                identity.is_active_in_ad = True
+
+            if not identity.email and item.get("email"):
+                identity.email = item.get("email")
+            elif not identity.email and is_corp:
+                identity.email = f"{uname.lower()}@windowasia.com"
+
+            if not identity.department:
+                if item.get("department"):
+                    identity.department = item.get("department")
+                elif is_shop_acc:
+                    identity.department = "WA Shop"
+
+            if (not identity.full_name or identity.full_name == identity.username) and item.get("full_name"):
+                identity.full_name = item.get("full_name")
+
+        # Check existing mapping
+        existing_mappings = (
+            db.query(AppAccountMapping)
+            .filter(
+                AppAccountMapping.application_id == app.id,
+                func.lower(AppAccountMapping.app_username) == uname.lower()
+            )
+            .all()
+        )
+        if existing_mappings:
+            exact_match = next((m for m in existing_mappings if m.app_username == uname), None)
+            mapping = exact_match or existing_mappings[0]
+            if len(existing_mappings) > 1:
+                for dup in existing_mappings:
+                    if dup.id != mapping.id:
+                        db.delete(dup)
+                db.flush()
+        else:
+            mapping = None
+
+        is_exception = bool(
+            getattr(mapping, "is_approved_exception", False) or getattr(identity, "is_approved_exception", False)
+        )
+        if is_exception:
+            sync_status = "APPROVED_EXCEPTION"
+        elif not is_shop_acc and not identity.is_active_in_ad and is_active and is_corp:
+            sync_status = "DISCREPANCY"
+        else:
+            sync_status = "IN_SYNC"
+
+        last_login_dt = None
+        raw_last_login = item.get("last_login_at")
+        if raw_last_login:
+            try:
+                last_login_dt = datetime.fromisoformat(raw_last_login.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        if not mapping:
+            mapping = AppAccountMapping(
+                identity_id=identity.id,
+                application_id=app.id,
+                app_username=uname,
+                app_user_id=str(item.get("id")) if item.get("id") is not None else None,
+                app_group_name=item.get("group_name") or ("Shop VPN" if is_shop_acc else None),
+                is_active_in_app=is_active,
+                last_sync_status=sync_status,
+                last_app_login_at=last_login_dt,
+                created_at=now
+            )
+            db.add(mapping)
+        else:
+            mapping.identity_id = identity.id
+            mapping.app_username = uname
+            mapping.app_user_id = str(item.get("id")) if item.get("id") is not None else mapping.app_user_id
+            mapping.app_group_name = item.get("group_name") or mapping.app_group_name
+            mapping.is_active_in_app = is_active
+            mapping.last_sync_status = sync_status
+            if last_login_dt:
+                mapping.last_app_login_at = last_login_dt
+
+        synced_count += 1
+
+    # Prune stale/orphaned mappings
+    live_usernames = {
+        (item.get("username") or "").strip().lower()
+        for item in raw_accounts
+        if (item.get("username") or "").strip()
+    }
+
+    if live_usernames:
+        stale_mappings = (
+            db.query(AppAccountMapping)
+            .filter(
+                AppAccountMapping.application_id == app.id,
+                ~func.trim(func.lower(AppAccountMapping.app_username)).in_(live_usernames)
+            )
+            .all()
+        )
+        for stale in stale_mappings:
+            db.delete(stale)
+
+        db.flush()
+
+        all_app_mappings = (
+            db.query(AppAccountMapping)
+            .filter(AppAccountMapping.application_id == app.id)
+            .order_by(AppAccountMapping.id.asc())
+            .all()
+        )
+        seen_lower = set()
+        for m in all_app_mappings:
+            low = (m.app_username or "").strip().lower()
+            if low in seen_lower:
+                db.delete(m)
+            else:
+                seen_lower.add(low)
+        db.flush()
+
+    app.last_sync_at = now
+    app.health_status = "ONLINE"
+    app.total_linked_accounts = synced_count
+
+    db.add(IamAuditLog(
+        actor_username=actor_username,
+        action_type="SYNC",
+        target_username=f"INVENTORY_{app.app_code.upper()}",
+        affected_app_code=app.app_code,
+        execution_mode=app.connector_type,
+        reason=f"Account inventory synchronized: {synced_count} accounts from {app.app_name}",
+        status="SUCCESS"
+    ))
+
+    db.commit()
+    return synced_count
+
+
 async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler") -> Dict[str, Any]:
     """
     Execute inventory synchronization across all active connected applications.
@@ -87,7 +283,6 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
     results = []
     success_count = 0
     fail_count = 0
-    now_utc = datetime.now(timezone.utc)
 
     logger.info("Starting sync-all for %d active applications (Actor: %s)", len(apps), actor_username)
 
@@ -96,170 +291,7 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
         try:
             inv = await connector.sync_inventory()
             raw_accounts = inv.get("accounts", [])
-            synced_for_app = 0
-
-            for item in raw_accounts:
-                uname = (item.get("username") or "").strip()
-                if not uname:
-                    continue
-
-                # 1. Match existing AppAccountMapping (case-insensitive to prevent duplicate rows)
-                existing_mappings = (
-                    db.query(AppAccountMapping)
-                    .filter(
-                        AppAccountMapping.application_id == app.id,
-                        func.lower(AppAccountMapping.app_username) == uname.lower()
-                    )
-                    .all()
-                )
-                mapping = None
-                if existing_mappings:
-                    exact_match = next((m for m in existing_mappings if m.app_username == uname), None)
-                    mapping = exact_match or existing_mappings[0]
-                    if len(existing_mappings) > 1:
-                        for dup in existing_mappings:
-                            if dup.id != mapping.id:
-                                db.delete(dup)
-                        db.flush()
-
-                # 2. Match MasterIdentity:
-                # If mapping was already manually linked to an identity by Admin, preserve it!
-                identity = None
-                if mapping and mapping.identity_id:
-                    identity = db.query(MasterIdentity).filter_by(id=mapping.identity_id).first()
-
-                # Fallback matching: username -> email -> full_name
-                if not identity:
-                    identity = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(uname)).first()
-                if not identity and item.get("email"):
-                    identity = db.query(MasterIdentity).filter(MasterIdentity.email.ilike(item.get("email").strip())).first()
-                if not identity and item.get("full_name") and item.get("full_name").strip() != uname:
-                    identity = db.query(MasterIdentity).filter(MasterIdentity.full_name.ilike(item.get("full_name").strip())).first()
-
-                is_ad_format = len(uname.split(".")) == 2 and len(uname.split(".")[1]) <= 2
-                dept_low = (item.get("department") or "").strip().lower()
-                corporate_depts = ("sale", "sales", "purchasing", "pu", "it", "administrator", "admin", "accounting", "hr", "executive", "management", "qa", "warehouse", "m365", "office", "general")
-                is_corp_dept = any(cd in dept_low for cd in corporate_depts) if dept_low else False
-                is_corp = is_ad_format or is_corp_dept or ("@windowasia.com" in (item.get("email") or "").lower())
-
-                if not identity:
-                    identity = MasterIdentity(
-                        username=uname,
-                        full_name=item.get("full_name") or uname,
-                        email=item.get("email") or (f"{uname.lower()}@windowasia.com" if is_corp else None),
-                        department=item.get("department") or ("Sales" if is_corp_dept else None),
-                        employee_id=item.get("employee_id"),
-                        is_active_in_ad=is_active if is_ad_app else (True if is_corp else False),
-                        created_at=now_utc
-                    )
-                    db.add(identity)
-                    db.flush()
-                else:
-                    if is_ad_app:
-                        identity.is_active_in_ad = is_active
-                        if item.get("employee_id"):
-                            identity.employee_id = item.get("employee_id")
-                    elif is_corp and not identity.is_active_in_ad and uname.lower() != "pinyada.s":
-                        identity.is_active_in_ad = True
-
-                    if not identity.email:
-                        identity.email = item.get("email") or (f"{uname.lower()}@windowasia.com" if is_corp else None)
-                    if not identity.department and item.get("department"):
-                        identity.department = item.get("department")
-                    if (not identity.full_name or identity.full_name == identity.username) and item.get("full_name"):
-                        identity.full_name = item.get("full_name")
-
-                is_active = bool(item.get("is_active", True))
-                is_ad_app = app.app_code.lower() == "ad"
-                if is_ad_app:
-                    identity.is_active_in_ad = is_active
-                    if item.get("employee_id"):
-                        identity.employee_id = item.get("employee_id")
-
-                is_exception = bool(
-                    getattr(mapping, "is_approved_exception", False) or getattr(identity, "is_approved_exception", False)
-                )
-
-                if is_exception:
-                    sync_status = "APPROVED_EXCEPTION"
-                elif not identity.is_active_in_ad and is_active and is_corp:
-                    sync_status = "DISCREPANCY"
-                else:
-                    sync_status = "IN_SYNC"
-
-                last_login_dt = None
-                raw_login = item.get("last_login_at")
-                if raw_login:
-                    try:
-                        last_login_dt = datetime.fromisoformat(raw_login.replace("Z", "+00:00"))
-                    except Exception:
-                        pass
-
-                if not mapping:
-                    mapping = AppAccountMapping(
-                        identity_id=identity.id,
-                        application_id=app.id,
-                        app_username=uname,
-                        app_user_id=str(item.get("id")) if item.get("id") is not None else None,
-                        app_group_name=item.get("group_name"),
-                        is_active_in_app=is_active,
-                        last_sync_status=sync_status,
-                        last_app_login_at=last_login_dt,
-                        created_at=now_utc
-                    )
-                    db.add(mapping)
-                else:
-                    mapping.identity_id = identity.id
-                    mapping.app_username = uname  # Normalize casing
-                    mapping.app_user_id = str(item.get("id")) if item.get("id") is not None else mapping.app_user_id
-                    mapping.app_group_name = item.get("group_name")
-                    mapping.is_active_in_app = is_active
-                    mapping.last_sync_status = sync_status
-                    if last_login_dt:
-                        mapping.last_app_login_at = last_login_dt
-
-                synced_for_app += 1
-
-            # Prune stale/orphaned mappings that no longer exist in the target spoke application
-            live_usernames = {
-                (item.get("username") or "").strip().lower()
-                for item in raw_accounts
-                if (item.get("username") or "").strip()
-            }
-            if live_usernames:
-                stale_mappings = (
-                    db.query(AppAccountMapping)
-                    .filter(
-                        AppAccountMapping.application_id == app.id,
-                        ~func.trim(func.lower(AppAccountMapping.app_username)).in_(live_usernames)
-                    )
-                    .all()
-                )
-                for stale in stale_mappings:
-                    db.delete(stale)
-
-                db.flush()
-
-                # Deduplicate any remaining mappings for this app that differ only by case
-                all_app_mappings = (
-                    db.query(AppAccountMapping)
-                    .filter(AppAccountMapping.application_id == app.id)
-                    .order_by(AppAccountMapping.id.asc())
-                    .all()
-                )
-                seen_lower = set()
-                for m in all_app_mappings:
-                    low = (m.app_username or "").strip().lower()
-                    if low in seen_lower:
-                        db.delete(m)
-                    else:
-                        seen_lower.add(low)
-                db.flush()
-
-
-            app.last_sync_at = now_utc
-            app.health_status = "ONLINE"
-            db.commit()
+            synced_for_app = persist_spoke_inventory(app, raw_accounts, db, actor_username=actor_username)
 
             results.append({
                 "app_code": app.app_code,
