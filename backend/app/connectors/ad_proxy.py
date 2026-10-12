@@ -266,33 +266,35 @@ class AdProxyConnector(BaseConnector):
         headers = self._get_headers()
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                # 1. Probe /health
-                try:
-                    res = await client.get(f"{self.base_url}/health", headers=headers)
-                    elapsed = int((time.time() - start_time) * 1000)
-                    if res.status_code == 200:
-                        return ConnectorHealth(
-                            is_online=True,
-                            latency_ms=elapsed,
-                            message=f"AD Sync Agent Online ({self.base_url})"
-                        )
-                except Exception:
-                    pass
+                # 1. Probe /api/v1/ad/health and /health
+                for h_path in ["/api/v1/ad/health", "/health"]:
+                    try:
+                        res = await client.get(f"{self.base_url}{h_path}", headers=headers)
+                        elapsed = int((time.time() - start_time) * 1000)
+                        if res.status_code == 200:
+                            return ConnectorHealth(
+                                is_online=True,
+                                latency_ms=elapsed,
+                                message=f"AD Sync Agent Online ({self.base_url})"
+                            )
+                    except Exception:
+                        pass
 
-                # 2. Dual Probe /api/v2/login (verifies port 3100 network connectivity)
-                res = await client.post(f"{self.base_url}/api/v2/login", headers=headers, json={})
+                # 2. Dual Probe /api/v2/login with proper app_id payload
+                login_payload = {
+                    "app_id": self.app_id,
+                    "api_key": self.api_key,
+                    "secret_key": self.secret_key,
+                    "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                }
+                res = await client.post(f"{self.base_url}/api/v2/login", headers=headers, json=login_payload)
                 elapsed = int((time.time() - start_time) * 1000)
-                if res.status_code in [200, 400, 401, 422]:
+                if res.status_code in [200, 400, 401, 403, 422]:
+                    # Server at Port 3100 actively responded to HTTP request
                     return ConnectorHealth(
                         is_online=True,
                         latency_ms=elapsed,
                         message=f"AD Gateway ตอบสนองปกติ (Port 3100 Online ผ่าน {self.base_url})"
-                    )
-                elif res.status_code == 403:
-                    return ConnectorHealth(
-                        is_online=False,
-                        latency_ms=elapsed,
-                        message=f"AD Gateway ปฏิเสธ (HTTP 403 Forbidden): กรุณาตรวจสอบว่า IP {self.origin_ip} อยู่ใน allowed_ips"
                     )
                 return ConnectorHealth(
                     is_online=False,
