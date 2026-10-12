@@ -25,6 +25,7 @@ class PfSenseConnector(BaseConnector):
             "Content-Type": "application/json",
             "X-Management-API-Key": self.api_key,
             "x-management-api-key": self.api_key,
+            "X-Spoke-API-Key": self.api_key,
             "Authorization": f"Bearer {self.api_key}",
             "X-Request-Timestamp": str(int(datetime.now(timezone.utc).timestamp())),
             "X-Forwarded-For": self.origin_ip,
