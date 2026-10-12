@@ -403,8 +403,6 @@ def init_db():
 
             if is_corporate:
                 cid.is_active_in_ad = True
-                if not cid.email:
-                    cid.email = f"{u_low}@windowasia.com"
                 restored_count += 1
                 if ad_app_obj:
                     ad_m = db.query(AppAccountMapping).filter(

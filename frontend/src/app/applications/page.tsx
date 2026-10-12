@@ -35,6 +35,7 @@ import {
   Download,
   BookOpen,
   FileText,
+  Settings,
 } from "lucide-react";
 import { ciamApi, ConnectedApp, SyncSchedule, SyncAllResult } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
@@ -707,7 +708,7 @@ export default function ApplicationsPage() {
                   </div>
 
                   <div className="flex items-center space-x-1.5">
-                    {/* Enable / Disable Spoke Toggle Button */}
+                    {/* Spoke Enable/Disable On/Off Toggle Switch */}
                     <button
                       type="button"
                       onClick={(e) => {
@@ -715,15 +716,27 @@ export default function ApplicationsPage() {
                         handleToggleSpokeActive(app);
                       }}
                       disabled={togglingActiveId === app.id}
-                      className={`px-2 py-0.5 rounded text-[10px] font-extrabold border transition-all cursor-pointer flex items-center space-x-1 ${
+                      className={`relative inline-flex items-center h-6 w-14 rounded-full transition-all cursor-pointer focus:outline-none shadow-xs border ${
                         app.is_active
-                          ? "bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200"
-                          : "bg-slate-200 text-slate-700 border-slate-400 hover:bg-slate-300"
+                          ? "bg-emerald-600 border-emerald-700 hover:bg-emerald-700"
+                          : "bg-slate-300 border-slate-400 hover:bg-slate-400"
                       }`}
-                      title={app.is_active ? "คลิกเพื่อปิดการใช้งาน Spoke นี้" : "คลิกเพื่อเปิดการใช้งาน Spoke นี้"}
+                      title={app.is_active ? "สถานะเปิดใช้งาน (ON) - คลิกเพื่อปิดใช้งาน (OFF)" : "สถานะปิดใช้งาน (OFF) - คลิกเพื่อเปิดใช้งาน (ON)"}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full ${app.is_active ? "bg-emerald-600 animate-pulse" : "bg-slate-500"}`}></span>
-                      <span>{app.is_active ? "Active" : "Disabled"}</span>
+                      <span
+                        className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform shadow-xs ${
+                          app.is_active ? "translate-x-8" : "translate-x-1"
+                        }`}
+                      />
+                      <span
+                        className={`absolute text-[9px] font-black tracking-wider uppercase select-none ${
+                          app.is_active
+                            ? "left-2 text-white"
+                            : "right-2 text-slate-700"
+                        }`}
+                      >
+                        {app.is_active ? "ON" : "OFF"}
+                      </span>
                     </button>
 
                     <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border ${
@@ -914,21 +927,12 @@ export default function ApplicationsPage() {
                   </button>
 
                   <button
-                    onClick={() => handleOpenEdit(app, "SSO")}
-                    title="ตั้งค่า Single Sign-On (OIDC / PKCE)"
-                    className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border-2 border-blue-300 rounded-md text-xs font-bold transition-colors flex items-center space-x-1 shadow-2xs cursor-pointer"
+                    onClick={() => handleOpenEdit(app, app.connector_type === "SSO_ONLY" ? "SSO" : "M2M")}
+                    title="ตั้งค่าการเชื่อมต่อระบบ, SSO Client และ M2M Management API"
+                    className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border-2 border-indigo-300 rounded-md text-xs font-bold transition-colors flex items-center space-x-1 shadow-2xs cursor-pointer"
                   >
-                    <Lock className="w-3.5 h-3.5 text-blue-700" />
-                    <span>SSO</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleOpenEdit(app, "M2M")}
-                    title="ตั้งค่าระบบและจัดการ M2M API Key"
-                    className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border-2 border-amber-300 rounded-md text-xs font-bold transition-colors flex items-center space-x-1 shadow-2xs cursor-pointer"
-                  >
-                    <Key className="w-3.5 h-3.5 text-amber-700" />
-                    <span>M2M Key</span>
+                    <Settings className="w-3.5 h-3.5 text-indigo-700" />
+                    <span>ตั้งค่าเชื่อมต่อ</span>
                   </button>
 
                   {(app.connector_type === "SAP_B1" || app.app_code.toLowerCase().includes("sap")) && (
@@ -1158,19 +1162,32 @@ export default function ApplicationsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">สถานะ Spoke (CIAM Active)</label>
-                  <button
-                    type="button"
-                    onClick={() => setEditIsActive(!editIsActive)}
-                    className={`w-full px-3 py-2 rounded-md font-bold text-xs border-2 flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
-                      editIsActive
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-400 hover:bg-emerald-100"
-                        : "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200"
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${editIsActive ? "bg-emerald-600" : "bg-slate-400"}`}></span>
-                    <span>{editIsActive ? "เปิดใช้งาน (Active)" : "ปิดใช้งาน (Disabled)"}</span>
-                  </button>
+                  <label className="block font-bold text-slate-700 mb-1">สวิตช์เปิด/ปิด Spoke (ON / OFF)</label>
+                  <div className="flex items-center h-[38px]">
+                    <button
+                      type="button"
+                      onClick={() => setEditIsActive(!editIsActive)}
+                      className={`relative inline-flex items-center h-7 w-16 rounded-full transition-colors cursor-pointer border ${
+                        editIsActive
+                          ? "bg-emerald-600 border-emerald-700"
+                          : "bg-slate-300 border-slate-400"
+                      }`}
+                      title={editIsActive ? "คลิกเพื่อปิดใช้งาน (OFF)" : "คลิกเพื่อเปิดใช้งาน (ON)"}
+                    >
+                      <span
+                        className={`inline-block w-5 h-5 transform bg-white rounded-full transition-transform shadow-xs ${
+                          editIsActive ? "translate-x-9" : "translate-x-1"
+                        }`}
+                      />
+                      <span
+                        className={`absolute text-[10px] font-black uppercase tracking-wider select-none ${
+                          editIsActive ? "left-2.5 text-white" : "right-2.5 text-slate-700"
+                        }`}
+                      >
+                        {editIsActive ? "ON" : "OFF"}
+                      </span>
+                    </button>
+                  </div>
                 </div>
               </div>
 

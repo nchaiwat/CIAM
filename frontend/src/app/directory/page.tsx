@@ -267,6 +267,15 @@ export default function DirectoryPage() {
   };
 
   useEffect(() => {
+    try {
+      const savedLimit = localStorage.getItem("ciam_directory_page_size");
+      if (savedLimit !== null) {
+        const parsed = parseInt(savedLimit, 10);
+        if ([0, 25, 50, 100].includes(parsed)) {
+          setPageSize(parsed);
+        }
+      }
+    } catch {}
     fetchApplications();
     fetchAdminUsers();
   }, []);
@@ -963,11 +972,10 @@ export default function DirectoryPage() {
             <button
               type="button"
               onClick={handleExportExcel}
-              title="ดาวน์โหลดข้อมูลตามเงื่อนไขที่เลือกเป็นไฟล์ Excel (.xlsx)"
-              className="flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-bold transition-colors shadow-xs cursor-pointer shrink-0"
+              title="ดาวน์โหลดข้อมูลเป็นไฟล์ Excel (.xlsx)"
+              className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition-all shadow-xs cursor-pointer shrink-0 flex items-center justify-center border border-emerald-700 hover:scale-105 active:scale-95"
             >
-              <ExcelIcon className="w-3.5 h-3.5" />
-              <span>ดาวน์โหลด Excel</span>
+              <ExcelIcon className="w-5 h-5" />
             </button>
           </div>
         </form>
@@ -1267,8 +1275,12 @@ export default function DirectoryPage() {
                 <select
                   value={pageSize}
                   onChange={(e) => {
-                    setPageSize(Number(e.target.value));
+                    const newSize = Number(e.target.value);
+                    setPageSize(newSize);
                     setCurrentPage(1);
+                    try {
+                      localStorage.setItem("ciam_directory_page_size", String(newSize));
+                    } catch {}
                   }}
                   className="px-2 py-1 bg-white border border-slate-300 rounded font-bold text-slate-800 focus:outline-none focus:border-blue-600 cursor-pointer"
                 >

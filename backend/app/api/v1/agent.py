@@ -155,8 +155,8 @@ def handle_agent_heartbeat(
                 ident = MasterIdentity(
                     username=username_clean,
                     full_name=acc.full_name or username_clean,
-                    email=acc.email or (f"{username_clean.lower()}@windowasia.com" if is_corp else None),
-                    department=acc.department or ("Corporate" if is_corp else "ทั่วไป"),
+                    email=acc.email or None,
+                    department=acc.department or "ทั่วไป",
                     is_active_in_ad=True if is_corp else False,
                     created_at=now
                 )

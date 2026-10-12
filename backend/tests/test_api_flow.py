@@ -236,11 +236,13 @@ def test_create_provision_and_lifecycle():
     from app.models.identity import MasterIdentity
     from app.models.mapping import AppAccountMapping
     db = SessionLocal()
-    ident = db.query(MasterIdentity).filter(MasterIdentity.username == test_username).first()
-    if ident:
-        db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == ident.id).delete()
-        db.delete(ident)
-        db.commit()
+    stray_users = db.query(MasterIdentity).filter(
+        (MasterIdentity.username == test_username) | (MasterIdentity.username.like("test.user.%"))
+    ).all()
+    for s_user in stray_users:
+        db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == s_user.id).delete()
+        db.delete(s_user)
+    db.commit()
     db.close()
     client.delete(f"/api/v1/applications/{mock_app['id']}", headers=headers)
 

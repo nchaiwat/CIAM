@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~16:48 ICT)  
+> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~17:21 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -9,7 +9,38 @@
 
 ---
 
-## 0.0000000000000 อัปเดตล่าสุด: แก้ไขปัญหาบันทึกความถี่แจ้งเตือน Telegram (interval_hours) เด้งกลับเป็น 4 ชั่วโมง (12 ต.ค. 2026)
+## 0.00000000000000 อัปเดตล่าสุด: ปุ่ม Excel ไอคอนล้วน, ยกเลิกสร้างอีเมลสมมติ (@windowasia.com), จำจำนวนแถวต่อหน้าใน LocalStorage, ปรับสวิตช์ Spoke เป็น On/Off และยุบปุ่มตั้งค่าเชื่อมต่อ (12 ต.ค. 2026)
+### 1. ปุ่มดาวน์โหลด Excel เป็น Icon ล้วน (Directory Page):
+- นำข้อความ `ดาวน์โหลด Excel` ออก เหลือเฉพาะไอคอนเอกสาร Excel สีเขียว พร้อม Tooltip สวยงามและ Micro-animation ขณะคลิก
+
+### 2. ตรวจสอบที่มาของ Email และยกเลิกการสร้างอีเมลสมมติอัตโนมัติ:
+- **สาเหตุที่เคยแสดงอีเมลทั้งที่ไม่มีใน M365:** ในโค้ดเดิม (`ad_proxy.py`, `scheduler.py`, `agent.py`, `initial_data.py`) มี Fallback อัตโนมัติว่าหากบัญชีไม่มีอีเมลแต่เป็นบัญชีองค์กร จะสังเคราะห์อีเมลปลอมขึ้นมาเป็น `{username}@windowasia.com` (เช่น `vip2@windowasia.com`)
+- **การแก้ไข:** ลบตรรกะการสังเคราะห์อีเมลสมมติออกทั้งหมด หากผู้ใช้ไม่มีบัญชีใน M365 และไม่มี Attribute `mail` ใน Active Directory ฟิลด์ Email จะมีค่าเป็น `null` และหน้าเว็บจะไม่แสดงอีเมลหลอกตา
+
+### 3. จำค่า Dropdown จำนวนแถวต่อหน้า (Pagination Limit) ตลอดการใช้งาน:
+- บันทึกค่าที่เลือก (10, 25, 50, 100) ลง `localStorage` (`ciam_directory_page_size`)
+- เมื่อเปิดหน้า Directory ครั้งถัดไประบบจะโหลดค่าเดิมกลับมาแสดงผลทันทีโดยไม่ต้องเลือกใหม่
+
+### 4. ที่มาของแผนก "Engineering" และบัญชี Lifecycle Test:
+- บัญชี `Lifecycle Test efa45e` (`test.user.efa45e`) ที่มีแผนก `Engineering` เกิดขึ้นจากการรัน Automated API Tests (`test_api_flow.py`) ทดสอบวงจร Provisioning & Deprovisioning บัญชี
+- ได้เพิ่มการทำ Cleanup ล้างบัญชีทดสอบ `test.user.%` อัตโนมัติหลังรัน Test เสร็จสิ้นทุกครั้ง
+
+### 5. ปรับปุ่ม Spoke เป็นสวิตช์เปิด/ปิด (ON / OFF):
+- เปลี่ยนจากปุ่ม Badge ข้อความ Active/Disabled มาเป็น **Toggle Switch On/Off สไตล์โมเดิร์น**:
+  - เมื่อเปิดใช้งาน (ON): พื้นหลังสีเขียว `bg-emerald-600` สวิตช์เลื่อนไปทางขวา แสดงข้อความ `ON`
+  - เมื่อปิดใช้งาน (OFF): พื้นหลังสีเทา `bg-slate-300` สวิตช์เลื่อนไปทางซ้าย แสดงข้อความ `OFF`
+- ปรับสวิตช์ใน Edit Modal ให้เป็น On/Off ในรูปแบบเดียวกัน
+
+### 6. ยุบปุ่ม SSO และ M2M Key รวมเป็นปุ่มเดียว:
+- ยุบปุ่ม `[🔒 SSO]` และ `[🔑 M2M Key]` ที่เปิดหน้าต่างเดียวกัน รวมเป็นปุ่มเดียวชื่อ **`[⚙️ ตั้งค่าเชื่อมต่อ]`**
+
+### 7. การตรวจสอบคุณภาพ:
+- Backend pytest: 46/46 passed (100%)
+- Frontend TypeScript `npx tsc --noEmit`: 0 errors (100%)
+
+---
+
+## 0.0000000000000 อัปเดตก่อนหน้า: แก้ไขปัญหาบันทึกความถี่แจ้งเตือน Telegram (interval_hours) เด้งกลับเป็น 4 ชั่วโมง (12 ต.ค. 2026)
 ### ปัญหาที่พบและสาเหตุ (Root Cause):
 - เมื่อผู้ใช้เลือกความถี่ในการตรวจเช็คเป็น **"ทุกๆ 1 ชั่วโมง"** แล้วกด **"บันทึกการตั้งค่า Telegram"** ค่าจะเด้งกลับมาเป็น **4 ชั่วโมง** เสมอ
 - **สาเหตุ:** คอลัมน์ `setting_value` ในโมเดล `SystemSetting` (`setting.py`) ถูกประกาศเป็น `Column(JSON)` แบบพื้นฐาน ซึ่ง SQLAlchemy ไม่ตรวจจับการแก้ไขค่าใน Dictionary ภายใน (In-place mutation) ทำให้เมื่อรันคำสั่ง `setting.setting_value = current_val` โดยที่เป็นออบเจกต์เดิม SQLAlchemy ถือว่าไม่มีฟิลด์ใดเปลี่ยนแปลง (No-op) และไม่ส่งคำสั่ง `UPDATE system_settings` ไปยัง PostgreSQL เลย เมื่อตอบกลับหรือรีโหลด Session ใหม่ ค่าจึงดึงของเดิม (4 ชั่วโมง) กลับมาแสดง

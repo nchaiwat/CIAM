@@ -141,12 +141,14 @@ def persist_spoke_inventory(
 
         telegram_val = str(item.get("telegram_id") or item.get("pager") or "").strip() or None
 
+        raw_item_email = (item.get("email") or "").strip() or None
+
         if not identity:
             identity = MasterIdentity(
                 username=uname,
                 full_name=item.get("full_name") or uname,
-                email=item.get("email") or (f"{uname.lower()}@windowasia.com" if is_corp else None),
-                department=item.get("department") or ("Sales" if is_corp_dept else ("WA Shop" if is_shop_acc else None)),
+                email=raw_item_email,
+                department=item.get("department") or ("WA Shop" if is_shop_acc else None),
                 employee_id=item.get("employee_id"),
                 telegram_id=telegram_val,
                 is_active_in_ad=is_active if is_ad_item else (False if is_shop_acc else (True if is_corp else False)),
@@ -171,10 +173,8 @@ def persist_spoke_inventory(
             if telegram_val and not identity.telegram_id:
                 identity.telegram_id = telegram_val
 
-            if not identity.email and item.get("email"):
-                identity.email = item.get("email")
-            elif not identity.email and is_corp:
-                identity.email = f"{uname.lower()}@windowasia.com"
+            if raw_item_email:
+                identity.email = raw_item_email
 
             if not identity.department:
                 if item.get("department"):

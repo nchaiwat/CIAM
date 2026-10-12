@@ -424,7 +424,7 @@ class AdProxyConnector(BaseConnector):
                         {
                             "username": idt.username,
                             "full_name": idt.full_name or idt.username,
-                            "email": idt.email or f"{idt.username.lower()}@windowasia.com",
+                            "email": idt.email,
                             "department": idt.department or "Active Directory",
                             "is_active": idt.is_active_in_ad,
                             "group_name": "Domain Users"
@@ -482,9 +482,7 @@ class AdProxyConnector(BaseConnector):
                             uac = int(entry.userAccountControl.value or 512)
                             is_active = not bool(uac & 2)  # bit 2 = ACCOUNTDISABLE
                             d_name = str(entry.displayName.value or s_name).strip()
-                            mail = str(entry.mail.value or "").strip()
-                            if not mail:
-                                mail = f"{s_name.lower()}@windowasia.com"
+                            mail = str(entry.mail.value or "").strip() or None
                             raw_dept = str(entry.department.value or "").strip() or None
                             dn_val = str(entry.distinguishedName.value or "").strip() or None
                             dept = extract_ou_department(dn_val, fallback=raw_dept) or raw_dept or None
@@ -533,7 +531,8 @@ class AdProxyConnector(BaseConnector):
                 continue
 
             fname = u.get("full_name") or u.get("DisplayName") or u.get("display_name") or uname
-            mail = u.get("email") or u.get("EmailAddress") or u.get("mail") or f"{uname.lower()}@windowasia.com"
+            raw_mail = u.get("email") or u.get("EmailAddress") or u.get("mail") or None
+            mail = str(raw_mail).strip() if raw_mail else None
             raw_dept = u.get("department") or u.get("Department") or None
             dn = u.get("distinguishedName") or u.get("DistinguishedName") or u.get("dn") or None
             dept = extract_ou_department(dn, fallback=raw_dept) or raw_dept or "Active Directory"
