@@ -13,7 +13,6 @@ import {
   RefreshCw,
   Server,
   Zap,
-  Bell,
   Key,
   Shield,
   ExternalLink,
@@ -28,26 +27,16 @@ import {
   CheckCircle,
   XCircle,
 } from "lucide-react";
-import { ciamApi, DashboardSummary, AdminUserOut, ConnectedApp } from "@/lib/api";
-import AdminProfileModal from "@/components/profile/AdminProfileModal";
+import { ciamApi, DashboardSummary, ConnectedApp } from "@/lib/api";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [apps, setApps] = useState<ConnectedApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<AdminUserOut | null>(null);
 
   // Spoke Analytics Dimension View Toggle (Point Requested by User)
   const [spokeDimension, setSpokeDimension] = useState<"SYNC_AD" | "ACTIVE_STATUS" | "MATRIX_TABLE">("SYNC_AD");
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("ciam_user");
-      if (stored) setCurrentUser(JSON.parse(stored));
-    } catch {}
-  }, []);
 
   const fetchDashboardData = async () => {
     try {
@@ -119,16 +108,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setProfileModalOpen(true)}
-            className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-sky-50 border border-sky-300 text-sky-800 text-xs font-bold hover:bg-sky-100 transition-colors shadow-2xs"
-            title="ตั้งค่าแจ้งเตือน Telegram & ตรวจสอบสถานะ AD Sync Agent"
-          >
-            <Bell className="w-3.5 h-3.5 text-sky-600" />
-            <span>Telegram & AD Agent</span>
-          </button>
-
+        <div className="flex items-center gap-2">
           <button
             onClick={fetchDashboardData}
             disabled={refreshing}
@@ -137,14 +117,6 @@ export default function DashboardPage() {
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-blue-600" : "text-slate-600"}`} />
             <span>{refreshing ? "กำลังรีเฟรช..." : "รีเฟรช"}</span>
           </button>
-
-          <Link
-            href="/directory"
-            className="flex items-center space-x-1 px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-2xs"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>ทะเบียนผู้ใช้</span>
-          </Link>
         </div>
       </div>
 
@@ -775,14 +747,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* Admin Profile & Telegram Health Monitor Modal */}
-      <AdminProfileModal
-        isOpen={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        currentUser={currentUser}
-        onUserUpdated={(updated) => setCurrentUser(updated)}
-      />
     </div>
   );
 }
