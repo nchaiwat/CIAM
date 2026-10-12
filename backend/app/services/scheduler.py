@@ -55,8 +55,9 @@ def get_sync_schedule(db: Session) -> Dict[str, Any]:
     return schedule
 
 def update_sync_schedule(db: Session, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    from sqlalchemy.orm.attributes import flag_modified
     setting = db.query(SystemSetting).filter_by(setting_key="sync_schedule").first()
-    current_val = setting.setting_value if setting else DEFAULT_SCHEDULE.copy()
+    current_val = dict(setting.setting_value) if (setting and setting.setting_value) else DEFAULT_SCHEDULE.copy()
 
     if "enabled" in update_data and update_data["enabled"] is not None:
         current_val["enabled"] = bool(update_data["enabled"])
@@ -69,14 +70,16 @@ def update_sync_schedule(db: Session, update_data: Dict[str, Any]) -> Dict[str, 
     if not setting:
         setting = SystemSetting(
             setting_key="sync_schedule",
-            setting_value=current_val,
+            setting_value=dict(current_val),
             description="Daily automated synchronization schedule for all connected spoke applications"
         )
         db.add(setting)
     else:
-        setting.setting_value = current_val
+        setting.setting_value = dict(current_val)
+        flag_modified(setting, "setting_value")
 
     db.commit()
+    db.refresh(setting)
     return get_sync_schedule(db)
 
 def persist_spoke_inventory(

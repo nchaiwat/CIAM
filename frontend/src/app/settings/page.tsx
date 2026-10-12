@@ -322,7 +322,7 @@ export default function SettingsPage() {
                   ความถี่ในการตรวจเช็ค (Interval)
                 </label>
                 <select
-                  value={telegramConfig.interval_hours || 4}
+                  value={telegramConfig.interval_hours ?? 4}
                   onChange={(e) =>
                     setTelegramConfig((prev) => ({
                       ...prev,
@@ -335,6 +335,7 @@ export default function SettingsPage() {
                   <option value={2}>ทุกๆ 2 ชั่วโมง</option>
                   <option value={4}>ทุกๆ 4 ชั่วโมง (แนะนำ)</option>
                   <option value={6}>ทุกๆ 6 ชั่วโมง</option>
+                  <option value={8}>ทุกๆ 8 ชั่วโมง</option>
                   <option value={12}>ทุกๆ 12 ชั่วโมง</option>
                   <option value={24}>วันละ 1 ครั้ง</option>
                 </select>

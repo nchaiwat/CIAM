@@ -84,8 +84,9 @@ def get_health_monitor_config(db: Session) -> Dict[str, Any]:
     return config
 
 def save_health_monitor_config(db: Session, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    from sqlalchemy.orm.attributes import flag_modified
     setting = db.query(SystemSetting).filter_by(setting_key="health_monitor_schedule").first()
-    current_val = setting.setting_value if setting else DEFAULT_HEALTH_MONITOR.copy()
+    current_val = dict(setting.setting_value) if (setting and setting.setting_value) else DEFAULT_HEALTH_MONITOR.copy()
 
     if "enabled" in update_data and update_data["enabled"] is not None:
         current_val["enabled"] = bool(update_data["enabled"])
@@ -94,9 +95,12 @@ def save_health_monitor_config(db: Session, update_data: Dict[str, Any]) -> Dict
         if len(parts) >= 2 and 0 <= int(parts[0]) <= 23 and 0 <= int(parts[1]) <= 59:
             current_val["start_time"] = f"{int(parts[0]):02d}:{int(parts[1]):02d}"
     if "interval_hours" in update_data and update_data["interval_hours"] is not None:
-        val = int(update_data["interval_hours"])
-        if val in [1, 2, 4, 6, 8, 12, 24]:
-            current_val["interval_hours"] = val
+        try:
+            val = int(update_data["interval_hours"])
+            if val in [1, 2, 4, 6, 8, 12, 24]:
+                current_val["interval_hours"] = val
+        except (ValueError, TypeError):
+            pass
     if "bot_token" in update_data and update_data["bot_token"] is not None:
         current_val["bot_token"] = str(update_data["bot_token"]).strip()
     if "chat_id" in update_data and update_data["chat_id"] is not None:
@@ -107,14 +111,16 @@ def save_health_monitor_config(db: Session, update_data: Dict[str, Any]) -> Dict
     if not setting:
         setting = SystemSetting(
             setting_key="health_monitor_schedule",
-            setting_value=current_val,
+            setting_value=dict(current_val),
             description="Telegram Health Monitor and AD Sync Agent periodic alert configuration"
         )
         db.add(setting)
     else:
-        setting.setting_value = current_val
+        setting.setting_value = dict(current_val)
+        flag_modified(setting, "setting_value")
 
     db.commit()
+    db.refresh(setting)
     return get_health_monitor_config(db)
 
 async def check_full_system_health(db: Session) -> Dict[str, Any]:
@@ -278,12 +284,14 @@ async def send_health_report(
     setting = db.query(SystemSetting).filter_by(setting_key="health_monitor_schedule").first()
     summary_msg = f"ส่งแจ้งเตือนสำเร็จ {success_deliveries}/{len(recipients)} ช่องทาง ({overall_status_text})"
     if setting:
-        val = setting.setting_value.copy()
+        val = dict(setting.setting_value) if setting.setting_value else {}
         val["last_run_at"] = get_bangkok_now().isoformat()
         val["last_status"] = "SUCCESS" if success_deliveries > 0 else "FAILED"
         val["last_summary"] = summary_msg
         val["last_error"] = "; ".join(delivery_errors) if delivery_errors else None
         setting.setting_value = val
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(setting, "setting_value")
         db.commit()
 
     # Record Audit Log

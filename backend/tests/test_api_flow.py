@@ -419,6 +419,19 @@ def test_health_monitor_schedule_and_alert():
     assert saved_cfg["interval_hours"] == 4
     assert saved_cfg["chat_id"] == "-1001234567890"
 
+    # 2.1 Update interval_hours to 1 hour and verify it persists on re-fetch
+    put_1h_res = client.put(
+        "/api/v1/dashboard/health-monitor",
+        json={"interval_hours": 1},
+        headers=headers
+    )
+    assert put_1h_res.status_code == 200
+    assert put_1h_res.json()["config"]["interval_hours"] == 1
+
+    get_1h_res = client.get("/api/v1/dashboard/health-monitor", headers=headers)
+    assert get_1h_res.status_code == 200
+    assert get_1h_res.json()["config"]["interval_hours"] == 1
+
     # 3. Test triggering alert (will simulate attempt and report delivery details)
     alert_res = client.post(
         "/api/v1/dashboard/health-monitor/test-alert",

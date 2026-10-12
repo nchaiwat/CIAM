@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~16:10 ICT)  
+> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~16:48 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -9,7 +9,21 @@
 
 ---
 
-## 0.000000000000 อัปเดตล่าสุด: แก้ไข Modal เลื่อนหลุดขอบบน, เพิ่มเมนู System Settings ใน Sidebar & Header, แก้ไข Error ซิงก์ทุกระบบทันที (now_utc), และเพิ่มปุ่ม Enable/Disable Spoke (12 ต.ค. 2026)
+## 0.0000000000000 อัปเดตล่าสุด: แก้ไขปัญหาบันทึกความถี่แจ้งเตือน Telegram (interval_hours) เด้งกลับเป็น 4 ชั่วโมง (12 ต.ค. 2026)
+### ปัญหาที่พบและสาเหตุ (Root Cause):
+- เมื่อผู้ใช้เลือกความถี่ในการตรวจเช็คเป็น **"ทุกๆ 1 ชั่วโมง"** แล้วกด **"บันทึกการตั้งค่า Telegram"** ค่าจะเด้งกลับมาเป็น **4 ชั่วโมง** เสมอ
+- **สาเหตุ:** คอลัมน์ `setting_value` ในโมเดล `SystemSetting` (`setting.py`) ถูกประกาศเป็น `Column(JSON)` แบบพื้นฐาน ซึ่ง SQLAlchemy ไม่ตรวจจับการแก้ไขค่าใน Dictionary ภายใน (In-place mutation) ทำให้เมื่อรันคำสั่ง `setting.setting_value = current_val` โดยที่เป็นออบเจกต์เดิม SQLAlchemy ถือว่าไม่มีฟิลด์ใดเปลี่ยนแปลง (No-op) และไม่ส่งคำสั่ง `UPDATE system_settings` ไปยัง PostgreSQL เลย เมื่อตอบกลับหรือรีโหลด Session ใหม่ ค่าจึงดึงของเดิม (4 ชั่วโมง) กลับมาแสดง
+- **การแก้ไข:**
+  1. ใน `backend/app/models/setting.py`: ปรับ `setting_value` เป็น `Column(MutableDict.as_mutable(JSON))` เพื่อให้ SQLAlchemy ตรวจจับการเปลี่ยนแปลงของ Dictionary ใน JSON โดยอัตโนมัติ
+  2. ใน `telegram_service.py` และ `scheduler.py`: คัดลอก Dict ด้วย `dict(...)` พร้อมเรียกใช้ `flag_modified(setting, "setting_value")` และ `db.refresh(setting)` เพื่อรับประกันว่าการ `UPDATE` จะถูกบันทึกลงฐานข้อมูล 100%
+  3. ใน `frontend/src/app/settings/page.tsx`: ปรับการผูกค่าเป็น `telegramConfig.interval_hours ?? 4` และเพิ่มตัวเลือกความถี่ `ทุกๆ 8 ชั่วโมง` ให้ครบถ้วน
+- **การตรวจสอบคุณภาพ:**
+  - เพิ่ม Unit Test ใน `test_api_flow.py` ยืนยันการอัปเดต `interval_hours = 1` และตรวจสอบการเรียก `GET` ซ้ำ ผ่าน 100%
+  - Frontend TypeScript `npx tsc --noEmit`: 0 errors
+
+---
+
+## 0.000000000000 อัปเดตก่อนหน้า: แก้ไข Modal เลื่อนหลุดขอบบน, เพิ่มเมนู System Settings ใน Sidebar & Header, แก้ไข Error ซิงก์ทุกระบบทันที (now_utc), และเพิ่มปุ่ม Enable/Disable Spoke (12 ต.ค. 2026)
 ### 1. แก้ไขปัญหากดชื่อผู้ดูแลระบบแล้วหน้าจอหลุดหายไปด้านบน (Admin Profile Modal Cutoff):
 - **สาเหตุ:** การใช้ CSS Flexbox `items-center` ร่วมกับ `overflow-y-auto` บน Container modal ที่มีความสูงมากกว่า Viewport ทำให้หัว Modal ถูกดันขึ้นไปในพื้นที่พิกัดติดลบ ไม่สามารถเลื่อนกลับลงมาได้
 - **การแก้ไข:** ใน `AdminProfileModal.tsx` ปรับโครงสร้าง Wrapper เป็น `items-start sm:items-center py-6 sm:py-10 max-h-[90vh] flex flex-col my-auto` พร้อมยึด Header แบบ `shrink-0` ทำให้หัวข้อและปุ่ม `[X]` ปิดหน้าต่างแสดงผลอยู่บนหน้าจอตลอดเวลา เลื่อนเนื้อหาภายในได้อย่างราบรื่น

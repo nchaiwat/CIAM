@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Boolean, JSON, DateTime
+from sqlalchemy.ext.mutable import MutableDict
 from app.core.database import Base
 
 class SystemSetting(Base):
@@ -7,6 +8,6 @@ class SystemSetting(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     setting_key = Column(String(100), unique=True, nullable=False, index=True)
-    setting_value = Column(JSON, nullable=False)
+    setting_value = Column(MutableDict.as_mutable(JSON), nullable=False)
     description = Column(String(255), nullable=True)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
