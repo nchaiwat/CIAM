@@ -9,6 +9,26 @@
 
 ---
 
+## 0.00000000 อัปเดตล่าสุด: เพิ่ม Spoke Connector สำหรับ pfSense HO (Head Office: 192.168.10.1) (12 ต.ค. 2026)
+### รายละเอียดฟีเจอร์การเชื่อมต่อ pfSense HO:
+1. **Spoke Registration & Seed Data (`initial_data.py`):**
+   - เพิ่มระบบเชื่อมต่อ `pfsense_ho` (pfSense Firewall & VPN - Head Office) เข้าสู่ตาราง `connected_applications`
+   - รหัสแอป: `pfsense_ho`, ชื่อ: `pfSense Firewall & VPN (Head Office)`
+   - ประเภท Connector: `PFSENSE`, Network Policy: `VPN_ONLY`
+   - Base URL: `https://192.168.10.1` (REST API สำนักงานใหญ่)
+   - ปรับการ Auto-heal ให้เจาะจงเฉพาะ IP เก่า `192.168.12.11` ไม่ให้กระทบ `192.168.10.1` ของ pfSense HO
+2. **Connector Layer & Multi-Endpoint Resilience (`pfsense.py` & `factory.py`):**
+   - รองรับการเชื่อมต่อตรงผ่าน HTTPS ด้วย `verify=False` (สำหรับ Self-signed certs บน pfSense WebGUI)
+   - ปรับ `health_check()` ให้รองรับทั้ง Endpoint Proxy (`/health`) และ Native pfSense-pkg-RESTAPI (`/api/v1/system/status`, `/api/v1/status`, `/api/v1/user`)
+   - ปรับ `sync_inventory()` ให้นำข้อมูลรายชื่อทั้งรูปแบบ CIAM (`accounts`) และ Native pfSense (`data`) มา Normalize เป็นโครงสร้างเดียวกัน
+   - ปรับ `set_account_status()` ให้รองรับทั้ง Endpoint `/users/{username}/status` และ `PATCH /api/v1/user` (`{"username": username, "disabled": bool}`)
+   - เพิ่ม Fast-fail เมื่อตรวจพบ `ConnectError` หรือ `ConnectTimeout` เพื่อไม่ให้วนซ้ำรอ Timeout เสียเวลา
+3. **ผลการทดสอบความถูกต้อง (Type Integrity & Test Suite):**
+   - Backend Pytest: ผ่าน 46/46 (100% รวม unit tests `tests/test_pfsense_connector.py`)
+   - Frontend TypeScript: ผ่าน `tsc --noEmit` ได้ 0 errors (100%)
+
+---
+
 ## 0.0000000 สรุปแผนงานและแนวทางการพัฒนา: นำ Spoke Integration Framework ไปใช้กับระบบ On-Premise PHP + MySQL (12 ต.ค. 2026)
 ### บริบทและโจทย์งาน:
 - เตรียมให้ทีม Dev ภายในนำ Framework การซิงก์และเชื่อมต่อกับ Central IAM ([SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) v2.7.0) ไปใช้กับแอปพลิเคชันภายใน

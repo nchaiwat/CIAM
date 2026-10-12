@@ -231,6 +231,20 @@ def init_db():
                 "network_policy": "VPN_ONLY",
                 "health_status": "ONLINE",
                 "latency_ms": 25
+            },
+            {
+                "app_code": "pfsense_ho",
+                "app_name": "pfSense Firewall & VPN (Head Office)",
+                "connector_type": "PFSENSE",
+                "base_url": "https://192.168.10.1",
+                "api_key": "mgmt_ciam_key_9a88b1c0d2e3f4a5",
+                "client_id": "pfsense-ho-spoke-client",
+                "client_secret": "sec_pfsense_ho_oauth_secret_2026",
+                "redirect_uris": "http://localhost:3000/portal/callback",
+                "sso_enabled": False,
+                "network_policy": "VPN_ONLY",
+                "health_status": "ONLINE",
+                "latency_ms": 15
             }
         ]
 
@@ -262,8 +276,8 @@ def init_db():
                 db.add(app)
                 db.flush()
             else:
-                # Auto-heal legacy 192.168 base_urls on existing applications
-                if app.base_url and "192.168." in app.base_url:
+                # Auto-heal legacy 192.168.12.11 base_urls on existing applications
+                if app.base_url and "192.168.12.11" in app.base_url:
                     if app.app_code == "ad":
                         app.base_url = "http://172.18.0.1:3100"
                     else:

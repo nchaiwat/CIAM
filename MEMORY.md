@@ -99,6 +99,9 @@
 * **Architecture Mode:** Dual-integration:
   1. **Native AD/LDAPS Auth Server:** Direct link to `172.18.0.1` (Ports 389/636) for WebGUI and OpenVPN authentication.
   2. **REST API Spoke Connector:** Community package `pfSense-API` (by Jared Hendrickson) installed via FreeBSD `pkg-static`.
+* **Connected Spokes:**
+  1. **pfSense FAC (`pfsense_fac`):** Factory Firewall & FreeRADIUS VPN Gateway via AD Sync Agent Proxy (`http://172.18.0.1:3100/api/v1/pfsense/fac`).
+  2. **pfSense HO (`pfsense_ho`):** Head Office Firewall & FreeRADIUS VPN Gateway at `https://192.168.10.1` (`PFSENSE` connector with native SSL bypass `verify=False` and fallback path resolution).
 * **Installation Command (pfSense 2.7.2):**
   `pkg-static -C /dev/null add https://github.com/pfrest/pfSense-pkg-RESTAPI/releases/download/v2.4.3/pfSense-2.7.2-pkg-RESTAPI.pkg`
   *(Note: v2.4.3 is the latest release specifically built for pfSense 2.7.2; latest v2.10+ targets 2.8+)*
