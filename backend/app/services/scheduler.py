@@ -92,7 +92,21 @@ def persist_spoke_inventory(
     synced_count = 0
     now = datetime.now(timezone.utc)
 
+    # Deduplicate incoming accounts by username to guard against duplicate entries
+    # (e.g. pfSense accounts present in both FreeRADIUS and Local user database)
+    seen_batch_usernames = set()
+    deduped_accounts = []
     for item in raw_accounts:
+        u_raw = (item.get("username") or "").strip()
+        if not u_raw:
+            continue
+        u_lower = u_raw.lower()
+        if u_lower in seen_batch_usernames:
+            continue
+        seen_batch_usernames.add(u_lower)
+        deduped_accounts.append(item)
+
+    for item in deduped_accounts:
         uname = (item.get("username") or "").strip()
         if not uname:
             continue

@@ -9,7 +9,20 @@
 
 ---
 
-## 0.000000000 อัปเดตล่าสุด: แก้ปัญหาดูข้อมูลสด pfSense HO ไม่แสดง (AD Sync Agent Gateway Routing & Endpoints) (12 ต.ค. 2026)
+## 0.0000000000 อัปเดตล่าสุด: แก้ไข 500 Internal Server Error จาก Duplicate Username และปฏิบัติตามกฎ Sandbox อย่างเคร่งครัด (12 ต.ค. 2026)
+### 1. ปัญหาและสาเหตุที่พบ (Root Cause of 500 Error):
+- Terminal ฝั่ง AD Sync Agent ดึงบัญชี HO สำเร็จสมบูรณ์: `Total 41 accounts (1 FreeRADIUS + 40 Local)` และส่ง `SUCCESS 200` กลับมายัง Central IAM
+- แต่หน้าเว็บขึ้นแจ้งเตือน `ไม่สามารถดึงข้อมูลบัญชีจาก PFSENSE_HO: API Error [500]: Internal Server Error`
+- **สาเหตุ:** ในฟังก์ชัน `persist_spoke_inventory` (`scheduler.py`) หากมีชื่อผู้ใช้ซ้ำกันระหว่างกลุ่ม FreeRADIUS VPN และ Local Users (หรือมีรายการชื่อผู้ใช้ซ้ำกันในชุดข้อมูลที่ดึงมา) ระบบจะพยายามสร้างแถวใน `app_account_mappings` ซ้ำซ้อน ซึ่งละเมิด Unique Constraint (`uq_app_username_per_app`) ในฐานข้อมูล ส่งผลให้เกิดข้อผิดพลาด 500
+- **การแก้ไข:** เพิ่มการ Deduplicate รายชื่อบัญชีตาม `username.lower()` ก่อนนำเข้าลูปประมวลผลใน `persist_spoke_inventory` เพื่อป้องกันการเกิด Unique Violation อย่างเด็ดขาด
+
+### 2. กฎเหล็กการไม่แตะต้องไฟล์นอก Sandbox (Strict Sandbox Boundary Protocol):
+- **ห้ามแก้ไขไฟล์ใดๆ นอกโฟลเดอร์ Workspace (`D:\Python\Central-IAM`) โดยเด็ดขาด** (เช่น `D:\Python\ADSyncAgent` หรือที่อื่นๆ) เว้นแต่ผู้ใช้จะอนุญาตก่อน
+- ทุกครั้งที่ต้องมีการอัปเดตโค้ดสำหรับรันบน Server / Spoke Agent ภายนอก **ต้องแสดงโค้ดออกมาในบทสนทนาให้ผู้ใช้ตรวจสอบและ Copy ไปวางเองเท่านั้น**
+
+---
+
+## 0.000000000 อัปเดตก่อนหน้า: แก้ปัญหาดูข้อมูลสด pfSense HO ไม่แสดง (AD Sync Agent Gateway Routing & Endpoints) (12 ต.ค. 2026)
 ### ปัญหาที่พบและการวิเคราะห์รากเหง้า (Root Cause):
 - เมื่อกดดูข้อมูลสดของ pfSense FAC ดึงได้ปกติ 168 บัญชี (77 FreeRADIUS + 91 Local) แต่ pfSense HO ขึ้นแจ้งเตือน:
   `ระบบปลายทางออฟไลน์ (Offline) - pfSense ไม่ตอบรับ (http://172.18.0.1:3100/api/v1/pfsense/ho)`
