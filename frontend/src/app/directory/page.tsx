@@ -1055,9 +1055,10 @@ export default function DirectoryPage() {
                             {user.telegram_id ? (
                               <>
                                 <span className="text-slate-400">•</span>
-                                <span className="inline-flex items-center space-x-1 bg-sky-50 text-sky-800 border border-sky-300 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold">
-                                  <Send className="w-2.5 h-2.5 text-sky-600 shrink-0" />
-                                  <span>{user.telegram_id}</span>
+                                <span
+                                  className="inline-flex items-center space-x-1 bg-sky-50 text-sky-800 border border-sky-300 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold"
+                                  title="Telegram ID (คลิกลูกศรด้านหน้าเพื่อทดสอบส่ง DM)"
+                                >
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -1065,15 +1066,16 @@ export default function DirectoryPage() {
                                       handleTestUserTelegramDm(user);
                                     }}
                                     disabled={testingDmUserId === user.id}
-                                    title={`ทดสอบส่งข้อความ DM ไปยัง Telegram ID: ${user.telegram_id}`}
-                                    className="ml-1 px-1 py-0.2 bg-white hover:bg-sky-100 border border-sky-300 rounded text-[9px] text-sky-700 font-sans font-bold cursor-pointer transition shadow-2xs"
+                                    title={`คลิกเพื่อทดสอบส่งข้อความ DM ไปยัง Telegram ID: ${user.telegram_id}`}
+                                    className="p-0.5 text-sky-600 hover:text-sky-900 hover:bg-sky-200/80 rounded transition cursor-pointer flex items-center justify-center shrink-0"
                                   >
                                     {testingDmUserId === user.id ? (
-                                      <RefreshCw className="w-2.5 h-2.5 animate-spin inline" />
+                                      <RefreshCw className="w-2.5 h-2.5 animate-spin text-sky-600" />
                                     ) : (
-                                      "ทดสอบ DM"
+                                      <Send className="w-2.5 h-2.5 hover:scale-125 transition-transform" />
                                     )}
                                   </button>
+                                  <span>{user.telegram_id}</span>
                                 </span>
                               </>
                             ) : user.employee_id ? (

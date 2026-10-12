@@ -17,7 +17,7 @@
 ### 2. นำฟิลด์ Telegram ID จาก AD Pager มาใช้งานแทน `• N/A` พร้อมปุ่มทดสอบ DM:
 - **ฟิลด์ Pager ใน AD Properties:** ผู้ใช้บน Active Directory มีหมายเลข Telegram ID บันทึกอยู่ที่ `Telephones > Pager` (เช่น `7656347433`)
 - **การเชื่อมโยงระบบ:** ดึง `pager` แมปเข้าสู่ `telegram_id` ใน `MasterIdentity` และแสดงในหน้า `/directory` ด้วยไอคอน Telegram (เครื่องบินกระดาษ)
-- **ปุ่มทดสอบ DM:** เพิ่มปุ่ม `ทดสอบ DM` ทั้งในตาราง User Directory และใน Modal รายละเอียดผู้ใช้ โดยเรียก Endpoint `POST /api/v1/directory/users/{user_id}/test-telegram` ส่งข้อความ DM แจ้งเตือนไปยัง Telegram ส่วนตัวของผู้ใช้ทันทีผ่าน Telegram Bot กลาง
+- **ปุ่มทดสอบ DM:** ปรับแต่ง UI ให้สะอาดตา โดยเปลี่ยนจากปุ่มข้อความเหลี่ยม `ทดสอบ DM` มาเป็นปุ่มลูกศรไอคอน Telegram ด้านหน้าหมายเลข Telegram ID โดยตรง (กดที่ลูกศรเพื่อยิง DM ทดสอบได้ทันที) พร้อมมี Loading Spinner และ Tooltip บอกวิธีใช้งานชัดเจน
 
 ### 3. หน้าตั้งค่าระบบแบบรวมศูนย์ (/settings) และเมนูใหม่บน Navbar:
 - **หน้าเว็บใหม่:** `frontend/src/app/settings/page.tsx` รวบรวมการตั้งค่าสำคัญทั้งหมด:
