@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   Server,
+  Settings,
 } from "lucide-react";
 
 export default function Navbar() {
@@ -30,6 +31,7 @@ export default function Navbar() {
     },
     { name: "ระบบที่เชื่อมต่อ", href: "/applications", icon: Layers },
     { name: "ประวัติการใช้งาน", href: "/audit-logs", icon: FileCheck2 },
+    { name: "ตั้งค่าระบบ", href: "/settings", icon: Settings },
   ];
 
   return (

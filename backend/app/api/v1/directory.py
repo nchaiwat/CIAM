@@ -1022,3 +1022,77 @@ def create_or_update_local_portal_account(
     )
 
 
+@router.post("/users/{user_id}/test-telegram")
+async def test_user_telegram_dm(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Send a test direct message (DM) to the user's Telegram ID via Central-IAM Bot."""
+    from datetime import timedelta
+    from app.core.config import settings
+    from app.services.telegram_service import get_health_monitor_config, send_telegram_message
+
+    identity = db.query(MasterIdentity).filter(MasterIdentity.id == user_id).first()
+    if not identity:
+        raise HTTPException(status_code=404, detail="ไม่พบข้อมูลผู้ใช้นี้ในระบบ")
+
+    telegram_id = (identity.telegram_id or "").strip()
+    if not telegram_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"ผู้ใช้ '{identity.full_name}' ({identity.username}) ยังไม่มีหมายเลข Telegram ID ในระบบ (กรุณาระบุ Telegram ID บน Active Directory ที่ฟิลด์ Pager)"
+        )
+
+    health_cfg = get_health_monitor_config(db)
+    bot_token = health_cfg.get("bot_token") or getattr(settings, "TELEGRAM_BOT_TOKEN", "") or ""
+    if not bot_token:
+        raise HTTPException(
+            status_code=400,
+            detail="ยังไม่ได้ตั้งค่า Telegram Bot Token ในระบบ (กรุณาไปที่เมนู 'ตั้งค่าระบบ' เพื่อใส่ Bot Token)"
+        )
+
+    bangkok_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=7))).strftime("%Y-%m-%d %H:%M:%S")
+    msg_text = (
+        f"🔔 <b>[Central-IAM] ทดสอบการส่งข้อความส่วนตัว (DM)</b>\n\n"
+        f"เรียนคุณ: <b>{identity.full_name}</b> (<code>{identity.username}</code>)\n"
+        f"แผนก: <b>{identity.department or '-'}</b>\n"
+        f"หมายเลข Telegram ID: <code>{telegram_id}</code>\n\n"
+        f"✅ การเชื่อมต่อระบบแจ้งเตือน Central-IAM กับ Telegram ของคุณสำเร็จเรียบร้อยแล้ว\n"
+        f"<i>วันเวลา: {bangkok_now} น.</i>"
+    )
+
+    success, err_msg = await send_telegram_message(
+        bot_token=bot_token,
+        chat_id=telegram_id,
+        text=msg_text,
+        parse_mode="HTML"
+    )
+
+    if not success:
+        return {
+            "success": False,
+            "message": f"ไม่สามารถส่งข้อความได้: {err_msg} (หมายเหตุ: บอท Telegram จะส่ง DM หาผู้ใช้ได้เมื่อผู้ใช้กด /start กับบอทแล้วเท่านั้น)",
+            "telegram_id": telegram_id
+        }
+
+    # Audit Trail
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="TEST_TELEGRAM_DM",
+        target_username=identity.username,
+        execution_mode="TELEGRAM_API",
+        reason=f"ทดสอบส่งข้อความ DM ไปยัง Telegram ID: {telegram_id}",
+        status="SUCCESS",
+        details=json.dumps({"telegram_id": telegram_id, "recipient": identity.full_name})
+    ))
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"ส่งข้อความทดสอบไปยัง Telegram ID: {telegram_id} สำเร็จเรียบร้อยแล้ว",
+        "telegram_id": telegram_id
+    }
+
+
+

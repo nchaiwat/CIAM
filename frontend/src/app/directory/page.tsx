@@ -27,6 +27,8 @@ import {
   Key,
   Copy,
   XCircle,
+  Send,
+  RefreshCw,
 } from "lucide-react";
 import {
   ciamApi,
@@ -197,6 +199,25 @@ export default function DirectoryPage() {
   const [assignAppRole, setAssignAppRole] = useState("Standard User");
   const [assignAppLoading, setAssignAppLoading] = useState(false);
   const [assignAppError, setAssignAppError] = useState<string | null>(null);
+
+  // Telegram Direct Message Test State
+  const [testingDmUserId, setTestingDmUserId] = useState<number | null>(null);
+
+  const handleTestUserTelegramDm = async (user: UserListItem) => {
+    if (!user.telegram_id) {
+      alert(`ผู้ใช้ ${user.full_name} ยังไม่มีหมายเลข Telegram ID ในระบบ (AD Pager ว่าง)`);
+      return;
+    }
+    try {
+      setTestingDmUserId(user.id);
+      const res = await ciamApi.testUserTelegramDm(user.id);
+      alert(res.message);
+    } catch (err: any) {
+      alert(`ไม่สามารถส่งข้อความ DM ได้: ${err.message || err}`);
+    } finally {
+      setTestingDmUserId(null);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -1021,12 +1042,46 @@ export default function DirectoryPage() {
                               </span>
                             ) : null}
                           </div>
-                          <div className="text-[11px] text-slate-600 font-medium flex items-center space-x-1.5 mt-0.5">
+                          <div className="text-[11px] text-slate-600 font-medium flex items-center flex-wrap gap-1.5 mt-0.5">
                             <span className="font-mono text-blue-700 font-bold bg-blue-50 px-1 py-0.2 rounded border border-blue-200">
                               {user.username}
                             </span>
-                            <span>•</span>
-                            <span className="font-mono text-slate-500">{user.employee_id || "N/A"}</span>
+                            {user.email && (
+                              <>
+                                <span className="text-slate-400">•</span>
+                                <span className="text-slate-600 font-normal text-[11px]">{user.email}</span>
+                              </>
+                            )}
+                            {user.telegram_id ? (
+                              <>
+                                <span className="text-slate-400">•</span>
+                                <span className="inline-flex items-center space-x-1 bg-sky-50 text-sky-800 border border-sky-300 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold">
+                                  <Send className="w-2.5 h-2.5 text-sky-600 shrink-0" />
+                                  <span>{user.telegram_id}</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleTestUserTelegramDm(user);
+                                    }}
+                                    disabled={testingDmUserId === user.id}
+                                    title={`ทดสอบส่งข้อความ DM ไปยัง Telegram ID: ${user.telegram_id}`}
+                                    className="ml-1 px-1 py-0.2 bg-white hover:bg-sky-100 border border-sky-300 rounded text-[9px] text-sky-700 font-sans font-bold cursor-pointer transition shadow-2xs"
+                                  >
+                                    {testingDmUserId === user.id ? (
+                                      <RefreshCw className="w-2.5 h-2.5 animate-spin inline" />
+                                    ) : (
+                                      "ทดสอบ DM"
+                                    )}
+                                  </button>
+                                </span>
+                              </>
+                            ) : user.employee_id ? (
+                              <>
+                                <span className="text-slate-400">•</span>
+                                <span className="font-mono text-slate-500">{user.employee_id}</span>
+                              </>
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -1436,9 +1491,26 @@ export default function DirectoryPage() {
                 <span className="text-slate-600 font-medium">เบอร์โทรศัพท์:</span>
                 <span className="text-slate-900 font-bold">{selectedUser.telephone || "N/A"}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600 font-medium">Telegram ID:</span>
-                <span className="font-mono text-blue-700 font-bold">{selectedUser.telegram_id || "N/A"}</span>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-600 font-medium">Telegram ID (Pager):</span>
+                <div className="flex items-center space-x-2">
+                  <span className="font-mono text-blue-700 font-bold">{selectedUser.telegram_id || "-"}</span>
+                  {selectedUser.telegram_id && (
+                    <button
+                      type="button"
+                      onClick={() => handleTestUserTelegramDm(selectedUser)}
+                      disabled={testingDmUserId === selectedUser.id}
+                      className="px-2 py-0.5 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded font-bold text-[10px] cursor-pointer shadow-xs inline-flex items-center space-x-1"
+                    >
+                      {testingDmUserId === selectedUser.id ? (
+                        <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                      ) : (
+                        <Send className="w-2.5 h-2.5" />
+                      )}
+                      <span>ทดสอบส่ง DM</span>
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-600 font-medium">สถานะใน Active Directory:</span>

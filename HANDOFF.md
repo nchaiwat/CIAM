@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~12:50 ICT)  
+> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~15:10 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -9,7 +9,29 @@
 
 ---
 
-## 0.0000000000 อัปเดตล่าสุด: แก้ไข 500 Internal Server Error จาก Duplicate Username และปฏิบัติตามกฎ Sandbox อย่างเคร่งครัด (12 ต.ค. 2026)
+## 0.00000000000 อัปเดตล่าสุด: สกัดแผนกจาก AD OU (Users WA), ดึง Telegram ID จาก AD Pager พร้อมปุ่มทดสอบ DM และหน้าตั้งค่าระบบ (/settings) (12 ต.ค. 2026)
+### 1. สกัดแผนกอิงตามโครงสร้าง OU (Users WA) ใน Active Directory:
+- **เหตุผล:** ผู้ใช้ทั้งหมดอยู่ภายใต้ `OU=Users WA,DC=wa,DC=net` ซึ่งแบ่งแผนกเป็น OU ย่อย (เช่น `Purchasing`, `IT`, `HR`, `Account`, `Sales`, `Production`)
+- **การแก้ไข:** ใน `ad_proxy.py` เพิ่มฟังก์ชัน `extract_ou_department(dn)` สกัดชื่อแผนกจาก DistinguishedName โดยอัตโนมัติ ทั้งในโหมดผ่าน AD Sync Agent (`_normalize_ad_users`) และ LDAP Direct Connection (`_query_ldap_users`) พร้อมอัปเดตลงตาราง `MasterIdentity.department` ใน `scheduler.py`
+
+### 2. นำฟิลด์ Telegram ID จาก AD Pager มาใช้งานแทน `• N/A` พร้อมปุ่มทดสอบ DM:
+- **ฟิลด์ Pager ใน AD Properties:** ผู้ใช้บน Active Directory มีหมายเลข Telegram ID บันทึกอยู่ที่ `Telephones > Pager` (เช่น `7656347433`)
+- **การเชื่อมโยงระบบ:** ดึง `pager` แมปเข้าสู่ `telegram_id` ใน `MasterIdentity` และแสดงในหน้า `/directory` ด้วยไอคอน Telegram (เครื่องบินกระดาษ)
+- **ปุ่มทดสอบ DM:** เพิ่มปุ่ม `ทดสอบ DM` ทั้งในตาราง User Directory และใน Modal รายละเอียดผู้ใช้ โดยเรียก Endpoint `POST /api/v1/directory/users/{user_id}/test-telegram` ส่งข้อความ DM แจ้งเตือนไปยัง Telegram ส่วนตัวของผู้ใช้ทันทีผ่าน Telegram Bot กลาง
+
+### 3. หน้าตั้งค่าระบบแบบรวมศูนย์ (/settings) และเมนูใหม่บน Navbar:
+- **หน้าเว็บใหม่:** `frontend/src/app/settings/page.tsx` รวบรวมการตั้งค่าสำคัญทั้งหมด:
+  - **Telegram Bot & Group Alerts:** ตั้งค่า Bot Token (แสดง/ซ่อนได้), Group Chat ID, เวลาเริ่มแจ้งเตือน, ความถี่ (Interval 1-24 ชม.), และปุ่ม "ทดสอบส่ง Alert เข้ากลุ่ม Telegram"
+  - **Automated Directory Sync Schedule:** ตั้งเวลาซิงก์ประจำวัน (เช่น 04:00 น.), สวิตช์เปิด/ปิด, ข้อมูล Next Run, และปุ่ม "ซิงก์ระบบทั้งหมดทันที"
+  - **Active Directory Integration Specs:** อธิบายการสกัดแผนกจาก OU และ Telegram ID จาก Pager
+  - **Live System Health Snapshot:** มอนิเตอร์สถานะฐานข้อมูล PostgreSQL, AD Gateway Port 3100, และระบบลูกที่ออนไลน์
+- **การตรวจสอบคุณภาพ:**
+  - Backend pytest: 46/46 passed (100%)
+  - Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)
+
+---
+
+## 0.0000000000 อัปเดตก่อนหน้า: แก้ไข 500 Internal Server Error จาก Duplicate Username และปฏิบัติตามกฎ Sandbox อย่างเคร่งครัด (12 ต.ค. 2026)
 ### 1. ปัญหาและสาเหตุที่พบ (Root Cause of 500 Error):
 - Terminal ฝั่ง AD Sync Agent ดึงบัญชี HO สำเร็จสมบูรณ์: `Total 41 accounts (1 FreeRADIUS + 40 Local)` และส่ง `SUCCESS 200` กลับมายัง Central IAM
 - แต่หน้าเว็บขึ้นแจ้งเตือน `ไม่สามารถดึงข้อมูลบัญชีจาก PFSENSE_HO: API Error [500]: Internal Server Error`

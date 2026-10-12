@@ -449,6 +449,10 @@ export const ciamApi = {
       body: JSON.stringify(payload),
     }),
 
+  testUserTelegramDm: (userId: number) =>
+    fetchApi<{ success: boolean; message: string; telegram_id?: string }>(`/directory/users/${userId}/test-telegram`, {
+      method: "POST",
+    }),
 
   // Offboarding
   previewOffboard: (username: string) =>

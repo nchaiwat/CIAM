@@ -8,6 +8,39 @@ from app.core.config import settings
 
 logger = logging.getLogger("ciam.connectors.ad_proxy")
 
+def extract_ou_department(dn: Optional[str], fallback: Optional[str] = None) -> Optional[str]:
+    """
+    Extract Department from Active Directory Distinguished Name (DN).
+    Target hierarchy: All company users reside under 'OU=Users WA,DC=wa,DC=net'.
+    Example: 'CN=Chaiwat N,OU=IT,OU=Users WA,DC=wa,DC=net' -> 'IT'
+    Example: 'CN=Purchasing Officer,OU=Purchasing,OU=Users WA,DC=wa,DC=net' -> 'Purchasing'
+    Example: 'CN=Factory User,OU=Factory B,OU=Production,OU=Users WA,DC=wa,DC=net' -> 'Production'
+    """
+    if not dn or not isinstance(dn, str):
+        return fallback
+
+    import re
+    ous = re.findall(r'OU=([^,]+)', dn, re.IGNORECASE)
+    if not ous:
+        return fallback
+
+    # Look for 'Users WA' in the OU path
+    for idx, ou in enumerate(ous):
+        if ou.strip().lower() == "users wa":
+            if idx > 0:
+                # Return the OU directly under Users WA
+                return ous[idx - 1].strip()
+            break
+
+    # If 'Users WA' not in path, take the first non-system OU
+    for ou in ous:
+        ou_clean = ou.strip()
+        if ou_clean.lower() not in ["users wa", "domain controllers", "builtin", "users"]:
+            return ou_clean
+
+    return fallback
+
+
 class AdProxyConnector(BaseConnector):
     """
     Connector for Active Directory via In-House AD Sync Agent (AD Proxy).
@@ -435,7 +468,7 @@ class AdProxyConnector(BaseConnector):
                     conn.search(
                         search_base=base_dn,
                         search_filter=search_filter,
-                        attributes=["sAMAccountName", "displayName", "mail", "department", "employeeID", "userAccountControl", "title"],
+                        attributes=["sAMAccountName", "displayName", "mail", "department", "employeeID", "userAccountControl", "title", "pager", "distinguishedName"],
                         size_limit=3000
                     )
                     if conn.entries:
@@ -450,8 +483,11 @@ class AdProxyConnector(BaseConnector):
                             mail = str(entry.mail.value or "").strip()
                             if not mail:
                                 mail = f"{s_name.lower()}@windowasia.com"
-                            dept = str(entry.department.value or "").strip() or None
+                            raw_dept = str(entry.department.value or "").strip() or None
+                            dn_val = str(entry.distinguishedName.value or "").strip() or None
+                            dept = extract_ou_department(dn_val, fallback=raw_dept) or raw_dept or None
                             emp_id = str(entry.employeeID.value or "").strip() or None
+                            pager_val = str(entry.pager.value or "").strip() or None
 
                             results.append({
                                 "username": s_name,
@@ -459,6 +495,8 @@ class AdProxyConnector(BaseConnector):
                                 "email": mail,
                                 "department": dept,
                                 "employee_id": emp_id,
+                                "telegram_id": pager_val,
+                                "distinguished_name": dn_val,
                                 "is_active": is_active,
                                 "group_name": "Domain Users"
                             })
@@ -494,8 +532,11 @@ class AdProxyConnector(BaseConnector):
 
             fname = u.get("full_name") or u.get("DisplayName") or u.get("display_name") or uname
             mail = u.get("email") or u.get("EmailAddress") or u.get("mail") or f"{uname.lower()}@windowasia.com"
-            dept = u.get("department") or u.get("Department") or "Active Directory"
+            raw_dept = u.get("department") or u.get("Department") or None
+            dn = u.get("distinguishedName") or u.get("DistinguishedName") or u.get("dn") or None
+            dept = extract_ou_department(dn, fallback=raw_dept) or raw_dept or "Active Directory"
             emp_id = u.get("employee_id") or u.get("EmployeeID") or None
+            pager = u.get("pager") or u.get("Pager") or u.get("telegram_id") or u.get("TelegramID") or None
 
             is_act = True
             if "is_active" in u:
@@ -511,6 +552,8 @@ class AdProxyConnector(BaseConnector):
                 "email": str(mail).strip(),
                 "department": str(dept).strip(),
                 "employee_id": str(emp_id).strip() if emp_id else None,
+                "telegram_id": str(pager).strip() if pager else None,
+                "distinguished_name": str(dn).strip() if dn else None,
                 "is_active": is_act,
                 "group_name": "Domain Users"
             })
