@@ -15,7 +15,7 @@ class PfSenseConnector(BaseConnector):
     """
     def __init__(self, app_code: str, base_url: str, api_key: str, origin_ip: Optional[str] = None):
         self.app_code = app_code
-        default_base = "https://192.168.10.1" if "ho" in app_code.lower() else "http://172.18.0.1:3100/api/v1/pfsense/fac"
+        default_base = "http://172.18.0.1:3100/api/v1/pfsense/ho" if "ho" in app_code.lower() else "http://172.18.0.1:3100/api/v1/pfsense/fac"
         self.base_url = (base_url or default_base).rstrip("/")
         self.api_key = api_key or "mgmt_ciam_key_9a88b1c0d2e3f4a5"
         self.origin_ip = origin_ip or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153") or "157.173.219.153"
@@ -120,11 +120,13 @@ class PfSenseConnector(BaseConnector):
         return await self.set_account_status(username=username, is_active=False, reason=reason, updated_by=updated_by)
 
     async def sync_inventory(self, status: str = "all", department: Optional[str] = None, search: Optional[str] = None) -> dict:
+        base = self.base_url.rstrip("/")
         candidates = [
-            f"{self.base_url}/users",
-            f"{self.base_url}/api/v1/user",
-            f"{self.base_url}/api/v1/users",
-            f"{self.base_url}/user"
+            base if base.endswith("/users") else f"{base}/users",
+            f"{base}/api/v1/user",
+            f"{base}/api/v1/users",
+            f"{base}/user",
+            base,
         ]
         headers = self._get_headers({"Accept": "application/json"})
         try:
@@ -181,12 +183,15 @@ class PfSenseConnector(BaseConnector):
 
     async def health_check(self) -> ConnectorHealth:
         start_time = time.time()
+        base = self.base_url.rstrip("/")
         candidates = [
-            f"{self.base_url}/health",
-            f"{self.base_url}/api/v1/system/status",
-            f"{self.base_url}/api/v1/status",
-            f"{self.base_url}/api/v1/user",
-            f"{self.base_url}/user"
+            base if base.endswith("/users") else f"{base}/users",
+            f"{base}/health",
+            f"{base}/api/v1/system/status",
+            f"{base}/api/v1/status",
+            f"{base}/api/v1/user",
+            f"{base}/user",
+            "http://172.18.0.1:3100/api/v1/pfsense/health",
         ]
         headers = self._get_headers()
         try:

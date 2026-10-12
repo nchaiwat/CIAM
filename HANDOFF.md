@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~09:40 ICT)  
+> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~12:50 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -9,7 +9,31 @@
 
 ---
 
-## 0.00000000 อัปเดตล่าสุด: เพิ่ม Spoke Connector สำหรับ pfSense HO (Head Office: 192.168.10.1) (12 ต.ค. 2026)
+## 0.000000000 อัปเดตล่าสุด: แก้ปัญหาดูข้อมูลสด pfSense HO ไม่แสดง (AD Sync Agent Gateway Routing & Endpoints) (12 ต.ค. 2026)
+### ปัญหาที่พบและการวิเคราะห์รากเหง้า (Root Cause):
+- เมื่อกดดูข้อมูลสดของ pfSense FAC ดึงได้ปกติ 168 บัญชี (77 FreeRADIUS + 91 Local) แต่ pfSense HO ขึ้นแจ้งเตือน:
+  `ระบบปลายทางออฟไลน์ (Offline) - pfSense ไม่ตอบรับ (http://172.18.0.1:3100/api/v1/pfsense/ho)`
+- Log ฝั่ง AD Sync Agent Terminal (Port 3100): บันทึก `ERROR 404 | User: N/A | App: WA_PROD | IP: WA_PROD` 3 ครั้งติดกัน
+- **สาเหตุ:**
+  1. เนื่องจาก Central IAM อยู่บน Cloud VPS (`157.173.219.153`) ไม่สามารถคุยตรงกับ LAN IP ภายใน (`192.168.10.1`) ได้ ต้องวิ่งผ่าน SSH Tunnel Gateway Port 3100 (`http://172.18.0.1:3100/api/v1/pfsense/ho`)
+  2. ตัว Agent บน Windows Server ยังไม่มี Endpoint `/api/v1/pfsense/ho/users` และ `/api/v1/pfsense/ho` หรือยังไม่ได้เพิ่ม Route ให้ชี้ไปยัง `192.168.10.1` (Port 8088/443) จึงส่งผลให้ Express ตอบกลับ 404
+  3. ใน `pfsense.py` ฟังก์ชัน `health_check()` และ `sync_inventory()` เดิมยังไม่ได้ probe รวม endpoint `/users` สำหรับทดสอบผ่าน Gateway Proxy
+
+### รายละเอียดการแก้ไข:
+1. **Connector Layer (`pfsense.py` & `factory.py`):**
+   - กำหนด default Base URL ของ `pfsense_ho` ให้วิ่งผ่าน Gateway `http://172.18.0.1:3100/api/v1/pfsense/ho` ให้ตรงกับสถาปัตยกรรมเดียวกับ FAC
+   - ปรับปรุง `health_check()` และ `sync_inventory()` ให้ probe Candidate Endpoints ครอบคลุมทั้ง `/users`, `/health`, และ Native pfSense Endpoints
+2. **AD Sync Agent Gateway Extension (`pfsense-extension.js`):**
+   - ปรับปรุง Extension สำหรับรันบน AD Sync Agent Server ให้รองรับทั้งไซต์ `FAC` (`https://192.168.12.1:8088`) และ `HO` (`https://192.168.10.1:8088`)
+   - รองรับ Auto-Fallback Port (8088 <-> 443) อัตโนมัติในกรณีที่ pfSense แต่ละไซต์ตั้งพอร์ต WebConfigurator ต่างกัน
+   - เพิ่ม Route `/api/v1/pfsense/ho/users` และ `/api/v1/pfsense/ho` พร้อมทั้ง Endpoint Health และ 1-Click Offboarding
+3. **ผลการทดสอบความถูกต้อง:**
+   - Backend Pytest: 46/46 passed (100%)
+   - Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)
+
+---
+
+## 0.00000000 อัปเดตก่อนหน้า: เพิ่ม Spoke Connector สำหรับ pfSense HO (Head Office: 192.168.10.1) (12 ต.ค. 2026)
 ### รายละเอียดฟีเจอร์การเชื่อมต่อ pfSense HO:
 1. **Spoke Registration & Seed Data (`initial_data.py`):**
    - เพิ่มระบบเชื่อมต่อ `pfsense_ho` (pfSense Firewall & VPN - Head Office) เข้าสู่ตาราง `connected_applications`

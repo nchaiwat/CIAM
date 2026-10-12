@@ -46,7 +46,7 @@ def get_connector_for_app(app: ConnectedApplication) -> BaseConnector:
         )
     elif c_type in ["PFSENSE", "PFSENSE_REST", "FIREWALL"] or "pfsense" in app.app_code.lower():
         from app.connectors.pfsense import PfSenseConnector
-        default_url = "https://192.168.10.1" if "ho" in app.app_code.lower() else "http://172.18.0.1:3100/api/v1/pfsense/fac"
+        default_url = "http://172.18.0.1:3100/api/v1/pfsense/ho" if "ho" in app.app_code.lower() else "http://172.18.0.1:3100/api/v1/pfsense/fac"
         return PfSenseConnector(
             app_code=app.app_code,
             base_url=app.base_url or default_url,

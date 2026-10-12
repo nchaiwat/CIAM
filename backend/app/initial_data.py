@@ -236,7 +236,7 @@ def init_db():
                 "app_code": "pfsense_ho",
                 "app_name": "pfSense Firewall & VPN (Head Office)",
                 "connector_type": "PFSENSE",
-                "base_url": "https://192.168.10.1",
+                "base_url": "http://172.18.0.1:3100/api/v1/pfsense/ho",
                 "api_key": "mgmt_ciam_key_9a88b1c0d2e3f4a5",
                 "client_id": "pfsense-ho-spoke-client",
                 "client_secret": "sec_pfsense_ho_oauth_secret_2026",
