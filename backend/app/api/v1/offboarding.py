@@ -50,7 +50,10 @@ def preview_offboarding_impact(
     mappings = (
         db.query(AppAccountMapping, ConnectedApplication)
         .join(ConnectedApplication, AppAccountMapping.application_id == ConnectedApplication.id)
-        .filter(AppAccountMapping.identity_id == identity.id)
+        .filter(
+            AppAccountMapping.identity_id == identity.id,
+            ConnectedApplication.is_active == True
+        )
         .all()
     )
 

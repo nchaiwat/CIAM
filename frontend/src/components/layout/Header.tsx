@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Menu, LogOut, User, Shield, PanelLeft, Rocket, Activity } from "lucide-react";
+import { Menu, LogOut, User, Shield, PanelLeft, Rocket, Activity, Settings } from "lucide-react";
 import { AdminUserOut, ciamApi } from "@/lib/api";
 import AdminProfileModal from "@/components/profile/AdminProfileModal";
 
@@ -143,6 +143,16 @@ export default function Header({
         >
           <Rocket className="w-3 h-3 text-sky-600" />
           <span className="hidden sm:inline">App Portal</span>
+        </Link>
+
+        {/* Quick System Settings Link */}
+        <Link
+          href="/settings"
+          className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-[11px] font-bold transition-all shadow-2xs"
+          title="ตั้งค่าระบบส่วนกลาง (Telegram Bot, Daily Sync, Spoke Integration)"
+        >
+          <Settings className="w-3 h-3 text-slate-600" />
+          <span className="hidden sm:inline">ตั้งค่าระบบ</span>
         </Link>
 
         {/* User Profile Card */}

@@ -13,12 +13,15 @@ def find_account_discrepancies(db: Session) -> List[DiscrepancyItem]:
     """
     results: List[DiscrepancyItem] = []
 
-    # Query all mappings where app account is ACTIVE
+    # Query all mappings where app account is ACTIVE and Spoke application is ACTIVE
     active_app_accounts = (
         db.query(AppAccountMapping, MasterIdentity, ConnectedApplication)
         .join(MasterIdentity, AppAccountMapping.identity_id == MasterIdentity.id)
         .join(ConnectedApplication, AppAccountMapping.application_id == ConnectedApplication.id)
-        .filter(AppAccountMapping.is_active_in_app == True)
+        .filter(
+            AppAccountMapping.is_active_in_app == True,
+            ConnectedApplication.is_active == True
+        )
         .all()
     )
 

@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~15:10 ICT)  
+> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~16:10 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -9,7 +9,40 @@
 
 ---
 
-## 0.00000000000 อัปเดตล่าสุด: สกัดแผนกจาก AD OU (Users WA), ดึง Telegram ID จาก AD Pager พร้อมปุ่มทดสอบ DM และหน้าตั้งค่าระบบ (/settings) (12 ต.ค. 2026)
+## 0.000000000000 อัปเดตล่าสุด: แก้ไข Modal เลื่อนหลุดขอบบน, เพิ่มเมนู System Settings ใน Sidebar & Header, แก้ไข Error ซิงก์ทุกระบบทันที (now_utc), และเพิ่มปุ่ม Enable/Disable Spoke (12 ต.ค. 2026)
+### 1. แก้ไขปัญหากดชื่อผู้ดูแลระบบแล้วหน้าจอหลุดหายไปด้านบน (Admin Profile Modal Cutoff):
+- **สาเหตุ:** การใช้ CSS Flexbox `items-center` ร่วมกับ `overflow-y-auto` บน Container modal ที่มีความสูงมากกว่า Viewport ทำให้หัว Modal ถูกดันขึ้นไปในพื้นที่พิกัดติดลบ ไม่สามารถเลื่อนกลับลงมาได้
+- **การแก้ไข:** ใน `AdminProfileModal.tsx` ปรับโครงสร้าง Wrapper เป็น `items-start sm:items-center py-6 sm:py-10 max-h-[90vh] flex flex-col my-auto` พร้อมยึด Header แบบ `shrink-0` ทำให้หัวข้อและปุ่ม `[X]` ปิดหน้าต่างแสดงผลอยู่บนหน้าจอตลอดเวลา เลื่อนเนื้อหาภายในได้อย่างราบรื่น
+- เพิ่มแบนเนอร์ในแท็บ 2 สำหรับเข้าถึงหน้า **"ตั้งค่าระบบส่วนกลาง (System Settings)"** ได้โดยตรง
+
+### 2. เพิ่มลิงก์และเมนูเข้าสู่หน้า System Settings (/settings):
+- เพิ่มเมนู `ตั้งค่าระบบ (System Settings)` ใน `Sidebar.tsx` ของแผงควบคุมหลัก
+- เพิ่มปุ่มลัด `ตั้งค่าระบบ` บน Header มุมขวาบนติดกับชื่อผู้ดูแลระบบ
+- หน้านี้เป็นศูนย์กลางกำหนดค่าระดับ System-Wide ได้แก่: Telegram Bot Token, Group Chat ID, เวลา Scheduled Sync ประจำวัน, และ Live Health Status
+
+### 3. แก้ไขข้อผิดพลาด "การซิงก์ทุกระบบล้มเหลว [500 Internal Server Error]":
+- **สาเหตุ:** ใน `backend/app/services/scheduler.py` ฟังก์ชัน `execute_sync_all` มีการเรียกใช้ตัวแปร `now_utc` แต่ไม่ได้ประกาศไว้ในบรรทัดเริ่มต้น ส่งผลให้เกิด `NameError: name 'now_utc' is not defined`
+- **การแก้ไข:** ประกาศ `now_utc = datetime.now(timezone.utc)` ตั้งแต่บรรทัดแรกของ `execute_sync_all`
+
+### 4. เพิ่มปุ่ม Enable / Disable Spoke และตัดการใช้งาน Spoke ที่ถูกปิดออกจากทุกส่วนของ CIAM:
+- **บนหน้า Applications (`/applications`):**
+  - เพิ่มปุ่มสลับสถานะ `Active / Disabled` บนการ์ดระบบแต่ละตัว พร้อมมีไฟบอกสถานะ
+  - แสดงการ์ดระบบที่ปิดใช้งานในลักษณะจางลง (Dimmed & Opacity 75%)
+  - เพิ่มสวิตช์สถานะ Spoke ในหน้าต่างแก้ไขระบบ (Edit Modal)
+- **การคัดกรอง Spoke ที่ถูกปิด (Disabled) ออกจากระบบ:**
+  - **Directory (`/directory`):** ใน `list_users` และ `get_user_detail` กรองเฉพาะ `ConnectedApplication.is_active == True` ทำให้ระบบที่ปิดใช้งานไม่ปรากฏใน Badge สถานะหรือรายละเอียดบัญชี
+  - **Dashboard & KPIs (`/dashboard`):** กรองนับเฉพาะระบบที่ `is_active == True` ไม่นำ Spoke ที่ปิดมานับรวม
+  - **Ghost Account Reconciliation:** กรองไม่นำ Spoke ที่ปิดมาตรวจสอบ Ghost Accounts
+  - **Offboarding Preview & Execution (`/offboarding`):** กรองไม่นำ Spoke ที่ปิดมาระงับบัญชี
+  - **Automated Sync (`execute_sync_all`):** ข้ามการซิงก์ Spoke ที่ปิดโดยอัตโนมัติ
+
+### 5. การตรวจสอบคุณภาพ:
+- Backend pytest: 46/46 passed (100%)
+- Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)
+
+---
+
+## 0.00000000000 อัปเดตก่อนหน้า: สกัดแผนกจาก AD OU (Users WA), ดึง Telegram ID จาก AD Pager พร้อมปุ่มทดสอบ DM และหน้าตั้งค่าระบบ (/settings) (12 ต.ค. 2026)
 ### 1. สกัดแผนกอิงตามโครงสร้าง OU (Users WA) ใน Active Directory:
 - **เหตุผล:** ผู้ใช้ทั้งหมดอยู่ภายใต้ `OU=Users WA,DC=wa,DC=net` ซึ่งแบ่งแผนกเป็น OU ย่อย (เช่น `Purchasing`, `IT`, `HR`, `Account`, `Sales`, `Production`)
 - **การแก้ไข:** ใน `ad_proxy.py` เพิ่มฟังก์ชัน `extract_ou_department(dn)` สกัดชื่อแผนกจาก DistinguishedName โดยอัตโนมัติ ทั้งในโหมดผ่าน AD Sync Agent (`_normalize_ad_users`) และ LDAP Direct Connection (`_query_ldap_users`) พร้อมอัปเดตลงตาราง `MasterIdentity.department` ใน `scheduler.py`

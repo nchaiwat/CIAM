@@ -166,7 +166,10 @@ def list_users(
     all_mappings = (
         db.query(AppAccountMapping, ConnectedApplication)
         .join(ConnectedApplication, AppAccountMapping.application_id == ConnectedApplication.id)
-        .filter(AppAccountMapping.identity_id.in_(identity_ids))
+        .filter(
+            AppAccountMapping.identity_id.in_(identity_ids),
+            ConnectedApplication.is_active == True
+        )
         .all()
     )
 
@@ -304,7 +307,10 @@ def get_user_detail(
     mappings = (
         db.query(AppAccountMapping, ConnectedApplication)
         .join(ConnectedApplication, AppAccountMapping.application_id == ConnectedApplication.id)
-        .filter(AppAccountMapping.identity_id == identity.id)
+        .filter(
+            AppAccountMapping.identity_id == identity.id,
+            ConnectedApplication.is_active == True
+        )
         .all()
     )
 

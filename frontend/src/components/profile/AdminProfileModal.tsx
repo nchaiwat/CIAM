@@ -191,33 +191,33 @@ export default function AdminProfileModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs p-4 flex justify-center items-start sm:items-center py-6 sm:py-10">
+      <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white flex items-center justify-between">
+        <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300">
               <Shield className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base font-extrabold tracking-wide">
-                จัดการโปรไฟล์ & แจ้งเตือน Telegram
+                โปรไฟล์ผู้ดูแลระบบ & การแจ้งเตือน
               </h2>
               <p className="text-xs text-blue-200/80">
-                User Profile & Active Directory Agent Health Monitor Schedule
+                Admin User Profile & System Telegram Integration
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 bg-slate-50/80 px-6 pt-3 gap-2">
+        <div className="flex border-b border-slate-200 bg-slate-50/80 px-6 pt-3 gap-2 shrink-0">
           <button
             onClick={() => setActiveTab("profile")}
             className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-b-2 ${
@@ -377,6 +377,25 @@ export default function AdminProfileModal({
           {/* TAB 2: Telegram Health Alerts & Schedule */}
           {activeTab === "telegram" && (
             <div className="space-y-5">
+              {/* Link to Dedicated System Settings Page */}
+              <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+                <div>
+                  <div className="font-extrabold flex items-center space-x-1.5">
+                    <span>⚙️ การตั้งค่าระบบส่วนกลาง (System Settings)</span>
+                  </div>
+                  <div className="text-[11px] text-blue-700 mt-0.5">
+                    การกำหนด Group Chat ID, Bot Token และเวลาซิงก์ระบบ สามารถตั้งค่าได้ที่หน้าตั้งค่าระบบ
+                  </div>
+                </div>
+                <a
+                  href="/settings"
+                  onClick={() => onClose()}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shrink-0 transition text-center shadow-xs"
+                >
+                  ไปที่หน้าตั้งค่าระบบ &rarr;
+                </a>
+              </div>
+
               {monitorSuccessMsg && (
                 <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center space-x-2">
                   <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />

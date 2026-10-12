@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Lock,
   Rocket,
+  Settings,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -73,6 +74,12 @@ export default function Sidebar({
       labelTh: "ประวัติการใช้งาน",
       href: "/audit-logs",
       icon: FileCheck2,
+    },
+    {
+      name: "System Settings",
+      labelTh: "ตั้งค่าระบบ",
+      href: "/settings",
+      icon: Settings,
     },
   ];
 

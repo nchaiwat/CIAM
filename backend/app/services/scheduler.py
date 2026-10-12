@@ -303,6 +303,7 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
     """
     Execute inventory synchronization across all active connected applications.
     """
+    now_utc = datetime.now(timezone.utc)
     apps = db.query(ConnectedApplication).filter(ConnectedApplication.is_active == True).all()
     results = []
     success_count = 0

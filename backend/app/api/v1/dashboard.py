@@ -27,11 +27,11 @@ def get_dashboard_summary(
     active_ad = db.query(MasterIdentity).filter(MasterIdentity.is_active_in_ad == True).count()
     deprovisioned = db.query(MasterIdentity).filter(MasterIdentity.is_active_in_ad == False).count()
 
-    total_apps = db.query(ConnectedApplication).count()
-    online_apps = db.query(ConnectedApplication).filter(ConnectedApplication.health_status == "ONLINE").count()
+    total_apps = db.query(ConnectedApplication).filter(ConnectedApplication.is_active == True).count()
+    online_apps = db.query(ConnectedApplication).filter(ConnectedApplication.is_active == True, ConnectedApplication.health_status == "ONLINE").count()
     # If not yet checked, assume active ones are online
     if online_apps == 0 and total_apps > 0:
-        online_apps = db.query(ConnectedApplication).filter(ConnectedApplication.is_active == True).count()
+        online_apps = total_apps
 
     discrepancies = find_account_discrepancies(db)
 
