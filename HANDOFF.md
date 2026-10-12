@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 10 ตุลาคม 2026 (Local Time: ~09:30 ICT)  
+> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~09:40 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -9,7 +9,30 @@
 
 ---
 
-## 0.000000 อัปเดตล่าสุด: ถอดปุ่มซิงก์ซ้ำซ้อนออกจากหน้าทะเบียนผู้ใช้ (Single Responsibility) (11 ต.ค. 2026)
+## 0.0000000 สรุปแผนงานและแนวทางการพัฒนา: นำ Spoke Integration Framework ไปใช้กับระบบ On-Premise PHP + MySQL (12 ต.ค. 2026)
+### บริบทและโจทย์งาน:
+- เตรียมให้ทีม Dev ภายในนำ Framework การซิงก์และเชื่อมต่อกับ Central IAM ([SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) v2.7.0) ไปใช้กับแอปพลิเคชันภายใน
+- สภาพแวดล้อมระบบของทีม Dev: พัฒนาแบบ **Manual (Native/Custom PHP)** ติดตั้งบนเซิร์ฟเวอร์ **On-Premise** ภายในองค์กร และเชื่อมต่อกับ **MySQL**
+
+### ข้อสรุปและการวิเคราะห์ทางเทคนิค:
+1. **ความเข้ากันได้ของ Framework (100% Compatible):**
+   - สเปกกลางของ CIAM เป็น Technology-Agnostic อิงตามมาตรฐานสากล (REST API, JSON, OIDC/OAuth 2.0 with PKCE) PHP ดั้งเดิมรองรับครบถ้วนผ่าน `cURL`, `json_encode()` / `json_decode()`, และ `PDO`/`mysqli`
+   - **โหมดการเชื่อมต่อที่แนะนำสำหรับ On-Premise:**
+     - **Mode C (Outbound Agent Mode):** เหมาะที่สุดสำหรับระบบ On-Premise ที่ไม่มี Public Inbound IP โดยให้เขียนสคริปต์ PHP เล็กๆ (เช่น `ciam_agent.php`) ตั้งรันผ่าน Windows Task Scheduler หรือ Linux Cronjob ทุก 1–2 นาที ยิง Outbound HTTPS 443 ไปที่ `POST /api/v1/agent/heartbeat` เพื่อส่งรายชื่อและดึงคำสั่งระงับสิทธิ์ (1-Click Offboard)
+     - **Mode B (SSO-Only Client Mode):** หากระบบต้องการแค่ฟังก์ชันล็อกอินผ่าน CIAM (ไม่ต้องการ Offboard อัตโนมัติ) สามารถทำแค่หน้า OIDC PKCE Login & Callback
+2. **การนำ Git มาใช้ในกระบวนการพัฒนา (Git Workflow สำหรับ On-Premise):**
+   - ช่วยเปลี่ยนผ่านจากการแก้โค้ดสดบนเซิร์ฟเวอร์ (Direct FTP/Live Edit) สู่ Version Control ตามมาตรฐาน ISO 27001
+   - Dev พัฒนาบนเครื่องตนเอง `git commit` / `git push` และบน On-Premise Server ใช้คำสั่ง `git pull` เพื่ออัปเดตโค้ดอย่างปลอดภัย
+   - **กฎเหล็กด้านความปลอดภัย:** รหัสผ่าน MySQL, CIAM Client Secret, และ API Key ต้องแยกเก็บใน `.env` หรือ `config.php` และใส่ใน `.gitignore` เสมอ ห้าม commit ขึ้น Git
+3. **การปรับแต่งฐานข้อมูล MySQL เดิม:**
+   - ตาราง `users` เดิมเพิ่มเพียง 3 คอลัมน์: `ciam_sub` VARCHAR(100), `auth_provider` VARCHAR(20) DEFAULT 'local', `is_active` TINYINT(1) DEFAULT 1
+   - เพิ่มตาราง `system_settings` เก็บค่า Config (Client ID, Client Secret, CIAM Base URL)
+4. **ความต่อเนื่องของระบบงาน (Break-Glass Fallback):**
+   - ต้องมีทางเลือกให้ Admin สามารถล็อกอินผ่านรหัสผ่าน Local Admin เดิมของ MySQL ได้ เผื่อกรณีเครือข่ายอินเทอร์เน็ตโรงงานขัดข้อง
+
+---
+
+## 0.000000 อัปเดตก่อนหน้า: ถอดปุ่มซิงก์ซ้ำซ้อนออกจากหน้าทะเบียนผู้ใช้ (Single Responsibility) (11 ต.ค. 2026)
 ### รายละเอียดการปรับปรุง:
 1. **หน้าทะเบียนผู้ใช้ (`frontend/src/app/directory/page.tsx`):**
    - ถอดปุ่ม `🔄 ซิงก์ข้อมูล` ใน Toolbar ออกตามหลักสถาปัตยกรรม Single Responsibility
@@ -707,6 +730,13 @@ docker compose up -d api web
 3. **การติดตามความร่วมมือกับทีม Spoke Mode C (MTPulse):**
    - ตรวจสอบว่าทีม MTPulse ได้เพิ่มปุ่ม **`[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]`** ในหน้า User Management หรือ Central IAM ตามสเปก v2.7.0 เรียบร้อยแล้วหรือไม่
    - ทดสอบรอบ Two-Way Reconciliation เมื่อ Admin สร้างหรือเปิดสิทธิ์ User ใหม่บน CIAM เพื่อให้ Spoke Mode C นำไป Provision สร้างในเครื่องลูกแบบ Real-Time
+4. **การเตรียม PHP Starter Template & เอกสาร Onboarding สำหรับทีม Dev (On-Prem PHP + MySQL):**
+   - จัดทำ Starter Code ตัวอย่างภาษา PHP ดั้งเดิม (Native PHP) 2-3 ไฟล์ พร้อมคำอธิบายภาษาไทย:
+     - `ciam_sso.php`: ทำ PKCE Code Challenge และ Redirect ไปยัง CIAM Login
+     - `ciam_callback.php`: รับ Code แลก Token, ดึง UserInfo, และสร้าง Session ใน PHP พร้อม Mapping เข้ากับตาราง MySQL
+     - `ciam_agent.php`: สคริปต์รันเบื้องหลังสำหรับ Mode C ยิง Heartbeat รายงานสถานะ และรับคำสั่ง `DISABLE_USER` / `PROVISION_USER` กลับไปอัปเดตตาราง MySQL
+   - เอกสารแนะนำการตั้งค่า Git Repo, การทำ `.gitignore` ป้องกันข้อมูล Credentials รั่วไหล, และคำสั่ง `git pull` บนเครื่อง On-Premise Server
+   - สคริปต์ SQL Migration ตัวอย่างสำหรับเพิ่มคอลัมน์ `ciam_sub`, `auth_provider`, `is_active` บนตาราง `users` ของ MySQL เดิม
 
 ---
 
