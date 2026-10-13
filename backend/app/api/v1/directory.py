@@ -137,15 +137,22 @@ def _clean_directory_attributes(identity: MasterIdentity, mappings: list, is_ad:
     email = identity.email if has_m365 else None
 
     dept_str = (identity.department or "").strip()
-    junk_depts = [
+    if not is_ad or not dept_str:
+        return email, None
+
+    dept_lower = dept_str.lower()
+    junk_exact = {
         "openvpn", "captive portal", "m365 user", "radius", "firewall",
-        "active directory", "wa shop", "general", "employee", "user", "ç", ""
+        "active directory", "wa shop", "general", "employee", "user", "ç",
+        "ทั่วไป", "none", "n/a", "-", "null", "undefined"
+    }
+    junk_substrings = [
+        "openvpn", "captive portal", "m365 user", "radius", "firewall",
+        "wa shop", "active directory"
     ]
     is_invalid_dept = (
-        not is_ad
-        or not dept_str
-        or any(j in dept_str.lower() for j in junk_depts)
-        or dept_str.lower() in ["ทั่วไป", "general", "none", "n/a", "-"]
+        dept_lower in junk_exact
+        or any(j in dept_lower for j in junk_substrings)
     )
     department = None if is_invalid_dept else dept_str
 

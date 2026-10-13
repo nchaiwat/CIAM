@@ -588,6 +588,8 @@ def init_db():
                 logger.info("Seeded real master identity: %s (%s)", ident.full_name, ident.username)
             else:
                 ident.is_active_in_ad = item["is_active_in_ad"]
+                if item.get("department") and not ident.department:
+                    ident.department = item.get("department")
                 for map_spec in item.get("mappings", []):
                     app_obj = app_objs.get(map_spec["app"])
                     if app_obj:
@@ -683,9 +685,14 @@ def init_db():
             ).all()
             m365_ident_ids = {m.identity_id for m in m_rows if m.identity_id}
 
-        junk_depts = [
+        junk_exact = {
             "openvpn", "captive portal", "m365 user", "radius", "firewall",
-            "active directory", "wa shop", "general", "employee", "user", "ç", ""
+            "active directory", "wa shop", "general", "employee", "user", "ç",
+            "ทั่วไป", "none", "n/a", "-", "null", "undefined"
+        }
+        junk_substrings = [
+            "openvpn", "captive portal", "m365 user", "radius", "firewall",
+            "wa shop", "active directory"
         ]
         cleared_emails = 0
         cleared_depts = 0
@@ -702,7 +709,7 @@ def init_db():
                 if ident.department:
                     ident.department = None
                     cleared_depts += 1
-            elif any(j in d_val for j in junk_depts) or d_val in ["ทั่วไป", "none", "n/a", "-"]:
+            elif d_val in junk_exact or any(j in d_val for j in junk_substrings):
                 ident.department = None
                 cleared_depts += 1
 

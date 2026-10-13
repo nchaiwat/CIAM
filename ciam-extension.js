@@ -54,10 +54,13 @@ module.exports = (app) => {
     const handleGetUsers = async (req, res) => {
         try {
             console.log('[CIAM AD] Querying Active Directory users via PowerShell...');
-            const psCmd = 'Get-ADUser -Filter * -Properties Enabled, DisplayName, Department, EmployeeID, DistinguishedName, Pager | Select-Object sAMAccountName, DisplayName, Department, EmployeeID, Enabled, DistinguishedName, Pager | ConvertTo-Json -Depth 2';
+            const psCmd = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-ADUser -Filter * -Properties Enabled, DisplayName, Department, EmployeeID, DistinguishedName, Pager | Select-Object sAMAccountName, DisplayName, Department, EmployeeID, Enabled, DistinguishedName, Pager | ConvertTo-Json -Depth 2';
             const { stdout } = await execPromise('powershell -NoProfile -Command "' + psCmd + '"', { maxBuffer: 10 * 1024 * 1024 });
             const raw = stdout ? JSON.parse(stdout) : [];
             const rawArray = Array.isArray(raw) ? raw : [raw];
+
+            const systemOus = ['users wa', 'domain controllers', 'builtin', 'users', 'managed service accounts', 'computers'];
+            const junkDepts = ['users wa', 'domain controllers', 'builtin', 'users', 'active directory', 'general', 'ทั่วไป', 'none', 'n/a', '-'];
 
             const accounts = rawArray
                 .map(u => {
@@ -71,20 +74,25 @@ module.exports = (app) => {
                         const ous = (dn.match(/OU=([^,]+)/gi) || []).map(o => o.replace(/^OU=/i, '').trim());
                         const usersWaIdx = ous.findIndex(o => o.toLowerCase() === 'users wa');
                         if (usersWaIdx > 0) {
-                            ouDept = ous[usersWaIdx - 1];
+                            ouDept = ous[0] && !systemOus.includes(ous[0].toLowerCase()) ? ous[0] : ous[usersWaIdx - 1];
                         } else {
-                            ouDept = ous.find(o => !['users wa', 'domain controllers', 'builtin', 'users'].includes(o.toLowerCase())) || null;
+                            ouDept = ous.find(o => !systemOus.includes(o.toLowerCase())) || null;
                         }
                     }
+
+                    // Fallback to Department attribute if user was in root OU without sub-OU
+                    const rawDept = (u.Department || u.department || '').trim();
+                    const finalDept = ouDept || (rawDept && !junkDepts.includes(rawDept.toLowerCase()) ? rawDept : null);
 
                     return {
                         username: uname,
                         full_name: u.DisplayName || u.full_name || uname,
                         email: null, // Email belongs exclusively to Microsoft 365
-                        department: ouDept, // Strictly OU, null if not in an OU
+                        department: finalDept, // Strictly OU, or valid AD department attribute
                         employee_id: u.EmployeeID || u.employee_id || null,
                         telegram_id: u.Pager || u.pager || null,
                         distinguished_name: dn || null,
+                        distinguishedName: dn || null,
                         is_active: u.Enabled !== undefined ? !!u.Enabled : (u.is_active !== undefined ? !!u.is_active : true),
                         group_name: 'Domain Users'
                     };

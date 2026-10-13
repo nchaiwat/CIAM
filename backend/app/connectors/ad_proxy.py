@@ -14,31 +14,36 @@ def extract_ou_department(dn: Optional[str], fallback: Optional[str] = None) -> 
     Target hierarchy: All company users reside under 'OU=Users WA,DC=wa,DC=net'.
     Example: 'CN=Chaiwat N,OU=Purchasing,OU=Users WA,DC=wa,DC=net' -> 'Purchasing'
     Example: 'CN=Sarinee P,OU=HR,OU=Users WA,DC=wa,DC=net' -> 'HR'
-    If no OU is found or cannot be extracted, returns None (no surrogate fallback).
+    If no OU is found or user is directly in root OU without sub-OU, returns fallback or None.
     """
     if not dn or not isinstance(dn, str):
-        return None
+        return fallback
 
     import re
-    ous = re.findall(r'OU=([^,]+)', dn, re.IGNORECASE)
+    ous = [o.strip() for o in re.findall(r'OU=([^,]+)', dn, re.IGNORECASE) if o.strip()]
     if not ous:
-        return None
+        return fallback
 
-    # Look for 'Users WA' in the OU path
-    for idx, ou in enumerate(ous):
-        if ou.strip().lower() == "users wa":
-            if idx > 0:
-                # Return the OU directly under Users WA
-                return ous[idx - 1].strip()
-            break
+    system_ous = {"users wa", "domain controllers", "builtin", "users", "managed service accounts", "computers"}
 
-    # If 'Users WA' not in path, take the first non-system OU
+    # 1. Look for 'Users WA' in the OU path
+    users_wa_idx = next((idx for idx, ou in enumerate(ous) if ou.lower() == "users wa"), None)
+    if users_wa_idx is not None:
+        if users_wa_idx > 0:
+            # The leaf-most sub-OU under Users WA
+            candidate = ous[0]
+            if candidate.lower() not in system_ous:
+                return candidate
+            return ous[users_wa_idx - 1]
+        # Placed directly in Users WA without sub-OU -> use fallback if available
+        return fallback
+
+    # 2. If 'Users WA' is not in path, take the first non-system OU
     for ou in ous:
-        ou_clean = ou.strip()
-        if ou_clean.lower() not in ["users wa", "domain controllers", "builtin", "users"]:
-            return ou_clean
+        if ou.lower() not in system_ous:
+            return ou
 
-    return None
+    return fallback
 
 
 class AdProxyConnector(BaseConnector):
@@ -528,8 +533,30 @@ class AdProxyConnector(BaseConnector):
                 continue
 
             fname = u.get("full_name") or u.get("DisplayName") or u.get("display_name") or uname
-            dn = u.get("distinguishedName") or u.get("DistinguishedName") or u.get("dn") or None
-            dept = extract_ou_department(dn)
+            dn = (
+                u.get("distinguishedName")
+                or u.get("DistinguishedName")
+                or u.get("distinguished_name")
+                or u.get("dn")
+                or None
+            )
+            raw_dept = u.get("department") or u.get("Department") or None
+            dept = extract_ou_department(dn, fallback=raw_dept)
+            if dept:
+                d_clean = str(dept).strip()
+                junk_exact = {
+                    "openvpn", "captive portal", "m365 user", "radius", "firewall",
+                    "active directory", "wa shop", "general", "employee", "user", "ç",
+                    "ทั่วไป", "none", "n/a", "-", "null", "undefined"
+                }
+                junk_substrings = [
+                    "openvpn", "captive portal", "m365 user", "radius", "firewall",
+                    "wa shop", "active directory"
+                ]
+                if d_clean.lower() in junk_exact or any(j in d_clean.lower() for j in junk_substrings):
+                    dept = None
+                else:
+                    dept = d_clean
             emp_id = u.get("employee_id") or u.get("EmployeeID") or None
             pager = u.get("pager") or u.get("Pager") or u.get("telegram_id") or u.get("TelegramID") or None
 

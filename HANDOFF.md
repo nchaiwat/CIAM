@@ -1,11 +1,37 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~14:35 ICT)  
+> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~15:28 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0.0000000000000000000000 แก้ไขบั๊กคอลัมน์แผนก Blank (-): แก้ไข Empty String ใน Junk Depts, ปรับปรุงการดึง OU จาก DistinguishedName และฟื้นฟูข้อมูลแผนก (13 ต.ค. 2026)
+### 1. สาเหตุที่คอลัมน์แผนก (Department) แสดงผลเป็นขีด `-` (Blank) ทั้งหมด:
+1. **Empty String ในตัวกรอง `junk_depts`:** ใน `backend/app/api/v1/directory.py` และ `backend/app/initial_data.py` เดิมมีลิสต์ `junk_depts` ที่บรรจุสตริงว่าง `""` อยู่ท้ายลิสต์ เมื่อมีเงื่อนไข `any(j in dept_str.lower() for j in junk_depts)` ในภาษา Python สตริงว่าง `""` จะเป็นซับสตริงของสตริงทุกตัวเสมอ (`"" in "Purchasing"` ได้ `True`) ส่งผลให้แผนกของทุกบัญชีถูกมองว่าเป็น Junk และถูกเปลี่ยนเป็น `None` 100% ทั้งใน API และการล้างข้อมูลตอนเริ่มเซิร์ฟเวอร์
+2. **ไม่รองรับคีย์ `distinguished_name` และ `department` ใน `_normalize_ad_users`:** ใน `backend/app/connectors/ad_proxy.py` โค้ดเดิมค้นหาเฉพาะ `distinguishedName`, `DistinguishedName`, และ `dn` (ไม่มีแบบ `distinguished_name` ที่ส่งจาก `ciam-extension.js`) และไม่ได้อ่านค่า `department` ที่ `ciam-extension.js` สกัดมาจาก OU ส่งผลให้เมื่อซิงก์จาก AD ข้อมูลแผนกจึงกลายเป็น `None` เสมอ
+3. **การสกัด OU จาก DistinguishedName:** ปรับปรุงให้อ่านทั้ง Leaf OU ใต้ `Users WA` (เช่น `Purchasing`, `IT`, `HR`, `Accounting`, `Warehouse`) และรองรับ Fallback ไปยังฟิลด์ `Department` ของ AD ในกรณีที่ผู้ใช้อยู่ใต้รูท OU โดยตรง
+
+### 2. รายละเอียดการแก้ไข:
+1. **`backend/app/api/v1/directory.py`:**
+   - นำสตริงว่าง `""` ออกจาก `junk_depts` และแยกเป็น `junk_exact` (ตรงกันทั้งคำ) กับ `junk_substrings` (คำไม่พึงประสงค์ เช่น `openvpn`, `captive portal`, `active directory`, `wa shop`)
+   - คืนค่าแผนกจริงได้อย่างถูกต้องเมื่อผู้ใช้เป็น AD Account
+2. **`backend/app/connectors/ad_proxy.py`:**
+   - แก้ไข `_normalize_ad_users` ให้อ่านทั้ง `distinguished_name`, `distinguishedName`, และค่า `department` / `Department`
+   - ปรับปรุง `extract_ou_department` ให้ดึง Leaf OU ใต้ `Users WA` ได้อย่างแม่นยำ และรองรับ fallback
+3. **`backend/app/initial_data.py`:**
+   - แก้ไข `junk_exact` และ `junk_substrings` ไม่ให้มีสตริงว่าง
+   - เพิ่ม Routine คืนค่าแผนกจริงสำหรับ Master Identities ที่เป็นบัญชีหลัก (เช่น `Chaiwat.N`, `Patcha.S`, `Apichai.P` -> `Purchasing`, `Ronnakorn.P`, `Wimonpan.P` -> `IT`, `Hermes.N` -> `Warehouse`)
+4. **`ciam-extension.js`:**
+   - เพิ่ม `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;` ก่อนรัน `Get-ADUser` ใน PowerShell ป้องกันภาษาไทยในชื่อ OU เพี้ยน
+   - ส่งออกทั้ง `distinguishedName`, `distinguished_name`, และ `department`
+
+### 3. ผลการตรวจสอบคุณภาพ:
+- Backend pytest: ผ่าน 49/49 tests 100%
+- Frontend TypeScript `npx tsc --noEmit`: ผ่าน 0 errors (100%)
 
 ---
 
