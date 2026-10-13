@@ -674,6 +674,7 @@ export const ciamApi = {
     fetchApi<{
       config: HealthMonitorConfig;
       live_health: LiveHealthSnapshot;
+      ad_monitor: AdMonitorState;
     }>("/dashboard/health-monitor"),
 
   updateHealthMonitor: (payload: Partial<HealthMonitorConfig>) =>
@@ -699,6 +700,28 @@ export const ciamApi = {
     }>("/dashboard/health-monitor/test-alert", {
       method: "POST",
       body: JSON.stringify(payload || {}),
+    }),
+
+  triggerTestAdAlert: (payload?: { alert_type?: string; bot_token?: string; chat_id?: string }) =>
+    fetchApi<{
+      success: boolean;
+      message: string;
+      recipients_delivered: number;
+      alert_type: string;
+    }>("/dashboard/health-monitor/test-ad-alert", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    }),
+
+  checkAdNow: () =>
+    fetchApi<{
+      status: string;
+      is_online: boolean;
+      alert_sent: boolean;
+      alert_type: string | null;
+      state: AdMonitorState;
+    }>("/dashboard/health-monitor/check-ad-now", {
+      method: "POST",
     }),
 };
 
@@ -852,6 +875,17 @@ export interface LiveHealthSnapshot {
     online: number;
     offline: number;
   };
+}
+
+export interface AdMonitorState {
+  current_status: "ONLINE" | "OFFLINE";
+  is_online: boolean;
+  offline_since: string | null;
+  last_notified_at: string | null;
+  total_offline_alerts_sent: number;
+  last_check_at: string | null;
+  last_latency_ms: number;
+  last_message: string;
 }
 
 

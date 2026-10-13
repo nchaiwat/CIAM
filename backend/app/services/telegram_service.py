@@ -315,3 +315,318 @@ async def send_health_report(
         "errors": delivery_errors,
         "timestamp": now_str
     }
+
+
+# =========================================================
+# Real-Time AD Sync Agent Status Monitoring & Hourly Alerts
+# =========================================================
+
+DEFAULT_AD_MONITOR: Dict[str, Any] = {
+    "current_status": "ONLINE",
+    "is_online": True,
+    "offline_since": None,
+    "last_notified_at": None,
+    "total_offline_alerts_sent": 0,
+    "last_check_at": None,
+    "last_latency_ms": 0,
+    "last_message": "พร้อมใช้งาน",
+}
+
+def format_duration(seconds: float) -> str:
+    """Format elapsed seconds into readable Thai string (e.g., '1 ชั่วโมง 15 นาที')."""
+    secs = int(max(0, seconds))
+    days = secs // 86400
+    hours = (secs % 86400) // 3600
+    minutes = (secs % 3600) // 60
+    parts = []
+    if days > 0:
+        parts.append(f"{days} วัน")
+    if hours > 0:
+        parts.append(f"{hours} ชั่วโมง")
+    if minutes > 0 or not parts:
+        parts.append(f"{minutes} นาที")
+    return " ".join(parts)
+
+def get_ad_monitor_status(db: Session) -> Dict[str, Any]:
+    """Retrieve current AD Sync Agent monitor state."""
+    setting = db.query(SystemSetting).filter_by(setting_key="ad_status_monitor").first()
+    if not setting or not setting.setting_value:
+        return DEFAULT_AD_MONITOR.copy()
+    return {**DEFAULT_AD_MONITOR, **setting.setting_value}
+
+async def send_ad_status_alert(
+    db: Session,
+    alert_type: str,  # "OFFLINE_IMMEDIATE", "OFFLINE_REMINDER", "ONLINE_RECOVERED"
+    ad_health_message: str = "",
+    ad_base_url: str = "http://172.18.0.1:3100",
+    latency_ms: int = 0,
+    downtime_str: str = "",
+    total_alerts_sent: int = 1,
+    custom_bot_token: Optional[str] = None,
+    custom_chat_id: Optional[str] = None
+) -> Tuple[bool, str, int]:
+    """Send dedicated Telegram alert for AD Sync Agent status changes and hourly reminders."""
+    config = get_health_monitor_config(db)
+    bot_token = (custom_bot_token or config.get("bot_token") or getattr(settings, "TELEGRAM_BOT_TOKEN", "")).strip()
+    primary_chat_id = (custom_chat_id or config.get("chat_id") or getattr(settings, "TELEGRAM_CHAT_ID", "")).strip()
+
+    recipients = []
+    if primary_chat_id:
+        recipients.append(primary_chat_id)
+
+    if config.get("notify_admins_enabled", True):
+        admins = db.query(AdminUser).filter(AdminUser.is_active == True, AdminUser.telegram_id != None).all()
+        for a in admins:
+            tid = a.telegram_id.strip()
+            if tid and tid not in recipients:
+                recipients.append(tid)
+
+    if not bot_token:
+        return False, "Bot token missing", 0
+    if not recipients:
+        return False, "No recipient chat IDs configured", 0
+
+    now_str = get_bangkok_now().strftime("%d/%m/%Y %H:%M:%S")
+
+    if alert_type == "OFFLINE_IMMEDIATE":
+        title = "🚨 <b>[CIAM ALERT] AD Sync Agent หลุดการเชื่อมต่อ (OFFLINE)</b>"
+        body = (
+            f"{title}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 <b>องค์กร:</b> Window Asia Public Company Limited\n"
+            f"⏰ <b>เวลาตรวจพบ:</b> {now_str} (Asia/Bangkok)\n"
+            f"🔌 <b>สถานะ:</b> 🔴 <b>OFFLINE (ตัดการเชื่อมต่อทันที)</b>\n"
+            f"🌐 <b>Gateway Host:</b> <code>{ad_base_url}</code>\n"
+            f"⚠️ <b>สาเหตุ/ข้อผิดพลาด:</b> <i>{ad_health_message or 'ไม่สามารถเชื่อมต่อ AD Proxy ได้'}</i>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📢 <b>หมายเหตุระบบ:</b> Central IAM จะส่งการแจ้งเตือนเตือนซ้ำทุกๆ 1 ชั่วโมง จนกว่า AD จะกลับมา ONLINE"
+        )
+    elif alert_type == "OFFLINE_REMINDER":
+        title = f"⚠️ <b>[CIAM REMINDER] AD Sync Agent ยังคง OFFLINE (เตือนรอบที่ {total_alerts_sent})</b>"
+        body = (
+            f"{title}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 <b>องค์กร:</b> Window Asia Public Company Limited\n"
+            f"⏰ <b>เวลาแจ้งเตือน:</b> {now_str} (Asia/Bangkok)\n"
+            f"⏱️ <b>ขัดข้องต่อเนื่องแล้ว:</b> <b>{downtime_str}</b>\n"
+            f"🔌 <b>สถานะ:</b> 🔴 <b>OFFLINE (ยังไม่สามารถติดต่อได้)</b>\n"
+            f"🌐 <b>Gateway Host:</b> <code>{ad_base_url}</code>\n"
+            f"⚠️ <b>ข้อความล่าสุด:</b> <i>{ad_health_message or 'Unreachable'}</i>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📢 <i>ระบบจะยังคงแจ้งเตือนทุก 1 ชั่วโมง จนกว่า AD จะกลับมาเชื่อมต่อได้ตามปกติ</i>"
+        )
+    elif alert_type == "ONLINE_RECOVERED":
+        title = "✅ <b>[CIAM RECOVERY] AD Sync Agent กลับมา ONLINE ปกติแล้ว</b>"
+        body = (
+            f"{title}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 <b>องค์กร:</b> Window Asia Public Company Limited\n"
+            f"⏰ <b>เวลากู้คืนสำเร็จ:</b> {now_str} (Asia/Bangkok)\n"
+            f"⏱️ <b>รวมระยะเวลาที่ขัดข้อง:</b> <b>{downtime_str}</b>\n"
+            f"🔌 <b>สถานะปัจจุบัน:</b> 🟢 <b>ONLINE (เชื่อมต่อสำเร็จ)</b>\n"
+            f"⚡ <b>Latency:</b> <b>{latency_ms} ms</b>\n"
+            f"🌐 <b>Gateway Host:</b> <code>{ad_base_url}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👍 <i>ระบบกลับสู่สภาวะปกติ การยืนยันตัวตนและการซิงก์ข้อมูล AD พร้อมใช้งานแล้ว</i>"
+        )
+    else:
+        title = f"ℹ️ <b>[CIAM] การทดสอบระบบแจ้งเตือน AD Sync Agent ({alert_type})</b>"
+        body = f"{title}\n⏰ <b>เวลา:</b> {now_str}\n<i>ทดสอบการส่งสัญญาณแจ้งเตือนระบบ AD สำเร็จ</i>"
+
+    success_deliveries = 0
+    for r_id in recipients:
+        ok, _ = await send_telegram_message(bot_token, r_id, body, parse_mode="HTML")
+        if ok:
+            success_deliveries += 1
+
+    # Record Audit Log
+    db.add(IamAuditLog(
+        actor_username="System-AdMonitor",
+        action_type=f"TELEGRAM_AD_{alert_type}",
+        target_username="TELEGRAM_ADMINS",
+        affected_app_code="AD",
+        execution_mode="REALTIME_MONITOR",
+        reason=f"ส่งแจ้งเตือนสถานะ AD ({alert_type}) สำเร็จ {success_deliveries}/{len(recipients)} ช่องทาง",
+        status="SUCCESS" if success_deliveries > 0 else "FAILED"
+    ))
+    db.commit()
+
+    return success_deliveries > 0, f"Delivered to {success_deliveries}/{len(recipients)}", success_deliveries
+
+async def check_and_notify_ad_status(db: Session, force_check: bool = False) -> Dict[str, Any]:
+    """
+    Core Real-Time AD Monitor Engine:
+    - Probes AD Sync Agent health
+    - If status changes to OFF -> Immediately notify Telegram
+    - If status remains OFF -> Remind every 1 hour (3600 seconds)
+    - If status recovers to ON -> Immediately notify recovery with downtime summary
+    - Persists state in SystemSetting: 'ad_status_monitor'
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+    now_bkk = get_bangkok_now()
+    now_iso = now_bkk.isoformat()
+
+    setting = db.query(SystemSetting).filter_by(setting_key="ad_status_monitor").first()
+    if not setting:
+        state = DEFAULT_AD_MONITOR.copy()
+        setting = SystemSetting(
+            setting_key="ad_status_monitor",
+            setting_value=state,
+            description="Real-time Active Directory status monitor and hourly alert tracker"
+        )
+        db.add(setting)
+        db.commit()
+        db.refresh(setting)
+    else:
+        state = {**DEFAULT_AD_MONITOR, **(setting.setting_value or {})}
+
+    ad_connector = AdProxyConnector()
+    ad_health = await ad_connector.health_check()
+    is_online = bool(ad_health.is_online)
+
+    prev_status = state.get("current_status", "ONLINE")
+    prev_offline_since = state.get("offline_since")
+    prev_last_notified = state.get("last_notified_at")
+    total_alerts = int(state.get("total_offline_alerts_sent", 0))
+
+    alert_sent = False
+    alert_type = None
+
+    if not is_online:
+        # Case 1: Just transitioned to OFFLINE
+        if prev_status != "OFFLINE":
+            state["current_status"] = "OFFLINE"
+            state["is_online"] = False
+            state["offline_since"] = now_iso
+            state["last_notified_at"] = now_iso
+            state["total_offline_alerts_sent"] = 1
+            alert_type = "OFFLINE_IMMEDIATE"
+
+            logger.warning("AD Sync Agent transitioned to OFFLINE! Sending immediate Telegram alert...")
+            await send_ad_status_alert(
+                db=db,
+                alert_type="OFFLINE_IMMEDIATE",
+                ad_health_message=ad_health.message,
+                ad_base_url=ad_connector.base_url,
+                latency_ms=ad_health.latency_ms,
+                downtime_str="เพิ่งเริ่มขัดข้อง",
+                total_alerts_sent=1
+            )
+            alert_sent = True
+        else:
+            # Case 2: Still OFFLINE - check 1-hour interval (3,600s)
+            should_remind = False
+            if prev_last_notified:
+                try:
+                    last_notified_dt = datetime.fromisoformat(prev_last_notified).astimezone(BANGKOK_TZ)
+                    elapsed_secs = (now_bkk - last_notified_dt).total_seconds()
+                    if elapsed_secs >= 3600:
+                        should_remind = True
+                except Exception:
+                    should_remind = True
+            else:
+                should_remind = True
+
+            if should_remind:
+                total_alerts += 1
+                state["last_notified_at"] = now_iso
+                state["total_offline_alerts_sent"] = total_alerts
+                alert_type = "OFFLINE_REMINDER"
+
+                # Calculate cumulative downtime
+                downtime_secs = 0
+                if prev_offline_since:
+                    try:
+                        off_dt = datetime.fromisoformat(prev_offline_since).astimezone(BANGKOK_TZ)
+                        downtime_secs = (now_bkk - off_dt).total_seconds()
+                    except Exception:
+                        pass
+                downtime_str = format_duration(downtime_secs) if downtime_secs > 0 else "1 ชั่วโมง"
+
+                logger.warning("AD Sync Agent remains OFFLINE (Round %d). Sending hourly reminder...", total_alerts)
+                await send_ad_status_alert(
+                    db=db,
+                    alert_type="OFFLINE_REMINDER",
+                    ad_health_message=ad_health.message,
+                    ad_base_url=ad_connector.base_url,
+                    latency_ms=ad_health.latency_ms,
+                    downtime_str=downtime_str,
+                    total_alerts_sent=total_alerts
+                )
+                alert_sent = True
+
+    else:
+        # Case 3: Transitioned back to ONLINE from OFFLINE
+        if prev_status == "OFFLINE":
+            downtime_secs = 0
+            if prev_offline_since:
+                try:
+                    off_dt = datetime.fromisoformat(prev_offline_since).astimezone(BANGKOK_TZ)
+                    downtime_secs = (now_bkk - off_dt).total_seconds()
+                except Exception:
+                    pass
+            downtime_str = format_duration(downtime_secs) if downtime_secs > 0 else "ไม่เกิน 1 นาที"
+
+            state["current_status"] = "ONLINE"
+            state["is_online"] = True
+            state["offline_since"] = None
+            state["last_notified_at"] = now_iso
+            state["total_offline_alerts_sent"] = 0
+            alert_type = "ONLINE_RECOVERED"
+
+            logger.info("AD Sync Agent RECOVERED to ONLINE! Downtime: %s. Sending recovery notification...", downtime_str)
+            await send_ad_status_alert(
+                db=db,
+                alert_type="ONLINE_RECOVERED",
+                ad_health_message=ad_health.message,
+                ad_base_url=ad_connector.base_url,
+                latency_ms=ad_health.latency_ms,
+                downtime_str=downtime_str,
+                total_alerts_sent=0
+            )
+            alert_sent = True
+        else:
+            state["current_status"] = "ONLINE"
+            state["is_online"] = True
+
+    state["last_check_at"] = now_iso
+    state["last_latency_ms"] = ad_health.latency_ms
+    state["last_message"] = ad_health.message
+
+    setting.setting_value = dict(state)
+    flag_modified(setting, "setting_value")
+    db.commit()
+
+    return {
+        "status": state["current_status"],
+        "is_online": is_online,
+        "alert_sent": alert_sent,
+        "alert_type": alert_type,
+        "state": state
+    }
+
+async def trigger_test_ad_alert(
+    db: Session,
+    alert_type: str = "OFFLINE_IMMEDIATE",
+    custom_bot_token: Optional[str] = None,
+    custom_chat_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Manually test AD status alert format and delivery to Telegram."""
+    connector = AdProxyConnector()
+    ok, msg, count = await send_ad_status_alert(
+        db=db,
+        alert_type=alert_type,
+        ad_health_message="[ทดสอบ] การจำลองสถานะการขัดข้อง AD Sync Agent",
+        ad_base_url=connector.base_url,
+        latency_ms=12,
+        downtime_str="1 ชั่วโมง 0 นาที",
+        total_alerts_sent=1,
+        custom_bot_token=custom_bot_token,
+        custom_chat_id=custom_chat_id
+    )
+    return {
+        "success": ok,
+        "message": msg,
+        "recipients_delivered": count,
+        "alert_type": alert_type
+    }

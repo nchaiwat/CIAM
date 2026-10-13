@@ -478,6 +478,20 @@ export default function AdminProfileModal({
                 </div>
               </div>
 
+              {/* AD Real-Time Monitoring Callout */}
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950 flex items-start space-x-2.5 shadow-2xs">
+                <Radio className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5 animate-pulse" />
+                <div className="flex-1">
+                  <div className="font-extrabold flex items-center justify-between">
+                    <span>⚡ ระบบเฝ้าระวัง AD Sync Agent แบบ Real-Time</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-200 text-emerald-900 font-black">ACTIVE (ทุก 30 วินาที)</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-800 mt-1 leading-relaxed">
+                    ระบบจะตรวจสอบ AD ตลอด 24/7 โดยอัตโนมัติ: <b>แจ้งเตือนเข้า Telegram ทันทีเมื่อ Offline</b> และ <b>แจ้งเตือนซ้ำทุกๆ 1 ชั่วโมง</b> จนกว่าจะกลับมา Online
+                  </div>
+                </div>
+              </div>
+
               {/* Schedule & Telegram Settings Form */}
               <form onSubmit={handleSaveMonitor} className="space-y-4">
                 {/* Master Toggle */}

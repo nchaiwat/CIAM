@@ -444,6 +444,13 @@ async def run_scheduler_worker():
                             await send_health_report(db, triggered_by=f"AUTO_SCHEDULED_{current_hm}")
                 except Exception as health_err:
                     logger.warning("Error running scheduled health monitor: %s", health_err)
+
+                # Real-Time AD Sync Agent Status Monitoring & Hourly Alert Loop
+                try:
+                    from app.services.telegram_service import check_and_notify_ad_status
+                    await check_and_notify_ad_status(db)
+                except Exception as ad_mon_err:
+                    logger.warning("Error running real-time AD health monitor: %s", ad_mon_err)
             finally:
                 db.close()
         except asyncio.CancelledError:

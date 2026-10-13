@@ -79,7 +79,10 @@ from app.services.telegram_service import (
     get_health_monitor_config,
     save_health_monitor_config,
     check_full_system_health,
-    send_health_report
+    send_health_report,
+    get_ad_monitor_status,
+    check_and_notify_ad_status,
+    trigger_test_ad_alert
 )
 
 class HealthMonitorUpdateRequest(BaseModel):
@@ -94,18 +97,25 @@ class HealthMonitorTestRequest(BaseModel):
     bot_token: Optional[str] = None
     chat_id: Optional[str] = None
 
+class AdAlertTestRequest(BaseModel):
+    alert_type: str = "OFFLINE_IMMEDIATE"  # OFFLINE_IMMEDIATE, OFFLINE_REMINDER, ONLINE_RECOVERED
+    bot_token: Optional[str] = None
+    chat_id: Optional[str] = None
+
 
 @router.get("/health-monitor")
 async def get_health_monitor_status(
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
-    """Retrieve Telegram Health Monitor configuration and live system health snapshot."""
+    """Retrieve Telegram Health Monitor configuration, live system health, and real-time AD monitor state."""
     config = get_health_monitor_config(db)
     health = await check_full_system_health(db)
+    ad_monitor = get_ad_monitor_status(db)
     return {
         "config": config,
-        "live_health": health
+        "live_health": health,
+        "ad_monitor": ad_monitor
     }
 
 
@@ -140,4 +150,31 @@ async def trigger_test_health_alert(
         custom_chat_id=c_id
     )
     return result
+
+
+@router.post("/health-monitor/test-ad-alert")
+async def trigger_test_ad_status_alert(
+    payload: Optional[AdAlertTestRequest] = None,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Trigger a simulated AD status alert to Telegram (OFFLINE_IMMEDIATE, OFFLINE_REMINDER, or ONLINE_RECOVERED)."""
+    alert_t = payload.alert_type if payload and payload.alert_type else "OFFLINE_IMMEDIATE"
+    b_token = payload.bot_token if payload and payload.bot_token else None
+    c_id = payload.chat_id if payload and payload.chat_id else None
+    return await trigger_test_ad_alert(
+        db=db,
+        alert_type=alert_t,
+        custom_bot_token=b_token,
+        custom_chat_id=c_id
+    )
+
+
+@router.post("/health-monitor/check-ad-now")
+async def force_check_ad_status(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Run an immediate AD status probe and notify if status is OFF or RECOVERED."""
+    return await check_and_notify_ad_status(db, force_check=True)
 

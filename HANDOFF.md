@@ -1,11 +1,32 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 12 ตุลาคม 2026 (Local Time: ~17:21 ICT)  
+> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~09:58 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0.000000000000000000 ระบบเฝ้าระวัง AD Sync Agent: แจ้งเตือน Telegram ทันทีเมื่อ OFF และเตือนซ้ำทุกๆ 1 ชั่วโมง จนกว่าจะกลับมาเป็น ON (13 ต.ค. 2026)
+### 1. รายละเอียดการทำงานของระบบเฝ้าระวัง (Real-Time AD Monitor Engine):
+1. **Background Scheduler Daemon (ตรวจสอบทุก 30 วินาที):**
+   - ทำงานตลอด 24/7 ผ่าน `run_scheduler_worker()` ใน `backend/app/services/scheduler.py`
+   - เรียกฟังก์ชัน `check_and_notify_ad_status(db)` เพื่อ Probe สถานะ AD Gateway (`http://172.18.0.1:3100`)
+2. **State Machine & Notification Rules:**
+   - **กฎที่ 1 (แจ้งเตือนทันทีเมื่อหลุด):** เมื่อสถานะ AD เปลี่ยนเป็น `OFFLINE` ระบบจะยิงข้อความแจ้งเตือนสีแดง `🚨 [CIAM ALERT] AD Sync Agent หลุดการเชื่อมต่อ` เข้ากลุ่ม Telegram และส่ง DM ถึงแอดมินทันที พร้อมระบุเวลาตรวจพบและสาเหตุข้อผิดพลาด
+   - **กฎที่ 2 (เตือนซ้ำทุกๆ 1 ชั่วโมง):** ตราบใดที่สถานะยังคงเป็น `OFFLINE` ระบบจะตรวจเวลาว่าผ่านไป >= 3,600 วินาทีจากรอบก่อนหรือไม่ หากครบ 1 ชั่วโมง จะส่งแจ้งเตือนสีส้ม `⚠️ [CIAM REMINDER] AD Sync Agent ยังคง OFFLINE (เตือนรอบที่ N)` พร้อมคำนวณเวลารวมที่ล่มต่อเนื่อง (Cumulative Downtime)
+   - **กฎที่ 3 (แจ้งเตือนกู้คืนเมื่อกลับมา ON):** เมื่อ AD กลับมาตอบสนองปกติ (`ONLINE`) ระบบจะส่งแจ้งเตือนสีเขียว `✅ [CIAM RECOVERY] AD Sync Agent กลับมา ONLINE ปกติแล้ว` ทันที พร้อมสรุปรวมเวลาขัดข้องทั้งหมด และรีเซ็ตวงรอบการเตือน
+3. **Database State Persistence:**
+   - บันทึกสถานะลงตาราง `system_settings` ในคีย์ `ad_status_monitor` ป้องกันการสูญหายของ State และเวลานับถอยหลังข้ามการรีสตาร์ตเซิร์ฟเวอร์
+4. **Interactive Dashboard & Settings UI:**
+   - หน้า **Settings (`/settings`)**: เพิ่มการ์ด **"ระบบเฝ้าระวัง AD Sync Agent & แจ้งเตือน Telegram ฉุกเฉิน"** แสดงสถานะสด, Response Latency, เวลาตรวจสอบล่าสุด, ปุ่มตรวจเช็คทันที, และปุ่มทดสอบจำลองส่งข้อความทั้ง 3 รูปแบบ (OFFLINE ทันที, เตือนซ้ำทุก 1 ชม., และ RECOVERY กู้คืน)
+   - โมดอล **AdminProfileModal**: เพิ่มแถบแจ้งเตือนสถานะ Real-Time 30s ในแท็บ Telegram Health & AD Agent
+
+### 2. ผลการตรวจสอบคุณภาพ:
+- Backend pytest: ผ่าน 49/49 tests 100% (รวม unit tests สำหรับ State Machine และ Endpoints ใหม่)
+- Frontend TypeScript `npx tsc --noEmit`: ผ่าน 0 errors (100%)
 
 ---
 

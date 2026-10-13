@@ -20,6 +20,9 @@ import {
   Info,
   Calendar,
   Zap,
+  Radio,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import {
   ciamApi,
@@ -27,6 +30,7 @@ import {
   LiveHealthSnapshot,
   SyncSchedule,
   SyncAllResult,
+  AdMonitorState,
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
 
@@ -50,6 +54,15 @@ export default function SettingsPage() {
     success: boolean;
     message: string;
   } | null>(null);
+
+  // Real-Time AD Monitor State
+  const [adMonitor, setAdMonitor] = useState<AdMonitorState | null>(null);
+  const [adTestLoading, setAdTestLoading] = useState(false);
+  const [adTestResult, setAdTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [adChecking, setAdChecking] = useState(false);
 
   // Sync Schedule State
   const [syncSchedule, setSyncSchedule] = useState<SyncSchedule>({
@@ -80,6 +93,9 @@ export default function SettingsPage() {
       if (healthData) {
         setTelegramConfig(healthData.config);
         setLiveHealth(healthData.live_health);
+        if (healthData.ad_monitor) {
+          setAdMonitor(healthData.ad_monitor);
+        }
       }
       if (scheduleData) {
         setSyncSchedule(scheduleData);
@@ -142,6 +158,47 @@ export default function SettingsPage() {
       });
     } finally {
       setTelegramTestLoading(false);
+    }
+  };
+
+  const handleTestAdAlert = async (type: "OFFLINE_IMMEDIATE" | "OFFLINE_REMINDER" | "ONLINE_RECOVERED") => {
+    try {
+      setAdTestLoading(true);
+      setAdTestResult(null);
+      const res = await ciamApi.triggerTestAdAlert({
+        alert_type: type,
+        bot_token: telegramConfig.bot_token,
+        chat_id: telegramConfig.chat_id,
+      });
+      setAdTestResult({
+        success: res.success,
+        message: res.success
+          ? `ส่งการแจ้งเตือนจำลอง (${type}) เข้า Telegram สำเร็จ (${res.message})`
+          : `ส่งการแจ้งเตือนไม่สำเร็จ: ${res.message}`,
+      });
+    } catch (err: any) {
+      setAdTestResult({
+        success: false,
+        message: `ข้อผิดพลาดในการทดสอบ AD Alert: ${err.message || err}`,
+      });
+    } finally {
+      setAdTestLoading(false);
+    }
+  };
+
+  const handleCheckAdNow = async () => {
+    try {
+      setAdChecking(true);
+      const res = await ciamApi.checkAdNow();
+      if (res.state) {
+        setAdMonitor(res.state);
+      }
+      await fetchSettings();
+      alert(`ตรวจวัดสถานะ AD Sync Agent สำเร็จ: สถานะ ${res.status} (${res.is_online ? "ONLINE ปกติ" : "OFFLINE หลุดการเชื่อมต่อ"})`);
+    } catch (err: any) {
+      alert(`ไม่สามารถตรวจสอบ AD ได้: ${err.message || err}`);
+    } finally {
+      setAdChecking(false);
     }
   };
 
@@ -563,6 +620,175 @@ export default function SettingsPage() {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+
+      {/* CARD: Real-Time AD Monitor & Hourly Telegram Alert Engine */}
+      <div className="bg-white rounded-xl border border-slate-300 shadow-sm overflow-hidden flex flex-col">
+        <div className="px-5 py-4 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-400/30">
+              <Radio className="w-4 h-4 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h2 className="font-bold text-sm tracking-tight">
+                  ระบบเฝ้าระวัง AD Sync Agent &amp; แจ้งเตือน Telegram ฉุกเฉิน
+                </h2>
+                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 uppercase">
+                  Real-Time 30s
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 mt-0.5">
+                ตรวจสอบ AD ทุก 30 วินาที • แจ้งเตือนทันทีเมื่อ OFF • เตือนซ้ำทุก 1 ชั่วโมง จนกว่าจะกลับมาเป็น ON
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-black border flex items-center space-x-1.5 shadow-2xs ${
+                (adMonitor?.is_online ?? liveHealth?.ad_sync_agent.is_online)
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40"
+                  : "bg-rose-500/20 text-rose-300 border-rose-400/40"
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${(adMonitor?.is_online ?? liveHealth?.ad_sync_agent.is_online) ? "bg-emerald-400 animate-ping" : "bg-rose-400"}`}></span>
+              <span>{(adMonitor?.is_online ?? liveHealth?.ad_sync_agent.is_online) ? "🟢 ONLINE ปกติ" : "🔴 OFFLINE หลุดการเชื่อมต่อ"}</span>
+            </span>
+
+            <button
+              type="button"
+              onClick={handleCheckAdNow}
+              disabled={adChecking}
+              className="flex items-center space-x-1 px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${adChecking ? "animate-spin" : ""}`} />
+              <span>ตรวจเช็คทันที</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Rules Banner */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="p-3 bg-rose-50/80 rounded-xl border border-rose-200 text-xs">
+              <div className="font-extrabold text-rose-900 flex items-center space-x-1.5 mb-1">
+                <span>🚨 กฎที่ 1: แจ้งเตือนทันทีเมื่อหลุด</span>
+              </div>
+              <p className="text-[11px] text-slate-700 leading-relaxed">
+                เมื่อสถานะของ AD เปลี่ยนเป็น <b>OFF (Offline / Unreachable)</b> ระบบจะยิง Telegram แจ้งเตือนแอดมินและกลุ่มทันที
+              </p>
+            </div>
+
+            <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 text-xs">
+              <div className="font-extrabold text-amber-900 flex items-center space-x-1.5 mb-1">
+                <span>⏱️ กฎที่ 2: เตือนซ้ำทุกๆ 1 ชั่วโมง</span>
+              </div>
+              <p className="text-[11px] text-slate-700 leading-relaxed">
+                ตราบใดที่ยังไม่สามารถติดต่อ AD ได้ ระบบจะส่งแจ้งเตือนเตือนซ้ำต่อเนื่อง<b>ทุกๆ 1 ชั่วโมง (3,600 วินาที)</b>
+              </p>
+            </div>
+
+            <div className="p-3 bg-emerald-50/80 rounded-xl border border-emerald-200 text-xs">
+              <div className="font-extrabold text-emerald-900 flex items-center space-x-1.5 mb-1">
+                <span>✅ กฎที่ 3: สรุปเมื่อกลับมาเป็น ON</span>
+              </div>
+              <p className="text-[11px] text-slate-700 leading-relaxed">
+                เมื่อ AD กลับมาเป็น <b>ON (Online)</b> ระบบจะส่งข้อความแจ้งกู้คืนสำเร็จทันที พร้อมคำนวณเวลารวมที่ล่ม (Downtime)
+              </p>
+            </div>
+          </div>
+
+          {/* Status Metrics Box */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+              <div className="text-slate-500 font-medium text-[11px]">สถานะปัจจุบัน:</div>
+              <div className="font-mono font-bold text-slate-900 mt-0.5">
+                {(adMonitor?.is_online ?? liveHealth?.ad_sync_agent.is_online) ? "ONLINE (พร้อมใช้งาน)" : "OFFLINE (ตัดการเชื่อมต่อ)"}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-slate-500 font-medium text-[11px]">ตรวจวัดล่าสุด:</div>
+              <div className="font-mono font-bold text-slate-800 mt-0.5">
+                {adMonitor?.last_check_at ? formatDateTime(adMonitor.last_check_at) : (liveHealth?.timestamp_bkk || "กำลังตรวจวัด")}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-slate-500 font-medium text-[11px]">Response Latency:</div>
+              <div className="font-mono font-bold text-slate-800 mt-0.5">
+                {adMonitor?.last_latency_ms ?? liveHealth?.ad_sync_agent.latency_ms ?? 0} ms
+              </div>
+            </div>
+
+            <div>
+              <div className="text-slate-500 font-medium text-[11px]">เตือน Offline ส่งไปแล้ว:</div>
+              <div className="font-mono font-bold text-slate-800 mt-0.5">
+                {adMonitor?.total_offline_alerts_sent ?? 0} ครั้ง
+              </div>
+            </div>
+          </div>
+
+          {/* Test Alert Buttons */}
+          <div className="pt-2 border-t border-slate-200">
+            <div className="text-xs font-bold text-slate-800 mb-2 flex items-center justify-between">
+              <span>🧪 ทดสอบการส่งข้อความแจ้งเตือน AD ไปยัง Telegram:</span>
+              <span className="text-[11px] text-slate-500 font-normal">
+                (ใช้ Bot Token และ Chat ID ที่กำหนดไว้ด้านบน)
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => handleTestAdAlert("OFFLINE_IMMEDIATE")}
+                disabled={adTestLoading}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                <span>🚨 ทดสอบจำลอง: AD หลุด (OFFLINE ทันที)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTestAdAlert("OFFLINE_REMINDER")}
+                disabled={adTestLoading}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>⚠️ ทดสอบจำลอง: เตือนซ้ำทุก 1 ชม. (Hourly Reminder)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTestAdAlert("ONLINE_RECOVERED")}
+                disabled={adTestLoading}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>✅ ทดสอบจำลอง: กู้คืนสำเร็จ (ONLINE Recovery)</span>
+              </button>
+            </div>
+
+            {adTestResult && (
+              <div
+                className={`mt-3 p-2.5 border rounded-lg text-xs font-bold flex items-start space-x-1.5 ${
+                  adTestResult.success
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                    : "bg-rose-50 border-rose-300 text-rose-800"
+                }`}
+              >
+                {adTestResult.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <span>{adTestResult.message}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

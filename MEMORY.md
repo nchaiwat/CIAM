@@ -556,4 +556,26 @@ FRONTEND_URL=http://localhost:3000
   - **Context-Aware Directory Filtering (`directory.py`):** ตัวกรองผสม เช่น `app_code="irm"` ร่วมกับ `status="active"` จะตรวจสอบสถานะ Active ภายในระบบ IRM โดยตรง (`spoke_active == True`) ทำให้บัญชีที่ปิดใช้งานใน IRM ไม่โผล่มาแสดงผล
   - **Ghost Account Guardrails (`reconciliation.py`):** ป้องกันไม่ให้ Local Spoke Accounts ถูกนำไปประเมินเป็น Discrepancy หรือ Ghost Account
 
+---
+
+## 17. Real-Time AD Sync Agent Monitoring & Hourly Telegram Alerts (Version 2.0.7)
+
+### 17.1 Background Architecture & Operational Rules
+* **Continuous Monitoring Loop (ตรวจทุก 30 วินาที):**
+  - รันผ่าน Background Scheduler Worker (`run_scheduler_worker` ใน `scheduler.py`) ซึ่งทำงาน 24/7
+  - ตรวจสอบความพร้อมของ AD Gateway (`http://172.18.0.1:3100`) ผ่าน `AdProxyConnector.health_check()`
+* **Alert Triggering Rules (3 ระดับ):**
+  1. **🚨 OFFLINE_IMMEDIATE (ส่งทันทีเมื่อหลุด):** เมื่อสถานะเปลี่ยนจาก `ONLINE` ➔ `OFFLINE` ระบบจะส่งแจ้งเตือน Telegram เข้ากลุ่มและ DM ถึงแอดมินทันที พร้อมบันทึกเวลาที่เริ่มขัดข้อง (`offline_since`)
+  2. **⚠️ OFFLINE_REMINDER (เตือนซ้ำทุก 1 ชั่วโมง):** ตราบใดที่สถานะยังคงเป็น `OFFLINE` ระบบจะจับเวลาและส่งแจ้งเตือนซ้ำทุกๆ 3,600 วินาที (1 ชั่วโมง) พร้อมสรุปเวลารวมที่ขัดข้องสะสม (Cumulative Downtime)
+  3. **✅ ONLINE_RECOVERED (แจ้งเตือนกู้คืนทันที):** เมื่อ AD กลับมาเป็น `ONLINE` ระบบจะส่งข้อความแจ้งเตือนทันที พร้อมสรุปรวมระยะเวลา Downtime ทั้งหมด และรีเซ็ตเคาน์เตอร์การเตือน
+* **State Persistence:**
+  - สถานะถูกบันทึกในฐานข้อมูล PostgreSQL ตาราง `system_settings` คีย์ `ad_status_monitor` โครงสร้าง JSON:
+    `{ current_status, is_online, offline_since, last_notified_at, total_offline_alerts_sent, last_check_at, last_latency_ms, last_message }`
+* **API Endpoints & UI Diagnostics:**
+  - `GET /api/v1/dashboard/health-monitor`: ส่งคืน `config`, `live_health`, และ `ad_monitor`
+  - `POST /api/v1/dashboard/health-monitor/test-ad-alert`: ทดสอบยิงข้อความจำลองทั้ง 3 รูปแบบ
+  - `POST /api/v1/dashboard/health-monitor/check-ad-now`: บังคับตรวจเช็คสถานะทันทีแบบ Real-time
+  - หน้าเว็บ `frontend/src/app/settings/page.tsx` มีการ์ดควบคุมและปุ่มทดสอบครบถ้วน
+
+
 
