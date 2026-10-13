@@ -2,9 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
-  ShieldCheck,
   Lock,
   User,
   Eye,
@@ -14,16 +12,11 @@ import {
   RefreshCw,
   CheckCircle2,
   HelpCircle,
-  Shield,
-  Zap,
-  Server,
-  Layers,
   X,
   KeyRound,
   Check,
 } from "lucide-react";
 import { ciamApi } from "@/lib/api";
-import { WindowAsiaLogo, WindowAsiaEmblem } from "@/components/WindowAsiaLogo";
 
 export default function EmployeeLoginPage() {
   const router = useRouter();
@@ -116,34 +109,35 @@ export default function EmployeeLoginPage() {
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-10 right-10 w-96 h-96 bg-sky-500/15 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Top: Window Asia Corporate Logo */}
+        {/* Top: Corporate Identifier */}
         <div className="relative z-10">
-          <WindowAsiaLogo variant="dark" size="lg" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/15 border border-blue-400/30 text-sky-300 text-xs font-semibold tracking-wide backdrop-blur-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            Window Asia Single Sign-On
+          </div>
         </div>
 
-        {/* Middle: Value Proposition & Security Assurances */}
-        <div className="relative z-10 my-10 lg:my-auto max-w-xl space-y-7">
+        {/* Middle: Clean, Concise Enterprise Information */}
+        <div className="relative z-10 my-10 lg:my-auto max-w-lg space-y-6">
           <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/15 border border-blue-400/30 text-sky-300 text-xs font-semibold tracking-wide backdrop-blur-sm">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Window Asia Central Single Sign-On
-            </div>
-            <h1 className="text-3xl sm:text-4xl xl:text-[42px] font-black tracking-tight leading-tight text-white">
-              ความปลอดภัยที่คุณวางใจ
+            <h1 className="text-3xl sm:text-4xl xl:text-[40px] font-black tracking-tight leading-tight text-white">
+              ระบบเข้าใช้งานรวมศูนย์
               <span className="block text-sky-400 font-extrabold mt-1">
                 เชื่อมต่อทุกระบบงานด้วยบัญชีเดียว
               </span>
             </h1>
+            <p className="text-sm sm:text-base text-slate-300 leading-relaxed pt-1">
+              เข้าถึงระบบสารสนเทศของบริษัท วินโดว์ เอเชีย จำกัด (มหาชน) ได้อย่างสะดวก รวดเร็ว และปลอดภัย
+            </p>
           </div>
 
-          {/* Bullet Points with Checkmarks */}
-          <div className="space-y-3.5 pt-2 text-slate-200 text-sm sm:text-base">
+          <div className="space-y-3 pt-1 text-slate-200 text-sm">
             <div className="flex items-start gap-3">
               <div className="w-5 h-5 rounded-full bg-blue-500/30 border border-blue-400/50 flex items-center justify-center shrink-0 mt-0.5 text-sky-300">
                 <Check className="w-3.5 h-3.5 stroke-[3]" />
               </div>
               <span className="leading-snug">
-                <strong>Single Sign-On รวมศูนย์</strong> — ล็อกอินครั้งเดียว เข้าถึงทุกระบบงานในองค์กรได้ทันที
+                ยืนยันตัวตนด้วยชื่อบัญชีและรหัสผ่าน Windows Active Directory
               </span>
             </div>
 
@@ -152,7 +146,7 @@ export default function EmployeeLoginPage() {
                 <Check className="w-3.5 h-3.5 stroke-[3]" />
               </div>
               <span className="leading-snug">
-                <strong>Active Directory Integrated</strong> — ยืนยันตัวตนด้วยชื่อบัญชีและรหัสผ่าน Windows ประจำตัว
+                รองรับการเข้าถึงระบบ IRM, SAP Business One, QMS และระบบงานภายในทั้งหมด
               </span>
             </div>
 
@@ -161,66 +155,8 @@ export default function EmployeeLoginPage() {
                 <Check className="w-3.5 h-3.5 stroke-[3]" />
               </div>
               <span className="leading-snug">
-                <strong>มาตรฐานความปลอดภัยระดับ Enterprise</strong> — เข้ารหัสข้อมูลและควบคุมสิทธิ์แบบ Real-time
+                มาตรฐานความปลอดภัยและการควบคุมสิทธิ์การเข้าถึงข้อมูลระดับองค์กร
               </span>
-            </div>
-          </div>
-
-          {/* Shield Guarantee Card (Matching reference mockup) */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-900/40 via-blue-800/30 to-indigo-900/30 border border-blue-400/30 backdrop-blur-md shadow-lg shadow-blue-950/30 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-sky-400 flex items-center justify-center shrink-0 shadow-md shadow-blue-500/30 text-white">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="font-bold text-white text-sm sm:text-base">
-                รับประกันความปลอดภัยตลอดการใช้งาน
-              </div>
-              <div className="text-xs text-sky-200/80 leading-relaxed mt-0.5">
-                มั่นใจในระบบความปลอดภัย ดูแลและปกป้องข้อมูลสำคัญขององค์กรตลอด 24 ชม.
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom 4 Feature Cards (Pillars) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3">
-            <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10 backdrop-blur-sm text-center space-y-1">
-              <div className="w-8 h-8 mx-auto rounded-lg bg-blue-500/20 text-sky-300 flex items-center justify-center">
-                <Shield className="w-4 h-4" />
-              </div>
-              <div className="text-xs font-bold text-white">ปลอดภัย</div>
-              <div className="text-[10px] text-slate-300/80 leading-tight">
-                ควบคุมการเข้าถึงรัดกุม
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10 backdrop-blur-sm text-center space-y-1">
-              <div className="w-8 h-8 mx-auto rounded-lg bg-sky-500/20 text-sky-300 flex items-center justify-center">
-                <Zap className="w-4 h-4" />
-              </div>
-              <div className="text-xs font-bold text-white">รวดเร็ว</div>
-              <div className="text-[10px] text-slate-300/80 leading-tight">
-                เข้าสู่ระบบทันใจ ไม่ซ้ำซ้อน
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10 backdrop-blur-sm text-center space-y-1">
-              <div className="w-8 h-8 mx-auto rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center">
-                <Server className="w-4 h-4" />
-              </div>
-              <div className="text-xs font-bold text-white">เสถียรภาพ</div>
-              <div className="text-[10px] text-slate-300/80 leading-tight">
-                High Availability 99.9%
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10 backdrop-blur-sm text-center space-y-1">
-              <div className="w-8 h-8 mx-auto rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center">
-                <Layers className="w-4 h-4" />
-              </div>
-              <div className="text-xs font-bold text-white">ครบวงจร</div>
-              <div className="text-[10px] text-slate-300/80 leading-tight">
-                เชื่อมต่อทุกระบบงาน
-              </div>
             </div>
           </div>
         </div>
@@ -235,28 +171,28 @@ export default function EmployeeLoginPage() {
       {/* ========================================================= */}
       {/* RIGHT PANEL: Enterprise Login Card (46% on desktop)      */}
       {/* ========================================================= */}
-      <div className="w-full lg:w-[46%] xl:w-[44%] bg-[#f8fafc] flex flex-col justify-center items-center p-6 sm:p-10 lg:p-12 relative overflow-y-auto">
+      <div className="w-full lg:w-[46%] xl:w-[44%] bg-white flex flex-col justify-center items-center p-6 sm:p-10 lg:p-12 relative overflow-y-auto">
         {/* Ambient Top Decorative Line */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-400" />
 
-        <div className="w-full max-w-[430px] space-y-6 my-auto">
-          {/* Header & 3D Window Emblem */}
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-              ยินดีต้อนรับ
-            </h2>
-            <p className="text-xs sm:text-sm font-medium text-slate-500">
-              เข้าสู่ระบบ <strong className="text-blue-700">Window Asia App Portal</strong>
-            </p>
-
-            {/* Mobile Header Logo */}
-            <div className="lg:hidden pb-1 flex justify-center">
-              <WindowAsiaLogo variant="light" size="md" />
+        <div className="w-full max-w-[420px] space-y-6 my-auto">
+          {/* Header & Official Logo Moved to Right Side */}
+          <div className="text-center space-y-3">
+            {/* Official Window Asia Corporate Logo (Emblem + Text) */}
+            <div className="flex justify-center pb-1">
+              <img
+                src="/window-asia-logo.png"
+                alt="Window Asia วินโดว์ เอเชีย"
+                className="h-12 sm:h-14 w-auto object-contain block select-none"
+              />
             </div>
-
-            {/* Official Window Asia Corporate Emblem (Authentic Asset) */}
-            <div className="py-2 hidden lg:block">
-              <WindowAsiaEmblem className="w-18 h-18 mx-auto transform hover:scale-105 transition-transform duration-300" />
+            <div className="space-y-1">
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+                ยินดีต้อนรับ
+              </h2>
+              <p className="text-xs sm:text-sm font-medium text-slate-500">
+                เข้าสู่ระบบ <strong className="text-blue-700">Window Asia App Portal</strong>
+              </p>
             </div>
           </div>
 
@@ -374,42 +310,8 @@ export default function EmployeeLoginPage() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="relative flex items-center justify-center">
-            <div className="border-t border-slate-200 w-full" />
-            <span className="bg-[#f8fafc] px-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">
-              หรือเข้าสู่ระบบด้วย
-            </span>
-            <div className="border-t border-slate-200 w-full" />
-          </div>
-
-          {/* Active Directory Corporate Sign-in Information Box */}
-          <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center gap-3 text-left">
-            <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 text-blue-700">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-bold text-slate-800">
-                Internal Active Directory
-              </div>
-              <div className="text-[11px] text-slate-500 leading-snug">
-                ยืนยันตัวตนผ่านระบบ Windows AD ของบริษัท (ชุดเดียวกับเปิดคอมพิวเตอร์)
-              </div>
-            </div>
-          </div>
-
-          {/* Admin Console Shortcut */}
-          <div className="pt-2 text-center">
-            <Link
-              href="/admin/login"
-              className="inline-flex items-center justify-center gap-1.5 text-slate-500 hover:text-blue-700 text-xs font-semibold transition-colors py-1 px-3 rounded-lg hover:bg-slate-100"
-            >
-              <span>⚙️ สำหรับเจ้าหน้าที่ไอที / ผู้ดูแลระบบ (Admin Console) ➜</span>
-            </Link>
-          </div>
-
           {/* Helpdesk Notice */}
-          <div className="text-center text-[11px] text-slate-400 pt-2 border-t border-slate-200/80">
+          <div className="text-center text-xs text-slate-400 pt-4 border-t border-slate-100">
             ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ? กรุณาติดต่อฝ่ายไอที (IT Support)
           </div>
         </div>
