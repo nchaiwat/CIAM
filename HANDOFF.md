@@ -1,11 +1,36 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~13:38 ICT)  
+> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~14:35 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0.000000000000000000000 ปรับปรุงหน้า SSO Portal ใหม่: Freeze Header, กระชับ Header รอง, ย่อขนาด App Cards 4 คอลัมน์, และพื้นหลังเฉดสีฟ้าอ่อน Modern (13 ต.ค. 2026)
+### 1. รายละเอียดการปรับปรุง (SSO App Portal Refinement):
+1. **Freeze Top Header:**
+   - เปลี่ยนจาก static/sticky header เป็น `fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur-xl border-b border-sky-200/80 h-16`
+   - เพิ่ม `pt-20` บนคอนเทนเนอร์หลัก (`<main>`) เพื่อตรึง Header ไว้ด้านบนตลอดเวลา ไม่เลื่อนหายไปไหนเมื่อ Scroll หน้าจอ
+2. **ปรับปรุงส่วน Header รองให้กระชับ ไม่กินพื้นที่:**
+   - ยกเลิกกล่อง Hero Banner ขนาดใหญ่ที่กินพื้นที่หน้าจอ
+   - ลบคำศัพท์เทคนิค เช่น `SSO Core Active (RS256)` และ `Enterprise Identity Portal` ออกทั้งหมด เพื่อให้ผู้ใช้งานทั่วไปเข้าใจง่าย ไม่สับสน
+   - เปลี่ยนเป็นแถบทักทายกระชับแบบบรรทัดเดียว: `สวัสดี, คุณ [ชื่อ-นามสกุล] 👋 เลือกระบบงานที่ต้องการเข้าใช้งาน หรือค้นหาจากแถบด้านล่าง` พร้อม Badge สรุปจำนวนระบบพร้อมใช้งาน
+3. **ปรับการ์ด App ให้กะทัดรัด (Compact Cards Grid):**
+   - ปรับการจัดวางเป็น 4 คอลัมน์บนหน้าจอเดสก์ท็อป (`grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4`)
+   - ย่อขนาดกล่องไอคอนทรง Squircle 3D เป็น `w-11 h-11` (ไอคอน `w-5.5 h-5.5`)
+   - ย่อระยะขอบด้านใน (padding) และข้อความคำอธิบายให้กระชับ
+   - ย่อปุ่มเปิดระบบเป็น `py-2.5 px-3 rounded-xl text-xs font-black`
+   - ลดความสูงรวมของการ์ดลงกว่า 45% ทำให้ผู้ใช้งานเห็นระบบงานทั้งหมดได้ครบในหน้าจอเดียวโดยไม่ต้องเลื่อนหน้าจอ
+4. **พื้นหลังไล่เฉดสีฟ้าอ่อนสไตล์ Modern (Soft Blue Gradient & Ambient Glow):**
+   - เปลี่ยนพื้นหลังจากสีขาวโพลน เป็น `bg-gradient-to-br from-sky-100/90 via-sky-50/80 to-blue-100/70`
+   - เพิ่ม Ambient Glow แสงฟุ้งสีฟ้าอ่อน (`from-sky-200/50 via-blue-100/30` และ blur orbs) ให้ความรู้สึกพรีเมียม นุ่มนวล สบายตา และมีมิติ
+
+### 2. ผลการตรวจสอบคุณภาพ:
+- Backend pytest: ผ่าน 49/49 tests 100%
+- Frontend TypeScript `npx tsc --noEmit`: ผ่าน 0 errors (100%)
 
 ---
 

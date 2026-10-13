@@ -231,73 +231,52 @@ export default function PortalPage() {
     switch (appCode.toLowerCase()) {
       case "irm":
         return {
-          icon: <Boxes className="w-7 h-7 text-white" />,
-          iconContainer: "bg-gradient-to-tr from-amber-500 to-orange-600 shadow-amber-500/30",
-          cardGlow: "group-hover:border-amber-400/80 group-hover:shadow-amber-500/10",
-          cardBg: "from-amber-500/[0.04] via-transparent to-transparent",
-          btn: "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-md shadow-amber-500/25",
-          badge: "bg-amber-50 text-amber-900 border-amber-300",
-          accentColor: "text-amber-800",
+          icon: <Boxes className="w-5.5 h-5.5 text-white" />,
+          iconContainer: "bg-gradient-to-tr from-amber-500 to-orange-600 shadow-md shadow-amber-500/25",
+          cardGlow: "hover:border-amber-400/90 hover:shadow-amber-500/10",
+          btn: "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-sm shadow-amber-500/25",
         };
       case "qms":
         return {
-          icon: <ClipboardCheck className="w-7 h-7 text-white" />,
-          iconContainer: "bg-gradient-to-tr from-emerald-500 to-teal-600 shadow-emerald-500/30",
-          cardGlow: "group-hover:border-emerald-400/80 group-hover:shadow-emerald-500/10",
-          cardBg: "from-emerald-500/[0.04] via-transparent to-transparent",
-          btn: "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md shadow-emerald-500/25",
-          badge: "bg-emerald-50 text-emerald-900 border-emerald-300",
-          accentColor: "text-emerald-800",
+          icon: <ClipboardCheck className="w-5.5 h-5.5 text-white" />,
+          iconContainer: "bg-gradient-to-tr from-emerald-500 to-teal-600 shadow-md shadow-emerald-500/25",
+          cardGlow: "hover:border-emerald-400/90 hover:shadow-emerald-500/10",
+          btn: "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-sm shadow-emerald-500/25",
         };
       case "qol":
         return {
-          icon: <FileSpreadsheet className="w-7 h-7 text-white" />,
-          iconContainer: "bg-gradient-to-tr from-blue-500 to-indigo-600 shadow-blue-500/30",
-          cardGlow: "group-hover:border-blue-400/80 group-hover:shadow-blue-500/10",
-          cardBg: "from-blue-500/[0.04] via-transparent to-transparent",
-          btn: "bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25",
-          badge: "bg-blue-50 text-blue-900 border-blue-300",
-          accentColor: "text-blue-800",
+          icon: <FileSpreadsheet className="w-5.5 h-5.5 text-white" />,
+          iconContainer: "bg-gradient-to-tr from-blue-500 to-indigo-600 shadow-md shadow-blue-500/25",
+          cardGlow: "hover:border-blue-400/90 hover:shadow-blue-500/10",
+          btn: "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm shadow-blue-500/25",
         };
       case "sap_b1":
         return {
-          icon: <Building2 className="w-7 h-7 text-white" />,
-          iconContainer: "bg-gradient-to-tr from-indigo-500 to-purple-600 shadow-indigo-500/30",
-          cardGlow: "group-hover:border-indigo-400/80 group-hover:shadow-indigo-500/10",
-          cardBg: "from-indigo-500/[0.04] via-transparent to-transparent",
-          btn: "bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md shadow-indigo-500/25",
-          badge: "bg-indigo-50 text-indigo-900 border-indigo-300",
-          accentColor: "text-indigo-800",
+          icon: <Building2 className="w-5.5 h-5.5 text-white" />,
+          iconContainer: "bg-gradient-to-tr from-indigo-500 to-purple-600 shadow-md shadow-indigo-500/25",
+          cardGlow: "hover:border-indigo-400/90 hover:shadow-indigo-500/10",
+          btn: "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-sm shadow-indigo-500/25",
         };
       case "mtpulse":
         return {
-          icon: <Activity className="w-7 h-7 text-white" />,
-          iconContainer: "bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-cyan-500/30",
-          cardGlow: "group-hover:border-cyan-400/80 group-hover:shadow-cyan-500/10",
-          cardBg: "from-cyan-500/[0.04] via-transparent to-transparent",
-          btn: "bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-700 hover:to-blue-700 text-white shadow-md shadow-cyan-500/25",
-          badge: "bg-cyan-50 text-cyan-900 border-cyan-300",
-          accentColor: "text-cyan-800",
+          icon: <Activity className="w-5.5 h-5.5 text-white" />,
+          iconContainer: "bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-md shadow-cyan-500/25",
+          cardGlow: "hover:border-cyan-400/90 hover:shadow-cyan-500/10",
+          btn: "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white shadow-sm shadow-cyan-500/25",
         };
       case "worksync":
         return {
-          icon: <Layers className="w-7 h-7 text-white" />,
-          iconContainer: "bg-gradient-to-tr from-violet-500 to-fuchsia-600 shadow-violet-500/30",
-          cardGlow: "group-hover:border-violet-400/80 group-hover:shadow-violet-500/10",
-          cardBg: "from-violet-500/[0.04] via-transparent to-transparent",
-          btn: "bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-md shadow-violet-500/25",
-          badge: "bg-violet-50 text-violet-900 border-violet-300",
-          accentColor: "text-violet-800",
+          icon: <Layers className="w-5.5 h-5.5 text-white" />,
+          iconContainer: "bg-gradient-to-tr from-violet-500 to-fuchsia-600 shadow-md shadow-violet-500/25",
+          cardGlow: "hover:border-violet-400/90 hover:shadow-violet-500/10",
+          btn: "bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white shadow-sm shadow-violet-500/25",
         };
       default:
         return {
-          icon: <Layers className="w-7 h-7 text-white" />,
-          iconContainer: "bg-gradient-to-tr from-slate-600 to-slate-800 shadow-slate-500/30",
-          cardGlow: "group-hover:border-slate-400/80 group-hover:shadow-slate-500/10",
-          cardBg: "from-slate-500/[0.04] via-transparent to-transparent",
-          btn: "bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white shadow-md shadow-slate-700/25",
-          badge: "bg-slate-100 text-slate-900 border-slate-300",
-          accentColor: "text-slate-800",
+          icon: <Layers className="w-5.5 h-5.5 text-white" />,
+          iconContainer: "bg-gradient-to-tr from-slate-600 to-slate-800 shadow-md shadow-slate-500/25",
+          cardGlow: "hover:border-slate-400/90 hover:shadow-slate-500/10",
+          btn: "bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white shadow-sm shadow-slate-700/25",
         };
     }
   };
@@ -346,22 +325,23 @@ export default function PortalPage() {
   }, [apps, searchQuery, selectedCategory]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100/70 to-blue-50/40 text-slate-800 flex flex-col font-sans relative overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-sky-100/90 via-sky-50/80 to-blue-100/70 text-slate-800 flex flex-col font-sans relative">
       {/* ─── Ambient Glow Decorative Elements ──────────────────────────────── */}
-      <div className="absolute top-0 left-1/4 w-[550px] h-[350px] bg-gradient-to-br from-blue-400/12 via-indigo-400/6 to-transparent rounded-full blur-3xl pointer-events-none -z-10" />
-      <div className="absolute top-20 right-10 w-[500px] h-[380px] bg-gradient-to-bl from-sky-400/12 via-cyan-400/6 to-transparent rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute top-0 inset-x-0 h-80 bg-gradient-to-b from-sky-200/50 via-blue-100/30 to-transparent pointer-events-none -z-10" />
+      <div className="absolute top-24 right-8 w-96 h-96 bg-blue-300/15 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute top-48 left-10 w-80 h-80 bg-sky-300/20 rounded-full blur-3xl pointer-events-none -z-10" />
 
-      {/* ─── Top Navigation Bar ────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-slate-200/80 px-4 sm:px-8 h-18 flex items-center justify-between shadow-xs">
+      {/* ─── 1. Frozen Top Navigation Bar ──────────────────────────────────── */}
+      <header className="fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur-xl border-b border-sky-200/80 px-4 sm:px-8 h-16 flex items-center justify-between shadow-xs">
         {/* Brand Logo & Name */}
-        <div className="flex items-center space-x-3.5">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-sky-500 flex items-center justify-center text-white shadow-md shadow-blue-500/25 ring-2 ring-white">
+        <div className="flex items-center space-x-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-sky-500 flex items-center justify-center text-white shadow-md shadow-blue-500/25 ring-2 ring-white">
             <Building2 className="w-5 h-5" />
           </div>
           <div>
-            <div className="font-black text-slate-900 text-base tracking-tight flex items-center gap-2">
+            <div className="font-black text-slate-900 text-sm sm:text-base tracking-tight flex items-center gap-2">
               <span>Window Asia</span>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200/90 shadow-2xs">
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 shadow-2xs">
                 SSO App Portal
               </span>
             </div>
@@ -372,12 +352,12 @@ export default function PortalPage() {
         </div>
 
         {/* User Profile & Actions */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
           {/* Admin Console Switcher (Visible to Admins only) */}
           {isAdmin && (
             <Link
               href="/"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-sm hover:scale-[1.02] active:scale-[0.98]"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs hover:scale-[1.02] active:scale-[0.98]"
               title="สลับไปยังหน้าจัดการ Admin Console"
             >
               <Shield className="w-3.5 h-3.5 text-sky-400" />
@@ -386,8 +366,8 @@ export default function PortalPage() {
           )}
 
           {/* User Info Chip */}
-          <div className="flex items-center gap-2.5 pl-3 py-1.5 bg-white/90 rounded-full border border-slate-200/90 shadow-2xs pr-2 backdrop-blur-sm">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs ring-2 ring-blue-100 shadow-2xs">
+          <div className="flex items-center gap-2 pl-2.5 py-1 bg-sky-50/90 rounded-full border border-sky-200/90 shadow-2xs pr-1.5 backdrop-blur-sm">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs ring-2 ring-white shadow-2xs">
               {currentUser?.full_name ? currentUser.full_name.charAt(0) : "U"}
             </div>
             <div className="text-left text-xs pr-1">
@@ -399,7 +379,7 @@ export default function PortalPage() {
               </div>
             </div>
 
-            <div className="w-px h-5 bg-slate-200" />
+            <div className="w-px h-4 bg-sky-200" />
 
             <button
               onClick={() => {
@@ -409,76 +389,61 @@ export default function PortalPage() {
                 setPasswordSuccess(false);
                 setIsPasswordModalOpen(true);
               }}
-              className="p-1.5 rounded-full text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+              className="p-1 rounded-full text-slate-500 hover:text-blue-600 hover:bg-white transition-colors cursor-pointer"
               title="เปลี่ยนรหัสผ่าน Single Sign-On"
             >
-              <Key className="w-4 h-4" />
+              <Key className="w-3.5 h-3.5" />
             </button>
 
             <button
               onClick={handleLogout}
-              className="p-1.5 rounded-full text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+              className="p-1 rounded-full text-slate-500 hover:text-rose-600 hover:bg-white transition-colors cursor-pointer"
               title="ออกจากระบบ"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       </header>
 
-      {/* ─── Main Portal Content ───────────────────────────────────────────── */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-8 space-y-7">
-        {/* Modern Executive Hero Card */}
-        <div className="relative overflow-hidden rounded-3xl bg-white/80 backdrop-blur-xl border border-white/90 shadow-xl shadow-slate-200/50 p-6 sm:p-8">
-          <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-blue-600 via-indigo-600 to-sky-400" />
-          
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
-                <span>Enterprise Identity Portal</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-                <span>สวัสดี, {currentUser?.full_name || currentUser?.username || "พนักงาน"}</span>
-                <span className="text-2xl animate-bounce">👋</span>
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-600 font-medium max-w-2xl leading-relaxed">
-                ระบบงานภายในองค์กรที่คุณได้รับสิทธิ์เข้าใช้งาน คลิกปุ่ม <strong>&quot;เข้าใช้งานระบบ&quot;</strong> เพื่อเชื่อมต่อเข้าสู่ระบบได้ทันทีโดยไม่ต้องล็อกอินซ้ำ (Seamless True SSO)
-              </p>
-            </div>
+      {/* ─── Main Portal Content (Offset for fixed header) ─────────────────── */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8 space-y-4">
+        {/* ─── 2. Compact, Friendly Greeting Bar (No technical jargon) ───────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-2.5 border-b border-sky-200/60">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <span>สวัสดี, {currentUser?.full_name || currentUser?.username || "พนักงาน"}</span>
+              <span className="text-xl">👋</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-600 font-medium mt-0.5">
+              เลือกระบบงานที่ต้องการเข้าใช้งาน หรือค้นหาจากแถบด้านล่าง
+            </p>
+          </div>
 
-            {/* Quick Metrics Pills */}
-            <div className="flex md:flex-col sm:flex-row gap-2.5 shrink-0">
-              <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-50/80 border border-slate-200 text-xs font-bold text-slate-800 shadow-2xs">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>SSO Core Active (RS256)</span>
-              </div>
-              <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs font-bold text-blue-900 shadow-2xs">
-                <Layers className="w-4 h-4 text-blue-600" />
-                <span>เข้าถึงได้ {apps.length} แอปพลิเคชัน</span>
-              </div>
-            </div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/90 border border-sky-200 text-xs font-bold text-sky-900 shadow-2xs self-start sm:self-auto">
+            <Layers className="w-3.5 h-3.5 text-sky-600" />
+            <span>{apps.length} ระบบพร้อมใช้งาน</span>
           </div>
         </div>
 
-        {/* ─── Search & Category Filter Toolbar ────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        {/* ─── Compact Search & Category Filter Toolbar ────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white/70 backdrop-blur-md p-2.5 rounded-2xl border border-sky-200/70 shadow-2xs">
           {/* Category Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
             {[
-              { id: "all", label: "ทั้งหมด (All)" },
+              { id: "all", label: "ทั้งหมด" },
               { id: "prod", label: "🏭 การผลิต & คลัง" },
-              { id: "sales", label: "📊 การขาย & ลูกค้า" },
+              { id: "sales", label: "📊 การขาย" },
               { id: "erp", label: "💼 ERP & บริหาร" },
               { id: "vpn", label: "🛡️ ต้องใช้ VPN" },
             ].map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
                   selectedCategory === cat.id
-                    ? "bg-slate-900 text-white shadow-sm"
-                    : "bg-white/80 hover:bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs"
+                    ? "bg-slate-900 text-white shadow-xs"
+                    : "bg-white hover:bg-sky-50 text-slate-700 border border-slate-200/80"
                 }`}
               >
                 {cat.label}
@@ -487,23 +452,23 @@ export default function PortalPage() {
           </div>
 
           {/* Search Box */}
-          <div className="relative w-full sm:w-72">
+          <div className="relative w-full sm:w-64">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ค้นหาระบบงาน (ชื่อ, รหัส, หมวด)..."
-              className="w-full pl-9 pr-8 py-2 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 shadow-2xs transition-all"
+              placeholder="ค้นหาระบบงาน..."
+              className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 shadow-2xs transition-all"
             />
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
               <Search className="w-3.5 h-3.5" />
             </div>
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
             )}
           </div>
@@ -511,7 +476,7 @@ export default function PortalPage() {
 
         {/* Error Alert */}
         {errorMsg && (
-          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm font-semibold flex items-center justify-between shadow-2xs">
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center justify-between shadow-2xs">
             <span>{errorMsg}</span>
             <button
               onClick={loadApps}
@@ -524,29 +489,29 @@ export default function PortalPage() {
 
         {/* Loading Skeleton */}
         {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="bg-white/70 rounded-3xl border border-slate-200 p-7 animate-pulse space-y-5 shadow-2xs"
+                className="bg-white/90 rounded-2xl border border-sky-200/80 p-4 animate-pulse space-y-3 shadow-2xs"
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-slate-200 rounded-2xl" />
-                  <div className="space-y-2 flex-1">
-                    <div className="w-2/3 h-4 bg-slate-200 rounded" />
-                    <div className="w-1/3 h-3 bg-slate-100 rounded" />
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-slate-200 rounded-xl" />
+                  <div className="space-y-1.5 flex-1">
+                    <div className="w-2/3 h-3.5 bg-slate-200 rounded" />
+                    <div className="w-1/3 h-2.5 bg-slate-100 rounded" />
                   </div>
                 </div>
-                <div className="w-full h-10 bg-slate-100 rounded-xl" />
-                <div className="w-full h-12 bg-slate-200 rounded-2xl" />
+                <div className="w-full h-8 bg-slate-100 rounded-lg" />
+                <div className="w-full h-9 bg-slate-200 rounded-xl" />
               </div>
             ))}
           </div>
         )}
 
-        {/* ─── App Cards Grid ─────────────────────────────────────────────── */}
+        {/* ─── 3. Compact, Space-Efficient 4-Column App Cards Grid ─────────── */}
         {!loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredApps.map((app) => {
               const theme = getAppTheme(app.app_code);
               const isLaunching = launchingAppCode === app.app_code;
@@ -559,133 +524,114 @@ export default function PortalPage() {
               const isVpnChecking = isVpnRequired && vpnStatus === "checking";
               const isVpnConnected = isVpnRequired && vpnStatus === "connected";
               const isVpnLocked = isVpnRequired && !isVpnConnected;
-              const isLaunchDisabled = isLaunching || isOffline || isSpokeSsoDisabled || isVpnLocked;
 
               return (
                 <div
                   key={app.id}
-                  className={`group relative overflow-hidden rounded-3xl bg-white/85 backdrop-blur-xl border p-6 sm:p-7 shadow-xs hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 flex flex-col justify-between space-y-6 ${
+                  className={`group relative overflow-hidden rounded-2xl bg-white/95 backdrop-blur-md border p-4 sm:p-4.5 shadow-2xs hover:shadow-lg hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between space-y-3.5 ${
                     isOffline
-                      ? "border-rose-200 bg-rose-50/10"
+                      ? "border-rose-200 bg-rose-50/20"
                       : isSpokeSsoDisabled
-                      ? "border-amber-200 bg-amber-50/10"
+                      ? "border-amber-200 bg-amber-50/20"
                       : isVpnChecking
                       ? "border-slate-200"
                       : isVpnConnected
-                      ? "border-sky-200 hover:border-sky-400 bg-gradient-to-b from-sky-500/[0.03] to-transparent"
+                      ? "border-sky-300 hover:border-sky-400"
                       : isVpnLocked
-                      ? "border-amber-300/80 bg-amber-50/20"
-                      : `border-slate-200/90 ${theme.cardGlow} bg-gradient-to-b ${theme.cardBg}`
+                      ? "border-amber-300 bg-amber-50/25"
+                      : `border-slate-200/90 ${theme.cardGlow}`
                   }`}
                 >
-                  {/* Subtle Corner Glow Accent */}
-                  <div className={`absolute -top-16 -right-16 w-36 h-36 rounded-full bg-gradient-to-br from-blue-400/10 to-indigo-400/5 blur-2xl group-hover:scale-125 transition-transform duration-500 pointer-events-none`} />
-
-                  <div className="space-y-4 relative z-10">
-                    {/* Top: App Icon & Name */}
-                    <div className="flex items-start gap-4">
-                      {/* Squircle 3D Icon Container */}
+                  <div className="space-y-2.5">
+                    {/* Top: App Icon, Code & Status */}
+                    <div className="flex items-start justify-between gap-2.5">
+                      {/* Compact Squircle 3D Icon */}
                       <div
-                        className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105 group-hover:rotate-1 ring-4 ring-white/80 ${
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 ring-2 ring-white ${
                           isOffline
-                            ? "bg-slate-300 text-slate-500 shadow-md"
+                            ? "bg-slate-300 text-slate-500 shadow-xs"
                             : isVpnChecking
-                            ? "bg-slate-200 text-slate-600 shadow-md"
+                            ? "bg-slate-200 text-slate-600 shadow-xs"
                             : isVpnConnected
-                            ? "bg-gradient-to-tr from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/30"
+                            ? "bg-gradient-to-tr from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/25"
                             : isVpnLocked
-                            ? "bg-gradient-to-tr from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30"
+                            ? "bg-gradient-to-tr from-amber-500 to-orange-600 text-white shadow-md shadow-amber-500/25"
                             : theme.iconContainer
                         }`}
                       >
                         {theme.icon}
                       </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-black tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-mono">
-                            {app.app_code}
-                          </span>
-                          
-                          {/* Live Status Indicators */}
-                          {isOffline ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                              ออฟไลน์
-                            </span>
-                          ) : isSpokeSsoDisabled ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                              Break-Glass
-                            </span>
-                          ) : isVpnRequired ? (
-                            isVpnChecking ? (
-                              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 animate-pulse">
-                                <RefreshCw className="w-3 h-3 animate-spin text-slate-500" />
-                                ตรวจสอบ VPN...
-                              </span>
-                            ) : isVpnConnected ? (
-                              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-300">
-                                <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span>
-                                🛡️ VPN พร้อม
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
-                                <Lock className="w-3 h-3 text-amber-600" />
-                                ต้องต่อ VPN
-                              </span>
-                            )
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                              SSO พร้อม
-                            </span>
-                          )}
-                        </div>
+                      {/* Code Pill & Live Status Indicators */}
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-[10px] font-black tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono">
+                          {app.app_code}
+                        </span>
 
-                        <h2 className={`font-black text-base leading-snug transition-colors ${
-                          isOffline ? "text-slate-500" : "text-slate-900 group-hover:text-blue-600"
-                        }`}>
-                          {app.app_name}
-                        </h2>
-                        {app.category && (
-                          <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
-                            {app.category.split(" (")[0]}
+                        {isOffline ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                            ออฟไลน์
+                          </span>
+                        ) : isSpokeSsoDisabled ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                            Break-Glass
+                          </span>
+                        ) : isVpnRequired ? (
+                          isVpnChecking ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                              <RefreshCw className="w-2.5 h-2.5 animate-spin text-slate-500" />
+                              ตรวจ VPN
+                            </span>
+                          ) : isVpnConnected ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-sky-50 text-sky-700 border border-sky-300">
+                              <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span>
+                              VPN พร้อม
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                              <Lock className="w-2.5 h-2.5 text-amber-600" />
+                              ต้องต่อ VPN
+                            </span>
+                          )
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            พร้อมใช้
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* App Description (Thai on line 1, English on line 2) */}
+                    {/* App Name & Category */}
+                    <div>
+                      <h2 className={`font-black text-sm leading-snug transition-colors line-clamp-1 ${
+                        isOffline ? "text-slate-500" : "text-slate-900 group-hover:text-blue-600"
+                      }`}>
+                        {app.app_name}
+                      </h2>
+                      {app.category && (
+                        <span className="text-[10px] text-slate-500 font-medium block truncate mt-0.5">
+                          {app.category.split(" (")[0]}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Compact App Description */}
                     {(() => {
                       const desc = app.description || "แอปพลิเคชันสำหรับบุคลากรภายในองค์กร";
                       const match = desc.match(/^(.*?)\s*\((.*?)\)$/);
-                      if (match) {
-                        const thaiText = match[1].trim();
-                        const engText = match[2].trim();
-                        return (
-                          <div className="space-y-1 min-h-[3.25rem] bg-slate-50/50 rounded-xl p-2.5 border border-slate-100">
-                            <p className="text-xs font-bold text-slate-800 leading-relaxed">
-                              {thaiText}
-                            </p>
-                            <p className="text-[11px] text-slate-500 font-medium leading-normal">
-                              {engText}
-                            </p>
-                          </div>
-                        );
-                      }
+                      const displayDesc = match ? match[1].trim() : desc;
                       return (
-                        <div className="bg-slate-50/50 rounded-xl p-2.5 border border-slate-100 min-h-[3.25rem]">
-                          <p className="text-xs text-slate-600 leading-relaxed">
-                            {desc}
-                          </p>
-                        </div>
+                        <p className="text-xs text-slate-600 leading-snug line-clamp-2 min-h-[2.5rem]">
+                          {displayDesc}
+                        </p>
                       );
                     })()}
                   </div>
 
-                  {/* Bottom: Single Launch Button with Smooth Micro-Animation */}
-                  <div className="relative z-10 pt-2 border-t border-slate-100">
+                  {/* Bottom: Compact Single Launch Button */}
+                  <div className="pt-2 border-t border-slate-100">
                     <button
                       onClick={() => {
                         if (isVpnLocked) {
@@ -695,7 +641,7 @@ export default function PortalPage() {
                         }
                       }}
                       disabled={isLaunching || isOffline || isSpokeSsoDisabled || isVpnChecking}
-                      className={`w-full py-3.5 px-4 rounded-2xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-2 active:scale-[0.98] ${
+                      className={`w-full py-2.5 px-3 rounded-xl text-xs font-black transition-all shadow-sm flex items-center justify-center gap-1.5 active:scale-[0.98] ${
                         isOffline
                           ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
                           : isSpokeSsoDisabled
@@ -703,41 +649,41 @@ export default function PortalPage() {
                           : isVpnChecking
                           ? "bg-slate-100 text-slate-600 border border-slate-200 cursor-wait shadow-none font-semibold"
                           : isVpnConnected
-                          ? "bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-sky-500/25 cursor-pointer"
+                          ? "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-sky-500/20 cursor-pointer"
                           : isVpnLocked
-                          ? "bg-amber-50 hover:bg-amber-100/90 text-amber-900 border border-amber-300 cursor-pointer shadow-none font-bold"
+                          ? "bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 cursor-pointer shadow-none font-bold"
                           : `${theme.btn} cursor-pointer`
                       }`}
                     >
                       {isLaunching ? (
                         <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>กำลังนำทางเข้าสู่ระบบ...</span>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>กำลังนำทาง...</span>
                         </>
                       ) : isOffline ? (
-                        <span>ระบบปิดปรับปรุงชั่วคราว (Offline)</span>
+                        <span>ปิดปรับปรุง (Offline)</span>
                       ) : isSpokeSsoDisabled ? (
-                        <span>ระบบปิดรับ SSO ชั่วคราว</span>
+                        <span>ปิดรับ SSO</span>
                       ) : isVpnChecking ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <RefreshCw className="w-4 h-4 animate-spin text-slate-500" />
-                          <span>กำลังตรวจสอบการเชื่อมต่อ VPN...</span>
+                        <span className="flex items-center justify-center gap-1.5">
+                          <RefreshCw className="w-3 h-3 animate-spin text-slate-500" />
+                          <span>กำลังตรวจ VPN...</span>
                         </span>
                       ) : isVpnConnected ? (
                         <>
                           <span>เข้าใช้งานระบบ</span>
-                          <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                          <ArrowUpRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                         </>
                       ) : isVpnLocked ? (
-                        <span className="flex items-center justify-center gap-1.5 text-center">
-                          <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          <span>กรุณาต่อ VPN แล้วคลิกตรวจใหม่</span>
-                          <RefreshCw className="w-3 h-3 ml-1 text-amber-700 shrink-0" />
+                        <span className="flex items-center justify-center gap-1 text-center">
+                          <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+                          <span>ต่อ VPN แล้วตรวจใหม่</span>
+                          <RefreshCw className="w-3 h-3 ml-0.5 text-amber-700 shrink-0" />
                         </span>
                       ) : (
                         <>
                           <span>เข้าใช้งานระบบ</span>
-                          <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                          <ArrowUpRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                         </>
                       )}
                     </button>
@@ -750,12 +696,12 @@ export default function PortalPage() {
 
         {/* ─── Empty Search Result ─────────────────────────────────────────── */}
         {!loading && apps.length > 0 && filteredApps.length === 0 && (
-          <div className="text-center py-16 bg-white/80 backdrop-blur-xl rounded-3xl border border-dashed border-slate-300 p-8 space-y-3 shadow-2xs">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
-              <Search className="w-6 h-6" />
+          <div className="text-center py-12 bg-white/90 backdrop-blur-md rounded-2xl border border-dashed border-sky-300 p-6 space-y-2 shadow-2xs">
+            <div className="w-10 h-10 mx-auto rounded-xl bg-sky-100 flex items-center justify-center text-sky-600">
+              <Search className="w-5 h-5" />
             </div>
-            <h3 className="text-sm font-bold text-slate-800">ไม่พบระบบงานที่ตรงกับคำค้นหา &quot;{searchQuery}&quot;</h3>
-            <p className="text-xs text-slate-500">กรุณาลองเปลี่ยนคำค้นหา หรือเลือกหมวดหมู่อื่น</p>
+            <h3 className="text-xs font-bold text-slate-800">ไม่พบระบบงานที่ตรงกับคำค้นหา &quot;{searchQuery}&quot;</h3>
+            <p className="text-[11px] text-slate-500">กรุณาลองเปลี่ยนคำค้นหา หรือเลือกหมวดหมู่อื่น</p>
             <button
               onClick={() => {
                 setSearchQuery("");
@@ -770,12 +716,12 @@ export default function PortalPage() {
 
         {/* ─── Empty State: No Authorized Apps ────────────────────────────── */}
         {!loading && apps.length === 0 && (
-          <div className="text-center py-16 bg-white/80 backdrop-blur-xl rounded-3xl border border-dashed border-slate-300 p-8 space-y-4 shadow-2xs">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
-              <Inbox className="w-8 h-8" />
+          <div className="text-center py-12 bg-white/90 backdrop-blur-md rounded-2xl border border-dashed border-sky-300 p-6 space-y-3 shadow-2xs">
+            <div className="w-12 h-12 mx-auto rounded-xl bg-sky-50 flex items-center justify-center text-sky-500">
+              <Inbox className="w-6 h-6" />
             </div>
-            <div className="max-w-md mx-auto space-y-1.5">
-              <h2 className="text-base font-bold text-slate-900">
+            <div className="max-w-md mx-auto space-y-1">
+              <h2 className="text-sm font-bold text-slate-900">
                 ยังไม่มีระบบงานที่ได้รับสิทธิ์
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed">
@@ -787,7 +733,7 @@ export default function PortalPage() {
       </main>
 
       {/* ─── Clean Minimal Footer ─────────────────────────────────────────── */}
-      <footer className="mt-auto border-t border-slate-200/70 bg-white/80 backdrop-blur-md py-4 px-4 text-center text-xs text-slate-500 font-medium">
+      <footer className="mt-auto border-t border-sky-200/60 bg-white/80 backdrop-blur-md py-3 px-4 text-center text-xs text-slate-500 font-medium">
         <p>© 2026 บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) • Central Single Sign-On Portal</p>
       </footer>
 
