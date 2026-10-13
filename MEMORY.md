@@ -205,8 +205,8 @@ FRONTEND_URL=http://localhost:3000
   * `POST /api/v1/oauth/portal/launch`: Enforces authorization check on launch and issues SSO token under the employee's genuine username instead of static admin.
 
 ### 4.9 Password Management & Security Policies (Version 2.3.0)
-* **Active Directory User Password Protection:**
   * Active Directory users authenticated via Windows Domain Controller (`is_ad_user: true`) **do not have the change password button 🔑** on the Employee Portal Header (`/portal`).
+  * `is_ad_user` Determination Rule: Only built-in admins (`admin`, `superadmin`) and accounts explicitly flagged with `ident.exception_type == "LOCAL_ACCOUNT"` return `is_ad_user: false`. All other corporate identities return `is_ad_user: true` (regardless of whether `ad_guid` is populated in DB).
   * AD passwords cannot and should not be changed via Central IAM web interface; employees must change domain credentials on domain joined computers via `Ctrl + Alt + Del` or through IT Helpdesk.
 * **Enterprise Password Complexity Policy (Local Accounts):**
   * Local Accounts created for non-AD users or third-party contractors must strictly adhere to the following enterprise complexity rules (enforced at both Backend and Client-side):

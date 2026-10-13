@@ -9,6 +9,25 @@
 
 ---
 
+## 0.000000000000000000000000000 แก้ไขบั๊กปุ่มเปลี่ยนรหัสผ่านยังแสดงบนบัญชี AD: ปรับปรุงการตรวจสอบ is_ad_user ให้แม่นยำ ไม่ผูกติดกับ ad_guid (13 ต.ค. 2026)
+### 1. สาเหตุและการแก้ไข (Root Cause Analysis & Fix):
+- **สาเหตุที่เกิดปัญหา:** ใน `backend/app/api/v1/auth.py` ของ Endpoint `GET /api/v1/auth/me` เดิมมีโค้ดตรวจสอบ:
+  `out.is_ad_user = bool(ident.is_active_in_ad and ident.ad_guid)`
+  เนื่องจากบัญชีพนักงานส่วนใหญ่ในระบบ (รวมถึง `Chaiwat.N`) ไม่มีฟิลด์ `ad_guid` ในฐานข้อมูล จึงทำให้เงื่อนไข `bool(True and None)` กลายเป็น **`False`** เสมอ ส่งผลให้ Frontend ได้รับ `is_ad_user: false` และมองว่าเป็น Local Account จึงแสดงปุ่มรูปกุญแจ 🔑 บนหน้า Portal
+- **การแก้ไข:** ปรับปรุงฟังก์ชัน `_resolve_is_ad_user(username, ident)` ในระดับ Module ของ `auth.py`:
+  - บัญชีที่เป็น Local Account มีเพียง 2 กรณีเท่านั้น คือ:
+    1. บัญชีผู้ดูแลระบบตั้งต้น (`admin`, `superadmin`)
+    2. บัญชีที่ได้รับการอนุมัติเป็นข้อยกเว้นพิเศษ (`ident.exception_type == "LOCAL_ACCOUNT"`)
+  - บัญชีพนักงานองค์กรอื่นๆ ทั้งหมด (เช่น `Chaiwat.N`, `Thanaphat.C`, `Patcha.S`, `Wimonpan.P`) จะได้ค่า `is_ad_user = True` เสมอ
+  - ใช้ฟังก์ชันเดียวกันนี้ทั้งใน `POST /api/v1/auth/login` และ `GET /api/v1/auth/me` ป้องกันค่าตีกัน
+- **ผลลัพธ์:** บัญชี `Chaiwat.N` และพนักงาน AD ทุกคนจะได้รับ `is_ad_user = True` 100% ทำให้ปุ่มเปลี่ยนรหัสผ่าน 🔑 บน Header ของ `/portal` ถูกซ่อนไปโดยอัตโนมัติ
+
+### 2. ผลการตรวจสอบคุณภาพ (Quality Assurance):
+- Backend Tests: ผ่าน 100%
+- Frontend TypeScript `npx tsc --noEmit`: ผ่าน 0 errors (100%)
+
+---
+
 ## 0.00000000000000000000000000 ปรับปรุงหน้า Login SSO: ย้าย Logo ทางการมาฝั่งขวา, ตัดกล่อง Local/AD ด้านล่างออก, และปรับกระชับ Wording ฝั่งซ้ายให้เรียบหรู Enterprise (13 ต.ค. 2026)
 ### 1. รายละเอียดการทำงาน (Login SSO Visual & Structural Refinements):
 1. **ย้าย Official Logo มาอยู่ฝั่งขวาด้านบนการ์ด Login:**

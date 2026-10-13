@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -17,6 +18,21 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
+
+
+def _resolve_is_ad_user(username: str, ident: Optional[MasterIdentity]) -> bool:
+    """
+    Determine if an account is an Active Directory user or a Local Account.
+    - Built-in admins ('admin', 'superadmin'): Local Account (False)
+    - Identities explicitly flagged with exception_type == 'LOCAL_ACCOUNT': Local Account (False)
+    - All other corporate accounts (e.g. Chaiwat.N, Thanaphat.C, Patcha.S): Active Directory (True)
+    """
+    clean_u = (username or "").strip().lower()
+    if clean_u in ["admin", "superadmin"]:
+        return False
+    if ident and ident.exception_type == "LOCAL_ACCOUNT":
+        return False
+    return True
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -413,16 +429,7 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
 
     user_out = AdminUserOut.model_validate(user)
     ident_login = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == user.username.lower()).first()
-    if user.username.lower() in ["admin", "superadmin"]:
-        user_out.is_ad_user = False
-    elif ident_login and ident_login.exception_type == "LOCAL_ACCOUNT":
-        user_out.is_ad_user = False
-    elif auth_mode in ["ACTIVE_DIRECTORY_AUTH", "ACTIVE_DIRECTORY_LDAP"]:
-        user_out.is_ad_user = True
-    elif ident_login:
-        user_out.is_ad_user = bool(ident_login.is_active_in_ad)
-    else:
-        user_out.is_ad_user = False
+    user_out.is_ad_user = _resolve_is_ad_user(user.username, ident_login)
     user_out.must_change_password = bool(getattr(user, "must_change_password", False))
 
     token = create_access_token(subject=user.username)
@@ -442,15 +449,7 @@ def get_current_user_profile(
     ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == current_user.username.lower()).first()
 
     # Determine whether user is AD user or Local account
-    if current_user.username.lower() in ["admin", "superadmin"]:
-        out.is_ad_user = False
-    elif ident and ident.exception_type == "LOCAL_ACCOUNT":
-        out.is_ad_user = False
-    elif ident:
-        out.is_ad_user = bool(ident.is_active_in_ad and ident.ad_guid)
-    else:
-        out.is_ad_user = False
-
+    out.is_ad_user = _resolve_is_ad_user(current_user.username, ident)
     out.must_change_password = bool(getattr(current_user, "must_change_password", False))
 
     if ident:
