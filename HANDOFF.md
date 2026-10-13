@@ -1,11 +1,42 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~09:58 ICT)  
+> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~10:38 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0.0000000000000000000 ปรับเปลี่ยนการตรวจสถานะ AD เป็นทุก 1 นาที (ค่าเริ่มต้น) และรองรับการตั้งค่าความถี่ได้เองโดย Admin (13 ต.ค. 2026)
+### 1. รายละเอียดการปรับปรุง (Configurable AD Monitor Probe Interval):
+1. **เปลี่ยนค่าความถี่เริ่มต้น (Default Interval):**
+   - เปลี่ยนจากการตรวจทุก 30 วินาที เป็น **ทุก 1 นาที (60 วินาที)**
+   - ปรับ `DEFAULT_AD_MONITOR` ใน `backend/app/services/telegram_service.py` ให้มี `"check_interval_seconds": 60`
+2. **ระบบตั้งค่าความถี่โดย Admin ในหน้า Settings:**
+   - เพิ่ม Dropdown ให้ Admin สามารถเลือกความถี่การ Probe AD ได้เอง:
+     - `30 วินาที` (30s - ตรวจถี่พิเศษ)
+     - `1 นาที` (60s - ค่าเริ่มต้นแนะนำ)
+     - `2 นาที` (120s)
+     - `3 นาที` (180s)
+     - `5 นาที` (300s)
+     - `10 นาที` (600s)
+   - มีปุ่ม **"💾 บันทึกความถี่"** พร้อมกล่อง Feedback แจ้งสถานะบันทึกสำเร็จทันที
+3. **Backend API & Dynamic Scheduler Execution:**
+   - เพิ่ม Endpoint `PUT /api/v1/dashboard/health-monitor/ad-interval` รับ `{ "check_interval_seconds": int }`
+   - ปรับ Background Scheduler (`backend/app/services/scheduler.py`) ให้วนรอบตรวจสอบทุกๆ 15 วินาที เพื่อรองรับการ Trigger ที่ตรงตามรอบเวลาที่ตั้งไว้ทุกช่วง
+   - ใน `check_and_notify_ad_status()`: มีการคำนวณ `elapsed_since_last_check` เทียบกับ `check_interval_seconds` หากยังไม่ถึงรอบจะ skip โดยไม่ยิง probe AD พร่ำเพรื่อ
+4. **Frontend UI Integration:**
+   - ปรับปรุง `frontend/src/app/settings/page.tsx`:
+     - เพิ่มกล่องตั้งค่าความถี่ในการตรวจสอบสถานะ AD (Probe Interval)
+     - ปรับ Badge แสดงสถานะและคำบรรยายให้แสดงผลตามค่าความถี่ที่ตั้งไว้แบบไดนามิก
+   - ปรับปรุง `frontend/src/components/profile/AdminProfileModal.tsx`:
+     - ระบุสถานะ `ACTIVE (ทุก 1 นาที)` พร้อมหมายเหตุแนะนำการตั้งค่าในหน้า Settings
+
+### 2. ผลการตรวจสอบคุณภาพ:
+- Backend pytest: ผ่าน 49/49 tests 100%
+- Frontend TypeScript `npx tsc --noEmit`: ผ่าน 0 errors (100%)
 
 ---
 

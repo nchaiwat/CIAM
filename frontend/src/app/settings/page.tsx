@@ -57,6 +57,9 @@ export default function SettingsPage() {
 
   // Real-Time AD Monitor State
   const [adMonitor, setAdMonitor] = useState<AdMonitorState | null>(null);
+  const [selectedInterval, setSelectedInterval] = useState<number>(60);
+  const [adIntervalSaving, setAdIntervalSaving] = useState(false);
+  const [adIntervalSaveMessage, setAdIntervalSaveMessage] = useState<string | null>(null);
   const [adTestLoading, setAdTestLoading] = useState(false);
   const [adTestResult, setAdTestResult] = useState<{
     success: boolean;
@@ -95,6 +98,9 @@ export default function SettingsPage() {
         setLiveHealth(healthData.live_health);
         if (healthData.ad_monitor) {
           setAdMonitor(healthData.ad_monitor);
+          if (healthData.ad_monitor.check_interval_seconds) {
+            setSelectedInterval(healthData.ad_monitor.check_interval_seconds);
+          }
         }
       }
       if (scheduleData) {
@@ -199,6 +205,25 @@ export default function SettingsPage() {
       alert(`ไม่สามารถตรวจสอบ AD ได้: ${err.message || err}`);
     } finally {
       setAdChecking(false);
+    }
+  };
+
+  const handleSaveAdInterval = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    try {
+      setAdIntervalSaving(true);
+      setAdIntervalSaveMessage(null);
+      const res = await ciamApi.updateAdInterval(selectedInterval);
+      if (res.ad_monitor) {
+        setAdMonitor(res.ad_monitor);
+        setSelectedInterval(res.ad_monitor.check_interval_seconds);
+      }
+      setAdIntervalSaveMessage(res.message || "บันทึกความถี่การตรวจสอบสำเร็จ");
+      setTimeout(() => setAdIntervalSaveMessage(null), 4000);
+    } catch (err: any) {
+      alert(`บันทึกความถี่ล้มเหลว: ${err.message || err}`);
+    } finally {
+      setAdIntervalSaving(false);
     }
   };
 
@@ -636,11 +661,11 @@ export default function SettingsPage() {
                   ระบบเฝ้าระวัง AD Sync Agent &amp; แจ้งเตือน Telegram ฉุกเฉิน
                 </h2>
                 <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 uppercase">
-                  Real-Time 30s
+                  ตรวจทุก {selectedInterval >= 60 ? `${selectedInterval / 60} นาที` : `${selectedInterval} วินาที`}
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 mt-0.5">
-                ตรวจสอบ AD ทุก 30 วินาที • แจ้งเตือนทันทีเมื่อ OFF • เตือนซ้ำทุก 1 ชั่วโมง จนกว่าจะกลับมาเป็น ON
+                ตรวจสอบ AD ทุก {selectedInterval >= 60 ? `${selectedInterval / 60} นาที` : `${selectedInterval} วินาที`} • แจ้งเตือนทันทีเมื่อ OFF • เตือนซ้ำทุก 1 ชั่วโมง จนกว่าจะกลับมาเป็น ON
               </p>
             </div>
           </div>
@@ -700,6 +725,60 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* Configurable Probe Interval Box */}
+          <form
+            onSubmit={handleSaveAdInterval}
+            className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+          >
+            <div className="space-y-0.5">
+              <div className="font-extrabold text-blue-950 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-blue-600" />
+                <span>ความถี่ในการตรวจสอบสถานะ AD (Probe Interval):</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-200 text-blue-900 font-black">
+                  กำหนดค่าได้โดย Admin
+                </span>
+              </div>
+              <p className="text-[11px] text-blue-800">
+                กำหนดระยะเวลาที่ระบบจะวนรอบตรวจสอบความพร้อมของ AD Gateway อัตโนมัติ (ค่าเริ่มต้น: ทุก 1 นาที)
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <select
+                value={selectedInterval}
+                onChange={(e) => setSelectedInterval(parseInt(e.target.value, 10))}
+                className="px-3 py-1.5 bg-white border border-blue-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 shadow-2xs"
+              >
+                <option value={30}>ทุกๆ 30 วินาที</option>
+                <option value={60}>ทุกๆ 1 นาที (ค่าเริ่มต้น / แนะนำ)</option>
+                <option value={120}>ทุกๆ 2 นาที</option>
+                <option value={180}>ทุกๆ 3 นาที</option>
+                <option value={300}>ทุกๆ 5 นาที</option>
+                <option value={600}>ทุกๆ 10 นาที</option>
+              </select>
+
+              <button
+                type="submit"
+                disabled={adIntervalSaving}
+                className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                {adIntervalSaving ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                <span>บันทึกความถี่</span>
+              </button>
+            </div>
+          </form>
+
+          {adIntervalSaveMessage && (
+            <div className="p-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold flex items-center space-x-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{adIntervalSaveMessage}</span>
+            </div>
+          )}
+
           {/* Status Metrics Box */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
             <div>
@@ -724,9 +803,9 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <div className="text-slate-500 font-medium text-[11px]">เตือน Offline ส่งไปแล้ว:</div>
-              <div className="font-mono font-bold text-slate-800 mt-0.5">
-                {adMonitor?.total_offline_alerts_sent ?? 0} ครั้ง
+              <div className="text-slate-500 font-medium text-[11px]">ความถี่ที่ตั้งไว้:</div>
+              <div className="font-mono font-bold text-blue-800 mt-0.5">
+                ทุก {selectedInterval >= 60 ? `${selectedInterval / 60} นาที` : `${selectedInterval} วินาที`}
               </div>
             </div>
           </div>

@@ -396,7 +396,7 @@ async def run_scheduler_worker():
     logger.info("Central IAM Daily Scheduler worker initialized (Timezone: Asia/Bangkok)")
     while True:
         try:
-            await asyncio.sleep(30)
+            await asyncio.sleep(15)
             now_bkk = get_current_bangkok_time()
             today_str = now_bkk.strftime("%Y-%m-%d")
             current_hm = now_bkk.strftime("%H:%M")

@@ -330,6 +330,7 @@ DEFAULT_AD_MONITOR: Dict[str, Any] = {
     "last_check_at": None,
     "last_latency_ms": 0,
     "last_message": "พร้อมใช้งาน",
+    "check_interval_seconds": 60,  # ค่าเริ่มต้น 1 นาที (60 วินาที) สามารถตั้งค่าได้โดย Admin
 }
 
 def format_duration(seconds: float) -> str:
@@ -353,6 +354,35 @@ def get_ad_monitor_status(db: Session) -> Dict[str, Any]:
     if not setting or not setting.setting_value:
         return DEFAULT_AD_MONITOR.copy()
     return {**DEFAULT_AD_MONITOR, **setting.setting_value}
+
+def save_ad_monitor_config(db: Session, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Save configurable AD Monitor settings (such as check_interval_seconds)."""
+    from sqlalchemy.orm.attributes import flag_modified
+    setting = db.query(SystemSetting).filter_by(setting_key="ad_status_monitor").first()
+    if not setting:
+        state = DEFAULT_AD_MONITOR.copy()
+        setting = SystemSetting(
+            setting_key="ad_status_monitor",
+            setting_value=state,
+            description="Real-time Active Directory status monitor and hourly alert tracker"
+        )
+        db.add(setting)
+    else:
+        state = {**DEFAULT_AD_MONITOR, **(setting.setting_value or {})}
+
+    if "check_interval_seconds" in update_data and update_data["check_interval_seconds"] is not None:
+        try:
+            val = int(update_data["check_interval_seconds"])
+            if 15 <= val <= 3600:
+                state["check_interval_seconds"] = val
+        except (ValueError, TypeError):
+            pass
+
+    setting.setting_value = dict(state)
+    flag_modified(setting, "setting_value")
+    db.commit()
+    db.refresh(setting)
+    return get_ad_monitor_status(db)
 
 async def send_ad_status_alert(
     db: Session,
@@ -479,6 +509,25 @@ async def check_and_notify_ad_status(db: Session, force_check: bool = False) -> 
         db.refresh(setting)
     else:
         state = {**DEFAULT_AD_MONITOR, **(setting.setting_value or {})}
+
+    # Check if configured interval has elapsed (unless forced check)
+    check_interval = int(state.get("check_interval_seconds", 60))
+    last_check_iso = state.get("last_check_at")
+    if not force_check and last_check_iso:
+        try:
+            last_check_dt = datetime.fromisoformat(last_check_iso).astimezone(BANGKOK_TZ)
+            elapsed_since_last_check = (now_bkk - last_check_dt).total_seconds()
+            if elapsed_since_last_check < (check_interval - 2):
+                return {
+                    "status": state.get("current_status", "ONLINE"),
+                    "is_online": state.get("is_online", True),
+                    "alert_sent": False,
+                    "alert_type": None,
+                    "skipped": True,
+                    "state": state
+                }
+        except Exception:
+            pass
 
     ad_connector = AdProxyConnector()
     ad_health = await ad_connector.health_check()

@@ -723,6 +723,16 @@ export const ciamApi = {
     }>("/dashboard/health-monitor/check-ad-now", {
       method: "POST",
     }),
+
+  updateAdInterval: (check_interval_seconds: number) =>
+    fetchApi<{
+      status: string;
+      message: string;
+      ad_monitor: AdMonitorState;
+    }>("/dashboard/health-monitor/ad-interval", {
+      method: "PUT",
+      body: JSON.stringify({ check_interval_seconds }),
+    }),
 };
 
 export const api = ciamApi;
@@ -886,6 +896,7 @@ export interface AdMonitorState {
   last_check_at: string | null;
   last_latency_ms: number;
   last_message: string;
+  check_interval_seconds: number;
 }
 
 

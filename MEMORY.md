@@ -558,11 +558,14 @@ FRONTEND_URL=http://localhost:3000
 
 ---
 
-## 17. Real-Time AD Sync Agent Monitoring & Hourly Telegram Alerts (Version 2.0.7)
+## 17. Real-Time AD Sync Agent Monitoring & Hourly Telegram Alerts (Version 2.0.7 & 2.0.8)
 
 ### 17.1 Background Architecture & Operational Rules
-* **Continuous Monitoring Loop (ตรวจทุก 30 วินาที):**
-  - รันผ่าน Background Scheduler Worker (`run_scheduler_worker` ใน `scheduler.py`) ซึ่งทำงาน 24/7
+* **Continuous Monitoring Loop (ตรวจทุก 1 นาทีเป็นค่าเริ่มต้น, กำหนดค่าได้เองโดย Admin):**
+  - รันผ่าน Background Scheduler Worker (`run_scheduler_worker` ใน `scheduler.py`) ซึ่งทำงาน 24/7 (Scheduler loop wake up ทุกๆ 15 วินาที เพื่อให้ตรงรอบเวลา)
+  - ความถี่เริ่มต้นเปลี่ยนจาก 30 วินาทีเป็น **1 นาที (60 วินาที)**
+  - Admin สามารถปรับเปลี่ยนความถี่ในการ Probe ตรวจสอบได้เองผ่านหน้า Settings: 30 วินาที, 1 นาที (ค่าเริ่มต้น), 2 นาที, 3 นาที, 5 นาที, หรือ 10 นาที
+  - ค่าความถี่ถูกบันทึกและอ่านจากฟิลด์ `check_interval_seconds` ใน `ad_status_monitor` (`system_settings`)
   - ตรวจสอบความพร้อมของ AD Gateway (`http://172.18.0.1:3100`) ผ่าน `AdProxyConnector.health_check()`
 * **Alert Triggering Rules (3 ระดับ):**
   1. **🚨 OFFLINE_IMMEDIATE (ส่งทันทีเมื่อหลุด):** เมื่อสถานะเปลี่ยนจาก `ONLINE` ➔ `OFFLINE` ระบบจะส่งแจ้งเตือน Telegram เข้ากลุ่มและ DM ถึงแอดมินทันที พร้อมบันทึกเวลาที่เริ่มขัดข้อง (`offline_since`)
@@ -570,12 +573,13 @@ FRONTEND_URL=http://localhost:3000
   3. **✅ ONLINE_RECOVERED (แจ้งเตือนกู้คืนทันที):** เมื่อ AD กลับมาเป็น `ONLINE` ระบบจะส่งข้อความแจ้งเตือนทันที พร้อมสรุปรวมระยะเวลา Downtime ทั้งหมด และรีเซ็ตเคาน์เตอร์การเตือน
 * **State Persistence:**
   - สถานะถูกบันทึกในฐานข้อมูล PostgreSQL ตาราง `system_settings` คีย์ `ad_status_monitor` โครงสร้าง JSON:
-    `{ current_status, is_online, offline_since, last_notified_at, total_offline_alerts_sent, last_check_at, last_latency_ms, last_message }`
+    `{ current_status, is_online, offline_since, last_notified_at, total_offline_alerts_sent, last_check_at, last_latency_ms, last_message, check_interval_seconds }`
 * **API Endpoints & UI Diagnostics:**
   - `GET /api/v1/dashboard/health-monitor`: ส่งคืน `config`, `live_health`, และ `ad_monitor`
+  - `PUT /api/v1/dashboard/health-monitor/ad-interval`: บันทึกความถี่การตรวจสอบ `check_interval_seconds`
   - `POST /api/v1/dashboard/health-monitor/test-ad-alert`: ทดสอบยิงข้อความจำลองทั้ง 3 รูปแบบ
   - `POST /api/v1/dashboard/health-monitor/check-ad-now`: บังคับตรวจเช็คสถานะทันทีแบบ Real-time
-  - หน้าเว็บ `frontend/src/app/settings/page.tsx` มีการ์ดควบคุมและปุ่มทดสอบครบถ้วน
+  - หน้าเว็บ `frontend/src/app/settings/page.tsx` มีการ์ดควบคุม, Dropdown เลือกความถี่ตรวจสอบ (30s - 10m) พร้อมปุ่มบันทึก และปุ่มทดสอบครบถ้วน
 
 
 

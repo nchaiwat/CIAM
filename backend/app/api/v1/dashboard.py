@@ -81,6 +81,7 @@ from app.services.telegram_service import (
     check_full_system_health,
     send_health_report,
     get_ad_monitor_status,
+    save_ad_monitor_config,
     check_and_notify_ad_status,
     trigger_test_ad_alert
 )
@@ -92,6 +93,10 @@ class HealthMonitorUpdateRequest(BaseModel):
     bot_token: Optional[str] = None
     chat_id: Optional[str] = None
     notify_admins_enabled: Optional[bool] = None
+    ad_check_interval_seconds: Optional[int] = None
+
+class AdIntervalUpdateRequest(BaseModel):
+    check_interval_seconds: int = 60
 
 class HealthMonitorTestRequest(BaseModel):
     bot_token: Optional[str] = None
@@ -125,12 +130,31 @@ def update_health_monitor(
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
-    """Update Telegram Health Monitor schedule and credentials."""
+    """Update Telegram Health Monitor schedule, credentials, and AD check interval."""
     updated = save_health_monitor_config(db, payload.model_dump(exclude_unset=True))
+    if payload.ad_check_interval_seconds is not None:
+        save_ad_monitor_config(db, {"check_interval_seconds": payload.ad_check_interval_seconds})
+    ad_mon = get_ad_monitor_status(db)
     return {
         "status": "success",
         "message": "บันทึกการตั้งค่าการแจ้งเตือน Telegram สำเร็จ",
-        "config": updated
+        "config": updated,
+        "ad_monitor": ad_mon
+    }
+
+
+@router.put("/health-monitor/ad-interval")
+def update_ad_check_interval(
+    payload: AdIntervalUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Update AD status monitoring probe interval (seconds)."""
+    updated = save_ad_monitor_config(db, {"check_interval_seconds": payload.check_interval_seconds})
+    return {
+        "status": "success",
+        "message": f"บันทึกความถี่ในการตรวจสอบ AD สำเร็จ ({payload.check_interval_seconds} วินาที)",
+        "ad_monitor": updated
     }
 
 

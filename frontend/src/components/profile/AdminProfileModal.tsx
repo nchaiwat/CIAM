@@ -484,10 +484,10 @@ export default function AdminProfileModal({
                 <div className="flex-1">
                   <div className="font-extrabold flex items-center justify-between">
                     <span>⚡ ระบบเฝ้าระวัง AD Sync Agent แบบ Real-Time</span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-200 text-emerald-900 font-black">ACTIVE (ทุก 30 วินาที)</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-200 text-emerald-900 font-black">ACTIVE (ทุก 1 นาที)</span>
                   </div>
                   <div className="text-[11px] text-emerald-800 mt-1 leading-relaxed">
-                    ระบบจะตรวจสอบ AD ตลอด 24/7 โดยอัตโนมัติ: <b>แจ้งเตือนเข้า Telegram ทันทีเมื่อ Offline</b> และ <b>แจ้งเตือนซ้ำทุกๆ 1 ชั่วโมง</b> จนกว่าจะกลับมา Online
+                    ระบบจะตรวจสอบ AD ตลอด 24/7 โดยอัตโนมัติ: <b>แจ้งเตือนเข้า Telegram ทันทีเมื่อ Offline</b> และ <b>แจ้งเตือนซ้ำทุกๆ 1 ชั่วโมง</b> จนกว่าจะกลับมา Online (สามารถกำหนดความถี่การตรวจเช็คได้ในหน้าตั้งค่าระบบ)
                   </div>
                 </div>
               </div>

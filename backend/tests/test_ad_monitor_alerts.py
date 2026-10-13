@@ -44,7 +44,7 @@ async def test_ad_monitor_lifecycle():
             mock_health.return_value = ConnectorHealth(is_online=False, latency_ms=15, message="Connection refused")
             mock_send.return_value = (True, "Success")
 
-            res1 = await check_and_notify_ad_status(db)
+            res1 = await check_and_notify_ad_status(db, force_check=True)
             assert res1["status"] == "OFFLINE"
             assert res1["is_online"] is False
             assert res1["alert_sent"] is True
@@ -53,7 +53,7 @@ async def test_ad_monitor_lifecycle():
             assert res1["state"]["offline_since"] is not None
 
             # 2. Simulate AD STILL OFFLINE but within 1 hour (No spam, no alert)
-            res2 = await check_and_notify_ad_status(db)
+            res2 = await check_and_notify_ad_status(db, force_check=True)
             assert res2["status"] == "OFFLINE"
             assert res2["alert_sent"] is False
             assert res2["alert_type"] is None
@@ -70,7 +70,7 @@ async def test_ad_monitor_lifecycle():
             flag_modified(st, "setting_value")
             db.commit()
 
-            res3 = await check_and_notify_ad_status(db)
+            res3 = await check_and_notify_ad_status(db, force_check=True)
             assert res3["status"] == "OFFLINE"
             assert res3["alert_sent"] is True
             assert res3["alert_type"] == "OFFLINE_REMINDER"
@@ -78,7 +78,7 @@ async def test_ad_monitor_lifecycle():
 
             # 4. Simulate AD RECOVERED back to ONLINE (Immediate Recovery Notification)
             mock_health.return_value = ConnectorHealth(is_online=True, latency_ms=10, message="AD Gateway Online")
-            res4 = await check_and_notify_ad_status(db)
+            res4 = await check_and_notify_ad_status(db, force_check=True)
             assert res4["status"] == "ONLINE"
             assert res4["is_online"] is True
             assert res4["alert_sent"] is True
@@ -87,10 +87,15 @@ async def test_ad_monitor_lifecycle():
             assert res4["state"]["offline_since"] is None
 
             # 5. Subsequent run while ONLINE (Normal, no alert)
-            res5 = await check_and_notify_ad_status(db)
+            res5 = await check_and_notify_ad_status(db, force_check=True)
             assert res5["status"] == "ONLINE"
             assert res5["alert_sent"] is False
-            assert res5["alert_type"] is None
+            assert res5["alert_type"] == None
+
+            # 6. Throttle test: without force_check, if within check_interval, it should skip
+            res6 = await check_and_notify_ad_status(db, force_check=False)
+            assert res6.get("skipped") is True
+            assert res6["alert_sent"] is False
     finally:
         db.close()
 
@@ -142,3 +147,22 @@ def test_api_test_ad_alerts_and_check_now():
     get_data = res_get.json()
     assert "ad_monitor" in get_data
     assert "current_status" in get_data["ad_monitor"]
+    assert "check_interval_seconds" in get_data["ad_monitor"]
+
+    # 5. Test updating check interval (e.g. to 60s, 120s)
+    res_int = client.put(
+        "/api/v1/dashboard/health-monitor/ad-interval",
+        json={"check_interval_seconds": 120},
+        headers=headers
+    )
+    assert res_int.status_code == 200
+    assert res_int.json()["ad_monitor"]["check_interval_seconds"] == 120
+
+    # Reset back to 60s
+    res_reset = client.put(
+        "/api/v1/dashboard/health-monitor/ad-interval",
+        json={"check_interval_seconds": 60},
+        headers=headers
+    )
+    assert res_reset.status_code == 200
+    assert res_reset.json()["ad_monitor"]["check_interval_seconds"] == 60
