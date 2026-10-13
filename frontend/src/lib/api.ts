@@ -449,6 +449,12 @@ export const ciamApi = {
       body: JSON.stringify(payload),
     }),
 
+  syncAdDirectory: () =>
+    fetchApi<{ success: boolean; message: string; accounts_updated: number; notice?: string }>(
+      "/directory/sync-ad",
+      { method: "POST" }
+    ),
+
   testUserTelegramDm: (userId: number) =>
     fetchApi<{ success: boolean; message: string; telegram_id?: string }>(`/directory/users/${userId}/test-telegram`, {
       method: "POST",

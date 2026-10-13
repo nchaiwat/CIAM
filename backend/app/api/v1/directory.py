@@ -1139,4 +1139,83 @@ async def test_user_telegram_dm(
     }
 
 
+@router.post("/sync-ad")
+async def sync_active_directory_users(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """
+    Directly query Active Directory via AD Sync Agent to update each user's
+    department (OU), active status, and attributes in real time.
+    """
+    from app.connectors.ad_proxy import AdProxyConnector
+    from app.services.scheduler import persist_spoke_inventory
+    
+    ad_app = db.query(ConnectedApplication).filter(func.lower(ConnectedApplication.app_code) == "ad").first()
+    if not ad_app:
+        raise HTTPException(status_code=404, detail="ระบบ Active Directory (app_code: 'ad') ไม่ได้ลงทะเบียนในระบบ")
+
+    connector = AdProxyConnector(
+        base_url=ad_app.base_url,
+        api_key=ad_app.api_key,
+        secret_key=ad_app.client_secret
+    )
+    
+    try:
+        inv = await connector.sync_inventory()
+        raw_accounts = inv.get("accounts", [])
+        if not raw_accounts:
+            return {
+                "success": False,
+                "message": inv.get("notice") or "ไม่พบข้อมูลบัญชีผู้ใช้จาก AD Agent",
+                "accounts_updated": 0
+            }
+
+        synced_count = persist_spoke_inventory(ad_app, raw_accounts, db, actor_username=current_admin.username)
+
+        # Auto-heal Wachirawut.B into wachirawoot.b
+        canonical_w = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "wachirawoot.b").first()
+        dup_w = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "wachirawut.b").first()
+        if canonical_w and dup_w and canonical_w.id != dup_w.id:
+            dup_mappings = db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == dup_w.id).all()
+            for dm in dup_mappings:
+                existing_cm = db.query(AppAccountMapping).filter(
+                    AppAccountMapping.identity_id == canonical_w.id,
+                    AppAccountMapping.application_id == dm.application_id
+                ).first()
+                if not existing_cm:
+                    dm.identity_id = canonical_w.id
+                else:
+                    db.delete(dm)
+            db.flush()
+            db.delete(dup_w)
+            db.flush()
+
+        db.add(IamAuditLog(
+            actor_username=current_admin.username,
+            action_type="SYNC_AD_DIRECT",
+            target_username="ACTIVE_DIRECTORY_ALL",
+            affected_app_code="AD",
+            execution_mode="MANUAL_TRIGGER",
+            reason=f"สั่งซิงก์ข้อมูลสดจาก Active Directory โดยตรง ({synced_count} บัญชี)",
+            status="SUCCESS"
+        ))
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"ซิงก์ข้อมูลจาก Active Directory สำเร็จและอัปเดตข้อมูลผู้ใช้ {synced_count} บัญชีเรียบร้อยแล้ว",
+            "accounts_updated": synced_count,
+            "notice": inv.get("notice")
+        }
+    except Exception as exc:
+        logger.error("Direct AD Sync error: %s", exc)
+        return {
+            "success": False,
+            "message": f"เกิดข้อผิดพลาดในการเชื่อมต่อกับ AD Agent: {str(exc)}",
+            "accounts_updated": 0
+        }
+
+
+
 

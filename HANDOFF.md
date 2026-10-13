@@ -1,11 +1,31 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~15:28 ICT)  
+> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~16:20 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0.00000000000000000000000 รวมบัญชี Wachirawut.B/wachirawoot.b อัตโนมัติ, แก้ไขแผนก Chaiwat (IT) และ Wimonpan.P (SC) ให้ถูกต้องตามจริง, และเพิ่มปุ่มซิงก์สดจาก AD (13 ต.ค. 2026)
+### 1. รายละเอียดการทำงานและตอบข้อสงสัยของผู้ใช้:
+1. **การรวมบัญชี Wachirawut.B กับ wachirawoot.b (Case Insensitive & Transliteration Merge):**
+   - **สาเหตุที่แยกเป็น 2 แถว:** บัญชีใน AD สะกดว่า `wachirawoot.b` (ใช้ `oo`) ส่วนบัญชีใน pfSense HO สะกดว่า `Wachirawut.B` (ใช้ตัวใหญ่และใช้ `u`) ระบบเดิมจึงมองเป็นคนละ username
+   - **การแก้ไข:** 
+     - เพิ่มฟังก์ชัน Auto-healing ใน `initial_data.py` ควบรวมบัญชี `Wachirawut.B` เข้ากับ `wachirawoot.b` ทันที ย้ายสิทธิ์ `PFSENSE_HO` มารวมไว้ที่บัญชีหลัก และลบบัญชีซ้ำซ้อนออก
+     - ใน `scheduler.py`: เพิ่มการจับคู่แบบ Case-Insensitive และถอดเสียง (Transliteration `wut` <-> `woot`) ทำให้ทุกครั้งที่ pfSense ซิงก์เข้ามา ระบบจะผูกเข้ากับ `wachirawoot.b` โดยอัตโนมัติ ไม่แยกแถวอีกต่อไป
+2. **ที่มาของแผนก Chaiwat (IT) และ Wimonpan.P (SC) — เลิกใช้ Mock Seed Data 100%:**
+   - **ที่มาเดิม:** แผนก "Purchasing" ของ Chaiwat และ "IT" ของ Wimonpan.P เกิดจากข้อมูลตัวอย่าง (Mock Data) ที่ถูกใส่ไว้ใน `real_identities` ของไฟล์ `initial_data.py` ก่อนหน้านี้ ไม่ได้อ่านมาจาก Active Directory จริง ซึ่งผู้ใช้ตรวจพบว่าข้อมูลผิดพลาด (ความจริงคือคุณ Chaiwat อยู่ **IT** และคุณ Wimonpan.P อยู่ **SC**)
+   - **การแก้ไข:** แก้ไขค่าให้ถูกต้องตามที่คุณ Chaiwat ระบุ (`Chaiwat.N` = **IT**, `Wimonpan.P` = **SC**) และตัดการคาดเดาแผนกทิ้งทั้งหมด เพื่อรอรับค่าจริงจากการซิงก์ Active Directory OU
+3. **การซิงก์ข้อมูลสดจาก Active Directory:**
+   - เพิ่ม Endpoint `POST /api/v1/directory/sync-ad` สำหรับให้ผู้ดูแลระบบสั่ง Query สดจาก AD Sync Agent (พอร์ต 3100) ได้ทันทีตามต้องการ เพื่ออัปเดต OU, Department, และสถานะของพนักงานทุกคนให้เป็นปัจจุบันที่สุด
+   - เพิ่มปุ่ม **`[ 🔄 ซิงก์จาก AD ]`** บนแถบเครื่องมือของหน้าทะเบียนผู้ใช้ (`/directory`) เพื่อให้ Admin กดซิงก์ดึงข้อมูลล่าสุดจาก AD เข้าสู่ Central IAM ได้ทันทีโดยไม่ต้องรอรอบ 04:00 น.
+
+### 2. ผลการตรวจสอบคุณภาพ:
+- Backend pytest: ผ่าน 49/49 tests 100%
+- Frontend TypeScript `npx tsc --noEmit`: ผ่าน 0 errors (100%)
 
 ---
 

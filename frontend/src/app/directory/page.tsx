@@ -238,6 +238,24 @@ export default function DirectoryPage() {
     );
   };
 
+  const [isSyncingAd, setIsSyncingAd] = useState(false);
+  const handleSyncAd = async () => {
+    setIsSyncingAd(true);
+    try {
+      const res = await ciamApi.syncAdDirectory();
+      if (res.success) {
+        alert(`✅ ${res.message}`);
+        await fetchUsers();
+      } else {
+        alert(`⚠️ ${res.message}`);
+      }
+    } catch (err: any) {
+      alert(`❌ เกิดข้อผิดพลาดในการซิงก์ AD: ${err.message || err}`);
+    } finally {
+      setIsSyncingAd(false);
+    }
+  };
+
   const handleTestUserTelegramDm = async (user: UserListItem) => {
     if (!user.telegram_id) {
       alert(`ผู้ใช้ ${user.full_name} ยังไม่มีหมายเลข Telegram ID ในระบบ (AD Pager ว่าง)`);
@@ -1038,6 +1056,17 @@ export default function DirectoryPage() {
               className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition-all shadow-xs cursor-pointer shrink-0 flex items-center justify-center border border-emerald-700 hover:scale-105 active:scale-95"
             >
               <ExcelIcon className="w-5 h-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSyncAd}
+              disabled={isSyncingAd}
+              title="ดึงข้อมูลสดล่าสุดจาก Active Directory ทันที (OU, แผนก, สถานะ)"
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAd ? "animate-spin" : ""}`} />
+              <span>{isSyncingAd ? "กำลังซิงก์ AD..." : "ซิงก์จาก AD"}</span>
             </button>
           </div>
         </form>

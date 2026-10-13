@@ -498,7 +498,7 @@ def init_db():
                 "username": "Chaiwat.N",
                 "full_name": "Chaiwat Nilawan",
                 "email": "chaiwat.n@windowasia.com",
-                "department": "Purchasing",
+                "department": "IT",
                 "is_active_in_ad": True,
                 "mappings": [
                     {"app": "irm", "role": "PU User", "active": True},
@@ -540,7 +540,7 @@ def init_db():
                 "username": "Wimonpan.P",
                 "full_name": "Wimonpan Promsuwan",
                 "email": "wimonpan.p@windowasia.com",
-                "department": "IT",
+                "department": "SC",
                 "is_active_in_ad": True,
                 "mappings": [
                     {"app": "ad", "role": "Domain Users", "active": True},
@@ -588,8 +588,13 @@ def init_db():
                 logger.info("Seeded real master identity: %s (%s)", ident.full_name, ident.username)
             else:
                 ident.is_active_in_ad = item["is_active_in_ad"]
-                if item.get("department") and not ident.department:
+                if ident.username.lower() == "chaiwat.n":
+                    ident.department = "IT"
+                elif ident.username.lower() == "wimonpan.p":
+                    ident.department = "SC"
+                elif item.get("department") and not ident.department:
                     ident.department = item.get("department")
+
                 for map_spec in item.get("mappings", []):
                     app_obj = app_objs.get(map_spec["app"])
                     if app_obj:
@@ -611,6 +616,26 @@ def init_db():
                         else:
                             m.is_active_in_app = map_spec["active"]
                             m.last_sync_status = "IN_SYNC"
+
+        # Auto-heal Wachirawut.B into wachirawoot.b (Transliteration and case sensitivity unification)
+        canonical_wachira = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "wachirawoot.b").first()
+        duplicate_wachira = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "wachirawut.b").first()
+        if canonical_wachira and duplicate_wachira and canonical_wachira.id != duplicate_wachira.id:
+            logger.info("Auto-healing duplicate Wachirawut.B into canonical wachirawoot.b...")
+            dup_mappings = db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == duplicate_wachira.id).all()
+            for dm in dup_mappings:
+                existing_cm = db.query(AppAccountMapping).filter(
+                    AppAccountMapping.identity_id == canonical_wachira.id,
+                    AppAccountMapping.application_id == dm.application_id
+                ).first()
+                if not existing_cm:
+                    dm.identity_id = canonical_wachira.id
+                else:
+                    db.delete(dm)
+            db.flush()
+            db.delete(duplicate_wachira)
+            db.flush()
+            logger.info("Successfully merged Wachirawut.B into wachirawoot.b (spoke mappings preserved)")
 
         # Auto-recover MTPulse commands for legitimate IT users
         from app.models.application import SpokePendingCommand

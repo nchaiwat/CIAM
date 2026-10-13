@@ -133,11 +133,26 @@ def persist_spoke_inventory(
         is_corp = (not is_shop_acc) and (is_ad_format or is_corp_dept or ("@windowasia.com" in (item.get("email") or "").lower()))
 
         # Look for existing identity in AD (Master Identity)
-        identity = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(uname)).first()
+        identity = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == uname.lower()).first()
         if not identity and item.get("email"):
             identity = db.query(MasterIdentity).filter(MasterIdentity.email.ilike(item.get("email").strip())).first()
         if not identity and item.get("full_name") and item.get("full_name").strip() != uname:
             identity = db.query(MasterIdentity).filter(MasterIdentity.full_name.ilike(item.get("full_name").strip())).first()
+
+        # Check phonetic / transliteration aliases for usernames (e.g. wachirawut.b <-> wachirawoot.b)
+        if not identity and "." in uname:
+            prefix, initial = uname.rsplit(".", 1)
+            p_low = prefix.lower()
+            alt_prefixes = []
+            if "wut" in p_low:
+                alt_prefixes.append(p_low.replace("wut", "woot"))
+            if "woot" in p_low:
+                alt_prefixes.append(p_low.replace("woot", "wut"))
+            for ap in alt_prefixes:
+                alt_uname = f"{ap}.{initial.lower()}"
+                identity = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == alt_uname).first()
+                if identity:
+                    break
 
         telegram_val = str(item.get("telegram_id") or item.get("pager") or "").strip() or None
 
