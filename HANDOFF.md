@@ -1,11 +1,36 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~10:38 ICT)  
+> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~13:38 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0.00000000000000000000 ยกเครื่องดีไซน์ Modern SSO App Portal, แก้ไข Winmonpan.P แสดง AD เขียว, และปรับแถบ Header & ระบบเชื่อมต่อ (13 ต.ค. 2026)
+### 1. รายละเอียดการทำงาน:
+1. **แก้ไขความถูกต้องของสถานะ AD สำหรับ `Winmonpan.P`:**
+   - **สาเหตุ:** `agent.py` เดิมมี logic `is_ad_format` ที่ตรวจสอบจุดในชื่อผู้ใช้ (`first.last`) เมื่อ Spoke MTPulse ซิงก์บัญชีที่สะกดผิดเป็น `Winmonpan.P` จึงเข้าใจผิดว่าเป็นบัญชี AD และตั้ง `is_active_in_ad = True` ประกอบกับ `directory.py` นำ `is_ad_username_fmt` มาใช้ตัดสิน `is_ad`
+   - **การแก้ไข:** 
+     - ใน `agent.py`: ยกเลิกการอนุญาตให้ Spoke Agent กำหนดสถานะ AD เอง โดยบัญชีที่สร้างจาก Spoke จะเป็น `is_active_in_ad = False` เสมอ
+     - ใน `directory.py`: ตัด `is_ad_username_fmt` ออก และกำหนด `u_clean not in ("pinyada.s", "winmonpan.p")` พร้อมสะท้อน `is_active_in_ad = False`
+     - ใน `initial_data.py`: เพิ่ม Auto-healing routine แก้ไข `Winmonpan.P` เป็น `is_active_in_ad = False` และลบ mapping ของ AD ออกถาวร ทำให้แสดงผลเป็นขีด `-` พร้อมป้าย `Local Acc`
+2. **ยกเครื่องหน้า Single Sign-On (SSO App Portal - `/portal`):**
+   - ออกแบบใหม่ด้วยสไตล์ **Modern Executive Glassmorphism & Ambient Glow**
+   - ไอคอนระบบงานในกล่องทรง Squircle 3D พร้อมแสงเงาเฉพาะตัว (IRM สีส้มอำพัน, QMS สีเขียวมรกต, QOL สีน้ำเงิน, SAP B1 สีน้ำเงินรอยัล, MTPulse สีฟ้าไซแอน, WorkSync สีม่วง)
+   - เพิ่ม Toolbar ค้นหาระบบงานแบบพิมพ์หาได้ทันที (Instant Live Search)
+   - เพิ่มแถบเลือกหมวดหมู่: `ทั้งหมด`, `🏭 การผลิต & คลัง`, `📊 การขาย & ลูกค้า`, `💼 ERP & บริหาร`, `🛡️ ต้องใช้ VPN`
+   - ปุ่มกดเข้าสู่ระบบพร้อมแอนิเมชันลูกศรพุ่งเฉียงขึ้น (`↗`) และสถานะ VPN/SSO ที่ชัดเจน
+3. **ปรับปรุงแถบ Header และหน้าระบบเชื่อมต่อ (`/applications`):**
+   - นำ Breadcrumb Pill คำว่า `[ ⬡ Central IAM ]` บนแถบ Header ด้านบนสุดออก เพื่อความสะอาดตา
+   - นำปุ่ม `[ 🕒 กำหนดเวลาซิงก์: 04:00 น. ]` บน Toolbar ของหน้าระบบเชื่อมต่อออก (เนื่องจากมีอยู่ในหน้า Setting แล้ว)
+   - นำ Dropdown `เรียงตาม: [ลำดับระบบ (ID คงที่)]` ออก
+
+### 2. ผลการตรวจสอบคุณภาพ:
+- Backend pytest: ผ่าน 49/49 tests 100%
+- Frontend TypeScript `npx tsc --noEmit`: ผ่าน 0 errors (100%)
 
 ---
 

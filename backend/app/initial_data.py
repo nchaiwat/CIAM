@@ -619,6 +619,18 @@ def init_db():
             SpokePendingCommand.action == "DISABLE_USER",
             func.lower(SpokePendingCommand.username).in_(["wimonpan.p", "winmonpan.p", "ronnakorn.p"])
         ).delete()
+
+        # Fix misspelled Winmonpan.P to ensure is_active_in_ad is False (Local Spoke account only)
+        win_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "winmonpan.p").first()
+        if win_ident:
+            win_ident.is_active_in_ad = False
+            ad_app = app_objs.get("ad")
+            if ad_app:
+                db.query(AppAccountMapping).filter(
+                    AppAccountMapping.identity_id == win_ident.id,
+                    AppAccountMapping.application_id == ad_app.id
+                ).delete()
+
         # Ensure ENABLE_USER commands exist so MTPulse re-activates them on next heartbeat
         for legit_u in ["Wimonpan.P", "Ronnakorn.P"]:
             exists_cmd = db.query(SpokePendingCommand).filter(

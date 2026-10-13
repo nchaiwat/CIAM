@@ -581,5 +581,25 @@ FRONTEND_URL=http://localhost:3000
   - `POST /api/v1/dashboard/health-monitor/check-ad-now`: บังคับตรวจเช็คสถานะทันทีแบบ Real-time
   - หน้าเว็บ `frontend/src/app/settings/page.tsx` มีการ์ดควบคุม, Dropdown เลือกความถี่ตรวจสอบ (30s - 10m) พร้อมปุ่มบันทึก และปุ่มทดสอบครบถ้วน
 
+---
+
+## 18. Modern Executive SSO App Portal & Strict AD Authority Boundary (Version 2.0.9)
+
+### 18.1 Modern Executive SSO App Portal Architecture (`/portal`)
+* **Design System & Aesthetics:**
+  - พัฒนาในรูปแบบ Frosted Glassmorphism พร้อม Ambient Glow แสงนุ่มลึก
+  - **Squircle 3D App Icons:** กล่องไอคอนมนทรง Squircle 3D พร้อมแสงเงาและเฉดสีเฉพาะของแต่ละระบบ (IRM: สีส้มอำพัน, QMS: สีเขียวมรกต, QOL: สีน้ำเงิน, SAP B1: สีน้ำเงินรอยัล, MTPulse: สีฟ้าไซแอน, WorkSync: สีม่วง)
+  - **Interactive Toolbar:** ระบบค้นหาแบบเรียลไทม์ (Instant Live Search) และ Filter Pills แยกตามหมวดหมู่ (`ทั้งหมด`, `การผลิต & คลัง`, `การขาย & ลูกค้า`, `ERP & บริหาร`, `VPN Only`)
+  - **Security Trust Badge:** การ์ด Hero แสดงสถานะ `🟢 SSO Core Active (RS256)` ยืนยันความปลอดภัยระดับ Enterprise
+  - **Interactive Micro-Animations:** ปุ่มเปิดระบบมีลูกศรพุ่งขึ้น (`↗`) ขยับเมื่อ Hover พร้อมการตรวจสอบเงื่อนไขความพร้อมของ VPN/Offline อัตโนมัติ
+
+### 18.2 Strict AD Authority Boundary & Local Spoke Account Safeguard
+* **ตัดสิทธิ์ Spoke Agent ในการกำหนดสถานะ AD:** ปรับปรุง `agent.py` และ `directory.py` ให้ Spoke Application ไม่มีสิทธิ์กำหนด `is_active_in_ad = True` โดยเด็ดขาด การเป็นบัญชี AD ต้องมาจากการซิงก์ของ AD Gateway, การมี `ad_guid`, หรือ `has_ad_mapping` เท่านั้น
+* **แก้ไขกรณี `Winmonpan.P` สะกดผิด:** ตัดการใช้ `is_ad_username_fmt` (ตรวจจุดในชื่อ) ตัดสิน AD ออก และเพิ่ม Auto-heal ใน `initial_data.py` กำหนดให้ `Winmonpan.P` เป็น `is_active_in_ad = False` แสดงผลเป็น Local Acc ขีด `-` เสมอ
+
+### 18.3 Minimalist Header & Spoke Settings Clean-up
+* นำ Pill `[ ⬡ Central IAM ]` บนแถบ Header ด้านบนสุดออก เพื่อความสะอาดตา
+* นำปุ่มกำหนดเวลาซิงก์และตัวเลือกเรียงตามลำดับในหน้า `/applications` ออก (ย้ายไปรวมอยู่ที่หน้า Settings)
+
 
 

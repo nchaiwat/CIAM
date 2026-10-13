@@ -618,23 +618,6 @@ export default function ApplicationsPage() {
             <span>📋 คู่มือสำหรับ Dev</span>
           </button>
 
-          {/* Scheduled Sync Settings Button */}
-          <button
-            onClick={handleOpenScheduleModal}
-            className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-md text-xs sm:text-sm font-bold transition-colors shadow-2xs cursor-pointer"
-            title="ตั้งค่ากำหนดเวลาการซิงก์ข้อมูลอัตโนมัติประจำวัน"
-          >
-            <Clock className="w-4 h-4 text-slate-600" />
-            <span>
-              กำหนดเวลาซิงก์:{" "}
-              {scheduleData?.enabled ? (
-                <span className="text-emerald-700 font-extrabold">{scheduleData.time} น.</span>
-              ) : (
-                <span className="text-slate-400 font-normal">ปิดใช้งาน</span>
-              )}
-            </span>
-          </button>
-
           {/* Sync All Button */}
           <button
             onClick={handleSyncAll}
@@ -645,20 +628,6 @@ export default function ApplicationsPage() {
             <RefreshCw className={`w-4 h-4 ${syncingAll ? "animate-spin" : ""}`} />
             <span>{syncingAll ? "กำลังซิงก์ทุกระบบ..." : "⚡ ซิงก์ทุกระบบทันที"}</span>
           </button>
-
-          {/* Sort Selector */}
-          <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-100 border border-slate-300 rounded-md text-xs sm:text-sm font-bold shadow-2xs">
-            <span className="text-slate-600 text-xs">เรียงตาม:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-800 cursor-pointer focus:outline-none focus:border-indigo-600"
-            >
-              <option value="id">ลำดับระบบ (ID คงที่)</option>
-              <option value="name">ชื่อระบบ (ก-ฮ / A-Z)</option>
-              <option value="code">รหัสระบบ (App Code)</option>
-            </select>
-          </div>
 
           {/* Register New App Button */}
           <button

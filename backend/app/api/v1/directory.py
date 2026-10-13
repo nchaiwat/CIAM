@@ -239,10 +239,9 @@ def list_users(
                 or identity.last_login_ad_at 
                 or has_ad_mapping
                 or is_corp_dept
-                or is_ad_username_fmt
                 or (has_corp_email and not is_shop_acc)
             )
-            and (u_clean != "pinyada.s")
+            and (u_clean not in ("pinyada.s", "winmonpan.p"))
         )
 
         # Check overall active status across AD and spokes
@@ -307,8 +306,8 @@ def list_users(
             department=clean_dept,
             telephone=identity.telephone,
             telegram_id=identity.telegram_id,
-            is_active_in_ad=identity.is_active_in_ad,
-            last_login_ad_at=identity.last_login_ad_at,
+            is_active_in_ad=identity.is_active_in_ad if is_ad else False,
+            last_login_ad_at=identity.last_login_ad_at if is_ad else None,
             created_at=created_at,
             last_access_at=last_access,
             days_since_last_access=days_since_access,

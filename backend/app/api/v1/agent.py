@@ -144,27 +144,17 @@ def handle_agent_heartbeat(
             username_clean = acc.username.strip()
             # Match master identity or create local spoke identity
             ident = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(username_clean)).first()
-            is_corp_email = bool(acc.email and "@windowasia.com" in acc.email.lower())
-            is_ad_format = len(username_clean.split(".")) == 2 and len(username_clean.split(".")[1]) <= 2
-            dept_val = (acc.department or "").strip().lower()
-            corporate_depts = ("sale", "sales", "purchasing", "pu", "it", "accounting", "hr", "qa", "warehouse", "m365", "office", "admin", "management", "general")
-            is_corp_dept = any(cd in dept_val for cd in corporate_depts) if dept_val else False
-            is_corp = is_corp_email or is_ad_format or is_corp_dept
-
             if not ident:
                 ident = MasterIdentity(
                     username=username_clean,
                     full_name=acc.full_name or username_clean,
                     email=acc.email or None,
-                    department=acc.department or "ทั่วไป",
-                    is_active_in_ad=True if is_corp else False,
+                    department=acc.department or None,
+                    is_active_in_ad=False,  # Spoke apps cannot declare AD status; AD Gateway is source of truth
                     created_at=now
                 )
                 db.add(ident)
                 db.flush()
-            elif is_corp and not ident.is_active_in_ad and username_clean.lower() != "pinyada.s":
-                # Ensure legitimate corporate employee pushed from agent is active in AD
-                ident.is_active_in_ad = True
 
             # Find existing mapping by (application_id, identity_id) OR case-insensitive username
             mapping = db.query(AppAccountMapping).filter(

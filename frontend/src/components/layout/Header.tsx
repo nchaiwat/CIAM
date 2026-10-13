@@ -87,12 +87,6 @@ export default function Header({
           <span>{collapsed ? "แสดงเมนู" : "ซ่อนเมนู"}</span>
         </button>
 
-        {/* Breadcrumb / System Name Pill */}
-        <div className="hidden md:flex items-center space-x-1.5 px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">
-          <Shield className="w-3 h-3 text-blue-600" />
-          <span>Central IAM</span>
-        </div>
-
         {/* AD Sync Agent Status Indicator (Point 8) */}
         <div
           onClick={() => setProfileModalOpen(true)}
