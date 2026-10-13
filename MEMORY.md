@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-10-13  
-**Version:** 2.1.0 (Refined SSO App Portal: Frozen Header, Compact Cards 4-Col, Soft Blue Gradient Canvas)  
+**Version:** 2.2.0 (Redesigned Split-Screen Enterprise SSO Login Portal with Window Asia Corporate Identity)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  

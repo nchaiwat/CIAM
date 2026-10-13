@@ -9,6 +9,36 @@
 
 ---
 
+## 0.000000000000000000000000 ออกแบบหน้า Login SSO ใหม่แบบ Split-Screen Enterprise Layout (13 ต.ค. 2026)
+### 1. รายละเอียดการทำงาน (Enterprise SSO Login Redesign):
+1. **เค้าโครง 2 คอลัมน์ (Split-Screen Layout):**
+   - **ฝั่งซ้าย (Enterprise Corporate Showcase ~55%):**
+     - พื้นหลัง Deep Navy Blue (`#06193b` ถึง `#041229`) พร้อมลวดลาย Architectural Blueprint Grid (ตารางวิศวกรรม/สถาปัตยกรรม 44px) และ Ambient Blue Glows
+     - โลโก้องค์กร **Window Asia** ("ประตูหน้าต่าง Alu/uPVC คุณภาพสูง") พร้อมไอคอนตราหน้าต่างอลูมิเนียมกรอบกระจก
+     - สรุปจุดเด่นระบบ SSO 3 ข้อ: Single Sign-On รวมศูนย์, ยืนยันตัวตนผ่าน Active Directory, มาตรฐานความปลอดภัย Enterprise
+     - แถบรับประกันความปลอดภัยตลอดการใช้งาน (Shield Guarantee Card) ดูแลและปกป้องข้อมูลตลอด 24 ชม.
+     - 4 เสาหลักฟีเจอร์ด้านล่าง: ปลอดภัย, รวดเร็ว, เสถียรภาพ (HA 99.9%), ครบวงจร
+     - Footer ด้านล่างแสดงลิขสิทธิ์ © 2026 Window Asia Public Company Limited
+   - **ฝั่งขวา (Enterprise Login Card ~45%):**
+     - โทนสะอาด คลีน สบายตา ผิวสว่างโทน `#f8fafc`
+     - หัวข้อ "ยินดีต้อนรับ เข้าสู่ระบบ Window Asia App Portal"
+     - ตราสัญลักษณ์หน้าต่าง 3D/Isometric (`Modern3DWindowIcon`) สีขาว-ฟ้าซ้อนกันตามแบบตัวอย่างที่ผู้ใช้ส่งมา
+     - ฟิลด์กรอกข้อมูล: ชื่อผู้ใช้งาน (Windows / AD Username) และรหัสผ่าน พร้อมปุ่มสลับการมองเห็น (Eye toggle)
+     - เช็กบ็อกซ์ "จดจำฉัน" และปุ่ม "ลืมรหัสผ่าน / ช่วยเหลือ?" (เปิด Modal แนะนำวิธีเปลี่ยนรหัสผ่าน AD และช่องทางติดต่อ IT Helpdesk)
+     - ปุ่ม "เข้าสู่ระบบ" สีน้ำเงิน Enterprise พร้อมไอคอนลูกศร
+     - แถบระบุตัวตน Active Directory ("ยืนยันตัวตนผ่านระบบ Windows AD ของบริษัท ชุดเดียวกับเปิดคอมพิวเตอร์")
+     - ลิงก์ตรงสำหรับเจ้าหน้าที่ไอที / ผู้ดูแลระบบ ไปยัง Admin Console (`/admin/login`)
+2. **สร้างคอมโพเนนต์สำหรับแบรนด์ Window Asia:**
+   - [WindowAsiaLogo.tsx](file:///d:/Python/Central-IAM/frontend/src/components/WindowAsiaLogo.tsx): มีทั้ง `WindowAsiaLogo` และ `Modern3DWindowIcon` เพื่อการนำไปใช้ซ้ำในหน้าอื่นๆ อย่างเป็นมาตรฐาน
+3. **การรองรับ Mobile:**
+   - ปรับการจัดวางให้รองรับ Responsive หน้าจอมือถือจะแสดงผลอย่างพอดี ไม่ล้นจอ และใช้งานง่าย
+
+### 2. ผลการทดสอบคุณภาพ:
+- Backend pytest: ผ่าน 49/49 tests (100%)
+- Frontend TypeScript `npx tsc --noEmit`: ผ่าน 0 errors (100%)
+
+---
+
 ## 0.00000000000000000000000 รวมบัญชี Wachirawut.B/wachirawoot.b อัตโนมัติ, แก้ไขแผนก Chaiwat (IT) และ Wimonpan.P (SC) ให้ถูกต้องตามจริง, และเพิ่มปุ่มซิงก์สดจาก AD (13 ต.ค. 2026)
 ### 1. รายละเอียดการทำงานและตอบข้อสงสัยของผู้ใช้:
 1. **การรวมบัญชี Wachirawut.B กับ wachirawoot.b (Case Insensitive & Transliteration Merge):**
