@@ -23,7 +23,7 @@ import {
   Check,
 } from "lucide-react";
 import { ciamApi } from "@/lib/api";
-import { WindowAsiaLogo, Modern3DWindowIcon } from "@/components/WindowAsiaLogo";
+import { WindowAsiaLogo, WindowAsiaEmblem } from "@/components/WindowAsiaLogo";
 
 export default function EmployeeLoginPage() {
   const router = useRouter();
@@ -249,9 +249,14 @@ export default function EmployeeLoginPage() {
               เข้าสู่ระบบ <strong className="text-blue-700">Window Asia App Portal</strong>
             </p>
 
-            {/* Modern 3D Window Icon (Matching Mockup) */}
-            <div className="py-2">
-              <Modern3DWindowIcon className="w-20 h-20 mx-auto transform hover:scale-105 transition-transform duration-300" />
+            {/* Mobile Header Logo */}
+            <div className="lg:hidden pb-1 flex justify-center">
+              <WindowAsiaLogo variant="light" size="md" />
+            </div>
+
+            {/* Official Window Asia Corporate Emblem (Authentic Asset) */}
+            <div className="py-2 hidden lg:block">
+              <WindowAsiaEmblem className="w-18 h-18 mx-auto transform hover:scale-105 transition-transform duration-300" />
             </div>
           </div>
 
