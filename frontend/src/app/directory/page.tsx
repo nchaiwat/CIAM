@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Users,
@@ -29,6 +29,10 @@ import {
   XCircle,
   Send,
   RefreshCw,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Settings,
 } from "lucide-react";
 import {
   ciamApi,
@@ -203,6 +207,37 @@ export default function DirectoryPage() {
   // Telegram Direct Message Test State
   const [testingDmUserId, setTestingDmUserId] = useState<number | null>(null);
 
+  // Table Sorting State (Point 1: Click header to sort)
+  type SortField = "name" | "department" | "ad_status" | "spokes" | "last_access";
+  type SortOrder = "asc" | "desc";
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortOrder === "asc") {
+        setSortOrder("desc");
+      } else {
+        setSortField(null);
+        setSortOrder("asc");
+      }
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-colors shrink-0" />;
+    }
+    return sortOrder === "asc" ? (
+      <ArrowUp className="w-3.5 h-3.5 text-blue-600 font-bold shrink-0" />
+    ) : (
+      <ArrowDown className="w-3.5 h-3.5 text-blue-600 font-bold shrink-0" />
+    );
+  };
+
   const handleTestUserTelegramDm = async (user: UserListItem) => {
     if (!user.telegram_id) {
       alert(`ผู้ใช้ ${user.full_name} ยังไม่มีหมายเลข Telegram ID ในระบบ (AD Pager ว่าง)`);
@@ -350,12 +385,39 @@ export default function DirectoryPage() {
     }
   };
 
-  // Calculate Pagination
-  const totalUsers = users.length;
+  // Calculate Sorting & Pagination
+  const sortedUsers = useMemo(() => {
+    if (!sortField) return users;
+    return [...users].sort((a, b) => {
+      let cmp = 0;
+      if (sortField === "name") {
+        const aName = (a.full_name || a.username || "").toLowerCase();
+        const bName = (b.full_name || b.username || "").toLowerCase();
+        cmp = aName.localeCompare(bName, "th");
+      } else if (sortField === "department") {
+        const aDept = (a.department || "").toLowerCase();
+        const bDept = (b.department || "").toLowerCase();
+        cmp = aDept.localeCompare(bDept, "th");
+      } else if (sortField === "ad_status") {
+        const aScore = a.is_ad_account === false ? 0 : a.is_active_in_ad ? 2 : 1;
+        const bScore = b.is_ad_account === false ? 0 : b.is_active_in_ad ? 2 : 1;
+        cmp = aScore - bScore;
+      } else if (sortField === "spokes") {
+        cmp = (a.connected_apps?.length || 0) - (b.connected_apps?.length || 0);
+      } else if (sortField === "last_access") {
+        const aDays = a.days_since_last_access !== null && a.days_since_last_access !== undefined ? a.days_since_last_access : 999999;
+        const bDays = b.days_since_last_access !== null && b.days_since_last_access !== undefined ? b.days_since_last_access : 999999;
+        cmp = aDays - bDays;
+      }
+      return sortOrder === "asc" ? cmp : -cmp;
+    });
+  }, [users, sortField, sortOrder]);
+
+  const totalUsers = sortedUsers.length;
   const effectivePageSize = pageSize === 0 ? (totalUsers || 1) : pageSize;
   const totalPages = Math.max(1, Math.ceil(totalUsers / effectivePageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
-  const paginatedUsers = pageSize === 0 ? users : users.slice((safeCurrentPage - 1) * effectivePageSize, safeCurrentPage * effectivePageSize);
+  const paginatedUsers = pageSize === 0 ? sortedUsers : sortedUsers.slice((safeCurrentPage - 1) * effectivePageSize, safeCurrentPage * effectivePageSize);
   const startIndex = totalUsers === 0 ? 0 : (safeCurrentPage - 1) * effectivePageSize + 1;
   const endIndex = Math.min(safeCurrentPage * effectivePageSize, totalUsers);
 
@@ -723,7 +785,7 @@ export default function DirectoryPage() {
       return;
     }
 
-    const exportData = users.map((u, idx) => {
+    const exportData = sortedUsers.map((u, idx) => {
       const role = adminRoles[u.username.toLowerCase()] || "PORTAL_USER";
       const roleText =
         role === "SUPER_ADMIN"
@@ -987,15 +1049,60 @@ export default function DirectoryPage() {
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
         <div className="overflow-x-auto max-h-[calc(100vh-210px)]">
           <table className="w-full text-left text-xs text-slate-800">
-            {/* Table Header (Point 5: Sticky Header freeze) */}
+            {/* Table Header with interactive sorting */}
             <thead className="sticky top-0 z-10 bg-slate-100 border-b-2 border-slate-300 text-xs font-extrabold text-slate-800 uppercase tracking-wider shadow-2xs">
               <tr>
-                <th className="py-2.5 px-4">พนักงาน / บัญชีผู้ใช้</th>
-                <th className="py-2.5 px-4">แผนก</th>
-                <th className="py-2.5 px-3 text-center w-24">สถานะ AD</th>
-                <th className="py-2.5 px-4">สิทธิ์ระบบลูก (Spokes)</th>
-                <th className="py-2.5 px-4">การเข้าใช้งาน</th>
-                <th className="py-2.5 px-4 text-right w-28">การจัดการ</th>
+                <th
+                  onClick={() => handleSort("name")}
+                  className="py-2.5 px-4 cursor-pointer select-none hover:bg-slate-200/80 transition-colors group"
+                  title="คลิกเพื่อเรียงลำดับตาม บัญชีผู้ใช้"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <span>บัญชีผู้ใช้</span>
+                    {renderSortIcon("name")}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort("department")}
+                  className="py-2.5 px-4 cursor-pointer select-none hover:bg-slate-200/80 transition-colors group"
+                  title="คลิกเพื่อเรียงลำดับตาม แผนก"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <span>แผนก</span>
+                    {renderSortIcon("department")}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort("ad_status")}
+                  className="py-2.5 px-3 text-center w-28 cursor-pointer select-none hover:bg-slate-200/80 transition-colors group"
+                  title="คลิกเพื่อเรียงลำดับตาม สถานะ AD"
+                >
+                  <div className="flex items-center justify-center space-x-1.5">
+                    <span>สถานะ AD</span>
+                    {renderSortIcon("ad_status")}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort("spokes")}
+                  className="py-2.5 px-4 cursor-pointer select-none hover:bg-slate-200/80 transition-colors group"
+                  title="คลิกเพื่อเรียงลำดับตาม สิทธิ์ระบบลูก"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <span>สิทธิ์ระบบลูก (SPOKES)</span>
+                    {renderSortIcon("spokes")}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort("last_access")}
+                  className="py-2.5 px-4 cursor-pointer select-none hover:bg-slate-200/80 transition-colors group"
+                  title="คลิกเพื่อเรียงลำดับตาม การเข้าใช้งาน"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <span>การเข้าใช้งาน</span>
+                    {renderSortIcon("last_access")}
+                  </div>
+                </th>
+                <th className="py-2.5 px-4 text-center w-20">การจัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -1247,15 +1354,14 @@ export default function DirectoryPage() {
                       </div>
                     </td>
 
-                    {/* Actions (Point 3: Single unified button opening popup with all controls) */}
-                    <td className="py-2.5 px-4 text-right">
+                    {/* Actions: Icon-only button as requested by user */}
+                    <td className="py-2.5 px-4 text-center">
                       <button
                         onClick={() => setSelectedUser(user)}
-                        className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 border border-blue-200 hover:border-blue-300 text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer"
-                        title="คลิกเพื่อจัดการสิทธิ์, ผูก AD, อนุมัติข้อยกเว้น, คืนสิทธิ์ หรือระงับสิทธิ์"
+                        className="p-1.5 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 border border-blue-200 hover:border-blue-300 transition-all shadow-2xs hover:shadow-xs cursor-pointer inline-flex items-center justify-center hover:scale-110 active:scale-95"
+                        title={`จัดการสิทธิ์ / กำหนดค่า: ${user.full_name} (${user.username})`}
                       >
-                        <span>จัดการสิทธิ์</span>
-                        <span className="text-xs">⚙️</span>
+                        <Settings className="w-4 h-4 text-blue-600 hover:text-blue-800" />
                       </button>
                     </td>
                   </tr>
