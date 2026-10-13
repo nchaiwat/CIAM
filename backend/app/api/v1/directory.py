@@ -123,6 +123,34 @@ def _build_app_summaries(mappings: list, identity_is_active_in_ad: Optional[bool
     summaries.sort(key=lambda x: x.app_code.upper())
     return summaries
 
+def _clean_directory_attributes(identity: MasterIdentity, mappings: list, is_ad: bool) -> tuple[Optional[str], Optional[str]]:
+    """
+    Enforce strict organizational integrity:
+    1. People who have email are ONLY those with an active account in Microsoft 365.
+    2. People who have department must be in Active Directory with an extracted OU.
+       If not in AD or not a real OU, do NOT display (return None).
+    """
+    has_m365 = any(
+        app.app_code.lower() == "m365" and m.is_active_in_app
+        for m, app in mappings
+    )
+    email = identity.email if has_m365 else None
+
+    dept_str = (identity.department or "").strip()
+    junk_depts = [
+        "openvpn", "captive portal", "m365 user", "radius", "firewall",
+        "active directory", "wa shop", "general", "employee", "user", "ç", ""
+    ]
+    is_invalid_dept = (
+        not is_ad
+        or not dept_str
+        or any(j in dept_str.lower() for j in junk_depts)
+        or dept_str.lower() in ["ทั่วไป", "general", "none", "n/a", "-"]
+    )
+    department = None if is_invalid_dept else dept_str
+
+    return email, department
+
 @router.get("/users", response_model=List[UserListItem])
 def list_users(
     search: Optional[str] = Query(None, description="Search term for employee_id, username, full_name, department"),
@@ -268,13 +296,15 @@ def list_users(
         exc_reason = getattr(identity, "exception_reason", None) or next((getattr(m, "exception_reason", None) for m, _ in mappings if getattr(m, "is_approved_exception", False)), None)
         exc_approved_by = getattr(identity, "exception_approved_by", None) or next((getattr(m, "exception_approved_by", None) for m, _ in mappings if getattr(m, "is_approved_exception", False)), None)
 
+        clean_email, clean_dept = _clean_directory_attributes(identity, mappings, is_ad)
+
         results.append(UserListItem(
             id=identity.id,
             employee_id=identity.employee_id,
             username=identity.username,
             full_name=identity.full_name,
-            email=identity.email,
-            department=identity.department,
+            email=clean_email,
+            department=clean_dept,
             telephone=identity.telephone,
             telegram_id=identity.telegram_id,
             is_active_in_ad=identity.is_active_in_ad,
@@ -317,14 +347,16 @@ def get_user_detail(
     app_summaries = _build_app_summaries(mappings, identity_is_active_in_ad=identity.is_active_in_ad)
     created_at, last_access, days_since_access = _get_identity_activity(identity, mappings)
     has_disc = (not identity.is_active_in_ad) and any(m.is_active_in_app for m, _ in mappings)
+    is_ad = bool(identity.is_active_in_ad or identity.ad_guid or any(app.app_code.lower() == "ad" for _, app in mappings))
+    clean_email, clean_dept = _clean_directory_attributes(identity, mappings, is_ad)
 
     user_item = UserListItem(
         id=identity.id,
         employee_id=identity.employee_id,
         username=identity.username,
         full_name=identity.full_name,
-        email=identity.email,
-        department=identity.department,
+        email=clean_email,
+        department=clean_dept,
         telephone=identity.telephone,
         telegram_id=identity.telegram_id,
         is_active_in_ad=identity.is_active_in_ad,
@@ -963,7 +995,7 @@ def create_or_update_local_portal_account(
         func.lower(AdminUser.username) == identity.username.lower().strip()
     ).first()
 
-    email_val = identity.email or f"{identity.username.lower()}@windowasia.com"
+    email_val = identity.email or f"{identity.username.lower()}@ciam.local"
     full_name_val = identity.full_name or identity.username
 
     if not admin_user:

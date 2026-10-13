@@ -143,13 +143,15 @@ def persist_spoke_inventory(
 
         raw_item_email = (item.get("email") or "").strip() or None
 
+        is_m365_item = app.app_code.lower() == "m365"
+
         if not identity:
             identity = MasterIdentity(
                 username=uname,
                 full_name=item.get("full_name") or uname,
-                email=raw_item_email,
-                department=item.get("department") or ("WA Shop" if is_shop_acc else None),
-                employee_id=item.get("employee_id"),
+                email=raw_item_email if is_m365_item else None,
+                department=item.get("department") if is_ad_item else None,
+                employee_id=item.get("employee_id") if is_ad_item else None,
                 telegram_id=telegram_val,
                 is_active_in_ad=is_active if is_ad_item else (False if is_shop_acc else (True if is_corp else False)),
                 created_at=now
@@ -161,6 +163,7 @@ def persist_spoke_inventory(
                 identity.is_active_in_ad = is_active
                 if item.get("employee_id"):
                     identity.employee_id = item.get("employee_id")
+                # Department comes strictly from Active Directory OU
                 if item.get("department"):
                     identity.department = item.get("department")
                 if telegram_val:
@@ -173,14 +176,9 @@ def persist_spoke_inventory(
             if telegram_val and not identity.telegram_id:
                 identity.telegram_id = telegram_val
 
-            if raw_item_email:
+            # Email belongs EXCLUSIVELY to Microsoft 365 accounts
+            if is_m365_item and raw_item_email:
                 identity.email = raw_item_email
-
-            if not identity.department:
-                if item.get("department"):
-                    identity.department = item.get("department")
-                elif is_shop_acc:
-                    identity.department = "WA Shop"
 
             if (not identity.full_name or identity.full_name == identity.username) and item.get("full_name"):
                 identity.full_name = item.get("full_name")

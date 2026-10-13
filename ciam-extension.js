@@ -54,7 +54,7 @@ module.exports = (app) => {
     const handleGetUsers = async (req, res) => {
         try {
             console.log('[CIAM AD] Querying Active Directory users via PowerShell...');
-            const psCmd = 'Get-ADUser -Filter * -Properties Enabled, DisplayName, EmailAddress, Department, EmployeeID | Select-Object sAMAccountName, DisplayName, EmailAddress, Department, EmployeeID, Enabled | ConvertTo-Json -Depth 2';
+            const psCmd = 'Get-ADUser -Filter * -Properties Enabled, DisplayName, Department, EmployeeID, DistinguishedName, Pager | Select-Object sAMAccountName, DisplayName, Department, EmployeeID, Enabled, DistinguishedName, Pager | ConvertTo-Json -Depth 2';
             const { stdout } = await execPromise('powershell -NoProfile -Command "' + psCmd + '"', { maxBuffer: 10 * 1024 * 1024 });
             const raw = stdout ? JSON.parse(stdout) : [];
             const rawArray = Array.isArray(raw) ? raw : [raw];
@@ -63,12 +63,28 @@ module.exports = (app) => {
                 .map(u => {
                     const uname = u.sAMAccountName || u.username;
                     if (!uname) return null;
+
+                    // Extract OU strictly from DistinguishedName
+                    let ouDept = null;
+                    const dn = u.DistinguishedName || u.distinguishedName || '';
+                    if (dn) {
+                        const ous = (dn.match(/OU=([^,]+)/gi) || []).map(o => o.replace(/^OU=/i, '').trim());
+                        const usersWaIdx = ous.findIndex(o => o.toLowerCase() === 'users wa');
+                        if (usersWaIdx > 0) {
+                            ouDept = ous[usersWaIdx - 1];
+                        } else {
+                            ouDept = ous.find(o => !['users wa', 'domain controllers', 'builtin', 'users'].includes(o.toLowerCase())) || null;
+                        }
+                    }
+
                     return {
                         username: uname,
                         full_name: u.DisplayName || u.full_name || uname,
-                        email: u.EmailAddress || u.email || (uname.toLowerCase() + '@windowasia.com'),
-                        department: u.Department || u.department || 'Active Directory',
+                        email: null, // Email belongs exclusively to Microsoft 365
+                        department: ouDept, // Strictly OU, null if not in an OU
                         employee_id: u.EmployeeID || u.employee_id || null,
+                        telegram_id: u.Pager || u.pager || null,
+                        distinguished_name: dn || null,
                         is_active: u.Enabled !== undefined ? !!u.Enabled : (u.is_active !== undefined ? !!u.is_active : true),
                         group_name: 'Domain Users'
                     };

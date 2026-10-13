@@ -144,7 +144,6 @@ class M365GraphConnector(BaseConnector):
 
             is_active = bool(u.get("accountEnabled", True))
             display_name = (u.get("displayName") or username).strip()
-            dept = u.get("department") or (u.get("jobTitle") or "M365 User")
             
             # Determine group designation
             group_name = "Mailbox" if u.get("mail") else "Entra ID"
@@ -152,8 +151,8 @@ class M365GraphConnector(BaseConnector):
             accounts.append({
                 "username": username,
                 "full_name": display_name,
-                "email": raw_email or (f"{username}@windowasia.com" if not "@" in raw_upn else raw_upn),
-                "department": dept,
+                "email": raw_email or (raw_upn if "@" in raw_upn else None),
+                "department": None,
                 "employee_id": None,
                 "group_name": group_name,
                 "is_active": is_active,

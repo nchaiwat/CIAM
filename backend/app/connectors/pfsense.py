@@ -159,14 +159,13 @@ class PfSenseConnector(BaseConnector):
                                     continue
                                 is_act = it.get("is_active") if "is_active" in it else not it.get("disabled", False)
                                 f_name = it.get("full_name") or it.get("descr") or it.get("name") or u_name
-                                dept = it.get("department") or ("FreeRADIUS VPN" if "radius" in str(it).lower() else "Firewall Local")
                                 grp = it.get("group_name") or it.get("scope") or "VPN_USER"
                                 norm_accounts.append({
                                     "username": u_name,
                                     "full_name": f_name,
                                     "is_active": is_act,
-                                    "email": it.get("email"),
-                                    "department": dept,
+                                    "email": None,
+                                    "department": None,
                                     "group_name": grp
                                 })
                             return {

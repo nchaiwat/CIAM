@@ -659,6 +659,44 @@ def init_db():
             db.add(vpn_setting)
             logger.info("Seeded corporate_vpn_networks setting")
 
+        # 5. Clean up illegitimate emails and non-OU departments in MasterIdentities
+        # Rule 1: Email belongs EXCLUSIVELY to users with an active Microsoft 365 mapping
+        # Rule 2: Department belongs EXCLUSIVELY to Active Directory accounts with a valid OU
+        m365_app_row = db.query(ConnectedApplication).filter(func.lower(ConnectedApplication.app_code) == "m365").first()
+        m365_ident_ids = set()
+        if m365_app_row:
+            m_rows = db.query(AppAccountMapping).filter(
+                AppAccountMapping.application_id == m365_app_row.id,
+                AppAccountMapping.is_active_in_app == True
+            ).all()
+            m365_ident_ids = {m.identity_id for m in m_rows if m.identity_id}
+
+        junk_depts = [
+            "openvpn", "captive portal", "m365 user", "radius", "firewall",
+            "active directory", "wa shop", "general", "employee", "user", "ç", ""
+        ]
+        cleared_emails = 0
+        cleared_depts = 0
+        all_idents = db.query(MasterIdentity).all()
+        for ident in all_idents:
+            # Clear email if user does not have active M365 account
+            if ident.id not in m365_ident_ids and ident.email:
+                ident.email = None
+                cleared_emails += 1
+
+            # Clear department if user is not in AD or department is a surrogate/junk string
+            d_val = (ident.department or "").strip().lower()
+            if not ident.is_active_in_ad and not ident.ad_guid:
+                if ident.department:
+                    ident.department = None
+                    cleared_depts += 1
+            elif any(j in d_val for j in junk_depts) or d_val in ["ทั่วไป", "none", "n/a", "-"]:
+                ident.department = None
+                cleared_depts += 1
+
+        if cleared_emails > 0 or cleared_depts > 0:
+            logger.info("Cleaned up %d non-M365 emails and %d non-OU departments", cleared_emails, cleared_depts)
+
         db.commit()
         logger.info("Database initialization and seeding complete with real data!")
     except Exception as e:

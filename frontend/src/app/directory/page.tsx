@@ -1099,9 +1099,13 @@ export default function DirectoryPage() {
 
                     {/* Department */}
                     <td className="py-2.5 px-4 text-xs font-semibold text-slate-700">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-800 text-xs">
-                        {user.department || "ทั่วไป"}
-                      </span>
+                      {user.department ? (
+                        <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-800 text-xs font-medium">
+                          {user.department}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-normal">-</span>
+                      )}
                     </td>
 
                     {/* AD Status (Point 1: Green circle if active in AD, Gray circle if inactive) */}
@@ -2278,7 +2282,7 @@ export default function DirectoryPage() {
                             <div className="text-[11px] text-slate-600 flex items-center space-x-2">
                               <span className="font-mono text-indigo-700">{cand.username}</span>
                               <span>•</span>
-                              <span>{cand.department || "ทั่วไป"}</span>
+                              <span>{cand.department || "-"}</span>
                             </div>
                           </div>
                           {linkTargetIdentityId === cand.id && (
