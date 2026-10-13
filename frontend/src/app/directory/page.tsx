@@ -195,6 +195,7 @@ export default function DirectoryPage() {
   const [localAccountError, setLocalAccountError] = useState<string | null>(null);
   const [localAccountResult, setLocalAccountResult] = useState<LocalPortalAccountResponse | null>(null);
   const [copiedPassword, setCopiedPassword] = useState(false);
+  const [localMustChangePassword, setLocalMustChangePassword] = useState(true);
 
   // Assign Spoke App to Existing User State
   const [isAssignAppOpen, setIsAssignAppOpen] = useState(false);
@@ -745,6 +746,7 @@ export default function DirectoryPage() {
     setLocalAccountError(null);
     setLocalAccountResult(null);
     setCopiedPassword(false);
+    setLocalMustChangePassword(true);
     setIsLocalAccountModalOpen(true);
   };
 
@@ -758,6 +760,7 @@ export default function DirectoryPage() {
       const res = await ciamApi.createLocalPortalAccount(localAccountTarget.id, {
         password: localPassword.trim() || undefined,
         notes: localNotes.trim() || undefined,
+        must_change_password: localMustChangePassword,
       });
       setLocalAccountResult(res);
       await fetchUsers();
@@ -2695,14 +2698,34 @@ export default function DirectoryPage() {
                   </label>
                   <input
                     type="text"
+                    maxLength={10}
                     value={localPassword}
                     onChange={(e) => setLocalPassword(e.target.value)}
                     placeholder="ปล่อยว่างไว้เพื่อให้ระบบสุ่มรหัสผ่านให้อัตโนมัติ"
                     className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-mono focus:outline-none focus:border-emerald-600"
                   />
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    หากไม่ระบุ ระบบจะสุ่มรหัสผ่านที่ปลอดภัย เช่น <span className="font-mono font-bold">Wa@xxxxxxxx</span>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                    หากไม่ระบุ ระบบจะสุ่มรหัสผ่านตามนโยบายอัตโนมัติ (8-10 ตัวอักษร: ตัวพิมพ์ใหญ่, ตัวพิมพ์เล็ก, ตัวเลข และอักขระพิเศษ)
                   </p>
+                </div>
+
+                <div className="p-3 bg-emerald-50/70 border border-emerald-300 rounded-md">
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={localMustChangePassword}
+                      onChange={(e) => setLocalMustChangePassword(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 block">
+                        บังคับให้ผู้ใช้เปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก
+                      </span>
+                      <span className="text-[11px] text-slate-600 block leading-tight mt-0.5">
+                        ระบบจะแสดงหน้าต่างให้ตั้งรหัสผ่านใหม่ (8-10 ตัวอักษร, พิมพ์ใหญ่, เล็ก, ตัวเลข, อักขระพิเศษ) ทันทีที่ล็อกอินเข้าสู่ App Portal
+                      </span>
+                    </div>
+                  </label>
                 </div>
 
                 <div>

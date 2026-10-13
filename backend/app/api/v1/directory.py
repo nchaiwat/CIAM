@@ -982,7 +982,7 @@ def create_or_update_local_portal_account(
     """
     import secrets
     from sqlalchemy import func
-    from app.core.security import hash_password
+    from app.core.security import hash_password, validate_password_complexity, generate_compliant_password
 
     identity = db.query(MasterIdentity).filter_by(id=identity_id).first()
     if not identity:
@@ -990,9 +990,13 @@ def create_or_update_local_portal_account(
 
     now = datetime.now(timezone.utc)
     raw_password = (payload.password or "").strip()
-    if not raw_password:
-        # Generate clean readable temporary password e.g. Wa@2026xxxx
-        raw_password = f"Wa@{secrets.token_hex(4)}"
+    if raw_password:
+        pwd_err = validate_password_complexity(raw_password)
+        if pwd_err:
+            raise HTTPException(status_code=400, detail=pwd_err)
+    else:
+        # Generate 10-char password strictly conforming to Enterprise Complexity Policy
+        raw_password = generate_compliant_password()
 
     hashed_pwd = hash_password(raw_password)
 
@@ -1003,6 +1007,7 @@ def create_or_update_local_portal_account(
 
     email_val = identity.email or f"{identity.username.lower()}@ciam.local"
     full_name_val = identity.full_name or identity.username
+    must_change = bool(payload.must_change_password)
 
     if not admin_user:
         admin_user = AdminUser(
@@ -1012,7 +1017,8 @@ def create_or_update_local_portal_account(
             hashed_password=hashed_pwd,
             role="PORTAL_USER",
             is_active=True,
-            failed_login_attempts=0
+            failed_login_attempts=0,
+            must_change_password=must_change
         )
         db.add(admin_user)
     else:
@@ -1020,6 +1026,7 @@ def create_or_update_local_portal_account(
         admin_user.is_active = True
         admin_user.failed_login_attempts = 0
         admin_user.locked_until = None
+        admin_user.must_change_password = must_change
         if admin_user.role not in ["SUPER_ADMIN", "ADMIN"]:
             admin_user.role = "PORTAL_USER"
 
@@ -1062,7 +1069,8 @@ def create_or_update_local_portal_account(
         full_name=identity.full_name,
         temporary_password=raw_password,
         role=admin_user.role,
-        is_approved_exception=True
+        is_approved_exception=True,
+        must_change_password=bool(admin_user.must_change_password)
     )
 
 

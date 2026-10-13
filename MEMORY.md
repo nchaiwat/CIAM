@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-10-13  
-**Version:** 2.2.0 (Redesigned Split-Screen Enterprise SSO Login Portal with Window Asia Corporate Identity)  
+**Version:** 2.3.0 (Enforce AD Password Button Hiding, Enterprise Complexity Policy for Local Accounts 8-10 chars, and Force Password Change on First Login)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -203,6 +203,24 @@ FRONTEND_URL=http://localhost:3000
 * **Strict Authorize-based App Filtering ([oauth.py](file:///d:/Python/Central-IAM/backend/app/api/v1/oauth.py)):**
   * `GET /api/v1/oauth/portal/apps`: Queries `AppAccountMapping` for the logged-in user and returns **only** active authorized applications (unauthorized apps are completely hidden). Admins view all active SSO apps.
   * `POST /api/v1/oauth/portal/launch`: Enforces authorization check on launch and issues SSO token under the employee's genuine username instead of static admin.
+
+### 4.9 Password Management & Security Policies (Version 2.3.0)
+* **Active Directory User Password Protection:**
+  * Active Directory users authenticated via Windows Domain Controller (`is_ad_user: true`) **do not have the change password button 🔑** on the Employee Portal Header (`/portal`).
+  * AD passwords cannot and should not be changed via Central IAM web interface; employees must change domain credentials on domain joined computers via `Ctrl + Alt + Del` or through IT Helpdesk.
+* **Enterprise Password Complexity Policy (Local Accounts):**
+  * Local Accounts created for non-AD users or third-party contractors must strictly adhere to the following enterprise complexity rules (enforced at both Backend and Client-side):
+    - **Length:** Strict 8-10 characters.
+    - **Uppercase Letter:** At least 1 character (`A-Z`).
+    - **Lowercase Letter:** At least 1 character (`a-z`).
+    - **Digit:** At least 1 character (`0-9`).
+    - **Special Character:** At least 1 character (`!@#$%^&*()_+-=[]{}|;:,.<>?`).
+    - **Confirmation:** Must match confirmation field.
+* **Forced Password Change on First Login (`must_change_password`):**
+  * When IT Administrators create or reset a Local Account in `/directory`, the option "บังคับให้ผู้ใช้เปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก" is enabled by default.
+  * When a flagged user signs into Central IAM, `/portal` automatically displays a blocking Modal requiring an immediate password change before granting access.
+* **Spoke Direct Access Clarification:**
+  * Local Accounts created on Central IAM **cannot log in directly to spoke applications** (e.g. IRM) using traditional login forms because spokes never receive or store plaintext passwords. Users must always authenticate via Central IAM SSO (`/portal`) to access connected spokes.
 
 ---
 

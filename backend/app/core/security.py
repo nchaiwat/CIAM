@@ -57,4 +57,45 @@ def get_public_base_url(request: Any) -> str:
         return settings.FRONTEND_URL.rstrip("/")
 
     return str(getattr(request, "base_url", "http://localhost:8001")).rstrip("/")
+import re
+import random
+import string
+
+def validate_password_complexity(password: str) -> Optional[str]:
+    """
+    Validate enterprise password complexity:
+    - Length between 8 and 10 characters ('ยาว 8-10 ตัวอักษร')
+    - Contains at least one uppercase letter (A-Z)
+    - Contains at least one lowercase letter (a-z)
+    - Contains at least one digit (0-9)
+    - Contains at least one special character (!@#$%^&*...)
+    Returns None if valid, or a descriptive error message in Thai if invalid.
+    """
+    if not password:
+        return "กรุณาระบุรหัสผ่าน"
+    pwd = password.strip()
+    if len(pwd) < 8 or len(pwd) > 10:
+        return f"รหัสผ่านต้องมีความยาวระหว่าง 8 ถึง 10 ตัวอักษร (ปัจจุบัน {len(pwd)} ตัวอักษร)"
+    if not re.search(r"[A-Z]", pwd):
+        return "รหัสผ่านต้องมีตัวอักษรพิมพ์ใหญ่ (A-Z) อย่างน้อย 1 ตัว"
+    if not re.search(r"[a-z]", pwd):
+        return "รหัสผ่านต้องมีตัวอักษรพิมพ์เล็ก (a-z) อย่างน้อย 1 ตัว"
+    if not re.search(r"[0-9]", pwd):
+        return "รหัสผ่านต้องมีตัวเลข (0-9) อย่างน้อย 1 ตัว"
+    if not re.search(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]", pwd):
+        return "รหัสผ่านต้องมีอักขระพิเศษ (!@#$%^&*...) อย่างน้อย 1 ตัว"
+    return None
+
+def generate_compliant_password() -> str:
+    """Generate a 10-character password strictly satisfying the complexity policy."""
+    upper = random.choice(string.ascii_uppercase)
+    lower = random.choice(string.ascii_lowercase)
+    digit1 = random.choice(string.digits)
+    digit2 = random.choice(string.digits)
+    special = random.choice("!@#$%&*?_-")
+    # remaining 5 characters from mixed alphabet and digits
+    remaining = random.choices(string.ascii_letters + string.digits, k=5)
+    chars = [upper, lower, digit1, digit2, special] + remaining
+    random.shuffle(chars)
+    return "".join(chars)
 

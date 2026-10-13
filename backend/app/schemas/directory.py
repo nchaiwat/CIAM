@@ -136,6 +136,7 @@ class UserActivateResponse(BaseModel):
 class LocalPortalAccountRequest(BaseModel):
     password: Optional[str] = None
     notes: Optional[str] = None
+    must_change_password: bool = True
 
 class LocalPortalAccountResponse(BaseModel):
     status: str
@@ -145,5 +146,6 @@ class LocalPortalAccountResponse(BaseModel):
     temporary_password: str
     role: str
     is_approved_exception: bool
+    must_change_password: bool = True
 
 

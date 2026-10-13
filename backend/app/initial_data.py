@@ -31,6 +31,8 @@ def init_db():
                 conn.execute(text("ALTER TABLE central_iam_admins ADD COLUMN locked_until TIMESTAMP;"))
             if "telegram_id" not in columns:
                 conn.execute(text("ALTER TABLE central_iam_admins ADD COLUMN telegram_id VARCHAR(100);"))
+            if "must_change_password" not in columns:
+                conn.execute(text("ALTER TABLE central_iam_admins ADD COLUMN must_change_password BOOLEAN DEFAULT FALSE;"))
 
             # Safe auto-migration for master_identities
             identity_columns = [c["name"] for c in inspector.get_columns("master_identities")]

@@ -285,7 +285,6 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
             # Ensure AdminUser record exists for access token & profile resolution
             try:
                 if not user:
-                    from app.models.identity import MasterIdentity
                     from app.core.security import hash_password
                     import secrets
 
@@ -412,11 +411,25 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
     ))
     db.commit()
 
+    user_out = AdminUserOut.model_validate(user)
+    ident_login = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == user.username.lower()).first()
+    if user.username.lower() in ["admin", "superadmin"]:
+        user_out.is_ad_user = False
+    elif ident_login and ident_login.exception_type == "LOCAL_ACCOUNT":
+        user_out.is_ad_user = False
+    elif auth_mode in ["ACTIVE_DIRECTORY_AUTH", "ACTIVE_DIRECTORY_LDAP"]:
+        user_out.is_ad_user = True
+    elif ident_login:
+        user_out.is_ad_user = bool(ident_login.is_active_in_ad)
+    else:
+        user_out.is_ad_user = False
+    user_out.must_change_password = bool(getattr(user, "must_change_password", False))
+
     token = create_access_token(subject=user.username)
     return TokenResponse(
         access_token=token,
         token_type="bearer",
-        user=AdminUserOut.model_validate(user)
+        user=user_out
     )
 
 @router.get("/me", response_model=AdminUserOut)
@@ -427,6 +440,19 @@ def get_current_user_profile(
     """Return currently logged in user profile with MasterIdentity details."""
     out = AdminUserOut.model_validate(current_user)
     ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == current_user.username.lower()).first()
+
+    # Determine whether user is AD user or Local account
+    if current_user.username.lower() in ["admin", "superadmin"]:
+        out.is_ad_user = False
+    elif ident and ident.exception_type == "LOCAL_ACCOUNT":
+        out.is_ad_user = False
+    elif ident:
+        out.is_ad_user = bool(ident.is_active_in_ad and ident.ad_guid)
+    else:
+        out.is_ad_user = False
+
+    out.must_change_password = bool(getattr(current_user, "must_change_password", False))
+
     if ident:
         out.department = ident.department
         out.employee_id = ident.employee_id
@@ -452,9 +478,12 @@ def update_current_user_profile(
         t_id = payload.telegram_id.strip()
         current_user.telegram_id = t_id if t_id else None
     if payload.new_password:
-        if len(payload.new_password) < 6:
-            raise HTTPException(status_code=400, detail="รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร")
+        from app.core.security import validate_password_complexity
+        pwd_err = validate_password_complexity(payload.new_password)
+        if pwd_err:
+            raise HTTPException(status_code=400, detail=pwd_err)
         current_user.hashed_password = hash_password(payload.new_password)
+        current_user.must_change_password = False
 
     # Also sync to MasterIdentity if exists
     ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == current_user.username.lower()).first()

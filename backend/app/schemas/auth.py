@@ -23,6 +23,8 @@ class AdminUserOut(BaseModel):
     department: Optional[str] = None
     employee_id: Optional[str] = None
     telegram_id: Optional[str] = None
+    is_ad_user: bool = True
+    must_change_password: bool = False
 
     model_config = {"from_attributes": True}
 

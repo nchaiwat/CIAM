@@ -9,6 +9,37 @@
 
 ---
 
+## 0.0000000000000000000000000 ซ่อนปุ่มเปลี่ยน Password สำหรับ AD, บังคับใช้นโยบายรหัสผ่าน Enterprise สำหรับ Local Account (8-10 ตัวอักษร), และระบบบังคับเปลี่ยนรหัสผ่านครั้งแรก (13 ต.ค. 2026)
+### 1. รายละเอียดการทำงาน (AD Password Protection & Enterprise Local Account Policy):
+1. **ซ่อนปุ่มเปลี่ยน Password สำหรับบัญชี AD บน Employee Portal (`/portal`):**
+   - ตรวจสอบชนิดบัญชีผ่าน API `/auth/me` และ `/auth/login` โดยเพิ่มฟิลด์ `is_ad_user: bool`
+   - หากผู้ใช้เป็น Active Directory User (`is_ad_user === true`) จะ**ไม่แสดงปุ่มรูปกุญแจ 🔑** บนแถบ Header ของ Employee App Portal เพื่อป้องกันความสับสน เนื่องจากรหัสผ่าน AD ต้องเปลี่ยนผ่าน Windows Domain Computer (`Ctrl + Alt + Del`) เท่านั้น
+   - หากเป็น Local Account หรือ Admin ทั่วไป (`is_ad_user === false`) จะมีปุ่มรูปกุญแจ 🔑 ให้เปลี่ยนรหัสผ่านได้ตามปกติ
+2. **นโยบายความปลอดภัยรหัสผ่าน Enterprise Password Complexity Policy (สำหรับ Local Account):**
+   - ปรับใช้ทั้งใน Backend (`validate_password_complexity` ใน `backend/app/core/security.py`) และ Frontend Client-side validation:
+     - **ความยาว 8-10 ตัวอักษร** (Strict Enterprise Length 8-10 characters)
+     - มีตัวอักษรพิมพ์ใหญ่ (A-Z) อย่างน้อย 1 ตัว
+     - มีตัวอักษรพิมพ์เล็ก (a-z) อย่างน้อย 1 ตัว
+     - มีตัวเลข (0-9) อย่างน้อย 1 ตัว
+     - มีอักขระพิเศษ (`!@#$%^&*()_+-=[]{}|;:,.<>?`) อย่างน้อย 1 ตัว
+     - ตรวจสอบการกรอกรหัสผ่านใหม่ตรงกัน 2 ครั้ง
+3. **ระบบบังคับเปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก (`must_change_password`):**
+   - เพิ่มคอลัมน์ `must_change_password: bool` ในโมเดล `AdminUser` พร้อมระบบ Auto-migration ใน `initial_data.py`
+   - ในหน้าทะเบียนผู้ใช้ (`/directory`): เพิ่ม Checkbox "บังคับให้ผู้ใช้เปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก" ทั้งตอนสร้างบัญชีใหม่และรีเซ็ตรหัสผ่าน
+   - เมื่อผู้ใช้ที่มีสถานะ `must_change_password === true` ล็อกอินเข้าสู่ระบบ:
+     - หน้า Employee App Portal (`/portal`) จะเปิด Modal บังคับเปลี่ยนรหัสผ่านทันทีอัตโนมัติ
+     - ซ่อนปุ่มปิด/ยกเลิก บังคับให้ผู้ใช้ต้องตั้งรหัสผ่านใหม่ตาม Enterprise Complexity Policy ก่อนจึงจะสามารถใช้งานระบบได้
+     - เมื่อเปลี่ยนรหัสผ่านสำเร็จ ระบบจะรีเซ็ตสถานะ `must_change_password` เป็น `false` โดยอัตโนมัติ
+4. **ข้อชี้แจงการเข้าใช้งานระบบ Spoke โดยตรง (Direct Spoke Login):**
+   - Local Account ที่สร้างบน Central IAM เพื่อไปใช้งาน Spoke App (เช่น IRM) **ไม่สามารถล็อกอินตรงผ่าน Form Login ดั้งเดิมของระบบ Spoke ได้** เนื่องจาก Spoke App ไม่ได้รับ Plaintext Password ไปบันทึกในฐานข้อมูลตนเอง (Zero-Password-Spoke Architecture)
+   - ผู้ใช้งานกลุ่มนี้ต้องล็อกอินผ่าน Central IAM SSO (`/portal`) แล้วคลิกเข้าสู่ Spoke Application เท่านั้น ซึ่งปลอดภัยและเป็นไปตามหลักการ Single Sign-On มาตรฐานองค์กร
+
+### 2. ผลการตรวจสอบคุณภาพ (Quality Assurance):
+- Backend pytest: ผ่าน 49/49 tests (100%)
+- Frontend TypeScript `npx tsc --noEmit`: ผ่าน 0 errors (100%)
+
+---
+
 ## 0.000000000000000000000000 ออกแบบหน้า Login SSO ใหม่แบบ Split-Screen Enterprise Layout ด้วย Official Logo ตรงตาม Brand Identity (13 ต.ค. 2026)
 ### 1. รายละเอียดการทำงาน (Enterprise SSO Login Redesign & Authentic Branding):
 1. **นำเข้าและใช้งาน Official Logo Asset โดยตรง (Brand Identity 100%):**

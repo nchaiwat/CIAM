@@ -27,6 +27,7 @@ import {
   Activity,
   Search,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { api, PortalAppItem, AdminUserOut } from "@/lib/api";
 
@@ -148,6 +149,9 @@ export default function PortalPage() {
       .then((me) => {
         setCurrentUser(me);
         localStorage.setItem("ciam_user", JSON.stringify(me));
+        if (me.is_ad_user === false && me.must_change_password === true) {
+          setIsPasswordModalOpen(true);
+        }
       })
       .catch(() => {});
 
@@ -177,10 +181,30 @@ export default function PortalPage() {
     }
   };
 
+  const validatePasswordComplexityClient = (pwd: string): string | null => {
+    if (pwd.length < 8 || pwd.length > 10) {
+      return `รหัสผ่านต้องมีความยาวระหว่าง 8 ถึง 10 ตัวอักษร (ปัจจุบัน ${pwd.length} ตัวอักษร)`;
+    }
+    if (!/[A-Z]/.test(pwd)) {
+      return "รหัสผ่านต้องมีตัวอักษรพิมพ์ใหญ่ (A-Z) อย่างน้อย 1 ตัว";
+    }
+    if (!/[a-z]/.test(pwd)) {
+      return "รหัสผ่านต้องมีตัวอักษรพิมพ์เล็ก (a-z) อย่างน้อย 1 ตัว";
+    }
+    if (!/[0-9]/.test(pwd)) {
+      return "รหัสผ่านต้องมีตัวเลข (0-9) อย่างน้อย 1 ตัว";
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]/.test(pwd)) {
+      return "รหัสผ่านต้องมีอักขระพิเศษ (!@#$%^&*...) อย่างน้อย 1 ตัว";
+    }
+    return null;
+  };
+
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 6) {
-      setPasswordError("รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร");
+    const complexityErr = validatePasswordComplexityClient(newPassword);
+    if (complexityErr) {
+      setPasswordError(complexityErr);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -193,6 +217,11 @@ export default function PortalPage() {
       setPasswordError(null);
       await api.updateAdminProfile({ new_password: newPassword });
       setPasswordSuccess(true);
+      if (currentUser) {
+        const updated = { ...currentUser, must_change_password: false };
+        setCurrentUser(updated);
+        localStorage.setItem("ciam_user", JSON.stringify(updated));
+      }
       setTimeout(() => {
         setIsPasswordModalOpen(false);
         setPasswordSuccess(false);
@@ -379,21 +408,25 @@ export default function PortalPage() {
               </div>
             </div>
 
-            <div className="w-px h-4 bg-sky-200" />
-
-            <button
-              onClick={() => {
-                setNewPassword("");
-                setConfirmPassword("");
-                setPasswordError(null);
-                setPasswordSuccess(false);
-                setIsPasswordModalOpen(true);
-              }}
-              className="p-1 rounded-full text-slate-500 hover:text-blue-600 hover:bg-white transition-colors cursor-pointer"
-              title="เปลี่ยนรหัสผ่าน Single Sign-On"
-            >
-              <Key className="w-3.5 h-3.5" />
-            </button>
+            {/* Show Change Password button ONLY for Local non-AD Accounts */}
+            {currentUser && currentUser.is_ad_user === false && (
+              <>
+                <div className="w-px h-4 bg-sky-200" />
+                <button
+                  onClick={() => {
+                    setNewPassword("");
+                    setConfirmPassword("");
+                    setPasswordError(null);
+                    setPasswordSuccess(false);
+                    setIsPasswordModalOpen(true);
+                  }}
+                  className="p-1 rounded-full text-slate-500 hover:text-blue-600 hover:bg-white transition-colors cursor-pointer"
+                  title="เปลี่ยนรหัสผ่าน Single Sign-On (Local Account)"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
 
             <button
               onClick={handleLogout}
@@ -737,34 +770,54 @@ export default function PortalPage() {
         <p>© 2026 บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) • Central Single Sign-On Portal</p>
       </footer>
 
-      {/* ─── Password Change Modal ────────────────────────────────────────── */}
+      {/* ─── Password Change Modal (Local Account Only) ────────────────────────── */}
       {isPasswordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white max-w-sm w-full p-6 space-y-4 rounded-xl border border-slate-200 shadow-2xl relative">
+          <div className="bg-white max-w-md w-full p-6 space-y-4 rounded-2xl border border-slate-200 shadow-2xl relative text-left">
             <div className="flex items-start justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center space-x-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
                   <Key className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">เปลี่ยนรหัสผ่าน Single Sign-On</h3>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    เปลี่ยนรหัสผ่าน Single Sign-On
+                    <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">
+                      Local Account
+                    </span>
+                  </h3>
                   <p className="text-[11px] text-slate-500 font-medium">
-                    รหัสผ่านนี้ใช้ล็อกอินเข้า App Portal ทุกครั้ง
+                    รหัสผ่านนี้ใช้ล็อกอินเข้า Central IAM App Portal
                   </p>
                 </div>
               </div>
 
-              <button
-                onClick={() => setIsPasswordModalOpen(false)}
-                className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center font-bold text-xs"
-              >
-                ✕
-              </button>
+              {!currentUser?.must_change_password && (
+                <button
+                  onClick={() => setIsPasswordModalOpen(false)}
+                  className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center font-bold text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
             </div>
 
+            {/* Force Password Change Warning Banner */}
+            {currentUser?.must_change_password && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">จำเป็นต้องเปลี่ยนรหัสผ่าน:</span>
+                  <p className="text-[11px] text-amber-800 mt-0.5 leading-snug">
+                    ผู้ดูแลระบบกำหนดให้คุณต้องตั้งรหัสผ่านใหม่ก่อนเข้าใช้งานระบบงาน App Portal
+                  </p>
+                </div>
+              </div>
+            )}
+
             {passwordSuccess ? (
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs space-y-2 text-center">
-                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+              <div className="p-5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs space-y-2 text-center">
+                <CheckCircle2 className="w-9 h-9 text-emerald-600 mx-auto" />
                 <div className="font-bold text-sm text-emerald-900">เปลี่ยนรหัสผ่านสำเร็จ!</div>
                 <p className="text-slate-600 font-medium">ระบบได้อัปเดตรหัสผ่านกลางของคุณเรียบร้อยแล้ว</p>
               </div>
@@ -776,23 +829,46 @@ export default function PortalPage() {
                   </div>
                 )}
 
+                {/* Password Complexity Checklist Guide */}
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] space-y-1.5">
+                  <div className="font-bold text-slate-700">ข้อกำหนดความปลอดภัยของรหัสผ่าน:</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px]">
+                    <div className={`flex items-center gap-1.5 ${newPassword.length >= 8 && newPassword.length <= 10 ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
+                      <span>• ความยาว 8 - 10 ตัวอักษร</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(newPassword) ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
+                      <span>• ตัวพิมพ์ใหญ่ (A-Z) อย่างน้อย 1 ตัว</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${/[a-z]/.test(newPassword) ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
+                      <span>• ตัวพิมพ์เล็ก (a-z) อย่างน้อย 1 ตัว</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${/[0-9]/.test(newPassword) ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
+                      <span>• ตัวเลข (0-9) อย่างน้อย 1 ตัว</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 sm:col-span-2 ${/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]/.test(newPassword) ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
+                      <span>• อักขระพิเศษ (!@#$%^&*...) อย่างน้อย 1 ตัว</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร) *
+                    รหัสผ่านใหม่ (ความยาว 8-10 ตัวอักษร) *
                   </label>
                   <div className="relative">
                     <input
                       type={showPassword ? "text" : "password"}
                       required
+                      maxLength={10}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="กรอกรหัสผ่านใหม่"
+                      placeholder="กรอกรหัสผ่านใหม่ (8-10 ตัวอักษร)"
                       className="w-full px-3 py-2 pr-9 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-blue-600"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -806,25 +882,28 @@ export default function PortalPage() {
                   <input
                     type={showPassword ? "text" : "password"}
                     required
+                    maxLength={10}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="กรอกรหัสผ่านใหม่อีกครั้ง"
+                    placeholder="กรอกรหัสผ่านใหม่อีกครั้งให้ตรงกัน"
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-blue-600"
                   />
                 </div>
 
                 <div className="pt-2 border-t border-slate-200 flex items-center justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsPasswordModalOpen(false)}
-                    className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
-                  >
-                    ยกเลิก
-                  </button>
+                  {!currentUser?.must_change_password && (
+                    <button
+                      type="button"
+                      onClick={() => setIsPasswordModalOpen(false)}
+                      className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                    >
+                      ยกเลิก
+                    </button>
+                  )}
                   <button
                     type="submit"
                     disabled={passwordSaving}
-                    className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs disabled:opacity-50"
+                    className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs disabled:opacity-50 cursor-pointer"
                   >
                     {passwordSaving ? (
                       <>

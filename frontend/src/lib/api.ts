@@ -128,6 +128,7 @@ export interface LocalPortalAccountResponse {
   temporary_password: string;
   role: string;
   is_approved_exception: boolean;
+  must_change_password?: boolean;
 }
 
 export interface UserListItem {
@@ -428,7 +429,7 @@ export const ciamApi = {
 
   createLocalPortalAccount: (
     identityId: number,
-    payload: { password?: string; notes?: string }
+    payload: { password?: string; notes?: string; must_change_password?: boolean }
   ) =>
     fetchApi<LocalPortalAccountResponse>(`/directory/users/${identityId}/local-account`, {
       method: "POST",
@@ -850,6 +851,8 @@ export interface AdminUserOut {
   department?: string | null;
   employee_id?: string | null;
   telegram_id?: string | null;
+  is_ad_user?: boolean;
+  must_change_password?: boolean;
 }
 
 export interface AdminTokenResponse {

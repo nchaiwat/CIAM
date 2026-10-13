@@ -116,8 +116,8 @@ def test_non_ad_local_portal_account_lifecycle():
         assert "irm" in app_codes
         assert "qms" not in app_codes
 
-        # 7. Non-AD User changes their password via profile endpoint
-        new_pwd = "NewSecurePass2026!"
+        # 7. Non-AD User changes their password via profile endpoint (Enterprise 8-10 chars policy)
+        new_pwd = "Wa@2026Ab"
         change_res = client.put(
             "/api/v1/auth/profile",
             json={"new_password": new_pwd},
