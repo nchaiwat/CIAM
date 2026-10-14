@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
-**Last Updated:** 2026-10-13  
-**Version:** 2.3.0 (Enforce AD Password Button Hiding, Enterprise Complexity Policy for Local Accounts 8-10 chars, and Force Password Change on First Login)  
+**Last Updated:** 2026-10-14  
+**Version:** 2.3.1 (Fix AD Inactive Overwrite by Spokes, Support Users TC OU, and Sanitize Administrator Role from Department)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -618,6 +618,24 @@ FRONTEND_URL=http://localhost:3000
 ### 18.3 Minimalist Header & Spoke Settings Clean-up
 * นำ Pill `[ ⬡ Central IAM ]` บนแถบ Header ด้านบนสุดออก เพื่อความสะอาดตา
 * นำปุ่มกำหนดเวลาซิงก์และตัวเลือกเรียงตามลำดับในหน้า `/applications` ออก (ย้ายไปรวมอยู่ที่หน้า Settings)
+
+---
+
+## 19. AD Authority Integrity & Department Sanitation (Version 2.3.1)
+
+### 19.1 Single Source of Truth for Active Directory Status
+* **ปัญหาเดิม:** เมื่อผู้ใช้ถูกระงับสิทธิ์ใน Active Directory (AD Disable) เช่น `Chanpen.K` แต่ยังคงมีบัญชีค้างอยู่ใน Spoke Application (เช่น pfSense `PFSENSE_HO`), ฟังก์ชัน `persist_spoke_inventory` ใน `scheduler.py` และ Auto-heal เดิมใน `initial_data.py` ได้เขียนทับ `is_active_in_ad = True` อัตโนมัติเนื่องจากชื่อมี Format พนักงานองค์กร (`Firstname.L`) ทำให้ระบบ Central IAM ไม่ตรวจจับ Ghost Account (บัญชีผี/ตกค้าง)
+* **การแก้ไข:** 
+  - ตัดสิทธิ์ Inbound Spoke Poller (`scheduler.py`) และตัด Routine Auto-heal ใน `initial_data.py` โดยเด็ดขาด ห้ามระบบลูกหรือ Spoke อื่นเปลี่ยนแปลงค่า `identity.is_active_in_ad`
+  - สถานะ `is_active_in_ad` ต้องมาจาก Active Directory Connector (`is_ad_item = True`) เท่านั้น
+  - เมื่อผู้ใช้ถูกปิดใน AD แต่ยังมีบัญชีใน Spoke ระบบจะจัดสถานะเป็น `DISCREPANCY` (บัญชีผี / ตกค้าง) ทันทีอย่างถูกต้องตามมาตรฐาน Identity Governance
+
+### 19.2 รองรับโครงสร้าง OU `Users TC` และกรอง Role "Administrator" ออกจากแผนก
+* **ปัญหาเดิม:** โครงสร้าง AD ของ Window Asia มีทั้ง OU `Users WA` (สำนักงานใหญ่/โรงงานหลัก) และ `Users TC` (ไซต์ TC) แต่ฟังก์ชัน `extract_ou_department` และ `ciam-extension.js` รองรับเฉพาะ `users wa` ส่งผลให้ผู้ใช้ใต้ `Users TC` ไม่ถูกสกัด Leaf OU อย่างถูกต้อง และหาก AD มีการกรอกฟิลด์ Department เป็น `Administrator` หรือ `Admin` ระบบจะนำมาแสดงในคอลัมน์ "แผนก" ทำให้เกิดความสับสนว่าเป็นผู้ดูแลระบบ (Admin)
+* **การแก้ไข:**
+  - เพิ่มการตรวจจับ Root OU ทั้ง `users wa`, `users tc`, และ `users` ใน `extract_ou_department` (`ad_proxy.py`) และ `ciam-extension.js`
+  - เพิ่มคำว่า `administrator`, `admin`, `domain admins`, `domain users` ใน `junk_exact` และ `junkDepts` เพื่อป้องกันไม่ให้คำนำหน้าสิทธิ์ระบบหลุดเข้ามาเป็นชื่อแผนก
+  - อัปเดต `corporate_depts` และ `corporate_keywords` ใน `directory.py` และ `scheduler.py` โดยเปลี่ยนจาก `Administrator` เป็น `Administration` (ธุรการ) เพื่อความถูกต้องตามหลักผังองค์กร
 
 
 

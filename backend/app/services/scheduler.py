@@ -128,7 +128,7 @@ def persist_spoke_inventory(
 
         is_ad_format = len(uname.split(".")) == 2 and len(uname.split(".")[1]) <= 2
         dept_low = (item.get("department") or "").strip().lower()
-        corporate_depts = ("sale", "sales", "purchasing", "pu", "it", "administrator", "admin", "accounting", "hr", "executive", "management", "qa", "warehouse", "m365", "office", "general")
+        corporate_depts = ("sale", "sales", "purchasing", "pu", "it", "accounting", "hr", "executive", "management", "qa", "warehouse", "m365", "office", "general", "administration", "ธุรการ")
         is_corp_dept = any(cd in dept_low for cd in corporate_depts) if dept_low else False
         is_corp = (not is_shop_acc) and (is_ad_format or is_corp_dept or ("@windowasia.com" in (item.get("email") or "").lower()))
 
@@ -168,7 +168,7 @@ def persist_spoke_inventory(
                 department=item.get("department") if is_ad_item else None,
                 employee_id=item.get("employee_id") if is_ad_item else None,
                 telegram_id=telegram_val,
-                is_active_in_ad=is_active if is_ad_item else (False if is_shop_acc else (True if is_corp else False)),
+                is_active_in_ad=is_active if is_ad_item else False,
                 created_at=now
             )
             db.add(identity)
@@ -185,8 +185,6 @@ def persist_spoke_inventory(
                     identity.telegram_id = telegram_val
             elif is_shop_acc:
                 identity.is_active_in_ad = False
-            elif is_corp and not identity.is_active_in_ad and uname.lower() != "pinyada.s":
-                identity.is_active_in_ad = True
 
             if telegram_val and not identity.telegram_id:
                 identity.telegram_id = telegram_val

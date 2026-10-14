@@ -59,8 +59,8 @@ module.exports = (app) => {
             const raw = stdout ? JSON.parse(stdout) : [];
             const rawArray = Array.isArray(raw) ? raw : [raw];
 
-            const systemOus = ['users wa', 'domain controllers', 'builtin', 'users', 'managed service accounts', 'computers'];
-            const junkDepts = ['users wa', 'domain controllers', 'builtin', 'users', 'active directory', 'general', 'ทั่วไป', 'none', 'n/a', '-'];
+            const systemOus = ['users wa', 'users tc', 'domain controllers', 'builtin', 'users', 'managed service accounts', 'computers'];
+            const junkDepts = ['users wa', 'users tc', 'domain controllers', 'builtin', 'users', 'active directory', 'general', 'ทั่วไป', 'none', 'n/a', '-', 'administrator', 'admin', 'domain admins', 'domain users'];
 
             const accounts = rawArray
                 .map(u => {
@@ -72,9 +72,11 @@ module.exports = (app) => {
                     const dn = u.DistinguishedName || u.distinguishedName || '';
                     if (dn) {
                         const ous = (dn.match(/OU=([^,]+)/gi) || []).map(o => o.replace(/^OU=/i, '').trim());
-                        const usersWaIdx = ous.findIndex(o => o.toLowerCase() === 'users wa');
-                        if (usersWaIdx > 0) {
-                            ouDept = ous[0] && !systemOus.includes(ous[0].toLowerCase()) ? ous[0] : ous[usersWaIdx - 1];
+                        const rootOuIdx = ous.findIndex(o => ['users wa', 'users tc', 'users'].includes(o.toLowerCase()));
+                        if (rootOuIdx > 0) {
+                            ouDept = ous[0] && !systemOus.includes(ous[0].toLowerCase()) 
+                                ? ous[0] 
+                                : (ous[rootOuIdx - 1] && !systemOus.includes(ous[rootOuIdx - 1].toLowerCase()) ? ous[rootOuIdx - 1] : null);
                         } else {
                             ouDept = ous.find(o => !systemOus.includes(o.toLowerCase())) || null;
                         }

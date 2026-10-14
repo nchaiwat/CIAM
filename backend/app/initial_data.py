@@ -349,14 +349,7 @@ def init_db():
         except Exception as e:
             logger.warning("Could not query offboard audit logs: %s", e)
 
-        corporate_depts = (
-            "sale", "sales", "purchasing", "pu", "it", "administrator", "admin",
-            "accounting", "hr", "executive", "management", "qa", "warehouse",
-            "m365", "m365 user", "general", "user", "office"
-        )
         corrupted_ad_identities = db.query(MasterIdentity).filter(MasterIdentity.is_active_in_ad == False).all()
-        restored_count = 0
-        now = datetime.now(timezone.utc)
         for cid in corrupted_ad_identities:
             u_low = (cid.username or "").strip().lower()
             if u_low in offboarded_usernames or u_low == "pinyada.s":
@@ -381,55 +374,6 @@ def init_db():
                         AppAccountMapping.application_id == ad_app_obj.id
                     ).delete()
                 continue
-
-            dept_low = (cid.department or "").strip().lower()
-            email_val = (cid.email or "").strip().lower()
-            has_corp_email = "@windowasia.com" in email_val
-            has_corp_dept = any(cd in dept_low for cd in corporate_depts) if dept_low else False
-            is_ad_format = len(u_low.split(".")) == 2 and len(u_low.split(".")[1]) <= 2
-            has_active_spoke = any(m.is_active_in_app for m in (cid.accounts or []))
-
-            # A true corporate employee is recognized if:
-            # 1. They have a corporate department (Sale, IT, HR, etc.) OR
-            # 2. Their username follows standard AD naming convention (Firstname.L) OR
-            # 3. They have a corporate email (@windowasia.com) OR
-            # 4. They have an AD GUID OR
-            # 5. They have active accounts in corporate spoke applications (QOL, IRM, M365, SAP B1, MTPulse)
-            is_corporate = (
-                has_corp_dept
-                or is_ad_format
-                or has_corp_email
-                or cid.ad_guid
-                or has_active_spoke
-            )
-
-            if is_corporate:
-                cid.is_active_in_ad = True
-                restored_count += 1
-                if ad_app_obj:
-                    ad_m = db.query(AppAccountMapping).filter(
-                        AppAccountMapping.application_id == ad_app_obj.id,
-                        (AppAccountMapping.identity_id == cid.id) |
-                        (func.lower(AppAccountMapping.app_username) == cid.username.lower())
-                    ).first()
-                    if ad_m:
-                        ad_m.is_active_in_app = True
-                        ad_m.last_sync_status = "IN_SYNC"
-                    else:
-                        ad_m = AppAccountMapping(
-                            identity_id=cid.id,
-                            application_id=ad_app_obj.id,
-                            app_username=cid.username,
-                            app_group_name="Domain Users",
-                            is_active_in_app=True,
-                            last_sync_status="IN_SYNC",
-                            created_at=now
-                        )
-                        db.add(ad_m)
-
-        if restored_count > 0:
-            db.flush()
-            logger.info("Auto-healed %d corporate identities to Active in AD (including QOL, M365, Sales)", restored_count)
 
         # Ensure Pinyada.S (local spoke account in IRM) is treated as Local Acc, not AD
         local_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "pinyada.s").first()

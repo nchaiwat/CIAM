@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timezone
+from sqlalchemy import func
 from fastapi.testclient import TestClient
 from app.main import app
 from app.core.database import get_db, Base
@@ -115,3 +116,87 @@ def test_spoke_agent_push_marks_identity_as_local_non_ad(client_with_auth=None):
             db.delete(spoke_app)
         db.commit()
         db.close()
+
+def test_extract_ou_department_users_tc_and_administrator():
+    """Verify Users TC root OU handling and filtering of administrator as department."""
+    from app.connectors.ad_proxy import extract_ou_department
+
+    # Direct in Users TC with Administrator fallback -> should be None
+    assert extract_ou_department("CN=Chanpen Kidchapo,OU=Users TC,DC=wa,DC=net", fallback="Administrator") is None
+    # Sub-OU Accounting under Users TC -> should be Accounting
+    assert extract_ou_department("CN=Chanpen Kidchapo,OU=Accounting,OU=Users TC,DC=wa,DC=net") == "Accounting"
+    # Sub-OU Administrator under Users TC -> should be filtered to None
+    assert extract_ou_department("CN=Chanpen Kidchapo,OU=Administrator,OU=Users TC,DC=wa,DC=net") is None
+    # Fallback to Admin or Administrator -> None
+    assert extract_ou_department(None, fallback="admin") is None
+    assert extract_ou_department("CN=Chanpen Kidchapo,OU=Users TC,DC=wa,DC=net", fallback="Purchasing") == "Purchasing"
+
+def test_spoke_sync_preserves_ad_disabled_status():
+    """Verify that spoke inventory sync (e.g. pfSense) NEVER flips is_active_in_ad to True for a disabled AD user."""
+    from app.core.database import SessionLocal
+    from app.services.scheduler import persist_spoke_inventory
+
+    db = SessionLocal()
+    try:
+        # 1. Setup pfSense app
+        pfsense_app = db.query(ConnectedApplication).filter_by(app_code="pfsense_ho").first()
+        if not pfsense_app:
+            pfsense_app = ConnectedApplication(
+                app_code="pfsense_ho",
+                app_name="pfSense Firewall (Head Office)",
+                connector_type="INBOUND_POLL"
+            )
+            db.add(pfsense_app)
+            db.flush()
+
+        # 2. Setup user disabled in AD
+        test_uname = "chanpen.k"
+        ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == test_uname).first()
+        if not ident:
+            ident = MasterIdentity(
+                username=test_uname,
+                full_name="Chanpen Kidchapo",
+                is_active_in_ad=False,
+                department=None
+            )
+            db.add(ident)
+        else:
+            ident.is_active_in_ad = False
+            ident.department = None
+        db.commit()
+
+        # 3. Simulate pfSense inventory sync reporting chanpen.k active
+        inventory = {
+            "application_name": "pfSense Firewall & VPN (Head Office)",
+            "total_accounts": 1,
+            "accounts": [
+                {
+                    "username": "chanpen.k",
+                    "full_name": "Chanpen Kidchapo",
+                    "department": "Administrator",
+                    "is_active": True
+                }
+            ]
+        }
+        persist_spoke_inventory(pfsense_app, inventory["accounts"], db)
+        db.commit()
+
+        # 4. Assertions: is_active_in_ad MUST STILL BE FALSE!
+        db.refresh(ident)
+        assert ident.is_active_in_ad is False
+
+        # Mapping must be flagged as DISCREPANCY (Ghost Account)
+        mapping = db.query(AppAccountMapping).filter(
+            AppAccountMapping.identity_id == ident.id,
+            AppAccountMapping.application_id == pfsense_app.id
+        ).first()
+        assert mapping is not None
+        assert mapping.is_active_in_app is True
+        assert mapping.last_sync_status == "DISCREPANCY"
+    finally:
+        # Cleanup
+        db.query(AppAccountMapping).filter(AppAccountMapping.app_username == "chanpen.k").delete()
+        db.query(MasterIdentity).filter(MasterIdentity.username == "chanpen.k").delete()
+        db.commit()
+        db.close()
+

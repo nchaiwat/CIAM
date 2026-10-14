@@ -144,7 +144,8 @@ def _clean_directory_attributes(identity: MasterIdentity, mappings: list, is_ad:
     junk_exact = {
         "openvpn", "captive portal", "m365 user", "radius", "firewall",
         "active directory", "wa shop", "general", "employee", "user", "ç",
-        "ทั่วไป", "none", "n/a", "-", "null", "undefined"
+        "ทั่วไป", "none", "n/a", "-", "null", "undefined",
+        "administrator", "admin", "domain admins", "domain users"
     }
     junk_substrings = [
         "openvpn", "captive portal", "m365 user", "radius", "firewall",
@@ -213,7 +214,7 @@ def list_users(
         mappings_by_identity[m.identity_id].append((m, app))
 
     now = datetime.now(timezone.utc)
-    corporate_depts = ("IT", "PU", "Administrator", "Accounting", "HR", "Executive", "Management", "General", "QA", "Sales", "Warehouse")
+    corporate_depts = ("IT", "PU", "Accounting", "HR", "Executive", "Management", "General", "QA", "Sales", "Warehouse", "Administration", "ธุรการ")
     results: List[UserListItem] = []
 
     for identity in identities:
@@ -224,7 +225,7 @@ def list_users(
         # AD users have ad_guid, employee_id, AD login history, AD mapping, corporate email, or corporate AD department
         has_ad_mapping = any(app.app_code.lower() == "ad" for _, app in mappings)
         dept_lower = (identity.department or "").strip().lower()
-        corporate_keywords = ("it", "pu", "purchasing", "admin", "accounting", "hr", "executive", "management", "general", "qa", "warehouse", "m365")
+        corporate_keywords = ("it", "pu", "purchasing", "accounting", "hr", "executive", "management", "general", "qa", "warehouse", "m365", "administration", "ธุรการ")
         is_corp_dept = any(kw in dept_lower for kw in corporate_keywords) if dept_lower else False
         has_corp_email = bool(identity.email and "@windowasia.com" in identity.email.lower())
         u_clean = (identity.username or "").strip().lower()

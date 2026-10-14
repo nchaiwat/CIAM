@@ -11,39 +11,45 @@ logger = logging.getLogger("ciam.connectors.ad_proxy")
 def extract_ou_department(dn: Optional[str], fallback: Optional[str] = None) -> Optional[str]:
     """
     Extract Department from Active Directory Distinguished Name (DN).
-    Target hierarchy: All company users reside under 'OU=Users WA,DC=wa,DC=net'.
+    Target hierarchy: Company users reside under 'OU=Users WA,DC=wa,DC=net' or 'OU=Users TC,DC=wa,DC=net'.
     Example: 'CN=Chaiwat N,OU=Purchasing,OU=Users WA,DC=wa,DC=net' -> 'Purchasing'
     Example: 'CN=Sarinee P,OU=HR,OU=Users WA,DC=wa,DC=net' -> 'HR'
-    If no OU is found or user is directly in root OU without sub-OU, returns fallback or None.
+    If no OU is found or user is directly in root OU without sub-OU, returns cleaned fallback or None.
     """
+    system_ous = {"users wa", "users tc", "users", "domain controllers", "builtin", "managed service accounts", "computers", "administrator", "admin"}
+
+    clean_fallback = fallback.strip() if fallback and isinstance(fallback, str) else None
+    if clean_fallback and clean_fallback.lower() in ("administrator", "admin", "domain admins", "domain users"):
+        clean_fallback = None
+
     if not dn or not isinstance(dn, str):
-        return fallback
+        return clean_fallback
 
     import re
     ous = [o.strip() for o in re.findall(r'OU=([^,]+)', dn, re.IGNORECASE) if o.strip()]
     if not ous:
-        return fallback
+        return clean_fallback
 
-    system_ous = {"users wa", "domain controllers", "builtin", "users", "managed service accounts", "computers"}
-
-    # 1. Look for 'Users WA' in the OU path
-    users_wa_idx = next((idx for idx, ou in enumerate(ous) if ou.lower() == "users wa"), None)
-    if users_wa_idx is not None:
-        if users_wa_idx > 0:
-            # The leaf-most sub-OU under Users WA
+    # 1. Look for root users OU in the OU path ('Users WA', 'Users TC', or 'Users')
+    root_ou_idx = next((idx for idx, ou in enumerate(ous) if ou.lower() in ("users wa", "users tc", "users")), None)
+    if root_ou_idx is not None:
+        if root_ou_idx > 0:
+            # The leaf-most sub-OU under root OU
             candidate = ous[0]
             if candidate.lower() not in system_ous:
                 return candidate
-            return ous[users_wa_idx - 1]
-        # Placed directly in Users WA without sub-OU -> use fallback if available
-        return fallback
+            sub_cand = ous[root_ou_idx - 1]
+            if sub_cand.lower() not in system_ous:
+                return sub_cand
+        # Placed directly in root OU without sub-OU -> use fallback if available
+        return clean_fallback
 
-    # 2. If 'Users WA' is not in path, take the first non-system OU
+    # 2. If known root OU is not in path, take the first non-system OU
     for ou in ous:
         if ou.lower() not in system_ous:
             return ou
 
-    return fallback
+    return clean_fallback
 
 
 class AdProxyConnector(BaseConnector):
@@ -486,8 +492,10 @@ class AdProxyConnector(BaseConnector):
                                 continue
                             uac = int(entry.userAccountControl.value or 512)
                             is_active = not bool(uac & 2)  # bit 2 = ACCOUNTDISABLE
+                            d_name = str(entry.displayName.value or s_name).strip()
                             dn_val = str(entry.distinguishedName.value or "").strip() or None
-                            dept = extract_ou_department(dn_val)
+                            raw_dept = str(entry.department.value or "").strip() or None
+                            dept = extract_ou_department(dn_val, fallback=raw_dept)
                             emp_id = str(entry.employeeID.value or "").strip() or None
                             pager_val = str(entry.pager.value or "").strip() or None
 
@@ -547,7 +555,8 @@ class AdProxyConnector(BaseConnector):
                 junk_exact = {
                     "openvpn", "captive portal", "m365 user", "radius", "firewall",
                     "active directory", "wa shop", "general", "employee", "user", "ç",
-                    "ทั่วไป", "none", "n/a", "-", "null", "undefined"
+                    "ทั่วไป", "none", "n/a", "-", "null", "undefined",
+                    "administrator", "admin", "domain admins", "domain users"
                 }
                 junk_substrings = [
                     "openvpn", "captive portal", "m365 user", "radius", "firewall",

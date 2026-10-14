@@ -1,11 +1,45 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 13 ตุลาคม 2026 (Local Time: ~16:20 ICT)  
+> **Date Updated:** 14 ตุลาคม 2026 (Local Time: ~09:25 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0.0000000000000000000000000000 ตรวจสอบและแก้ไขกรณี User Chanpen.K: ซ่อมสถานะ AD ถูก Spoke เขียนทับ และล้าง Role Administrator ออกจากชื่อแผนก (14 ต.ค. 2026)
+### 1. สาเหตุของปัญหา (Root Cause Analysis):
+1. **ทำไมสถานะ AD ของ `Chanpen.K` แสดงเป็นสีเขียว (Active) ทั้งที่บน AD ถูก Disable แล้ว:**
+   - ใน AD ผู้ใช้ `Chanpen.K` ถูกระงับสิทธิ์จริง (ไอคอนลูกศรชี้ลง ⬇️ ใน OU `Users TC`)
+   - แต่ผู้ใช้ยังมีบัญชีตกค้างอยู่ในระบบลูก pfSense (`DIRECT ● AD ● PFSENSE_HO`)
+   - ใน `backend/app/services/scheduler.py` ฟังก์ชัน `persist_spoke_inventory` เดิมมีเงื่อนไข:
+     `elif is_corp and not identity.is_active_in_ad and uname.lower() != "pinyada.s": identity.is_active_in_ad = True`
+     เมื่อระบบซิงก์ pfSense เข้ามา พบว่า `chanpen.k` มีรูปแบบชื่อพนักงานองค์กร (`Firstname.L`) จึงบังคับเปลี่ยน `is_active_in_ad` ให้กลับมาเป็น `True` เสมอ!
+   - นอกจากนี้ Routine Auto-heal เดิมใน `backend/app/initial_data.py` ก็คอยบังคับเปลี่ยน `is_active_in_ad = True` ทับทุกครั้งที่เปิดเซิร์ฟเวอร์
+   - ส่งผลให้สถานะที่ AD ปิดไว้ถูก Spoke อื่นเขียนทับกลับมาเป็น Active และทำให้ระบบไม่ยอมตรวจจับเป็นบัญชีผี (Discrepancy)
+2. **ทำไมผู้ใช้ไม่ใช่ Admin แต่คอลัมน์ "แผนก" แสดงเป็น `Administrator`:**
+   - ใน Active Directory ผู้ใช้คนนี้อยู่ใน OU `Users TC` และอาจมีฟิลด์ Department ระบุไว้ว่า `Administrator` (ตั้งใจจะสื่อถึง ธุรการ หรือเลือกผิด)
+   - ฟังก์ชัน `extract_ou_department` ใน `ad_proxy.py` และ `ciam-extension.js` เดิมรองรับเฉพาะ `users wa` แต่ไม่รู้จัก `users tc` จึงไม่สามารถสกัด Leaf OU ที่ถูกต้องได้
+   - คำว่า `Administrator` และ `Admin` ไม่ได้อยู่ในรายการ `junk_exact` จึงไม่ถูกคัดกรองออก ซ้ำร้ายใน `directory.py` และ `scheduler.py` ยังมี `Administrator` บรรจุอยู่ในรายการ `corporate_depts` ระบบจึงมองว่าเป็นแผนกและแสดงผลออกมา ทำให้ผู้ใช้เข้าใจผิดว่าระบบให้สิทธิ์ Admin แก่พนักงาน
+
+### 2. การแก้ไข (Technical Implementation):
+- **`backend/app/services/scheduler.py`:**
+  - ลบเงื่อนไขที่อนุญาตให้ Spoke เปลี่ยน `identity.is_active_in_ad = True` ออกโดยเด็ดขาด กำหนดให้เฉพาะ Active Directory Connector (`is_ad_item = True`) เท่านั้นที่มีสิทธิ์ระบุสถานะนี้
+  - หากเป็นผู้ใช้ใหม่ที่พบจาก Spoke ให้กำหนด `is_active_in_ad = False`
+  - ลบคำว่า `administrator` และ `admin` ออกจาก `corporate_depts` โดยแทนที่ด้วย `administration` และ `ธุรการ`
+- **`backend/app/initial_data.py`:**
+  - ลบ Routine Auto-heal ที่กวาดเปลี่ยน `is_active_in_ad = True` บนบัญชีทั้งหมดทิ้ง คงไว้เฉพาะการเคลียร์บัญชีสาขา shop ให้เป็น False
+- **`backend/app/connectors/ad_proxy.py` & `ciam-extension.js`:**
+  - ปรับ `extract_ou_department` ให้รองรับทั้ง Root OU `users wa`, `users tc`, และ `users`
+  - เพิ่ม `administrator`, `admin`, `domain admins`, `domain users` ใน `system_ous`, `junk_exact`, และ `junkDepts`
+- **`backend/app/api/v1/directory.py`:**
+  - เพิ่ม `administrator`, `admin`, `domain admins`, `domain users` ลงใน `junk_exact` ของ `_clean_directory_attributes`
+  - เปลี่ยน `Administrator` ใน `corporate_depts` เป็น `Administration`
+- **Unit Tests:**
+  - เพิ่มการทดสอบใน `backend/tests/test_agent_deduplication.py` ครอบคลุมทั้งการสกัด OU ใต้ `Users TC`, การคัดกรองคำว่า `Administrator` ทิ้งเป็น `None`, และการยืนยันว่าการซิงก์ Spoke (เช่น pfSense) จะไม่เปลี่ยน `is_active_in_ad` ของผู้ใช้ที่ถูก Disable ใน AD กลับมาเป็น True พร้อมจัดสถานะเป็น `DISCREPANCY` (Ghost Account) อย่างถูกต้อง
+- **ผลการทดสอบ:** Backend Pytest ผ่าน 100%, Frontend TypeScript `npx tsc --noEmit` 0 errors (100%)
 
 ---
 
