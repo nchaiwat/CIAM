@@ -1,11 +1,21 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 14 ตุลาคม 2026 (Local Time: ~13:46 ICT)  
+> **Date Updated:** 14 ตุลาคม 2026 (Local Time: ~14:35 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0.000000000000000000000000000000 ปรับปรุงหน้า Login SSO: ตัด "หรือ Somchai.S" ออกจากช่องกรอกชื่อผู้ใช้งาน (14 ต.ค. 2026)
+### 1. รายละเอียดการทำงาน (Login Placeholder Refinement):
+- ใน `frontend/src/app/login/page.tsx` แก้ไข Placeholder ของช่องกรอกชื่อผู้ใช้งาน (Username) จากเดิม:
+  `placeholder="เช่น Chaiwat.N หรือ Somchai.S"`
+  ปรับปรุงให้กระชับเป็น:
+  `placeholder="เช่น Chaiwat.N"`
+- ตรวจสอบความถูกต้อง TypeScript `npx tsc --noEmit` ผ่าน 0 errors (100%)
 
 ---
 

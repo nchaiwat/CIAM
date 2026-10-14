@@ -644,7 +644,8 @@ FRONTEND_URL=http://localhost:3000
   - ปรับปรุงข้อความระบบงานที่รองรับใน `login/page.tsx` จาก `รองรับการเข้าถึงระบบ IRM, SAP Business One, QMS และระบบงานภายในทั้งหมด` ให้เหลือเฉพาะ `รองรับการเข้าถึงระบบ IRM, QMS และระบบงานภายในทั้งหมด` เพื่อความถูกต้องตามสถานะการเปิดใช้งานจริง
 * **LINE QR Code IT Support Asset & Interaction:**
   - เพิ่มไฟล์ภาพ `/line-it-support-qr.png` ใน `frontend/public/`
-  - ติดตั้งปุ่มไอคอนและปุ่ม Quick Contact สำหรับคลิกเปิด Modal เพื่อสแกน LINE ติดต่อฝ่ายไอที ทั้งที่การ์ดเข้าสู่ระบบ, ปุ่ม Floating ล่างขวา และภายใน Help Modal เมื่อคลิก "ลืมรหัสผ่าน / ช่วยเหลือ?"
+* **ปรับกระชับ Placeholder ช่อง Username:**
+  - ตัด "หรือ Somchai.S" ออกจากช่องกรอกชื่อผู้ใช้งานใน `login/page.tsx` ให้แสดงเป็น `เช่น Chaiwat.N` สั้นกระชับ สะอาดตา
 
 
 
