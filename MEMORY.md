@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-10-14  
-**Version:** 2.3.1 (Fix AD Inactive Overwrite by Spokes, Support Users TC OU, and Sanitize Administrator Role from Department)  
+**Version:** 2.3.2 (Remove SAP B1 from Login, Add Interactive IT Support LINE QR Code Modal)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -636,6 +636,16 @@ FRONTEND_URL=http://localhost:3000
   - เพิ่มการตรวจจับ Root OU ทั้ง `users wa`, `users tc`, และ `users` ใน `extract_ou_department` (`ad_proxy.py`) และ `ciam-extension.js`
   - เพิ่มคำว่า `administrator`, `admin`, `domain admins`, `domain users` ใน `junk_exact` และ `junkDepts` เพื่อป้องกันไม่ให้คำนำหน้าสิทธิ์ระบบหลุดเข้ามาเป็นชื่อแผนก
   - อัปเดต `corporate_depts` และ `corporate_keywords` ใน `directory.py` และ `scheduler.py` โดยเปลี่ยนจาก `Administrator` เป็น `Administration` (ธุรการ) เพื่อความถูกต้องตามหลักผังองค์กร
+
+---
+
+## 20. Login SSO UX Refinements & IT Support LINE QR Integration (Version 2.3.2)
+* **ตัด SAP Business One ออกจากแบนเนอร์ข้อมูล Login:**
+  - ปรับปรุงข้อความระบบงานที่รองรับใน `login/page.tsx` จาก `รองรับการเข้าถึงระบบ IRM, SAP Business One, QMS และระบบงานภายในทั้งหมด` ให้เหลือเฉพาะ `รองรับการเข้าถึงระบบ IRM, QMS และระบบงานภายในทั้งหมด` เพื่อความถูกต้องตามสถานะการเปิดใช้งานจริง
+* **LINE QR Code IT Support Asset & Interaction:**
+  - เพิ่มไฟล์ภาพ `/line-it-support-qr.png` ใน `frontend/public/`
+  - ติดตั้งปุ่มไอคอนและปุ่ม Quick Contact สำหรับคลิกเปิด Modal เพื่อสแกน LINE ติดต่อฝ่ายไอที ทั้งที่การ์ดเข้าสู่ระบบ, ปุ่ม Floating ล่างขวา และภายใน Help Modal เมื่อคลิก "ลืมรหัสผ่าน / ช่วยเหลือ?"
+
 
 
 

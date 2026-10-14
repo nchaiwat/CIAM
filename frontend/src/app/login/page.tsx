@@ -15,6 +15,7 @@ import {
   X,
   KeyRound,
   Check,
+  QrCode,
 } from "lucide-react";
 import { ciamApi } from "@/lib/api";
 
@@ -30,6 +31,7 @@ export default function EmployeeLoginPage() {
   const [success, setSuccess] = useState(false);
   const [redirectTarget, setRedirectTarget] = useState("/portal");
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -146,7 +148,7 @@ export default function EmployeeLoginPage() {
                 <Check className="w-3.5 h-3.5 stroke-[3]" />
               </div>
               <span className="leading-snug">
-                รองรับการเข้าถึงระบบ IRM, SAP Business One, QMS และระบบงานภายในทั้งหมด
+                รองรับการเข้าถึงระบบ IRM, QMS และระบบงานภายในทั้งหมด
               </span>
             </div>
 
@@ -310,9 +312,20 @@ export default function EmployeeLoginPage() {
             </button>
           </form>
 
-          {/* Helpdesk Notice */}
-          <div className="text-center text-xs text-slate-400 pt-4 border-t border-slate-100">
-            ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ? กรุณาติดต่อฝ่ายไอที (IT Support)
+          {/* Helpdesk Notice & Interactive IT Contact Icon */}
+          <div className="text-center text-xs text-slate-500 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-center gap-2">
+            <span>ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ?</span>
+            <button
+              type="button"
+              onClick={() => setShowQrModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 text-emerald-700 font-semibold transition-all hover:scale-105 shadow-2xs cursor-pointer group"
+              title="คลิกเพื่อเปิด QR Code สแกน LINE ติดต่อฝ่ายไอที"
+            >
+              <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                <QrCode className="w-2.5 h-2.5" />
+              </div>
+              <span>ติดต่อฝ่ายไอที (Scan LINE)</span>
+            </button>
           </div>
         </div>
       </div>
@@ -351,7 +364,20 @@ export default function EmployeeLoginPage() {
                   1. หากคุณอยู่ที่เครื่องคอมพิวเตอร์ทำงาน ให้กด <strong>Ctrl + Alt + Del</strong> แล้วเลือก <em>Change a password</em> เพื่อเปลี่ยนรหัสผ่าน
                 </div>
                 <div className="text-xs text-blue-900/90 pl-5">
-                  2. หากเข้าใช้งานไม่ได้หรือบัญชีถูกล็อก ให้ติดต่อ <strong>ฝ่ายไอที (IT Support)</strong> โทรภายใน หรือแจ้งผ่านระบบแจ้งซ่อม IT เพื่อให้เจ้าหน้าที่ช่วยรีเซ็ตรหัสผ่านให้
+                  2. หากเข้าใช้งานไม่ได้หรือบัญชีถูกล็อก ให้ติดต่อ <strong>ฝ่ายไอที (IT Support)</strong> โทรภายใน หรือสแกน LINE
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowHelpModal(false);
+                        setShowQrModal(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>สแกน QR Code ติดต่อฝ่ายไอที (LINE)</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -372,6 +398,79 @@ export default function EmployeeLoginPage() {
           </div>
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* IT Support LINE QR Code Modal                            */}
+      {/* ========================================================= */}
+      {showQrModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-center animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+                  <QrCode className="w-4 h-4" />
+                </div>
+                <span>ติดต่อฝ่ายไอที (IT Support)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQrModal(false)}
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col items-center justify-center space-y-3 shadow-inner">
+                <div className="p-2 bg-white rounded-xl border border-slate-200 shadow-sm">
+                  <img
+                    src="/line-it-support-qr.png"
+                    alt="LINE QR Code IT Support"
+                    className="w-48 h-48 object-contain rounded-lg block select-none"
+                  />
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#06C755]/10 border border-[#06C755]/30 text-[#06C755] font-bold text-xs">
+                  <span className="w-2 h-2 rounded-full bg-[#06C755] animate-pulse" />
+                  <span>LINE Official IT Support</span>
+                </div>
+              </div>
+
+              <div className="space-y-1 text-xs text-slate-600 text-left bg-slate-50/80 p-3 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-800">ขั้นตอนการติดต่อ:</div>
+                <div className="text-slate-500 leading-relaxed text-[11.5px]">
+                  1. เปิดแอปพลิเคชัน <strong>LINE</strong> บนสมาร์ตโฟน<br />
+                  2. ไปที่แท็บ <strong>หน้าหลัก (Home)</strong> แล้วกดไอคอน <strong>สแกน QR Code</strong><br />
+                  3. สแกนภาพด้านบนเพื่อเริ่มสนทนากับเจ้าหน้าที่ฝ่ายไอที
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowQrModal(false)}
+                className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors cursor-pointer"
+              >
+                เข้าใจแล้ว / ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Quick Contact IT Button (Bottom Right) */}
+      <button
+        type="button"
+        onClick={() => setShowQrModal(true)}
+        className="fixed bottom-4 right-4 z-40 bg-white/95 hover:bg-white text-slate-700 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-full px-3.5 py-2 shadow-lg flex items-center gap-2 text-xs font-semibold backdrop-blur-md transition-all hover:scale-105 cursor-pointer group"
+        title="คลิกเพื่อสแกน LINE ติดต่อฝ่ายไอที (IT Support)"
+      >
+        <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform">
+          <QrCode className="w-3 h-3" />
+        </div>
+        <span className="hidden sm:inline">ติดต่อ IT Support</span>
+      </button>
     </div>
   );
 }

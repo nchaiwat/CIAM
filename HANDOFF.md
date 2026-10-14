@@ -1,11 +1,32 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 14 ตุลาคม 2026 (Local Time: ~09:25 ICT)  
+> **Date Updated:** 14 ตุลาคม 2026 (Local Time: ~13:46 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0.00000000000000000000000000000 ปรับปรุงหน้า Login SSO: นำ SAP Business One ออก และเพิ่มปุ่มเปิด Scan LINE QR Code ติดต่อฝ่ายไอที (14 ต.ค. 2026)
+### 1. รายละเอียดการทำงาน (Login Page UX & Support Updates):
+1. **นำคำว่า SAP Business One ออกจากแบนเนอร์ข้อมูลฝั่งซ้าย:**
+   - ใน `frontend/src/app/login/page.tsx` แก้ไขข้อความในรายการรองรับระบบงาน จาก:
+     `รองรับการเข้าถึงระบบ IRM, SAP Business One, QMS และระบบงานภายในทั้งหมด`
+     เป็น:
+     `รองรับการเข้าถึงระบบ IRM, QMS และระบบงานภายในทั้งหมด`
+   - เพื่อป้องกันความสับสนของผู้ใช้งานเนื่องจากระบบ SAP B1 ยังไม่เปิดให้เข้าใช้งานตรงผ่านเว็บ
+2. **เพิ่มปุ่มและ Modal สำหรับสแกน LINE QR Code ติดต่อฝ่ายไอที (IT Support):**
+   - นำภาพ LINE QR Code ทางการที่ผู้ใช้ส่งมอบมาบันทึกเป็น Asset กลางที่ `frontend/public/line-it-support-qr.png`
+   - เพิ่มปุ่มไอคอนขนาดกะทัดรัดบริเวณด้านล่างการ์ดเข้าสู่ระบบ: `[ 📱 ติดต่อฝ่ายไอที (Scan LINE) ]`
+   - เพิ่มปุ่ม Floating Quick Contact บริเวณมุมขวาล่างของหน้าจอ ให้ผู้ใช้งานคลิกเปิดสแกนได้สะดวกรวดเร็ว
+   - เพิ่มปุ่มเปิด QR Code ภายในหน้าต่าง "ลืมรหัสผ่าน / ช่วยเหลือ?" (Help Modal)
+   - เมื่อคลิก จะแสดง Modal Pop-up ปรากฏภาพ QR Code ชัดเจน พร้อมระบุขั้นตอนการสแกนผ่านแอป LINE 1-2-3 อย่างเป็นระเบียบ เรียบหรู ใช้งานง่าย
+
+### 2. ผลการตรวจสอบคุณภาพ (Quality Assurance):
+- Backend Tests: ผ่าน 23/23 (100%)
+- Frontend TypeScript `npx tsc --noEmit`: ผ่าน 0 errors (100%)
 
 ---
 
