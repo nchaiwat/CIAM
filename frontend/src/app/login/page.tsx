@@ -90,11 +90,11 @@ export default function EmployeeLoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#081a38] text-slate-800 selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white lg:bg-[#081a38] text-slate-800 selection:bg-blue-600 selection:text-white">
       {/* ========================================================= */}
-      {/* LEFT PANEL: Enterprise Brand Showcase (55% on desktop)   */}
+      {/* LEFT PANEL: Enterprise Brand Showcase (Hidden on Mobile) */}
       {/* ========================================================= */}
-      <div className="relative w-full lg:w-[54%] xl:w-[56%] bg-gradient-to-br from-[#06193b] via-[#0c2957] to-[#041229] text-white p-8 sm:p-12 lg:p-16 flex flex-col justify-between overflow-hidden border-b lg:border-b-0 lg:border-r border-blue-900/40">
+      <div className="relative hidden lg:flex w-full lg:w-[54%] xl:w-[56%] bg-gradient-to-br from-[#06193b] via-[#0c2957] to-[#041229] text-white p-8 sm:p-12 lg:p-16 flex-col justify-between overflow-hidden border-b lg:border-b-0 lg:border-r border-blue-900/40">
         {/* Subtle Architectural Blueprint / Engineering Grid Pattern */}
         <div
           className="absolute inset-0 opacity-[0.07] pointer-events-none"
@@ -171,9 +171,9 @@ export default function EmployeeLoginPage() {
       </div>
 
       {/* ========================================================= */}
-      {/* RIGHT PANEL: Enterprise Login Card (46% on desktop)      */}
+      {/* RIGHT PANEL: Enterprise Login Card (Full on Mobile)       */}
       {/* ========================================================= */}
-      <div className="w-full lg:w-[46%] xl:w-[44%] bg-white flex flex-col justify-center items-center p-6 sm:p-10 lg:p-12 relative overflow-y-auto">
+      <div className="w-full min-h-screen lg:w-[46%] xl:w-[44%] bg-white flex flex-col justify-center items-center p-6 sm:p-10 lg:p-12 relative overflow-y-auto">
         {/* Ambient Top Decorative Line */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-400" />
 
@@ -322,6 +322,11 @@ export default function EmployeeLoginPage() {
             >
               ติดต่อฝ่าย IT
             </button>
+          </div>
+
+          {/* Mobile-only Subtle Footer */}
+          <div className="lg:hidden text-center text-[11px] text-slate-400 pt-3">
+            © 2026 Window Asia Public Company Limited
           </div>
         </div>
       </div>

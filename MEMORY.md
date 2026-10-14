@@ -646,6 +646,8 @@ FRONTEND_URL=http://localhost:3000
   - เพิ่มไฟล์ภาพ `/line-it-support-qr.png` ใน `frontend/public/`
 * **ปรับกระชับ Placeholder ช่อง Username:**
   - ตัด "หรือ Somchai.S" ออกจากช่องกรอกชื่อผู้ใช้งานใน `login/page.tsx` ให้แสดงเป็น `เช่น Chaiwat.N` สั้นกระชับ สะอาดตา
+* **Mobile Responsive Layout (ซ่อนแผงสีน้ำเงินบนมือถือ):**
+  - กำหนดให้แผงสีน้ำเงินฝั่งซ้ายเป็น `hidden lg:flex` บนหน้าจอมือถือจะแสดงผลเฉพาะการ์ดเข้าสู่ระบบสีขาวเต็มหน้าจอทันที (`min-h-screen`) ไม่ต้องเลื่อนจอ
 
 
 

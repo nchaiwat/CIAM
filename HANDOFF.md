@@ -1,11 +1,24 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 14 ตุลาคม 2026 (Local Time: ~15:48 ICT)  
+> **Date Updated:** 14 ตุลาคม 2026 (Local Time: ~16:24 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0.00000000000000000000000000000000 ปรับปรุง Responsive หน้า Login SSO: ซ่อนแบนเนอร์สีน้ำเงินบน Mobile เพื่อให้แสดงการ์ด Login ทันทีโดยไม่ต้องเลื่อนหน้าจอ (14 ต.ค. 2026)
+### 1. รายละเอียดการทำงาน (Mobile Responsive Refinement):
+- ใน `frontend/src/app/login/page.tsx` ปรับส่วนแสดงผลของแผงข้อมูลสีน้ำเงินฝั่งซ้าย (Left Panel) ให้เป็น `hidden lg:flex`
+- เมื่อผู้ใช้งานเปิดผ่านสมาร์ตโฟนหรือแท็บเล็ตขนาดเล็ก (จอ < `lg`):
+  - ส่วนแผงสีน้ำเงินจะถูกซ่อนโดยสมบูรณ์
+  - การ์ดเข้าสู่ระบบสีขาวจะแสดงผลเต็มหน้าจอทันที (`w-full min-h-screen`) ผู้ใช้สามารถพิมพ์ Username/Password และเข้าสู่ระบบได้ทันทีโดยไม่ต้องเลื่อนหน้าจอลงมา
+  - เพิ่มข้อความลิขสิทธิ์ขนาดกะทัดรัดใต้การ์ดสำหรับหน้าจอมือถือ (`lg:hidden`)
+- บนหน้าจอคอมพิวเตอร์ (Desktop >= `lg`):
+  - ยังคงแสดงผลแบบ 2 คอลัมน์เคียงข้างกันอย่างสง่างามเช่นเดิม
+- ตรวจสอบความถูกต้อง TypeScript `npx tsc --noEmit` ผ่าน 0 errors (100%)
 
 ---
 
