@@ -312,19 +312,15 @@ export default function EmployeeLoginPage() {
             </button>
           </form>
 
-          {/* Helpdesk Notice & Interactive IT Contact Icon */}
-          <div className="text-center text-xs text-slate-500 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-center gap-2">
-            <span>ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ?</span>
+          {/* Helpdesk Notice */}
+          <div className="text-center text-xs text-slate-500 pt-4 border-t border-slate-100">
+            ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ?{" "}
             <button
               type="button"
               onClick={() => setShowQrModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 text-emerald-700 font-semibold transition-all hover:scale-105 shadow-2xs cursor-pointer group"
-              title="คลิกเพื่อเปิด QR Code สแกน LINE ติดต่อฝ่ายไอที"
+              className="text-blue-600 hover:text-blue-800 font-semibold hover:underline cursor-pointer transition-colors"
             >
-              <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                <QrCode className="w-2.5 h-2.5" />
-              </div>
-              <span>ติดต่อฝ่ายไอที (Scan LINE)</span>
+              ติดต่อฝ่าย IT
             </button>
           </div>
         </div>

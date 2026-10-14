@@ -1,11 +1,21 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 14 ตุลาคม 2026 (Local Time: ~14:35 ICT)  
+> **Date Updated:** 14 ตุลาคม 2026 (Local Time: ~15:48 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+
+---
+
+## 0.0000000000000000000000000000000 ปรับปรุงหน้า Login SSO: เปลี่ยนปุ่มติดต่อไอทีเป็นการ์ดข้อความปกติ "ติดต่อฝ่าย IT" ไม่ซ้ำซ้อนกับด้านล่าง (14 ต.ค. 2026)
+### 1. รายละเอียดการทำงาน (Login Helpdesk Link Refinement):
+- ใน `frontend/src/app/login/page.tsx` ปรับส่วนแจ้งเตือนความช่วยเหลือใต้การ์ดเข้าสู่ระบบ โดยตัดปุ่มสีเขียว `[ 📱 ติดต่อฝ่ายไอที (Scan LINE) ]` ออก เพื่อไม่ให้ซ้ำซ้อนกับปุ่ม Floating ด้านล่าง
+- ปรับเปลี่ยนเป็นข้อความลิงก์ปกติ:
+  `ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ? ติดต่อฝ่าย IT`
+  (โดยคำว่า "ติดต่อฝ่าย IT" สามารถคลิกเพื่อเปิด Modal แสดง QR Code ติดต่อฝ่ายไอทีได้เช่นเดิม)
+- ตรวจสอบความถูกต้อง TypeScript `npx tsc --noEmit` ผ่าน 0 errors (100%)
 
 ---
 
