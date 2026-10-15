@@ -37,26 +37,31 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       }
       setAuthChecked(true);
     } else if (pathname === "/login") {
-      // If already logged in, redirect to portal or dashboard
+      // If already logged in, redirect to portal
       if (token) {
-        if (userRole === "PORTAL_USER") {
-          router.replace("/portal");
-        } else {
-          router.replace("/portal");
-        }
+        router.replace("/portal");
         return;
       }
       setAuthChecked(true);
     } else if (pathname?.startsWith("/admin/login")) {
-      if (token && userRole !== "PORTAL_USER") {
-        router.replace("/");
+      // Forward any /admin/login traffic directly to unified /login
+      if (token) {
+        if (userRole === "PORTAL_USER") {
+          router.replace("/portal");
+        } else {
+          router.replace("/");
+        }
         return;
       }
-      setAuthChecked(true);
+      const search = typeof window !== "undefined" ? window.location.search : "";
+      router.replace(`/login${search}`);
+      return;
     } else if (!isStandalone) {
       // Protected Admin Console routes (/, /directory, /applications, /offboarding, /audit-logs)
       if (!token) {
-        router.replace(`/admin/login?redirect=${encodeURIComponent(pathname || "/")}`);
+        // Clean redirect to /login (no query if visiting root "/", preserve query if deep admin link)
+        const redirectParam = pathname && pathname !== "/" ? `?redirect=${encodeURIComponent(pathname)}` : "";
+        router.replace(`/login${redirectParam}`);
         return;
       }
       if (userRole === "PORTAL_USER") {

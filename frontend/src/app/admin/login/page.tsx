@@ -35,30 +35,39 @@ export default function AdminLoginPage() {
 
   const [sessionExpired, setSessionExpired] = useState(false);
 
-  // Check if already authenticated or session expired
+  // Automatically forward /admin/login to unified /login
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("expired") === "1") {
-        setSessionExpired(true);
+      const redir = params.get("redirect");
+      const expired = params.get("expired");
+      if (expired === "1") {
         localStorage.removeItem("ciam_token");
         localStorage.removeItem("ciam_user");
+        router.replace("/login?expired=1");
         return;
       }
-    }
-    const existingToken = localStorage.getItem("ciam_token");
-    const existingUser = localStorage.getItem("ciam_user");
-    if (existingToken && existingUser) {
-      try {
-        const user = JSON.parse(existingUser);
-        if (user.role === "PORTAL_USER") {
+      const existingToken = localStorage.getItem("ciam_token");
+      const existingUser = localStorage.getItem("ciam_user");
+      if (existingToken && existingUser) {
+        try {
+          const user = JSON.parse(existingUser);
+          if (user.role === "PORTAL_USER") {
+            router.replace("/portal");
+            return;
+          } else {
+            router.replace(redir && redir !== "/" && redir !== "/admin" ? redir : "/portal");
+            return;
+          }
+        } catch {
           router.replace("/portal");
-        } else {
-          router.replace("/");
+          return;
         }
-      } catch {
-        router.replace("/");
       }
+
+      // Unauthenticated: Redirect directly to unified /login
+      const redirectQuery = redir && redir !== "/" && redir !== "/admin" ? `?redirect=${encodeURIComponent(redir)}` : "";
+      router.replace(`/login${redirectQuery}`);
     }
   }, [router]);
 

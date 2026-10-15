@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-10-15  
-**Version:** 2.5.0 (Mobile Responsive SSO Login, Streamlined Username Placeholder, Clean IT Support Link, Administrator Role Sanitization, AD Single Source of Truth)  
+**Version:** 2.6.0 (Single Unified Front Door, Default /login Routing, Auto-Forward /admin/login, Post-Login Landing to /portal, Responsive Admin Console Switcher)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -190,19 +190,16 @@ FRONTEND_URL=http://localhost:3000
 4. Generates certificate code: `CERT-YYYYMMDD-XXXXXX`
 5. Records immutable audit trails in `IamAuditLog`
 
-### 4.8 Dual Login Architecture & Minimal Employee Portal (Version 1.9.3)
-* **Separated Login Routes:**
-  * **Employee Portal Login (`/login`):** Dedicated, welcoming, and clean corporate login interface for general employees. Uses standard Windows/AD credentials and directs users to `/portal`.
-  * **Admin Console Login (`/admin/login`):** Dedicated high-security console for IT Administrators and security officers with honeypot decoys, legal notices, and lockout protection.
-* **Role-Based Guards ([AppShell.tsx](file:///d:/Python/Central-IAM/frontend/src/components/layout/AppShell.tsx)):**
-  * Prevents regular employees (`role: PORTAL_USER`) from accessing administrative management views (`/`, `/directory`, `/applications`, `/offboarding`, `/audit-logs`), redirecting them smoothly to `/portal`.
-  * Enforces token authentication before viewing `/portal`.
-* **Minimalist & Clean App Launcher ([portal/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/portal/page.tsx)):**
-  * Stripped of all technical clutter (no latency ms, no raw connector types, no client-ids, no simulator menus).
-  * Prominent, high-contrast, responsive app cards with 1-Click Launch.
-* **Strict Authorize-based App Filtering ([oauth.py](file:///d:/Python/Central-IAM/backend/app/api/v1/oauth.py)):**
-  * `GET /api/v1/oauth/portal/apps`: Queries `AppAccountMapping` for the logged-in user and returns **only** active authorized applications (unauthorized apps are completely hidden). Admins view all active SSO apps.
-  * `POST /api/v1/oauth/portal/launch`: Enforces authorization check on launch and issues SSO token under the employee's genuine username instead of static admin.
+### 4.8 Single Unified Front Door & Post-Login Flow (Version 2.6.0)
+* **Single Unified Front Door (`/login`):**
+  * ทุกคำขอที่ไม่ระบุตัวตน (Unauthenticated Requests) รวมถึงการเข้า Root Path `ciam.windowasia.com` (`/`) หรือกรณีเซสชันหลุด จะถูกนำทางเข้าสู่หน้า **`/login`** (Window Asia App Portal สีขาว-น้ำเงิน) เสมอ 100%
+  * หน้า `/admin/login` มีระบบ Auto-Forward ส่งต่อทราฟฟิกเข้ามาที่ `/login` ป้องกันไม่ให้พนักงานทั่วไปหลุดเข้าไปเห็นหน้า Admin Console
+* **Unified Post-Login Redirection:**
+  * ทั้งพนักงานทั่วไปและผู้ดูแลระบบ (Admin) ใช้หน้า `/login` เดียวกัน และเมื่อเข้าสู่ระบบจะถูกส่งเข้าสู่ **`/portal`** เป็นค่าเริ่มต้น
+  * พนักงานทั่วไป (`role: PORTAL_USER`): แสดงเฉพาะแอปพลิเคชันที่ตนเองได้รับสิทธิ์ และไม่สามารถเข้าถึงเส้นทาง Admin (`/`, `/directory`, ฯลฯ)
+  * ผู้ดูแลระบบ (`role: SUPER_ADMIN` / `ADMIN`): แสดงแอปพลิเคชันทั้งหมด พร้อมปุ่มลัด **`[ 🛡️ Admin Console ]`** บนแถบ Header (แสดงผลทั้งบน Desktop และ Mobile) เพื่อคลิกสลับเข้าสู่แดชบอร์ดบริหารจัดการได้ทันที
+* **Deep Link Preservation:**
+  * หาก Admin เปิดลิงก์เฉพาะทาง (เช่น `/directory`, `/applications`, `/offboarding`) โดยที่ยังไม่ได้ล็อกอิน ระบบจะส่งมาที่ `/login?redirect=...` และเมื่อล็อกอินผ่านจะนำทางกลับไปหน้าดังกล่าวโดยอัตโนมัติ
 
 ### 4.9 Password Management & Security Policies (Version 2.3.0)
   * Active Directory users authenticated via Windows Domain Controller (`is_ad_user: true`) **do not have the change password button 🔑** on the Employee Portal Header (`/portal`).

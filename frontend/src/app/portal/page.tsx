@@ -386,11 +386,12 @@ export default function PortalPage() {
           {isAdmin && (
             <Link
               href="/"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs hover:scale-[1.02] active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs hover:scale-[1.02] active:scale-[0.98]"
               title="สลับไปยังหน้าจัดการ Admin Console"
             >
               <Shield className="w-3.5 h-3.5 text-sky-400" />
-              <span>Admin Console</span>
+              <span className="hidden sm:inline">Admin Console</span>
+              <span className="sm:hidden text-[10px]">Admin</span>
             </Link>
           )}
 

@@ -37,7 +37,7 @@ export default function EmployeeLoginPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const redir = params.get("redirect");
-      if (redir && !redir.includes("/login")) {
+      if (redir && !redir.includes("/login") && redir !== "/" && redir !== "/admin") {
         setRedirectTarget(redir);
       }
 
@@ -46,7 +46,12 @@ export default function EmployeeLoginPage() {
       const existingUser = localStorage.getItem("ciam_user");
       if (existingToken && existingUser) {
         try {
-          router.replace(redir || "/portal");
+          const user = JSON.parse(existingUser);
+          if (user.role === "PORTAL_USER" || !redir || redir === "/" || redir === "/admin") {
+            router.replace("/portal");
+          } else {
+            router.replace(redir);
+          }
         } catch {
           router.replace("/portal");
         }
@@ -76,7 +81,11 @@ export default function EmployeeLoginPage() {
 
       setSuccess(true);
       setTimeout(() => {
-        router.push(redirectTarget);
+        if (res.user?.role === "PORTAL_USER" || redirectTarget === "/" || redirectTarget === "/admin") {
+          router.push("/portal");
+        } else {
+          router.push(redirectTarget);
+        }
       }, 500);
     } catch (err: any) {
       console.error("Employee login failed:", err);

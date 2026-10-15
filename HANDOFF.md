@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 15 ตุลาคม 2026 (Local Time: ~08:50 ICT)  
+> **Date Updated:** 15 ตุลาคม 2026 (Local Time: ~10:30 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 51/51 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Clean, up-to-date with `origin/main` (Head Commit: `4470ffe`)
+> **Git Status:** Production Ready (Sprint 36 Single Unified Front Door)
 
 ---
 
@@ -15,35 +15,47 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%** โดยการปรับปรุงในรอบวันที่ 14-15 ตุลาคม 2026 มุ่งเน้นการยกระดับประสบการณ์ผู้ใช้ (Enterprise UX) บนหน้า Single Sign-On Login และการแก้ไขความถูกต้องของข้อมูลความปลอดภัย (Identity Governance):
-1. **Mobile Responsive Login UX:** ปรับปรุงหน้าเข้าสู่ระบบ SSO บนสมาร์ตโฟนและแท็บเล็ตขนาดเล็ก โดยซ่อนแผงแบนเนอร์สีน้ำเงินฝั่งซ้าย (`hidden lg:flex`) เพื่อให้การ์ดกรอก Username/Password แสดงผลเต็มจอทันที (`min-h-screen`) ผู้ใช้งานสามารถพิมพ์ข้อมูลและเข้าสู่ระบบได้ทันทีโดยไม่ต้องเลื่อนหน้าจอลงมา
-2. **Helpdesk & Support Interaction:** ปรับข้อความช่วยเหลือใต้การ์ดเข้าสู่ระบบเป็นลิงก์ปกติ `"ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ? ติดต่อฝ่าย IT"` ที่คลิกแล้วจะเปิด Modal แสดงภาพ LINE QR Code ของฝ่ายไอที พร้อมคงปุ่ม Floating Quick Contact ที่มุมขวาล่างของจอไว้
-3. **Username Placeholder:** ปรับตัวอย่างในช่องกรอกชื่อผู้ใช้งานให้กระชับเป็น `เช่น Chaiwat.N` (ตัดคำว่า `หรือ Somchai.S` ออก)
-4. **App Directory Hygiene (ตัด SAP B1):** นำคำว่า SAP Business One ออกจากข้อความประชาสัมพันธ์ระบบงานที่รองรับบนหน้า Login เนื่องจากยังไม่เปิดให้ผู้ใช้งานทั่วไปเข้าตรงผ่านเว็บ
-5. **Authentic Window Asia Branding:** ใช้งานตราสัญลักษณ์และโลโก้ทางการ วินโดว์ เอเชีย บนพื้นหลังการ์ดขาวคมชัด
-6. **Active Directory Single Source of Truth (กรณี Chanpen.K):**
-   - แก้ไข `backend/app/services/scheduler.py` ให้เฉพาะ Active Directory Connector (`is_ad_item = True`) เท่านั้นที่มีสิทธิ์กำหนด `identity.is_active_in_ad`
-   - ป้องกัน Spoke Connectors (เช่น pfSense, IRM) เขียนทับสถานะของผู้ใช้ที่ถูกระงับสิทธิ์ใน AD กลับมาเป็น Active อีกต่อไป
-   - ลบ Routine Auto-heal เดิมใน `backend/app/initial_data.py` ที่เคยวนลูปแก้ `is_active_in_ad = True` ทิ้งอย่างถาวร
-   - ตรวจจับบัญชีที่ถูกระงับสิทธิ์ใน AD แต่ยังตกค้างใน Spoke เป็น `DISCREPANCY` (Ghost Account) 100%
-7. **Department & Role Sanitization:**
-   - ขยาย `extract_ou_department` ใน `ad_proxy.py` และ `ciam-extension.js` ให้รองรับทั้ง Root OU `Users WA` และ `Users TC`
-   - กรองคำว่า `"Administrator"`, `"Admin"`, `"Domain Admins"` ออกจากรายการแผนก และแทนที่ด้วย `"Administration"` หรือ `"ธุรการ"`
-8. **AD Password Protection & Enterprise Complexity:**
-   - ปรับปรุงการตรวจสอบ `is_ad_user` ใน `backend/app/api/v1/auth.py` ให้ถูกต้องสำหรับพนักงาน AD ทุกคน โดยไม่ต้องพึ่งพา `ad_guid`
-   - ซ่อนปุ่มเปลี่ยนรหัสผ่านรูปกุญแจ 🔑 บนหน้า Employee App Portal (`/portal`) สำหรับพนักงาน AD ทุกคนโดยอัตโนมัติ
-   - บังคับใช้นโยบายรหัสผ่าน Enterprise สำหรับ Local Account: ความยาว 8-10 ตัวอักษร, พิมพ์ใหญ่, พิมพ์เล็ก, ตัวเลข, อักขระพิเศษ
-   - รองรับระบบบังคับเปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก (`must_change_password`)
-9. **Zero-Trust Client-Side VPN Reachability Probe Engine:**
-   - ระบบตรวจจับ Reachability ไปยัง Spoke On-Premise (`wa-mtpulse.wa.net`) อัตโนมัติจากเบราว์เซอร์ผู้ใช้ และปรับสถานะเป็นสีฟ้าสดใส (Sky/Blue) `🛡️ VPN พร้อม` เมื่อต่อ VPN
+1. **Single Unified Front Door (Sprint 36):** ปรับปรุงโครงสร้าง Routing และ Authentication Guard ใน `AppShell.tsx` ให้ทุกคำขอที่ยังไม่ได้ล็อกอิน ไม่ว่าจะเป็นการพิมพ์ `ciam.windowasia.com` (Root Path `/`) หรือเปิดลิงก์ที่เซสชันหลุด จะวิ่งเข้าสู่หน้า `/login` (Window Asia App Portal สีขาว-น้ำเงิน) เสมอ 100% ป้องกันไม่ให้ผู้ใช้ทั่วไปหลุดเข้าไปเห็นหน้า `/admin/login` (Admin Console จอดำทะมึน พ.ร.บ.คอมฯ) ซึ่งสร้างความสับสนและตื่นตระหนกให้ผู้ใช้งาน
+2. **Unified Post-Login Landing:** ทั้งพนักงานทั่วไปและผู้ดูแลระบบล็อกอินผ่านหน้า `/login` เดียวกัน โดยจะเข้าสู่ `/portal` เป็นค่าเริ่มต้น ซึ่งพนักงานทั่วไปจะเห็นเฉพาะระบบงานที่ตนเองได้รับสิทธิ์ ส่วน Admin จะเห็นระบบงานพร้อมปุ่มลัด `[ 🛡️ Admin Console ]` บน Header เพื่อคลิกสลับเข้าสู่แดชบอร์ดบริหารจัดการได้ทันที
+3. **Responsive Admin Switcher on Portal:** ปรับปุ่ม `Admin Console` บนแถบ Header ของ `/portal` ให้แสดงผลและรองรับทั้งบน Mobile (`[ 🛡️ Admin ]`) และ Desktop (`[ 🛡️ Admin Console ]`) สำหรับผู้ใช้ที่มีสิทธิ์ Admin
+4. **Mobile Responsive Login UX:** ปรับปรุงหน้าเข้าสู่ระบบ SSO บนสมาร์ตโฟนและแท็บเล็ตขนาดเล็ก โดยซ่อนแผงแบนเนอร์สีน้ำเงินฝั่งซ้าย (`hidden lg:flex`) เพื่อให้การ์ดกรอก Username/Password แสดงผลเต็มจอทันที (`min-h-screen`) ผู้ใช้งานสามารถพิมพ์ข้อมูลและเข้าสู่ระบบได้ทันทีโดยไม่ต้องเลื่อนหน้าจอลงมา
+5. **Helpdesk & Support Interaction:** ปรับข้อความช่วยเหลือใต้การ์ดเข้าสู่ระบบเป็นลิงก์ปกติ `"ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ? ติดต่อฝ่าย IT"` ที่คลิกแล้วจะเปิด Modal แสดงภาพ LINE QR Code ของฝ่ายไอที พร้อมคงปุ่ม Floating Quick Contact ที่มุมขวาล่างของจอไว้
+6. **Username Placeholder:** ปรับตัวอย่างในช่องกรอกชื่อผู้ใช้งานให้กระชับเป็น `เช่น Chaiwat.N` (ตัดคำว่า `หรือ Somchai.S` ออก)
+7. **App Directory Hygiene (ตัด SAP B1):** นำคำว่า SAP Business One ออกจากข้อความประชาสัมพันธ์ระบบงานที่รองรับบนหน้า Login เนื่องจากยังไม่เปิดให้ผู้ใช้งานทั่วไปเข้าตรงผ่านเว็บ
+8. **Active Directory Single Source of Truth (กรณี Chanpen.K):** เฉพาะ Active Directory Connector เท่านั้นที่มีสิทธิ์กำหนด `identity.is_active_in_ad` ป้องกัน Spoke Connectors เขียนทับ
+9. **Department & Role Sanitization:** กรองคำว่า `"Administrator"`, `"Admin"` ออกจากรายการแผนก และแทนที่ด้วย `"Administration"` หรือ `"ธุรการ"`
+10. **Zero-Trust Client-Side VPN Reachability Probe Engine:** ระบบตรวจจับ Reachability ไปยัง Spoke On-Premise (`wa-mtpulse.wa.net`) อัตโนมัติจากเบราว์เซอร์ผู้ใช้
 
 ---
 
 ### 0.2 กฎเหล็กเชิงสถาปัตยกรรมที่ห้ามฝ่าฝืนโดยเด็ดขาด (Architectural Invariants)
+- **Single Unified Front Door:** ประตูเข้าสู่ระบบหน้าเดียวสำหรับทุกคนคือ `/login` ห้าม Redirect ผู้ใช้ทั่วไปหรือคำขอที่ไม่ล็อกอินไปที่ `/admin/login`
 - **AD เป็น Single Source of Truth:** ห้ามให้ Spoke ใดๆ ปรับเปลี่ยน `is_active_in_ad` เป็นอันขาด หากบัญชีไม่มีใน AD หรือถูก Disable ใน AD แต่พบใน Spoke จะต้องจัดเป็น Discrepancy
 - **Zero-Password-Spoke Architecture:** Central IAM ไม่เคยและจะไม่ส่งรหัสผ่าน Plaintext ไปบันทึกในฐานข้อมูลของ Spoke แอปพลิเคชันลูกต้องยืนยันตัวตนผ่าน OIDC SSO Authorization Code Flow with PKCE เท่านั้น
 - **RFC 9700 Seamless SSO Initiation:** การเปิดระบบลูก On-Premise จาก Central IAM Portal ให้เด้งผ่าน Portal Launch URL (`/auth/start`) เพื่อให้ Spoke ผูก State/PKCE เข้ากับ Browser Cookie ป้องกันปัญหา Session Expired
 - **Docker Compose Service Names:** ชื่อ Service ของ Frontend คือ **`web`** (ห้ามใช้ `frontend` เด็ดขาด) และ Backend คือ **`api`**
 - **VPS Deployment Rule:** เขียนคำสั่งแยกทีละบรรทัด ห้ามเชื่อมด้วย `&&` ยาวเป็นพรืด และต้องมี `git pull` นำหน้าเสมอ
+
+---
+
+## Sprint 36: รวมศูนย์ประตูเข้าสู่ระบบหน้าเดียว (Single Unified Front Door) ป้องกัน User หลุดเข้าหน้า Admin Console (15 ต.ค. 2026)
+### 1. รายละเอียดการทำงาน (Single Unified Front Door & Post-Login Flow):
+1. **Unauthenticated Redirection to `/login` ([AppShell.tsx](file:///d:/Python/Central-IAM/frontend/src/components/layout/AppShell.tsx)):**
+   - ปรับ Routing Guard สำหรับคำขอที่ยังไม่ได้ล็อกอิน (`!token`):
+     - เมื่อผู้ใช้เข้าผ่าน Root URL `ciam.windowasia.com` (Path `/`) หรือเซสชันหลุด ระบบจะนำทางไปยังหน้าเข้าสู่ระบบรวมศูนย์ `/login` ทันที โดยไม่ต่อ Query Parameter ที่ไม่จำเป็น
+     - ลบการ Redirect อัตโนมัติไปยัง `/admin/login` ออกอย่างสมบูรณ์
+     - หากมีการเข้าลิงก์ตรงไปยังหน้าจัดการเฉพาะทาง (เช่น `/directory`, `/applications`, `/offboarding`) ระบบจะคงพารามิเตอร์ `?redirect=...` ไว้เพื่อพากลับมาหน้าเดิมหลังล็อกอิน
+2. **Auto-Forward `/admin/login` ไปยัง `/login` ([admin/login/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/admin/login/page.tsx)):**
+   - เพิ่ม Auto-Forward Guard ในหน้า `/admin/login` ส่งต่อทราฟฟิกหรือ Bookmark เก่าทั้งหมดเข้ามาที่ `/login` โดยอัตโนมัติ เพื่อให้เหลือหน้าแรกหน้าเดียว
+3. **Default Landing to `/portal` ([login/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/login/page.tsx)):**
+   - เมื่อล็อกอินสำเร็จ ทั้งพนักงานทั่วไปและแอดมินจะเข้าสู่ `/portal` เป็นค่าเริ่มต้น (ยกเว้นกรณีเข้าผ่าน Deep Link เฉพาะทาง เช่น `/directory`)
+   - พนักงานทั่วไปจะเห็นเฉพาะระบบงานที่ตนเองได้รับสิทธิ์
+   - แอดมินจะเห็นระบบงานทั้งหมด พร้อมปุ่มสลับไปยัง `Admin Console` บน Header
+4. **Responsive Admin Switcher on Portal ([portal/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/portal/page.tsx)):**
+   - ปรับปุ่ม `Admin Console` บนแถบ Header ของ `/portal` ให้แสดงผลบน Mobile (`[ 🛡️ Admin ]`) ควบคู่กับ Desktop (`[ 🛡️ Admin Console ]`) สำหรับผู้ดูแลระบบ
+5. **Quality Assurance:**
+   - Frontend TypeScript: `npx tsc --noEmit` ผ่าน 0 errors (100%)
+   - Backend Pytest: ผ่าน 51/51 tests (100%)
 
 ---
 
