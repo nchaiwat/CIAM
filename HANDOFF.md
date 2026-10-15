@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 15 ตุลาคม 2026 (Local Time: ~15:15 ICT)  
+> **Date Updated:** 15 ตุลาคม 2026 (Local Time: ~20:45 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 52/52 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 39 Spoke Unified Settings Modal & AD Sync 500 Fix)
+> **Git Status:** Production Ready (Synced with `origin/main` at commit `2e73e5e` - Sprint 39)
 
 ---
 
@@ -1382,62 +1382,56 @@ docker compose up -d api web
 
 ## 4. สถานะระบบปัจจุบัน และ แผนงานที่จะปรับปรุงต่อในรอบถัดไป (Current Status & Next Steps Roadmap)
 
-> **ปรับปรุงล่าสุด:** 15 ตุลาคม 2026 (Local Time: ~08:50 ICT)  
-> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (ทุกการเปลี่ยนแปลงได้ผ่านการทดสอบและ Push สู่ `origin/main` ครบถ้วนแล้ว)
+> **ปรับปรุงล่าสุด:** 15 ตุลาคม 2026 (Local Time: ~20:45 ICT)  
+> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (ทุกการเปลี่ยนแปลงได้ผ่านการทดสอบ 100% และ Push สู่ `origin/main` ที่ Commit `2e73e5e` เรียบร้อยแล้ว)
 
 ### 4.1 สถานะระบบที่ตรวจสอบและส่งมอบแล้ว (Verified & Production Ready)
 * **Git Commits ล่าสุด (10 Commits ล่าสุดบน `origin/main`):**
+  - `2e73e5e` — `fix(applications): unify settings modal, full base url, remove duplicate switch, and fix sync-ad 500 error` (Sprint 39)
+  - `843ba41` — `fix(directory): exclude shop vpn accounts from ad filter and sanitize ad spoke badge` (Sprint 38)
+  - `c687e8e` — `fix(sync): sanitize shop accounts from ad ingest and auto-heal existing database records` (Sprint 38)
+  - `d5fe6f7` — `fix(ad-sync): reconcile missing ad users to inactive status and fix worawut.s status` (Sprint 37)
+  - `9ecab21` — `fix(routing): guarantee root path '/' and default navigation land on /login portal front door` (Sprint 36)
   - `4470ffe` — `refactor(login): hide left blue branding panel on mobile for instant login access`
   - `0d5cfd1` — `refactor(login): replace green LINE button with clean 'ติดต่อฝ่าย IT' link in login card`
   - `75bce6b` — `refactor(login): remove 'หรือ Somchai.S' from username placeholder`
   - `d5e42d7` — `feat(login): remove SAP B1 from supported apps and add interactive LINE IT Support QR modal`
   - `205d6b4` — `fix(ad-sync): prevent spoke inventory overwriting AD disabled status and sanitize Administrator role from department`
-  - `a1cfce6` — `fix(auth): accurate is_ad_user detection without requiring ad_guid to hide change password key`
-  - `3993137` — `refactor(login): move official logo to right panel, remove redundant bottom box, and streamline left wording`
-  - `b9eecb8` — `feat(auth): enforce AD password button hiding, enterprise complexity policy, and force password change`
-  - `14f7cd0` — `feat(branding): integrate authentic official Window Asia logo assets into login portal`
-  - `03ff2ff` — `feat(auth): redesign SSO login page to split-screen enterprise layout with Window Asia branding`
 
 * **ผลการตรวจสอบคุณภาพและความถูกต้อง (Test & Type Integrity):**
-  - **Backend Test Suite:** รัน `pytest` ผ่านครบถ้วน **51/51 tests (100% Passed)**
+  - **Backend Test Suite:** รัน `pytest` ผ่านครบถ้วน **52/52 tests (100% Passed)**
   - **Frontend Type Check:** รัน `npx tsc --noEmit` ผ่านสมบูรณ์ **0 TypeScript Errors**
-  - **Git Working Tree:** สะอาด (Working tree clean, synced with `origin/main`)
+  - **Git Working Tree:** สะอาด (Working tree clean, synced with `origin/main` at commit `2e73e5e`)
 
-* **สรุปฟังก์ชันและสถาปัตยกรรมหลักที่ส่งมอบแล้วในรอบนี้:**
-  1. **Mobile Responsive Login UX:** ซ่อนแผงสีน้ำเงินบนจอเล็ก (`hidden lg:flex`) ผู้ใช้บนสมาร์ตโฟนจะเห็นการ์ด Login เต็มจอทันทีโดยไม่ต้องเลื่อนหน้าจอ
-  2. **Clean Helpdesk Interaction:** เปลี่ยนปุ่มสีเขียวใต้ฟอร์มเป็นการ์ดข้อความ `"ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ? ติดต่อฝ่าย IT"` ที่คลิกเปิด QR Code ได้ และคงปุ่ม Floating Quick Contact มุมขวาล่างไว้ ไม่ซ้ำซ้อน
-  3. **Streamlined Credentials Form:** ตัดคำว่า `"หรือ Somchai.S"` ออก เหลือตัวอย่าง `เช่น Chaiwat.N` สื่อสารชัดเจนและเข้าใจง่าย
-  4. **Removal of Unsupported Apps:** ตัดชื่อ SAP Business One ออกจากหน้าระบบรองรับ ป้องกันความสับสนของผู้ใช้
-  5. **Official Window Asia Branding:** นำเข้าตราสัญลักษณ์และโลโก้ทางการ วินโดว์ เอเชีย คมชัดระดับ Retina บนการ์ด Login
-  6. **Single Source of Truth for Active Directory:** ป้องกัน Spoke Connectors (เช่น pfSense, IRM) เขียนทับสถานะ `is_active_in_ad` ของพนักงานที่ถูกระงับสิทธิ์ใน AD อย่างเด็ดขาด
-  7. **Role & Department Sanitization:** ล้างค่า `"Administrator"` และ `"Admin"` ออกจากรายชื่อแผนกองค์กร โดยจัดเป็น System Role และใช้ `"Administration"` หรือ `"ธุรการ"` แทน
-  8. **AD Password Integrity:** ซ่อนปุ่มเปลี่ยนรหัสผ่านบนพอร์ทัลสำหรับพนักงาน AD และบังคับใช้นโยบายรหัสผ่าน Enterprise (8-10 ตัวอักษร, พิมพ์ใหญ่, พิมพ์เล็ก, ตัวเลข, สัญลักษณ์) สำหรับ Local Account พร้อมระบบบังคับเปลี่ยนรหัสผ่านครั้งแรก (`must_change_password`)
-  9. **Client-Side VPN Reachability Probe Engine:** ตรวจจับความพร้อมของการเชื่อมต่อ VPN อัตโนมัติ ปรับสถานะเป็นสีฟ้า Sky/Blue ทันทีเมื่อผู้ใช้เชื่อมต่อ VPN
+* **สรุปฟังก์ชันและสถาปัตยกรรมหลักที่ส่งมอบแล้วในรอบล่าสุด (Sprints 36 - 39):**
+  1. **Unified Spoke Settings Modal (Sprint 39):** ยุบรวมปุ่มตั้งค่าระบบลูกที่กระจัดกระจาย (`SAP B1`, `AD Settings`, `M365`) เข้าเป็นปุ่มเดียว `[ ⚙️ ตั้งค่าเชื่อมต่อ ]` บนการ์ดทุกใบ พร้อมกลไก Auto-select แท็บที่ตรงกับประเภท Connector ของระบบนั้นๆ โดยอัตโนมัติ และสลับแท็บใดๆ ภายใน Modal ได้อิสระ
+  2. **Removal of Duplicate Spoke Switch (Sprint 39):** ลบสวิตช์ ON/OFF ซ้ำซ้อนภายในป๊อปอัปตั้งค่าระบบ เหลือเฉพาะสวิตช์หลักบนการ์ดภายนอก และจัดวางฟอร์มข้อมูลส่วนหัวเป็น 3 คอลัมน์กว้างสบายตา
+  3. **Full Base URL Display (Sprint 39):** เปลี่ยนการแสดงผล URL ปลายทางบนการ์ดระบบลูกจากการใช้ `truncate max-w-[170px]` เป็น `break-all` responsive แสดงชื่อ URL เต็มทุกตัวอักษร
+  4. **Active Directory Sync 500 Resolution (Sprint 39):** แก้ไข `NameError: name 'func' is not defined` ใน `directory.py` ที่เกิดจากการเรียก `func.lower()` โดยไม่ได้ import `func` จาก `sqlalchemy` ทำให้ปุ่ม "ซิงก์จาก AD" ในหน้าทะเบียนผู้ใช้ทำงานได้อย่างสมบูรณ์
+  5. **Shop Accounts Sanitization from AD Filter (Sprint 38):** บัญชีร้านค้าสาขา (`WA-Shop_*`) ถูกตัดสิทธิ์จากการแสดงในตัวกรอง `Active Directory (DC Gateway)` และตัวกรอง `Active` อย่างเด็ดขาด พร้อมตัดป้าย `🔴 AD` ออกจากคอลัมน์ Spokes ของร้านค้า
+  6. **AD Inactive Reconciliation & Ghost Account Auto-Heal (Sprint 37):** แก้ไขปัญหาผู้ใช้ที่ไม่อยู่ใน AD แล้ว (เช่น `worawut.s`) ให้ถูกปรับเป็น Inactive (จุดสีเทา) และตัดการแมป AD ทันทีเมื่อซิงก์
+  7. **Single Unified Front Door (Sprint 36):** บังคับให้ผู้ใช้ทุกคนที่เข้าสู่ระบบผ่าน `ciam.windowasia.com` (Root Path `/`) เข้าสู่หน้า `/login` (App Portal) เสมอ ป้องกันไม่ให้หลุดเข้าหน้าจอดำ Admin Console โดยไม่ตั้งใจ
 
 ---
 
 ### 4.2 แผนงานและข้อสังเกตสำหรับการปรับปรุงในรอบถัดไป (Next Iteration Roadmap)
-เมื่อกลับมาพัฒนาต่อในรอบถัดไป ให้ดำเนินการตามลำดับความสำคัญดังต่อไปนี้:
+เมื่อกลับมาทำงานต่อในรอบถัดไป ให้ดำเนินการตามลำดับความสำคัญดังต่อไปนี้:
 
-1. **User Acceptance Testing (UAT) การ Deploy และแสดงผลหน้า Login SSO จริงบน Production VPS:**
-   - นำคำสั่ง Deploy ในข้อ 5 ไปรันบน Production Server (`/var/www/Ciam`)
-   - ทดสอบเปิดหน้า Login SSO (`https://ciam.windowasia.com` หรือ Domain ทางการ) บนสมาร์ตโฟนทั้ง iOS และ Android เพื่อยืนยันว่าการ์ดเข้าสู่ระบบแสดงผลเต็มจอทันทีโดยไม่ต้องเลื่อนหน้าจอ
-   - ทดสอบเปิดบน Desktop เพื่อยืนยันว่า Split-Screen Layout (แผง Deep Navy ซ้าย และ การ์ดขาวขวา) แสดงผลคมชัดสวยงาม
+1. **User Acceptance Testing (UAT) บน Production VPS:**
+   - นำคำสั่ง Deploy ล่าสุดไปรันบน Production Server (`/var/www/Ciam`)
+   - ยืนยันการทำงานของปุ่ม `[ ⚙️ ตั้งค่าเชื่อมต่อ ]` บนการ์ด Spokes (SAP B1, AD, M365, MTPulse) ว่าเปิดแท็บที่ถูกต้อง
+   - ยืนยันการแสดงผล URL ปลายทางเต็มทุกระบบ
+   - ทดสอบกดปุ่ม "ซิงก์จาก AD" ในหน้าทะเบียนผู้ใช้ (`/directory`) เพื่อยืนยันว่าซิงก์ได้สำเร็จ ไม่มี Error 500
 
-2. **การทดสอบ Interactive LINE IT Support Modal:**
-   - ทดสอบคลิกข้อความ `"ติดต่อฝ่าย IT"` ใต้การ์ด Login และปุ่ม Floating Quick Contact ที่มุมขวาล่าง
-   - ยืนยันว่า Modal แสดงผลภาพ LINE QR Code (`/line-it-support-qr.png`) อย่างถูกต้อง พร้อมคำแนะนำขั้นตอนการสแกน 1-2-3
+2. **ระบบจัดการพนักงานลาออกอัตโนมัติ (Offboarding & Deprovisioning Orchestration):**
+   - ตรวจสอบหน้า `/offboarding` สำหรับการปิดสิทธิ์พนักงานออกจากทุก Spoke Applications แบบ One-Click Kill Switch (AD, pfSense, M365, SAP B1, IRM)
+   - ทดสอบการตัด Token, Revoke OAuth Sessions และเปลี่ยนสถานะตัวตนใน Master Identity
 
-3. **การตรวจสอบผลลัพธ์ของ User `Chanpen.K` บน Production Directory:**
-   - รันการซิงก์ข้อมูลจาก AD หรือตรวจสอบหน้า `/directory` ยืนยันว่า `Chanpen.K` แสดงสถานะ AD เป็น Inactive (สีเทา/ขีด)
-   - สิทธิ์บน pfSense HO ยังคงปรากฏ และสถานะภาพรวมถูกจัดหมวดหมู่เป็น `DISCREPANCY` (Ghost Account) อย่างถูกต้อง
-   - คอลัมน์ "แผนก" ไม่แสดงคำว่า `Administrator` อีกต่อไป
-
-4. **การทดสอบความร่วมมือกับ Spoke Mode C (MTPulse):**
+3. **การทดสอบความร่วมมือกับ Spoke Mode C (MTPulse):**
    - ติดตามผลการเพิ่มปุ่ม `[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]` บนหน้าจอตั้งค่าของ MTPulse
    - ทดสอบการ Provisioning และ Deprovisioning บัญชีแบบสองทางผ่าน Outbound Reverse Heartbeat API (`/api/v1/agent/heartbeat`)
 
-5. **การจัดเตรียม Starter Template ภาษา Native PHP + MySQL:**
+4. **การเตรียม Starter Template ภาษา Native PHP + MySQL:**
    - เตรียมตัวอย่างโค้ด PHP ดั้งเดิม (Native PHP 3 ไฟล์: `ciam_sso.php`, `ciam_callback.php`, `ciam_agent.php`) เพื่อส่งมอบให้ทีม Dev ภายในองค์กรนำไปเชื่อมต่อกับระบบ On-Premise เดิมของบริษัท
 
 ---
