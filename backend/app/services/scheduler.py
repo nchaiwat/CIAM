@@ -276,9 +276,27 @@ def persist_spoke_inventory(
             .all()
         )
         for stale in stale_mappings:
+            if is_ad_item and stale.identity:
+                logger.info("AD Sync: User '%s' removed from AD. Setting is_active_in_ad = False", stale.app_username)
+                stale.identity.is_active_in_ad = False
             db.delete(stale)
 
         db.flush()
+
+        # If syncing Active Directory, any identity that was marked is_active_in_ad=True but is NOT in live AD accounts must be False
+        if is_ad_item and len(live_usernames) >= 5:
+            missing_ad_identities = (
+                db.query(MasterIdentity)
+                .filter(
+                    MasterIdentity.is_active_in_ad == True,
+                    ~func.lower(MasterIdentity.username).in_(live_usernames)
+                )
+                .all()
+            )
+            for m_id in missing_ad_identities:
+                logger.info("AD Sync: User '%s' is no longer in Active Directory. Setting is_active_in_ad = False", m_id.username)
+                m_id.is_active_in_ad = False
+            db.flush()
 
         all_app_mappings = (
             db.query(AppAccountMapping)

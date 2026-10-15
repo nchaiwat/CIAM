@@ -34,6 +34,11 @@ def test_link_account_and_exception_lifecycle():
             db.add(ad_user)
             db.commit()
             db.refresh(ad_user)
+        else:
+            ad_user.is_active_in_ad = True
+            ad_user.ad_guid = "guid-natcha-ad-test"
+            db.commit()
+            db.refresh(ad_user)
 
         # 2. Setup Spoke application (SAP B1)
         sap_app = db.query(ConnectedApplication).filter_by(app_code="sap_b1").first()

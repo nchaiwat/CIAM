@@ -200,3 +200,81 @@ def test_spoke_sync_preserves_ad_disabled_status():
         db.commit()
         db.close()
 
+
+def test_ad_sync_marks_removed_ad_users_inactive():
+    """Verify that when AD sync runs, any identity missing from live AD accounts is set to is_active_in_ad=False."""
+    from sqlalchemy.orm import Session
+    from app.core.database import SessionLocal
+    from app.services.scheduler import persist_spoke_inventory
+
+    db: Session = SessionLocal()
+    try:
+        ad_app = db.query(ConnectedApplication).filter(func.lower(ConnectedApplication.app_code) == "ad").first()
+        if not ad_app:
+            ad_app = ConnectedApplication(
+                app_code="ad",
+                app_name="Active Directory",
+                connector_type="AD_PROXY",
+                is_active=True
+            )
+            db.add(ad_app)
+            db.flush()
+
+        # Create user worawut.s with is_active_in_ad=True and an AD mapping
+        test_uname = "worawut.s"
+        ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == test_uname).first()
+        if not ident:
+            ident = MasterIdentity(
+                username=test_uname,
+                full_name="Worawut Seelanuan",
+                email="worawut.s@windowasia.com",
+                is_active_in_ad=True
+            )
+            db.add(ident)
+            db.flush()
+        else:
+            ident.is_active_in_ad = True
+
+        ad_map = db.query(AppAccountMapping).filter(
+            AppAccountMapping.identity_id == ident.id,
+            AppAccountMapping.application_id == ad_app.id
+        ).first()
+        if not ad_map:
+            ad_map = AppAccountMapping(
+                identity_id=ident.id,
+                application_id=ad_app.id,
+                app_username=test_uname,
+                is_active_in_app=True,
+                last_sync_status="IN_SYNC"
+            )
+            db.add(ad_map)
+        db.commit()
+
+        # Simulate AD sync with 5 active users, NOT including worawut.s
+        live_ad_accounts = [
+            {"username": "user1.a", "full_name": "User 1", "is_active": True},
+            {"username": "user2.b", "full_name": "User 2", "is_active": True},
+            {"username": "user3.c", "full_name": "User 3", "is_active": True},
+            {"username": "user4.d", "full_name": "User 4", "is_active": True},
+            {"username": "user5.e", "full_name": "User 5", "is_active": True},
+        ]
+        persist_spoke_inventory(ad_app, live_ad_accounts, db)
+        db.commit()
+
+        # worawut.s must now have is_active_in_ad = False
+        db.refresh(ident)
+        assert ident.is_active_in_ad is False
+
+        # And his AD mapping must have been pruned
+        remaining_ad_map = db.query(AppAccountMapping).filter(
+            AppAccountMapping.identity_id == ident.id,
+            AppAccountMapping.application_id == ad_app.id
+        ).first()
+        assert remaining_ad_map is None
+    finally:
+        db.query(AppAccountMapping).filter(AppAccountMapping.app_username.in_(["worawut.s", "user1.a", "user2.b", "user3.c", "user4.d", "user5.e"])).delete()
+        db.query(MasterIdentity).filter(MasterIdentity.username.in_(["worawut.s", "user1.a", "user2.b", "user3.c", "user4.d", "user5.e"])).delete()
+        db.commit()
+        db.close()
+
+

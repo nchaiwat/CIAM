@@ -1270,7 +1270,7 @@ export default function DirectoryPage() {
                         ) : (
                           <span
                             className="inline-flex items-center justify-center"
-                            title="Inactive: บัญชีถูกปิดใช้งานใน Active Directory"
+                            title="Inactive: บัญชีถูกปิดใช้งาน หรือไม่มีตัวตนใน Active Directory"
                           >
                             <span className="inline-flex rounded-full h-3.5 w-3.5 bg-slate-300 shadow-2xs border border-white ring-2 ring-slate-200"></span>
                           </span>

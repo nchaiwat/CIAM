@@ -252,9 +252,17 @@ def list_users(
             and (u_clean not in ("pinyada.s", "winmonpan.p"))
         )
 
+        # An identity is genuinely active in AD only if it has an AD presence (ad mapping, ad_guid, or login) and identity.is_active_in_ad is True
+        has_direct_ad = bool(has_ad_mapping or identity.ad_guid or identity.last_login_ad_at)
+        effective_ad_active = bool(identity.is_active_in_ad and has_direct_ad)
+        if identity.is_active_in_ad and not has_direct_ad and not getattr(identity, "is_approved_exception", False):
+            # Auto-heal: If an identity has no AD presence at all, it is no longer in AD
+            identity.is_active_in_ad = False
+            effective_ad_active = False
+
         # Check overall active status across AD and spokes
         has_active_spoke = any(m.is_active_in_app for m, _ in mappings)
-        is_overall_active = identity.is_active_in_ad or has_active_spoke
+        is_overall_active = effective_ad_active or has_active_spoke
 
         # Filter by app_code and status
         if app_code:
@@ -264,9 +272,9 @@ def list_users(
                     continue
                 if status:
                     stat = status.lower().strip()
-                    if stat == "active" and not identity.is_active_in_ad:
+                    if stat == "active" and not effective_ad_active:
                         continue
-                    elif stat in ("terminated", "inactive", "all_inactive") and identity.is_active_in_ad:
+                    elif stat in ("terminated", "inactive", "all_inactive") and effective_ad_active:
                         continue
             else:
                 spoke_ms = [m for m, app in mappings if app.app_code.lower() == target_app]
@@ -292,7 +300,7 @@ def list_users(
         is_exception = is_identity_exception or has_approved_mapping_exception
 
         # Discrepancy ONLY applies to AD corporate accounts that are INACTIVE in AD but STILL ACTIVE in a spoke app
-        has_disc = is_ad and (not identity.is_active_in_ad) and has_active_spoke and not is_exception
+        has_disc = is_ad and (not effective_ad_active) and has_active_spoke and not is_exception
 
         # Apply has_ghost filter if requested
         if has_ghost is not None:
@@ -314,7 +322,7 @@ def list_users(
             department=clean_dept,
             telephone=identity.telephone,
             telegram_id=identity.telegram_id,
-            is_active_in_ad=identity.is_active_in_ad if is_ad else False,
+            is_active_in_ad=effective_ad_active if is_ad else False,
             last_login_ad_at=identity.last_login_ad_at if is_ad else None,
             created_at=created_at,
             last_access_at=last_access,
@@ -351,10 +359,17 @@ def get_user_detail(
         .all()
     )
 
-    app_summaries = _build_app_summaries(mappings, identity_is_active_in_ad=identity.is_active_in_ad)
+    has_ad_mapping = any(app.app_code.lower() == "ad" for _, app in mappings)
+    has_direct_ad = bool(has_ad_mapping or identity.ad_guid or identity.last_login_ad_at)
+    effective_ad_active = bool(identity.is_active_in_ad and has_direct_ad)
+    if identity.is_active_in_ad and not has_direct_ad and not getattr(identity, "is_approved_exception", False):
+        identity.is_active_in_ad = False
+        effective_ad_active = False
+
+    app_summaries = _build_app_summaries(mappings, identity_is_active_in_ad=effective_ad_active)
     created_at, last_access, days_since_access = _get_identity_activity(identity, mappings)
-    has_disc = (not identity.is_active_in_ad) and any(m.is_active_in_app for m, _ in mappings)
-    is_ad = bool(identity.is_active_in_ad or identity.ad_guid or any(app.app_code.lower() == "ad" for _, app in mappings))
+    has_disc = (not effective_ad_active) and any(m.is_active_in_app for m, _ in mappings)
+    is_ad = bool(effective_ad_active or identity.ad_guid or any(app.app_code.lower() == "ad" for _, app in mappings))
     clean_email, clean_dept = _clean_directory_attributes(identity, mappings, is_ad)
 
     user_item = UserListItem(
@@ -366,7 +381,7 @@ def get_user_detail(
         department=clean_dept,
         telephone=identity.telephone,
         telegram_id=identity.telegram_id,
-        is_active_in_ad=identity.is_active_in_ad,
+        is_active_in_ad=effective_ad_active if is_ad else False,
         last_login_ad_at=identity.last_login_ad_at,
         created_at=created_at,
         last_access_at=last_access,

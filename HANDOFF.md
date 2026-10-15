@@ -1,23 +1,53 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 15 ตุลาคม 2026 (Local Time: ~10:30 ICT)  
+> **Date Updated:** 15 ตุลาคม 2026 (Local Time: ~14:30 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 51/51 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 36 Single Unified Front Door)
+> **Test Integrity:** Backend Pytest: 52/52 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready (Sprint 37 AD Inactive Status Sync & Ghost Account Reconciliation)
 
 ---
 
 ## 0. ภาพรวมสรุปสำหรับทีมงานและ AI Agent ในการกลับมาพัฒนาต่อ (Executive Resume & Handover Protocol)
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
-ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%** โดยการปรับปรุงในรอบวันที่ 14-15 ตุลาคม 2026 มุ่งเน้นการยกระดับประสบการณ์ผู้ใช้ (Enterprise UX) บนหน้า Single Sign-On Login และการแก้ไขความถูกต้องของข้อมูลความปลอดภัย (Identity Governance):
-1. **Single Unified Front Door (Sprint 36):** ปรับปรุงโครงสร้าง Routing และ Authentication Guard ใน `AppShell.tsx` ให้ทุกคำขอที่ยังไม่ได้ล็อกอิน ไม่ว่าจะเป็นการพิมพ์ `ciam.windowasia.com` (Root Path `/`) หรือเปิดลิงก์ที่เซสชันหลุด จะวิ่งเข้าสู่หน้า `/login` (Window Asia App Portal สีขาว-น้ำเงิน) เสมอ 100% ป้องกันไม่ให้ผู้ใช้ทั่วไปหลุดเข้าไปเห็นหน้า `/admin/login` (Admin Console จอดำทะมึน พ.ร.บ.คอมฯ) ซึ่งสร้างความสับสนและตื่นตระหนกให้ผู้ใช้งาน
-2. **Unified Post-Login Landing:** ทั้งพนักงานทั่วไปและผู้ดูแลระบบล็อกอินผ่านหน้า `/login` เดียวกัน โดยจะเข้าสู่ `/portal` เป็นค่าเริ่มต้น ซึ่งพนักงานทั่วไปจะเห็นเฉพาะระบบงานที่ตนเองได้รับสิทธิ์ ส่วน Admin จะเห็นระบบงานพร้อมปุ่มลัด `[ 🛡️ Admin Console ]` บน Header เพื่อคลิกสลับเข้าสู่แดชบอร์ดบริหารจัดการได้ทันที
-3. **Responsive Admin Switcher on Portal:** ปรับปุ่ม `Admin Console` บนแถบ Header ของ `/portal` ให้แสดงผลและรองรับทั้งบน Mobile (`[ 🛡️ Admin ]`) และ Desktop (`[ 🛡️ Admin Console ]`) สำหรับผู้ใช้ที่มีสิทธิ์ Admin
+ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
+1. **AD Inactive Status Reconciliation & Auto-heal (Sprint 37 - กรณี Worawut.S):**
+   - แก้ไขปัญหาผู้ใช้ที่ถูกลบหรือไม่มีตัวตนใน Active Directory แล้ว (เช่น `worawut.s`) แต่ยังคงแสดงสถานะเป็น On (จุดเขียวกระพริบ 🟢) ในหน้า User Directory
+   - ปรับปรุง `persist_spoke_inventory` ใน `scheduler.py`: เมื่อเชื่อมต่อ AD Sync Agent และดึงรายชื่อผู้ใช้ล่าสุด บัญชีใดที่ไม่อยู่ใน AD แล้วจะถูกปรับ `is_active_in_ad = False` ทันที และลบการแมปกับ AD ออก
+   - ปรับปรุง `directory.py`: คำนวณ `effective_ad_active = bool(identity.is_active_in_ad and (has_ad_mapping or identity.ad_guid or identity.last_login_ad_at))` และมีกลไก Auto-heal ปรับตัวตนที่ไม่มี AD Footprint ให้เป็น `is_active_in_ad = False`
+   - ปรับปรุง Tooltip ใน `frontend/src/app/directory/page.tsx` แสดงคำอธิบายสถานะให้ชัดเจนว่าบัญชีถูกปิดหรือไม่มีใน AD
+2. **Single Unified Front Door (Sprint 36):** ปรับปรุงโครงสร้าง Routing และ Authentication Guard ใน `AppShell.tsx` ให้ทุกคำขอที่ยังไม่ได้ล็อกอิน ไม่ว่าจะเป็นการพิมพ์ `ciam.windowasia.com` (Root Path `/`) หรือเปิดลิงก์ที่เซสชันหลุด จะวิ่งเข้าสู่หน้า `/login` (Window Asia App Portal สีขาว-น้ำเงิน) เสมอ 100% ป้องกันไม่ให้ผู้ใช้ทั่วไปหลุดเข้าไปเห็นหน้า `/admin/login` (Admin Console จอดำทะมึน พ.ร.บ.คอมฯ) ซึ่งสร้างความสับสนและตื่นตระหนกให้ผู้ใช้งาน
+3. **Unified Post-Login Landing:** ทั้งพนักงานทั่วไปและผู้ดูแลระบบล็อกอินผ่านหน้า `/login` เดียวกัน โดยจะเข้าสู่ `/portal` เป็นค่าเริ่มต้น ซึ่งพนักงานทั่วไปจะเห็นเฉพาะระบบงานที่ตนเองได้รับสิทธิ์ ส่วน Admin จะเห็นระบบงานพร้อมปุ่มลัด `[ 🛡️ Admin Console ]` บน Header เพื่อคลิกสลับเข้าสู่แดชบอร์ดบริหารจัดการได้ทันที
+4. **Responsive Admin Switcher on Portal:** ปรับปุ่ม `Admin Console` บนแถบ Header ของ `/portal` ให้แสดงผลและรองรับทั้งบน Mobile (`[ 🛡️ Admin ]`) และ Desktop (`[ 🛡️ Admin Console ]`) สำหรับผู้ใช้ที่มีสิทธิ์ Admin
+
+---
+
+## Sprint 37: ปรับปรุงการตรวจสอบสถานะ Active Directory ให้แม่นยำ และแก้ปัญหาผู้ใช้ที่ไม่อยู่ใน AD แล้ว (Worawut.S) (15 ต.ค. 2026)
+### 1. สาเหตุของปัญหา (Root Cause Analysis):
+- `worawut.s` (Worawut Seelanuan) เป็นบัญชีที่มีอยู่เดิมใน Spoke Applications (เช่น M365 และ SAP B1) แต่ได้ถูกนำออกจาก Active Directory ไปแล้ว
+- ในโมเดล `MasterIdentity` ฟิลด์ `is_active_in_ad` มีค่าเริ่มต้นเป็น `True` และยังไม่เคยถูกปรับเป็น `False` เนื่องจากตอนรัน AD Sync ครั้งถัดมา ระบบจะ sync เฉพาะบัญชีที่ AD ส่งมา และลบเฉพาะแถว `AppAccountMapping` ของ AD แต่ไม่ได้ปรับฟิลด์ `is_active_in_ad` บน `MasterIdentity`
+- ใน `directory.py` การตรวจสอบ `is_ad` เดิมอาศัยเงื่อนไขว่าถ้ามีอีเมล `@windowasia.com` (ซึ่งมาจาก M365) ก็ถูกนับเป็น `is_ad = True` จึงทำให้ `is_active_in_ad` ดึงค่า `True` ออกมา และแสดงสถานะเป็น On (จุดเขียว 🟢)
+
+### 2. รายละเอียดการแก้ไข (Implementation Details):
+1. **Automated Deactivation on AD Sync ([scheduler.py](file:///d:/Python/Central-IAM/backend/app/services/scheduler.py)):**
+   - ปรับปรุงฟังก์ชัน `persist_spoke_inventory`: เมื่อตัวเชื่อมต่อเป็น Active Directory หากบัญชีเดิมหลุดออกจากรายการ AD สด (`live_usernames`) ระบบจะปรับ `stale.identity.is_active_in_ad = False` ทันที พร้อมลบการแมป AD
+   - เพิ่มระบบกวาดตรวจ (Reconciliation Sweep): หากผลลัพธ์ sync จาก AD มีผู้ใช้จริงมากกว่า 5 รายการ ตัวตนใดที่คงค้าง `is_active_in_ad = True` แต่ไม่มีใน `live_usernames` จะถูกปรับเป็น `is_active_in_ad = False`
+2. **Effective AD Status & Auto-Healing ([directory.py](file:///d:/Python/Central-IAM/backend/app/api/v1/directory.py)):**
+   - คำนวณสถานะ `has_direct_ad = bool(has_ad_mapping or identity.ad_guid or identity.last_login_ad_at)`
+   - คำนวณ `effective_ad_active = bool(identity.is_active_in_ad and has_direct_ad)` ป้องกันไม่ให้ตัวตนที่ไม่มีความเชื่อมโยงกับ AD แสดงสถานะเขียว
+   - ทำ Auto-heal ในตัว: หากพบตัวตนที่ `is_active_in_ad == True` แต่ไม่มีความเชื่อมโยงกับ AD จะอัปเดตให้เป็น `False` ทันที
+3. **Database Auto-Healing & Seeding ([initial_data.py](file:///d:/Python/Central-IAM/backend/app/initial_data.py)):**
+   - เพิ่มการตั้งค่า explicitly deactive สำหรับ `worawut.s` (`is_active_in_ad = False`) และถอน AD mapping
+   - เพิ่มกลไก auto-heal ให้กวาดตรวจและแก้ไขตัวตนที่ตกค้างทั้งหมด
+4. **Enhanced UI Tooltips ([directory/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/directory/page.tsx)):**
+   - ปรับข้อความ Tooltip เมื่อ AD เป็น Inactive: `"Inactive: บัญชีถูกปิดใช้งาน หรือไม่มีตัวตนใน Active Directory"`
+5. **Quality Assurance:**
+   - Backend Pytest: 52/52 passed (100%) รวมถึงการทดสอบใหม่ `test_ad_sync_marks_removed_ad_users_inactive`
+   - Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)
 4. **Mobile Responsive Login UX:** ปรับปรุงหน้าเข้าสู่ระบบ SSO บนสมาร์ตโฟนและแท็บเล็ตขนาดเล็ก โดยซ่อนแผงแบนเนอร์สีน้ำเงินฝั่งซ้าย (`hidden lg:flex`) เพื่อให้การ์ดกรอก Username/Password แสดงผลเต็มจอทันที (`min-h-screen`) ผู้ใช้งานสามารถพิมพ์ข้อมูลและเข้าสู่ระบบได้ทันทีโดยไม่ต้องเลื่อนหน้าจอลงมา
 5. **Helpdesk & Support Interaction:** ปรับข้อความช่วยเหลือใต้การ์ดเข้าสู่ระบบเป็นลิงก์ปกติ `"ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ? ติดต่อฝ่าย IT"` ที่คลิกแล้วจะเปิด Modal แสดงภาพ LINE QR Code ของฝ่ายไอที พร้อมคงปุ่ม Floating Quick Contact ที่มุมขวาล่างของจอไว้
 6. **Username Placeholder:** ปรับตัวอย่างในช่องกรอกชื่อผู้ใช้งานให้กระชับเป็น `เช่น Chaiwat.N` (ตัดคำว่า `หรือ Somchai.S` ออก)

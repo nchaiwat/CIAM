@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-10-15  
-**Version:** 2.6.0 (Single Unified Front Door, Default /login Routing, Auto-Forward /admin/login, Post-Login Landing to /portal, Responsive Admin Console Switcher)  
+**Version:** 2.7.0 (AD Inactive Status Reconciliation, Ghost Account Auto-Heal, Single Unified Front Door, Default /login Routing)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -641,11 +641,16 @@ FRONTEND_URL=http://localhost:3000
   - ปรับปรุงข้อความระบบงานที่รองรับใน `login/page.tsx` จาก `รองรับการเข้าถึงระบบ IRM, SAP Business One, QMS และระบบงานภายในทั้งหมด` ให้เหลือเฉพาะ `รองรับการเข้าถึงระบบ IRM, QMS และระบบงานภายในทั้งหมด` เพื่อความถูกต้องตามสถานะการเปิดใช้งานจริง
 * **LINE QR Code IT Support Asset & Interaction:**
   - เพิ่มไฟล์ภาพ `/line-it-support-qr.png` ใน `frontend/public/`
-* **ปรับกระชับ Placeholder ช่อง Username:**
-  - ตัด "หรือ Somchai.S" ออกจากช่องกรอกชื่อผู้ใช้งานใน `login/page.tsx` ให้แสดงเป็น `เช่น Chaiwat.N` สั้นกระชับ สะอาดตา
-* **Mobile Responsive Layout (ซ่อนแผงสีน้ำเงินบนมือถือ):**
-  - กำหนดให้แผงสีน้ำเงินฝั่งซ้ายเป็น `hidden lg:flex` บนหน้าจอมือถือจะแสดงผลเฉพาะการ์ดเข้าสู่ระบบสีขาวเต็มหน้าจอทันที (`min-h-screen`) ไม่ต้องเลื่อนจอ
 
+## 21. AD Inactive Status Reconciliation & Ghost Account Auto-Heal (Version 2.7.0)
 
-
-
+### 21.1 ปัญหาผู้ใช้ที่ถูกลบออกจาก AD แต่สถานะยังแสดงเป็น On (เขียว 🟢) - กรณี `Worawut.S`
+* **สาเหตุ:**
+  - `worawut.s` (Worawut Seelanuan) เป็นบัญชีที่มีอยู่เดิมใน Spoke Applications (เช่น M365 และ SAP B1) แต่ได้ถูกนำออกจาก Active Directory ไปแล้ว
+  - ในโมเดล `MasterIdentity` ฟิลด์ `is_active_in_ad` มีค่าเริ่มต้นเป็น `True` และยังไม่เคยถูกปรับเป็น `False` เนื่องจากตอนรัน AD Sync ครั้งถัดมา ระบบจะ sync เฉพาะบัญชีที่ AD ส่งมา และลบเฉพาะแถว `AppAccountMapping` ของ AD แต่ไม่ได้ปรับฟิลด์ `is_active_in_ad` บน `MasterIdentity`
+  - ใน `directory.py` การตรวจสอบ `is_ad` เดิมอาศัยเงื่อนไขว่าถ้ามีอีเมล `@windowasia.com` (ซึ่งมาจาก M365) ก็ถูกนับเป็น `is_ad = True` จึงทำให้ `is_active_in_ad` ดึงค่า `True` ออกมา และแสดงสถานะเป็น On (จุดเขียว 🟢)
+* **การแก้ไข:**
+  - **Automated Deactivation on AD Sync (`scheduler.py`):** เมื่อเชื่อมต่อ AD Sync Agent แล้ว หากพบบัญชีเดิมที่หลุดออกจากรายการ AD สด (`live_usernames`) ระบบจะปรับ `stale.identity.is_active_in_ad = False` ทันที พร้อมลบการแมป AD และมี Reconciliation Sweep กวาดตรวจตัวตนที่ค้างอยู่
+  - **Effective AD Status & Auto-Healing (`directory.py`):** คำนวณ `has_direct_ad = bool(has_ad_mapping or identity.ad_guid or identity.last_login_ad_at)` และ `effective_ad_active = bool(identity.is_active_in_ad and has_direct_ad)` ป้องกันไม่ให้ตัวตนที่ไม่มีความเชื่อมโยงกับ AD แสดงสถานะเขียว พร้อม auto-heal บันทึกลงฐานข้อมูล
+  - **Database Auto-Healing (`initial_data.py`):** ปรับ `worawut.s` เป็น `is_active_in_ad = False` และมี auto-heal กวาดตรวจตัวตนที่ไม่มี AD footprint
+  - **Tooltip Clarity (`frontend/src/app/directory/page.tsx`):** ปรับ Tooltip เป็น `"Inactive: บัญชีถูกปิดใช้งาน หรือไม่มีตัวตนใน Active Directory"`

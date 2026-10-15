@@ -425,6 +425,7 @@ def init_db():
                 "department": "Purchasing",
                 "is_active_in_ad": True,
                 "mappings": [
+                    {"app": "ad", "role": "Domain Users", "active": True},
                     {"app": "irm", "role": "PU User", "active": True},
                     {"app": "sap_b1", "role": "SAP B1 User", "active": True}
                 ]
@@ -436,6 +437,7 @@ def init_db():
                 "department": "Purchasing",
                 "is_active_in_ad": True,
                 "mappings": [
+                    {"app": "ad", "role": "Domain Users", "active": True},
                     {"app": "irm", "role": "PU User", "active": True},
                     {"app": "sap_b1", "role": "SAP B1 User", "active": True}
                 ]
@@ -447,6 +449,7 @@ def init_db():
                 "department": "IT",
                 "is_active_in_ad": True,
                 "mappings": [
+                    {"app": "ad", "role": "Domain Users", "active": True},
                     {"app": "irm", "role": "PU User", "active": True},
                     {"app": "sap_b1", "role": "SAP B1 Superuser", "active": True}
                 ]
@@ -458,6 +461,7 @@ def init_db():
                 "department": "Purchasing",
                 "is_active_in_ad": True,
                 "mappings": [
+                    {"app": "ad", "role": "Domain Users", "active": True},
                     {"app": "irm", "role": "PU User", "active": True}
                 ]
             },
@@ -468,6 +472,7 @@ def init_db():
                 "department": "Purchasing",
                 "is_active_in_ad": True,
                 "mappings": [
+                    {"app": "ad", "role": "Domain Users", "active": True},
                     {"app": "irm", "role": "PU User", "active": True}
                 ]
             },
@@ -500,6 +505,7 @@ def init_db():
                 "department": "Warehouse",
                 "is_active_in_ad": True,
                 "mappings": [
+                    {"app": "ad", "role": "Domain Users", "active": True},
                     {"app": "irm", "role": "WH User", "active": True}
                 ]
             }
@@ -603,6 +609,37 @@ def init_db():
                     AppAccountMapping.identity_id == win_ident.id,
                     AppAccountMapping.application_id == ad_app.id
                 ).delete()
+
+        # Fix worawut.s: removed from Active Directory, must not be active in AD
+        worawut_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "worawut.s").first()
+        if worawut_ident:
+            worawut_ident.is_active_in_ad = False
+            ad_app = app_objs.get("ad")
+            if ad_app:
+                db.query(AppAccountMapping).filter(
+                    AppAccountMapping.identity_id == worawut_ident.id,
+                    AppAccountMapping.application_id == ad_app.id
+                ).delete()
+
+        # Auto-heal: Ensure any identity marked active in AD but absent from AD account mappings is set to is_active_in_ad = False
+        ad_app = app_objs.get("ad")
+        if ad_app:
+            ad_ident_ids = [r[0] for r in db.query(AppAccountMapping.identity_id).filter(AppAccountMapping.application_id == ad_app.id).all()]
+            if ad_ident_ids:
+                orphaned_ad_active = (
+                    db.query(MasterIdentity)
+                    .filter(
+                        MasterIdentity.is_active_in_ad == True,
+                        MasterIdentity.ad_guid.is_(None),
+                        MasterIdentity.last_login_ad_at.is_(None),
+                        ~MasterIdentity.id.in_(ad_ident_ids)
+                    )
+                    .all()
+                )
+                for orphan in orphaned_ad_active:
+                    logger.info("Auto-healing: User '%s' has no Active Directory account mapping. Setting is_active_in_ad = False", orphan.username)
+                    orphan.is_active_in_ad = False
+                db.flush()
 
         # Ensure ENABLE_USER commands exist so MTPulse re-activates them on next heartbeat
         for legit_u in ["Wimonpan.P", "Ronnakorn.P"]:
