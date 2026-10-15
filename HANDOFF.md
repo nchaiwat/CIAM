@@ -1,15 +1,53 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 14 ตุลาคม 2026 (Local Time: ~16:24 ICT)  
+> **Date Updated:** 15 ตุลาคม 2026 (Local Time: ~08:50 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
-> **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)
+> **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
+> **Test Integrity:** Backend Pytest: 51/51 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Clean, up-to-date with `origin/main` (Head Commit: `4470ffe`)
 
 ---
 
-## 0.00000000000000000000000000000000 ปรับปรุง Responsive หน้า Login SSO: ซ่อนแบนเนอร์สีน้ำเงินบน Mobile เพื่อให้แสดงการ์ด Login ทันทีโดยไม่ต้องเลื่อนหน้าจอ (14 ต.ค. 2026)
+## 0. ภาพรวมสรุปสำหรับทีมงานและ AI Agent ในการกลับมาพัฒนาต่อ (Executive Resume & Handover Protocol)
+
+### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
+ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%** โดยการปรับปรุงในรอบวันที่ 14-15 ตุลาคม 2026 มุ่งเน้นการยกระดับประสบการณ์ผู้ใช้ (Enterprise UX) บนหน้า Single Sign-On Login และการแก้ไขความถูกต้องของข้อมูลความปลอดภัย (Identity Governance):
+1. **Mobile Responsive Login UX:** ปรับปรุงหน้าเข้าสู่ระบบ SSO บนสมาร์ตโฟนและแท็บเล็ตขนาดเล็ก โดยซ่อนแผงแบนเนอร์สีน้ำเงินฝั่งซ้าย (`hidden lg:flex`) เพื่อให้การ์ดกรอก Username/Password แสดงผลเต็มจอทันที (`min-h-screen`) ผู้ใช้งานสามารถพิมพ์ข้อมูลและเข้าสู่ระบบได้ทันทีโดยไม่ต้องเลื่อนหน้าจอลงมา
+2. **Helpdesk & Support Interaction:** ปรับข้อความช่วยเหลือใต้การ์ดเข้าสู่ระบบเป็นลิงก์ปกติ `"ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ? ติดต่อฝ่าย IT"` ที่คลิกแล้วจะเปิด Modal แสดงภาพ LINE QR Code ของฝ่ายไอที พร้อมคงปุ่ม Floating Quick Contact ที่มุมขวาล่างของจอไว้
+3. **Username Placeholder:** ปรับตัวอย่างในช่องกรอกชื่อผู้ใช้งานให้กระชับเป็น `เช่น Chaiwat.N` (ตัดคำว่า `หรือ Somchai.S` ออก)
+4. **App Directory Hygiene (ตัด SAP B1):** นำคำว่า SAP Business One ออกจากข้อความประชาสัมพันธ์ระบบงานที่รองรับบนหน้า Login เนื่องจากยังไม่เปิดให้ผู้ใช้งานทั่วไปเข้าตรงผ่านเว็บ
+5. **Authentic Window Asia Branding:** ใช้งานตราสัญลักษณ์และโลโก้ทางการ วินโดว์ เอเชีย บนพื้นหลังการ์ดขาวคมชัด
+6. **Active Directory Single Source of Truth (กรณี Chanpen.K):**
+   - แก้ไข `backend/app/services/scheduler.py` ให้เฉพาะ Active Directory Connector (`is_ad_item = True`) เท่านั้นที่มีสิทธิ์กำหนด `identity.is_active_in_ad`
+   - ป้องกัน Spoke Connectors (เช่น pfSense, IRM) เขียนทับสถานะของผู้ใช้ที่ถูกระงับสิทธิ์ใน AD กลับมาเป็น Active อีกต่อไป
+   - ลบ Routine Auto-heal เดิมใน `backend/app/initial_data.py` ที่เคยวนลูปแก้ `is_active_in_ad = True` ทิ้งอย่างถาวร
+   - ตรวจจับบัญชีที่ถูกระงับสิทธิ์ใน AD แต่ยังตกค้างใน Spoke เป็น `DISCREPANCY` (Ghost Account) 100%
+7. **Department & Role Sanitization:**
+   - ขยาย `extract_ou_department` ใน `ad_proxy.py` และ `ciam-extension.js` ให้รองรับทั้ง Root OU `Users WA` และ `Users TC`
+   - กรองคำว่า `"Administrator"`, `"Admin"`, `"Domain Admins"` ออกจากรายการแผนก และแทนที่ด้วย `"Administration"` หรือ `"ธุรการ"`
+8. **AD Password Protection & Enterprise Complexity:**
+   - ปรับปรุงการตรวจสอบ `is_ad_user` ใน `backend/app/api/v1/auth.py` ให้ถูกต้องสำหรับพนักงาน AD ทุกคน โดยไม่ต้องพึ่งพา `ad_guid`
+   - ซ่อนปุ่มเปลี่ยนรหัสผ่านรูปกุญแจ 🔑 บนหน้า Employee App Portal (`/portal`) สำหรับพนักงาน AD ทุกคนโดยอัตโนมัติ
+   - บังคับใช้นโยบายรหัสผ่าน Enterprise สำหรับ Local Account: ความยาว 8-10 ตัวอักษร, พิมพ์ใหญ่, พิมพ์เล็ก, ตัวเลข, อักขระพิเศษ
+   - รองรับระบบบังคับเปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก (`must_change_password`)
+9. **Zero-Trust Client-Side VPN Reachability Probe Engine:**
+   - ระบบตรวจจับ Reachability ไปยัง Spoke On-Premise (`wa-mtpulse.wa.net`) อัตโนมัติจากเบราว์เซอร์ผู้ใช้ และปรับสถานะเป็นสีฟ้าสดใส (Sky/Blue) `🛡️ VPN พร้อม` เมื่อต่อ VPN
+
+---
+
+### 0.2 กฎเหล็กเชิงสถาปัตยกรรมที่ห้ามฝ่าฝืนโดยเด็ดขาด (Architectural Invariants)
+- **AD เป็น Single Source of Truth:** ห้ามให้ Spoke ใดๆ ปรับเปลี่ยน `is_active_in_ad` เป็นอันขาด หากบัญชีไม่มีใน AD หรือถูก Disable ใน AD แต่พบใน Spoke จะต้องจัดเป็น Discrepancy
+- **Zero-Password-Spoke Architecture:** Central IAM ไม่เคยและจะไม่ส่งรหัสผ่าน Plaintext ไปบันทึกในฐานข้อมูลของ Spoke แอปพลิเคชันลูกต้องยืนยันตัวตนผ่าน OIDC SSO Authorization Code Flow with PKCE เท่านั้น
+- **RFC 9700 Seamless SSO Initiation:** การเปิดระบบลูก On-Premise จาก Central IAM Portal ให้เด้งผ่าน Portal Launch URL (`/auth/start`) เพื่อให้ Spoke ผูก State/PKCE เข้ากับ Browser Cookie ป้องกันปัญหา Session Expired
+- **Docker Compose Service Names:** ชื่อ Service ของ Frontend คือ **`web`** (ห้ามใช้ `frontend` เด็ดขาด) และ Backend คือ **`api`**
+- **VPS Deployment Rule:** เขียนคำสั่งแยกทีละบรรทัด ห้ามเชื่อมด้วย `&&` ยาวเป็นพรืด และต้องมี `git pull` นำหน้าเสมอ
+
+---
+
+## Sprint 35: ปรับปรุง Responsive หน้า Login SSO: ซ่อนแบนเนอร์สีน้ำเงินบน Mobile เพื่อให้แสดงการ์ด Login ทันทีโดยไม่ต้องเลื่อนหน้าจอ (14 ต.ค. 2026)
 ### 1. รายละเอียดการทำงาน (Mobile Responsive Refinement):
 - ใน `frontend/src/app/login/page.tsx` ปรับส่วนแสดงผลของแผงข้อมูลสีน้ำเงินฝั่งซ้าย (Left Panel) ให้เป็น `hidden lg:flex`
 - เมื่อผู้ใช้งานเปิดผ่านสมาร์ตโฟนหรือแท็บเล็ตขนาดเล็ก (จอ < `lg`):
@@ -22,7 +60,7 @@
 
 ---
 
-## 0.0000000000000000000000000000000 ปรับปรุงหน้า Login SSO: เปลี่ยนปุ่มติดต่อไอทีเป็นการ์ดข้อความปกติ "ติดต่อฝ่าย IT" ไม่ซ้ำซ้อนกับด้านล่าง (14 ต.ค. 2026)
+## Sprint 34: ปรับปรุงหน้า Login SSO: เปลี่ยนปุ่มติดต่อไอทีเป็นการ์ดข้อความปกติ "ติดต่อฝ่าย IT" ไม่ซ้ำซ้อนกับด้านล่าง (14 ต.ค. 2026)
 ### 1. รายละเอียดการทำงาน (Login Helpdesk Link Refinement):
 - ใน `frontend/src/app/login/page.tsx` ปรับส่วนแจ้งเตือนความช่วยเหลือใต้การ์ดเข้าสู่ระบบ โดยตัดปุ่มสีเขียว `[ 📱 ติดต่อฝ่ายไอที (Scan LINE) ]` ออก เพื่อไม่ให้ซ้ำซ้อนกับปุ่ม Floating ด้านล่าง
 - ปรับเปลี่ยนเป็นข้อความลิงก์ปกติ:
@@ -32,7 +70,7 @@
 
 ---
 
-## 0.000000000000000000000000000000 ปรับปรุงหน้า Login SSO: ตัด "หรือ Somchai.S" ออกจากช่องกรอกชื่อผู้ใช้งาน (14 ต.ค. 2026)
+## Sprint 33: ปรับปรุงหน้า Login SSO: ตัด "หรือ Somchai.S" ออกจากช่องกรอกชื่อผู้ใช้งาน (14 ต.ค. 2026)
 ### 1. รายละเอียดการทำงาน (Login Placeholder Refinement):
 - ใน `frontend/src/app/login/page.tsx` แก้ไข Placeholder ของช่องกรอกชื่อผู้ใช้งาน (Username) จากเดิม:
   `placeholder="เช่น Chaiwat.N หรือ Somchai.S"`
@@ -42,7 +80,7 @@
 
 ---
 
-## 0.00000000000000000000000000000 ปรับปรุงหน้า Login SSO: นำ SAP Business One ออก และเพิ่มปุ่มเปิด Scan LINE QR Code ติดต่อฝ่ายไอที (14 ต.ค. 2026)
+## Sprint 32: ปรับปรุงหน้า Login SSO: นำ SAP Business One ออก และเพิ่มปุ่มเปิด Scan LINE QR Code ติดต่อฝ่ายไอที (14 ต.ค. 2026)
 ### 1. รายละเอียดการทำงาน (Login Page UX & Support Updates):
 1. **นำคำว่า SAP Business One ออกจากแบนเนอร์ข้อมูลฝั่งซ้าย:**
    - ใน `frontend/src/app/login/page.tsx` แก้ไขข้อความในรายการรองรับระบบงาน จาก:
@@ -63,7 +101,7 @@
 
 ---
 
-## 0.0000000000000000000000000000 ตรวจสอบและแก้ไขกรณี User Chanpen.K: ซ่อมสถานะ AD ถูก Spoke เขียนทับ และล้าง Role Administrator ออกจากชื่อแผนก (14 ต.ค. 2026)
+## Sprint 31: ตรวจสอบและแก้ไขกรณี User Chanpen.K: ซ่อมสถานะ AD ถูก Spoke เขียนทับ และล้าง Role Administrator ออกจากชื่อแผนก (14 ต.ค. 2026)
 ### 1. สาเหตุของปัญหา (Root Cause Analysis):
 1. **ทำไมสถานะ AD ของ `Chanpen.K` แสดงเป็นสีเขียว (Active) ทั้งที่บน AD ถูก Disable แล้ว:**
    - ใน AD ผู้ใช้ `Chanpen.K` ถูกระงับสิทธิ์จริง (ไอคอนลูกศรชี้ลง ⬇️ ใน OU `Users TC`)
@@ -97,7 +135,7 @@
 
 ---
 
-## 0.000000000000000000000000000 แก้ไขบั๊กปุ่มเปลี่ยนรหัสผ่านยังแสดงบนบัญชี AD: ปรับปรุงการตรวจสอบ is_ad_user ให้แม่นยำ ไม่ผูกติดกับ ad_guid (13 ต.ค. 2026)
+## Sprint 30: แก้ไขบั๊กปุ่มเปลี่ยนรหัสผ่านยังแสดงบนบัญชี AD: ปรับปรุงการตรวจสอบ is_ad_user ให้แม่นยำ ไม่ผูกติดกับ ad_guid (13 ต.ค. 2026)
 ### 1. สาเหตุและการแก้ไข (Root Cause Analysis & Fix):
 - **สาเหตุที่เกิดปัญหา:** ใน `backend/app/api/v1/auth.py` ของ Endpoint `GET /api/v1/auth/me` เดิมมีโค้ดตรวจสอบ:
   `out.is_ad_user = bool(ident.is_active_in_ad and ident.ad_guid)`
@@ -116,7 +154,7 @@
 
 ---
 
-## 0.00000000000000000000000000 ปรับปรุงหน้า Login SSO: ย้าย Logo ทางการมาฝั่งขวา, ตัดกล่อง Local/AD ด้านล่างออก, และปรับกระชับ Wording ฝั่งซ้ายให้เรียบหรู Enterprise (13 ต.ค. 2026)
+## Sprint 29: ปรับปรุงหน้า Login SSO: ย้าย Logo ทางการมาฝั่งขวา, ตัดกล่อง Local/AD ด้านล่างออก, และปรับกระชับ Wording ฝั่งซ้ายให้เรียบหรู Enterprise (13 ต.ค. 2026)
 ### 1. รายละเอียดการทำงาน (Login SSO Visual & Structural Refinements):
 1. **ย้าย Official Logo มาอยู่ฝั่งขวาด้านบนการ์ด Login:**
    - ย้ายโลโก้ทางการของบริษัท วินโดว์ เอเชีย (`/window-asia-logo.png`) ที่มีทั้งตราสัญลักษณ์วงกลมและตัวหนังสือ "Window Asia / วินโดว์ เอเชีย" มาไว้ด้านบนสุดของการ์ดเข้าสู่ระบบฝั่งขวา เหนือคำว่า "ยินดีต้อนรับ"
@@ -140,7 +178,7 @@
 
 ---
 
-## 0.0000000000000000000000000 ซ่อนปุ่มเปลี่ยน Password สำหรับ AD, บังคับใช้นโยบายรหัสผ่าน Enterprise สำหรับ Local Account (8-10 ตัวอักษร), และระบบบังคับเปลี่ยนรหัสผ่านครั้งแรก (13 ต.ค. 2026)
+## Sprint 28: ซ่อนปุ่มเปลี่ยน Password สำหรับ AD, บังคับใช้นโยบายรหัสผ่าน Enterprise สำหรับ Local Account (8-10 ตัวอักษร), และระบบบังคับเปลี่ยนรหัสผ่านครั้งแรก (13 ต.ค. 2026)
 ### 1. รายละเอียดการทำงาน (AD Password Protection & Enterprise Local Account Policy):
 1. **ซ่อนปุ่มเปลี่ยน Password สำหรับบัญชี AD บน Employee Portal (`/portal`):**
    - ตรวจสอบชนิดบัญชีผ่าน API `/auth/me` และ `/auth/login` โดยเพิ่มฟิลด์ `is_ad_user: bool`
@@ -171,7 +209,7 @@
 
 ---
 
-## 0.000000000000000000000000 ออกแบบหน้า Login SSO ใหม่แบบ Split-Screen Enterprise Layout ด้วย Official Logo ตรงตาม Brand Identity (13 ต.ค. 2026)
+## Sprint 27: ออกแบบหน้า Login SSO ใหม่แบบ Split-Screen Enterprise Layout ด้วย Official Logo ตรงตาม Brand Identity (13 ต.ค. 2026)
 ### 1. รายละเอียดการทำงาน (Enterprise SSO Login Redesign & Authentic Branding):
 1. **นำเข้าและใช้งาน Official Logo Asset โดยตรง (Brand Identity 100%):**
    - นำไฟล์รูปภาพโลโก้ทางการของบริษัท วินโดว์ เอเชีย (`media_1791888237535.png`) ที่ผู้ใช้ส่งให้ มาใช้เป็น Asset หลักโดยตรงใน `frontend/public/window-asia-logo.png`
@@ -202,7 +240,7 @@
 
 ---
 
-## 0.00000000000000000000000 รวมบัญชี Wachirawut.B/wachirawoot.b อัตโนมัติ, แก้ไขแผนก Chaiwat (IT) และ Wimonpan.P (SC) ให้ถูกต้องตามจริง, และเพิ่มปุ่มซิงก์สดจาก AD (13 ต.ค. 2026)
+## Sprint 26: รวมบัญชี Wachirawut.B/wachirawoot.b อัตโนมัติ, แก้ไขแผนก Chaiwat (IT) และ Wimonpan.P (SC) ให้ถูกต้องตามจริง, และเพิ่มปุ่มซิงก์สดจาก AD (13 ต.ค. 2026)
 ### 1. รายละเอียดการทำงานและตอบข้อสงสัยของผู้ใช้:
 1. **การรวมบัญชี Wachirawut.B กับ wachirawoot.b (Case Insensitive & Transliteration Merge):**
    - **สาเหตุที่แยกเป็น 2 แถว:** บัญชีใน AD สะกดว่า `wachirawoot.b` (ใช้ `oo`) ส่วนบัญชีใน pfSense HO สะกดว่า `Wachirawut.B` (ใช้ตัวใหญ่และใช้ `u`) ระบบเดิมจึงมองเป็นคนละ username
@@ -222,7 +260,7 @@
 
 ---
 
-## 0.0000000000000000000000 แก้ไขบั๊กคอลัมน์แผนก Blank (-): แก้ไข Empty String ใน Junk Depts, ปรับปรุงการดึง OU จาก DistinguishedName และฟื้นฟูข้อมูลแผนก (13 ต.ค. 2026)
+## Sprint 25: แก้ไขบั๊กคอลัมน์แผนก Blank (-): แก้ไข Empty String ใน Junk Depts, ปรับปรุงการดึง OU จาก DistinguishedName และฟื้นฟูข้อมูลแผนก (13 ต.ค. 2026)
 ### 1. สาเหตุที่คอลัมน์แผนก (Department) แสดงผลเป็นขีด `-` (Blank) ทั้งหมด:
 1. **Empty String ในตัวกรอง `junk_depts`:** ใน `backend/app/api/v1/directory.py` และ `backend/app/initial_data.py` เดิมมีลิสต์ `junk_depts` ที่บรรจุสตริงว่าง `""` อยู่ท้ายลิสต์ เมื่อมีเงื่อนไข `any(j in dept_str.lower() for j in junk_depts)` ในภาษา Python สตริงว่าง `""` จะเป็นซับสตริงของสตริงทุกตัวเสมอ (`"" in "Purchasing"` ได้ `True`) ส่งผลให้แผนกของทุกบัญชีถูกมองว่าเป็น Junk และถูกเปลี่ยนเป็น `None` 100% ทั้งใน API และการล้างข้อมูลตอนเริ่มเซิร์ฟเวอร์
 2. **ไม่รองรับคีย์ `distinguished_name` และ `department` ใน `_normalize_ad_users`:** ใน `backend/app/connectors/ad_proxy.py` โค้ดเดิมค้นหาเฉพาะ `distinguishedName`, `DistinguishedName`, และ `dn` (ไม่มีแบบ `distinguished_name` ที่ส่งจาก `ciam-extension.js`) และไม่ได้อ่านค่า `department` ที่ `ciam-extension.js` สกัดมาจาก OU ส่งผลให้เมื่อซิงก์จาก AD ข้อมูลแผนกจึงกลายเป็น `None` เสมอ
@@ -248,7 +286,7 @@
 
 ---
 
-## 0.000000000000000000000 ปรับปรุงหน้า SSO Portal ใหม่: Freeze Header, กระชับ Header รอง, ย่อขนาด App Cards 4 คอลัมน์, และพื้นหลังเฉดสีฟ้าอ่อน Modern (13 ต.ค. 2026)
+## Sprint 24: ปรับปรุงหน้า SSO Portal ใหม่: Freeze Header, กระชับ Header รอง, ย่อขนาด App Cards 4 คอลัมน์, และพื้นหลังเฉดสีฟ้าอ่อน Modern (13 ต.ค. 2026)
 ### 1. รายละเอียดการปรับปรุง (SSO App Portal Refinement):
 1. **Freeze Top Header:**
    - เปลี่ยนจาก static/sticky header เป็น `fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur-xl border-b border-sky-200/80 h-16`
@@ -273,7 +311,7 @@
 
 ---
 
-## 0.00000000000000000000 ยกเครื่องดีไซน์ Modern SSO App Portal, แก้ไข Winmonpan.P แสดง AD เขียว, และปรับแถบ Header & ระบบเชื่อมต่อ (13 ต.ค. 2026)
+## Sprint 23: ยกเครื่องดีไซน์ Modern SSO App Portal, แก้ไข Winmonpan.P แสดง AD เขียว, และปรับแถบ Header & ระบบเชื่อมต่อ (13 ต.ค. 2026)
 ### 1. รายละเอียดการทำงาน:
 1. **แก้ไขความถูกต้องของสถานะ AD สำหรับ `Winmonpan.P`:**
    - **สาเหตุ:** `agent.py` เดิมมี logic `is_ad_format` ที่ตรวจสอบจุดในชื่อผู้ใช้ (`first.last`) เมื่อ Spoke MTPulse ซิงก์บัญชีที่สะกดผิดเป็น `Winmonpan.P` จึงเข้าใจผิดว่าเป็นบัญชี AD และตั้ง `is_active_in_ad = True` ประกอบกับ `directory.py` นำ `is_ad_username_fmt` มาใช้ตัดสิน `is_ad`
@@ -298,7 +336,7 @@
 
 ---
 
-## 0.0000000000000000000 ปรับเปลี่ยนการตรวจสถานะ AD เป็นทุก 1 นาที (ค่าเริ่มต้น) และรองรับการตั้งค่าความถี่ได้เองโดย Admin (13 ต.ค. 2026)
+## Sprint 22: ปรับเปลี่ยนการตรวจสถานะ AD เป็นทุก 1 นาที (ค่าเริ่มต้น) และรองรับการตั้งค่าความถี่ได้เองโดย Admin (13 ต.ค. 2026)
 ### 1. รายละเอียดการปรับปรุง (Configurable AD Monitor Probe Interval):
 1. **เปลี่ยนค่าความถี่เริ่มต้น (Default Interval):**
    - เปลี่ยนจากการตรวจทุก 30 วินาที เป็น **ทุก 1 นาที (60 วินาที)**
@@ -329,7 +367,7 @@
 
 ---
 
-## 0.000000000000000000 ระบบเฝ้าระวัง AD Sync Agent: แจ้งเตือน Telegram ทันทีเมื่อ OFF และเตือนซ้ำทุกๆ 1 ชั่วโมง จนกว่าจะกลับมาเป็น ON (13 ต.ค. 2026)
+## Sprint 21: ระบบเฝ้าระวัง AD Sync Agent: แจ้งเตือน Telegram ทันทีเมื่อ OFF และเตือนซ้ำทุกๆ 1 ชั่วโมง จนกว่าจะกลับมาเป็น ON (13 ต.ค. 2026)
 ### 1. รายละเอียดการทำงานของระบบเฝ้าระวัง (Real-Time AD Monitor Engine):
 1. **Background Scheduler Daemon (ตรวจสอบทุก 30 วินาที):**
    - ทำงานตลอด 24/7 ผ่าน `run_scheduler_worker()` ใน `backend/app/services/scheduler.py`
@@ -350,7 +388,7 @@
 
 ---
 
-## 0.00000000000000000 เพิ่มการ Sort ที่ Header ตาราง, เปลี่ยนชื่อคอลัมน์เป็น "บัญชีผู้ใช้", และปรับปุ่มจัดการสิทธิ์เป็นไอคอนล้วน (13 ต.ค. 2026)
+## Sprint 20: เพิ่มการ Sort ที่ Header ตาราง, เปลี่ยนชื่อคอลัมน์เป็น "บัญชีผู้ใช้", และปรับปุ่มจัดการสิทธิ์เป็นไอคอนล้วน (13 ต.ค. 2026)
 ### 1. รายละเอียดการปรับปรุงหน้า Directory:
 1. **กดที่ Header เพื่อเรียงลำดับ (Interactive Column Sorting):**
    - สามารถคลิกที่หัวตารางเพื่อสลับการเรียงลำดับ (Ascending ⬆️ / Descending ⬇️ / Default)
@@ -367,7 +405,7 @@
 
 ---
 
-## 0.0000000000000000 ปรับปรุงความถูกต้องข้อมูล: แสดงอีเมลเฉพาะผู้ใช้ M365 เท่านั้น และแสดงแผนกเฉพาะที่ดึงได้จาก AD OU เท่านั้น ห้ามใส่ค่าทดแทน (13 ต.ค. 2026)
+## Sprint 19: ปรับปรุงความถูกต้องข้อมูล: แสดงอีเมลเฉพาะผู้ใช้ M365 เท่านั้น และแสดงแผนกเฉพาะที่ดึงได้จาก AD OU เท่านั้น ห้ามใส่ค่าทดแทน (13 ต.ค. 2026)
 ### 1. นโยบายการแสดงผลข้อมูลที่ถูกต้องตามคำสั่งผู้ใช้:
 - **อีเมล (Email):** ผู้ใช้ที่มีอีเมลคือผู้ที่ใช้งาน **Microsoft 365** เท่านั้น หากผู้ใช้ไม่ได้เชื่อมต่อหรือไม่มีสิทธิ์ใน M365 จะไม่แสดงอีเมลโดยเด็ดขาด (`email = null`) ห้ามสังเคราะห์อีเมลสมมติหรือนำอีเมลจาก Spoke อื่นมาใส่
 - **แผนก (Department):** ผู้ใช้ที่จะมีแผนกจะต้องเป็นผู้ใช้ใน **Active Directory (AD)** และต้องสามารถดึง **Organizational Unit (OU)** ออกมาได้จริงเท่านั้น หากดึง OU ไม่ได้ หรือเป็นบัญชีเฉพาะระบบ/Spoke ให้แสดงผลเป็นขีด `-` ห้ามใส่ชื่อกลุ่ม pfSense (เช่น OpenVPN Client, Captive Portal), ห้ามใส่ "M365 User", "Firewall Local", "Active Directory", หรือ "ทั่วไป" โดยเด็ดขาด เพราะการใส่ค่าทดแทนทำให้เข้าใจผิด
@@ -388,7 +426,7 @@
 
 ---
 
-## 0.000000000000000 ตัดปุ่มทางลัดที่ซ้ำซ้อนบน Header และ Dashboard ให้ UI สะอาดตา (12 ต.ค. 2026)
+## Sprint 18: ตัดปุ่มทางลัดที่ซ้ำซ้อนบน Header และ Dashboard ให้ UI สะอาดตา (12 ต.ค. 2026)
 ### 1. ลบปุ่มทางลัดที่ไม่จำเป็นตามคำขอผู้ใช้:
 - ผู้ใช้ระบุว่าปุ่มทางลัดต่างๆ บนหน้าจอรกเกินไป และสามารถคลิกเข้าสู่เมนูหลักผ่าน Sidebar ด้านซ้ายได้โดยตรง
 - **จุดที่นำออก:**
@@ -403,7 +441,7 @@
 
 ---
 
-## 0.00000000000000 อัปเดตล่าสุด: ปุ่ม Excel ไอคอนล้วน, ยกเลิกสร้างอีเมลสมมติ (@windowasia.com), จำจำนวนแถวต่อหน้าใน LocalStorage, ปรับสวิตช์ Spoke เป็น On/Off และยุบปุ่มตั้งค่าเชื่อมต่อ (12 ต.ค. 2026)
+## Sprint 17: อัปเดตล่าสุด: ปุ่ม Excel ไอคอนล้วน, ยกเลิกสร้างอีเมลสมมติ (@windowasia.com), จำจำนวนแถวต่อหน้าใน LocalStorage, ปรับสวิตช์ Spoke เป็น On/Off และยุบปุ่มตั้งค่าเชื่อมต่อ (12 ต.ค. 2026)
 ### 1. ปุ่มดาวน์โหลด Excel เป็น Icon ล้วน (Directory Page):
 - นำข้อความ `ดาวน์โหลด Excel` ออก เหลือเฉพาะไอคอนเอกสาร Excel สีเขียว พร้อม Tooltip สวยงามและ Micro-animation ขณะคลิก
 
@@ -434,7 +472,7 @@
 
 ---
 
-## 0.0000000000000 อัปเดตก่อนหน้า: แก้ไขปัญหาบันทึกความถี่แจ้งเตือน Telegram (interval_hours) เด้งกลับเป็น 4 ชั่วโมง (12 ต.ค. 2026)
+## Sprint 16: อัปเดตก่อนหน้า: แก้ไขปัญหาบันทึกความถี่แจ้งเตือน Telegram (interval_hours) เด้งกลับเป็น 4 ชั่วโมง (12 ต.ค. 2026)
 ### ปัญหาที่พบและสาเหตุ (Root Cause):
 - เมื่อผู้ใช้เลือกความถี่ในการตรวจเช็คเป็น **"ทุกๆ 1 ชั่วโมง"** แล้วกด **"บันทึกการตั้งค่า Telegram"** ค่าจะเด้งกลับมาเป็น **4 ชั่วโมง** เสมอ
 - **สาเหตุ:** คอลัมน์ `setting_value` ในโมเดล `SystemSetting` (`setting.py`) ถูกประกาศเป็น `Column(JSON)` แบบพื้นฐาน ซึ่ง SQLAlchemy ไม่ตรวจจับการแก้ไขค่าใน Dictionary ภายใน (In-place mutation) ทำให้เมื่อรันคำสั่ง `setting.setting_value = current_val` โดยที่เป็นออบเจกต์เดิม SQLAlchemy ถือว่าไม่มีฟิลด์ใดเปลี่ยนแปลง (No-op) และไม่ส่งคำสั่ง `UPDATE system_settings` ไปยัง PostgreSQL เลย เมื่อตอบกลับหรือรีโหลด Session ใหม่ ค่าจึงดึงของเดิม (4 ชั่วโมง) กลับมาแสดง
@@ -448,7 +486,7 @@
 
 ---
 
-## 0.000000000000 อัปเดตก่อนหน้า: แก้ไข Modal เลื่อนหลุดขอบบน, เพิ่มเมนู System Settings ใน Sidebar & Header, แก้ไข Error ซิงก์ทุกระบบทันที (now_utc), และเพิ่มปุ่ม Enable/Disable Spoke (12 ต.ค. 2026)
+## Sprint 15: อัปเดตก่อนหน้า: แก้ไข Modal เลื่อนหลุดขอบบน, เพิ่มเมนู System Settings ใน Sidebar & Header, แก้ไข Error ซิงก์ทุกระบบทันที (now_utc), และเพิ่มปุ่ม Enable/Disable Spoke (12 ต.ค. 2026)
 ### 1. แก้ไขปัญหากดชื่อผู้ดูแลระบบแล้วหน้าจอหลุดหายไปด้านบน (Admin Profile Modal Cutoff):
 - **สาเหตุ:** การใช้ CSS Flexbox `items-center` ร่วมกับ `overflow-y-auto` บน Container modal ที่มีความสูงมากกว่า Viewport ทำให้หัว Modal ถูกดันขึ้นไปในพื้นที่พิกัดติดลบ ไม่สามารถเลื่อนกลับลงมาได้
 - **การแก้ไข:** ใน `AdminProfileModal.tsx` ปรับโครงสร้าง Wrapper เป็น `items-start sm:items-center py-6 sm:py-10 max-h-[90vh] flex flex-col my-auto` พร้อมยึด Header แบบ `shrink-0` ทำให้หัวข้อและปุ่ม `[X]` ปิดหน้าต่างแสดงผลอยู่บนหน้าจอตลอดเวลา เลื่อนเนื้อหาภายในได้อย่างราบรื่น
@@ -481,7 +519,7 @@
 
 ---
 
-## 0.00000000000 อัปเดตก่อนหน้า: สกัดแผนกจาก AD OU (Users WA), ดึง Telegram ID จาก AD Pager พร้อมปุ่มทดสอบ DM และหน้าตั้งค่าระบบ (/settings) (12 ต.ค. 2026)
+## Sprint 14: อัปเดตก่อนหน้า: สกัดแผนกจาก AD OU (Users WA), ดึง Telegram ID จาก AD Pager พร้อมปุ่มทดสอบ DM และหน้าตั้งค่าระบบ (/settings) (12 ต.ค. 2026)
 ### 1. สกัดแผนกอิงตามโครงสร้าง OU (Users WA) ใน Active Directory:
 - **เหตุผล:** ผู้ใช้ทั้งหมดอยู่ภายใต้ `OU=Users WA,DC=wa,DC=net` ซึ่งแบ่งแผนกเป็น OU ย่อย (เช่น `Purchasing`, `IT`, `HR`, `Account`, `Sales`, `Production`)
 - **การแก้ไข:** ใน `ad_proxy.py` เพิ่มฟังก์ชัน `extract_ou_department(dn)` สกัดชื่อแผนกจาก DistinguishedName โดยอัตโนมัติ ทั้งในโหมดผ่าน AD Sync Agent (`_normalize_ad_users`) และ LDAP Direct Connection (`_query_ldap_users`) พร้อมอัปเดตลงตาราง `MasterIdentity.department` ใน `scheduler.py`
@@ -503,7 +541,7 @@
 
 ---
 
-## 0.0000000000 อัปเดตก่อนหน้า: แก้ไข 500 Internal Server Error จาก Duplicate Username และปฏิบัติตามกฎ Sandbox อย่างเคร่งครัด (12 ต.ค. 2026)
+## Sprint 13: อัปเดตก่อนหน้า: แก้ไข 500 Internal Server Error จาก Duplicate Username และปฏิบัติตามกฎ Sandbox อย่างเคร่งครัด (12 ต.ค. 2026)
 ### 1. ปัญหาและสาเหตุที่พบ (Root Cause of 500 Error):
 - Terminal ฝั่ง AD Sync Agent ดึงบัญชี HO สำเร็จสมบูรณ์: `Total 41 accounts (1 FreeRADIUS + 40 Local)` และส่ง `SUCCESS 200` กลับมายัง Central IAM
 - แต่หน้าเว็บขึ้นแจ้งเตือน `ไม่สามารถดึงข้อมูลบัญชีจาก PFSENSE_HO: API Error [500]: Internal Server Error`
@@ -516,7 +554,7 @@
 
 ---
 
-## 0.000000000 อัปเดตก่อนหน้า: แก้ปัญหาดูข้อมูลสด pfSense HO ไม่แสดง (AD Sync Agent Gateway Routing & Endpoints) (12 ต.ค. 2026)
+## Sprint 12: อัปเดตก่อนหน้า: แก้ปัญหาดูข้อมูลสด pfSense HO ไม่แสดง (AD Sync Agent Gateway Routing & Endpoints) (12 ต.ค. 2026)
 ### ปัญหาที่พบและการวิเคราะห์รากเหง้า (Root Cause):
 - เมื่อกดดูข้อมูลสดของ pfSense FAC ดึงได้ปกติ 168 บัญชี (77 FreeRADIUS + 91 Local) แต่ pfSense HO ขึ้นแจ้งเตือน:
   `ระบบปลายทางออฟไลน์ (Offline) - pfSense ไม่ตอบรับ (http://172.18.0.1:3100/api/v1/pfsense/ho)`
@@ -540,7 +578,7 @@
 
 ---
 
-## 0.00000000 อัปเดตก่อนหน้า: เพิ่ม Spoke Connector สำหรับ pfSense HO (Head Office: 192.168.10.1) (12 ต.ค. 2026)
+## Sprint 11: อัปเดตก่อนหน้า: เพิ่ม Spoke Connector สำหรับ pfSense HO (Head Office: 192.168.10.1) (12 ต.ค. 2026)
 ### รายละเอียดฟีเจอร์การเชื่อมต่อ pfSense HO:
 1. **Spoke Registration & Seed Data (`initial_data.py`):**
    - เพิ่มระบบเชื่อมต่อ `pfsense_ho` (pfSense Firewall & VPN - Head Office) เข้าสู่ตาราง `connected_applications`
@@ -560,7 +598,7 @@
 
 ---
 
-## 0.0000000 สรุปแผนงานและแนวทางการพัฒนา: นำ Spoke Integration Framework ไปใช้กับระบบ On-Premise PHP + MySQL (12 ต.ค. 2026)
+## Sprint 10: สรุปแผนงานและแนวทางการพัฒนา: นำ Spoke Integration Framework ไปใช้กับระบบ On-Premise PHP + MySQL (12 ต.ค. 2026)
 ### บริบทและโจทย์งาน:
 - เตรียมให้ทีม Dev ภายในนำ Framework การซิงก์และเชื่อมต่อกับ Central IAM ([SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) v2.7.0) ไปใช้กับแอปพลิเคชันภายใน
 - สภาพแวดล้อมระบบของทีม Dev: พัฒนาแบบ **Manual (Native/Custom PHP)** ติดตั้งบนเซิร์ฟเวอร์ **On-Premise** ภายในองค์กร และเชื่อมต่อกับ **MySQL**
@@ -583,7 +621,7 @@
 
 ---
 
-## 0.000000 อัปเดตก่อนหน้า: ถอดปุ่มซิงก์ซ้ำซ้อนออกจากหน้าทะเบียนผู้ใช้ (Single Responsibility) (11 ต.ค. 2026)
+## Sprint 9: อัปเดตก่อนหน้า: ถอดปุ่มซิงก์ซ้ำซ้อนออกจากหน้าทะเบียนผู้ใช้ (Single Responsibility) (11 ต.ค. 2026)
 ### รายละเอียดการปรับปรุง:
 1. **หน้าทะเบียนผู้ใช้ (`frontend/src/app/directory/page.tsx`):**
    - ถอดปุ่ม `🔄 ซิงก์ข้อมูล` ใน Toolbar ออกตามหลักสถาปัตยกรรม Single Responsibility
@@ -592,7 +630,7 @@
 
 ---
 
-## 0.00000 อัปเดตก่อนหน้า: บันทึกบัญชีสดเข้าฐานข้อมูลอัตโนมัติ (Auto-persist) (11 ต.ค. 2026)
+## Sprint 8: อัปเดตก่อนหน้า: บันทึกบัญชีสดเข้าฐานข้อมูลอัตโนมัติ (Auto-persist) (11 ต.ค. 2026)
 ### สาเหตุที่หน้าทะเบียนผู้ใช้ยังขึ้น 90 คน:
 - Modal "รายชื่อผู้ใช้สด" ดึงข้อมูลจาก M2M Endpoint สด (`168 บัญชี`) แต่เดิมไม่ได้บันทึกลงฐานข้อมูล `app_account_mappings` โดยอัตโนมัติ
 - หน้าทะเบียนผู้ใช้ (`/directory`) อ่านข้อมูลจากฐานข้อมูลของ Central IAM ซึ่งเดิมค้างอยู่ที่รอบการซิงก์ครั้งแรก (90 บัญชี Local)
@@ -608,7 +646,7 @@
 
 ---
 
-## 0.0000 อัปเดตก่อนหน้า: ปรับปรุงการแยกแยะบัญชี pfSense Local / FreeRADIUS และตัดปุ่ม Excel ซ้ำซ้อน (11 ต.ค. 2026)
+## Sprint 7: อัปเดตก่อนหน้า: ปรับปรุงการแยกแยะบัญชี pfSense Local / FreeRADIUS และตัดปุ่ม Excel ซ้ำซ้อน (11 ต.ค. 2026)
 ### รายละเอียดการปรับปรุง:
 1. **หน้าทะเบียนผู้ใช้ (`frontend/src/app/directory/page.tsx`):**
    - ตัดปุ่ม "ดาวน์โหลด Excel" ใน Header ด้านบนออก เหลือเฉพาะปุ่มไอคอน Excel ถัดจากปุ่มค้นหาใน Toolbar
@@ -620,7 +658,7 @@
 
 ---
 
-## 0.000 อัปเดตก่อนหน้า: เพิ่ม Spoke Connector สำหรับ pfSense FAC (Firewall, FreeRADIUS VPN & Captive Portal) (11 ต.ค. 2026)
+## Sprint 6: อัปเดตก่อนหน้า: เพิ่ม Spoke Connector สำหรับ pfSense FAC (Firewall, FreeRADIUS VPN & Captive Portal) (11 ต.ค. 2026)
 ### รายละเอียดฟีเจอร์การเชื่อมต่อ pfSense FAC:
 1. **PfSenseConnector Class (`backend/app/connectors/pfsense.py`):**
    - พัฒนา Connector เฉพาะทางสำหรับ pfSense สื่อสารผ่าน AD Sync Agent Security Proxy (`http://172.18.0.1:3100/api/v1/pfsense/fac`)
@@ -639,7 +677,7 @@
 
 ---
 
-## 0.00 อัปเดตก่อนหน้า: เพิ่มปุ่มและฟังก์ชันดาวน์โหลดทะเบียนผู้ใช้เป็น Excel (.xlsx) พร้อมไอคอน Excel (/directory) (10 ต.ค. 2026)
+## Sprint 5: อัปเดตก่อนหน้า: เพิ่มปุ่มและฟังก์ชันดาวน์โหลดทะเบียนผู้ใช้เป็น Excel (.xlsx) พร้อมไอคอน Excel (/directory) (10 ต.ค. 2026)
 ### รายละเอียดฟีเจอร์การส่งออก Excel:
 1. **ไอคอน Microsoft Excel เฉพาะตัว (Custom Green Spreadsheet Icon):**
    - ออกแบบไอคอน SVG คมชัดสีเขียวเข้มสไตล์ Microsoft Excel พร้อมตัวอักษร X และตารางสเปรดชีต
@@ -662,7 +700,7 @@
 
 ---
 
-## 0.0 อัปเดตก่อนหน้า: Data Analytics & Spoke Accounts Breakdown & IAM Operational KPIs (/page.tsx, /applications) (10 ต.ค. 2026)
+## Sprint 4: อัปเดตก่อนหน้า: Data Analytics & Spoke Accounts Breakdown & IAM Operational KPIs (/page.tsx, /applications) (10 ต.ค. 2026)
 ### รายละเอียดฟีเจอร์และการวิเคราะห์ข้อมูล (KPI & Roadmap):
 1. **การแจกแจงสัดส่วนบัญชีแต่ละระบบลูก (Spoke Account Breakdown):**
    - **Backend API (`GET /api/v1/applications`):** เชื่อมโยง `AppAccountMapping` เข้ากับ `MasterIdentity` เพื่อประมวลผลตัวเลขจริงแบบเรียลไทม์:
@@ -687,7 +725,7 @@
 
 ---
 
-## 0.1 อัปเดตก่อนหน้า: ปรับปรุงหน้าแสดงทะเบียนผู้ใช้ (/directory), Header กะทัดรัด Sticky Freeze, และแดชบอร์ดกราฟวิเคราะห์ (/page.tsx) (10 ต.ค. 2026)
+## Sprint 3: อัปเดตก่อนหน้า: ปรับปรุงหน้าแสดงทะเบียนผู้ใช้ (/directory), Header กะทัดรัด Sticky Freeze, และแดชบอร์ดกราฟวิเคราะห์ (/page.tsx) (10 ต.ค. 2026)
 ### รายการปรับปรุงตามความต้องการของผู้ใช้ (9 ข้อ):
 1. **ช่องสถานะ AD (`/directory`):** เปลี่ยนจากป้ายตัวหนังสือ `Active`/`Inactive` เป็นจุดกลมคลีน:
    - 🟢 **กลมสีเขียว (พัลส์เรืองแสง):** เมื่อเปิดใช้งานใน AD (`is_active_in_ad == true`)
@@ -713,7 +751,7 @@
 
 ---
 
-## 0.1 อัปเดตก่อนหน้า (10 ต.ค. 2026): แก้ไขปัญหา QOL Account ขึ้น AD Disable, Wimonpan.P/Ronnakorn.P ถูก Auto-Disable และถอด Rogue Autonomous Loop ออกถาวร
+## Sprint 2: อัปเดตก่อนหน้า (10 ต.ค. 2026): แก้ไขปัญหา QOL Account ขึ้น AD Disable, Wimonpan.P/Ronnakorn.P ถูก Auto-Disable และถอด Rogue Autonomous Loop ออกถาวร
 ### ปัญหาที่พบและสาเหตุรากเหง้า (Root Cause Analysis):
 1. **บัญชีบน QOL (เช่น `Patcharakorn.T`, `Thidarat.S`, `Patsara.P`, `Worakit.K`, `Natthaset.S`, `Sompon.P`, `Punyanut.T`, `Supitchaya.P`) ที่เป็นบัญชีใน AD แต่แสดงสถานะ AD เป็น Inactive และติดป้าย "บัญชีผี" (Ghost Account):**
    - **สาเหตุ 1 (Sync Stale Absence Bug เดิม):** บัญชีเหล่านี้เคยถูกโค้ดซิงก์รอบ 04:00 น. เดิมตั้ง `is_active_in_ad = False` ค้างในฐานข้อมูล เมื่อ AD Sync ส่งข้อมูลมาไม่ครบ
@@ -736,7 +774,7 @@
 
 ---
 
-## 0.1 อัปเดตก่อนหน้า (9 ต.ค. 2026): แก้ไขปัญหา AD Inactive, Ghost Account False Positives และ Pinyada.S
+## Sprint 1: อัปเดตก่อนหน้า (9 ต.ค. 2026): แก้ไขปัญหา AD Inactive, Ghost Account False Positives และ Pinyada.S
 ### ปัญหาที่พบและสาเหตุ:
 1. **บัญชี `Patcha.S`, `Apichai.P`, `Praewwalee.K`, `pinyada.r`, `Ronnakorn.P`, `Wimonpan.P` ขึ้น AD Inactive / บัญชีผี (Ghost Account):**
    - สาเหตุ 1: ใน `agent.py` เมื่อ MTPulse ยิง heartbeat ส่งรายชื่อผู้ใช้ โค้ดสร้าง MasterIdentity โดยตั้งค่า `is_active_in_ad = False` ส่งผลให้กลายเป็น Inactive ใน AD ทันที
@@ -1254,51 +1292,102 @@ docker compose up -d api web
 
 ## 4. สถานะระบบปัจจุบัน และ แผนงานที่จะปรับปรุงต่อในรอบถัดไป (Current Status & Next Steps Roadmap)
 
+> **ปรับปรุงล่าสุด:** 15 ตุลาคม 2026 (Local Time: ~08:50 ICT)  
+> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (ทุกการเปลี่ยนแปลงได้ผ่านการทดสอบและ Push สู่ `origin/main` ครบถ้วนแล้ว)
+
 ### 4.1 สถานะระบบที่ตรวจสอบและส่งมอบแล้ว (Verified & Production Ready)
-* **Git Commits ล่าสุด:**
-  - `223100d` — `feat(portal): implement client-side VPN reachability probe with automated sky blue ready state`
-  - Push สู่ `origin/main` เรียบร้อยแล้ว 100%
-* **ผลการทดสอบความถูกต้อง (Test & Type Integrity):**
-  - **Backend:** `pytest backend\tests` ผ่านครบ **43/43 tests (100% Passed)**
-  - **Frontend:** `npx tsc --noEmit` ผ่าน **0 errors**
-* **สรุปฟังก์ชันที่พร้อมใช้งานในปัจจุบัน:**
-  1. ถอด Whitelist IP สาธารณะ `147.50.223.20` ออกหมดจด เพื่อความปลอดภัย Enterprise Zero-Trust รองรับพนักงานที่เชื่อมต่อจากทุกเครือข่าย
-  2. ระบบ Probe อัตโนมัติจากเบราว์เซอร์ผู้ใช้ ตรวจสอบ Reachability ไปยัง On-Premise Spoke (`wa-mtpulse.wa.net`)
-  3. เมื่อต่อ VPN พร้อม การ์ด ป้ายสถานะ และปุ่มจะเปลี่ยนเป็น **สีฟ้าสดใส (Sky/Blue)** `🛡️ VPN พร้อม` และ `เข้าใช้งานระบบ (VPN พร้อม) ↗` โดยอัตโนมัติ
-  4. ดักจับ Event `window.focus` ทำให้เมื่อผู้ใช้สลับไปต่อ OpenVPN แล้วคลิกกลับมาที่หน้าเว็บ CIAM ระบบจะ Re-check ปลดล็อกเป็นสีฟ้าให้อัตโนมัติทันที
-  5. หากยังไม่ต่อ VPN แสดงปุ่มสีส้มพร้อมฟังก์ชันคลิกตรวจเช็กซ้ำได้ทันที
+* **Git Commits ล่าสุด (10 Commits ล่าสุดบน `origin/main`):**
+  - `4470ffe` — `refactor(login): hide left blue branding panel on mobile for instant login access`
+  - `0d5cfd1` — `refactor(login): replace green LINE button with clean 'ติดต่อฝ่าย IT' link in login card`
+  - `75bce6b` — `refactor(login): remove 'หรือ Somchai.S' from username placeholder`
+  - `d5e42d7` — `feat(login): remove SAP B1 from supported apps and add interactive LINE IT Support QR modal`
+  - `205d6b4` — `fix(ad-sync): prevent spoke inventory overwriting AD disabled status and sanitize Administrator role from department`
+  - `a1cfce6` — `fix(auth): accurate is_ad_user detection without requiring ad_guid to hide change password key`
+  - `3993137` — `refactor(login): move official logo to right panel, remove redundant bottom box, and streamline left wording`
+  - `b9eecb8` — `feat(auth): enforce AD password button hiding, enterprise complexity policy, and force password change`
+  - `14f7cd0` — `feat(branding): integrate authentic official Window Asia logo assets into login portal`
+  - `03ff2ff` — `feat(auth): redesign SSO login page to split-screen enterprise layout with Window Asia branding`
+
+* **ผลการตรวจสอบคุณภาพและความถูกต้อง (Test & Type Integrity):**
+  - **Backend Test Suite:** รัน `pytest` ผ่านครบถ้วน **51/51 tests (100% Passed)**
+  - **Frontend Type Check:** รัน `npx tsc --noEmit` ผ่านสมบูรณ์ **0 TypeScript Errors**
+  - **Git Working Tree:** สะอาด (Working tree clean, synced with `origin/main`)
+
+* **สรุปฟังก์ชันและสถาปัตยกรรมหลักที่ส่งมอบแล้วในรอบนี้:**
+  1. **Mobile Responsive Login UX:** ซ่อนแผงสีน้ำเงินบนจอเล็ก (`hidden lg:flex`) ผู้ใช้บนสมาร์ตโฟนจะเห็นการ์ด Login เต็มจอทันทีโดยไม่ต้องเลื่อนหน้าจอ
+  2. **Clean Helpdesk Interaction:** เปลี่ยนปุ่มสีเขียวใต้ฟอร์มเป็นการ์ดข้อความ `"ยังไม่มีบัญชีหรือพบปัญหาเข้าสู่ระบบ? ติดต่อฝ่าย IT"` ที่คลิกเปิด QR Code ได้ และคงปุ่ม Floating Quick Contact มุมขวาล่างไว้ ไม่ซ้ำซ้อน
+  3. **Streamlined Credentials Form:** ตัดคำว่า `"หรือ Somchai.S"` ออก เหลือตัวอย่าง `เช่น Chaiwat.N` สื่อสารชัดเจนและเข้าใจง่าย
+  4. **Removal of Unsupported Apps:** ตัดชื่อ SAP Business One ออกจากหน้าระบบรองรับ ป้องกันความสับสนของผู้ใช้
+  5. **Official Window Asia Branding:** นำเข้าตราสัญลักษณ์และโลโก้ทางการ วินโดว์ เอเชีย คมชัดระดับ Retina บนการ์ด Login
+  6. **Single Source of Truth for Active Directory:** ป้องกัน Spoke Connectors (เช่น pfSense, IRM) เขียนทับสถานะ `is_active_in_ad` ของพนักงานที่ถูกระงับสิทธิ์ใน AD อย่างเด็ดขาด
+  7. **Role & Department Sanitization:** ล้างค่า `"Administrator"` และ `"Admin"` ออกจากรายชื่อแผนกองค์กร โดยจัดเป็น System Role และใช้ `"Administration"` หรือ `"ธุรการ"` แทน
+  8. **AD Password Integrity:** ซ่อนปุ่มเปลี่ยนรหัสผ่านบนพอร์ทัลสำหรับพนักงาน AD และบังคับใช้นโยบายรหัสผ่าน Enterprise (8-10 ตัวอักษร, พิมพ์ใหญ่, พิมพ์เล็ก, ตัวเลข, สัญลักษณ์) สำหรับ Local Account พร้อมระบบบังคับเปลี่ยนรหัสผ่านครั้งแรก (`must_change_password`)
+  9. **Client-Side VPN Reachability Probe Engine:** ตรวจจับความพร้อมของการเชื่อมต่อ VPN อัตโนมัติ ปรับสถานะเป็นสีฟ้า Sky/Blue ทันทีเมื่อผู้ใช้เชื่อมต่อ VPN
+
+---
 
 ### 4.2 แผนงานและข้อสังเกตสำหรับการปรับปรุงในรอบถัดไป (Next Iteration Roadmap)
-เมื่อกลับมาพัฒนาต่อ ให้โฟกัสและตรวจสอบตามประเด็นต่อไปนี้:
-1. **User Acceptance Testing (UAT) การเชื่อมต่อ MTPulse จริงบน Production:**
-   - **ทดสอบเคสที่ 1 (ยังไม่ต่อ VPN):** เข้าหน้า `/portal` จากภายนอก ➔ การ์ด MTPulse ต้องขึ้นสีส้ม `🔒 ต้องต่อ VPN` และมีปุ่ม `🔒 กรุณาต่อ VPN แล้วคลิกตรวจใหม่`
-   - **ทดสอบเคสที่ 2 (ต่อ VPN OpenVPN 192.168.42.0/24):** เปิด OpenVPN Connect บนเครื่อง ➔ สลับแท็บกลับมาหน้า CIAM ➔ การ์ดต้องสลับเป็นสีฟ้า `🛡️ VPN พร้อม` และปุ่มเปลี่ยนเป็น `เข้าใช้งานระบบ (VPN พร้อม) ↗` ทันที
-   - **ทดสอบเคสที่ 3 (กดเข้าใช้งาน):** คลิกปุ่มสีฟ้า ➔ CIAM ต้องออก Single-use Authorization Code และ Redirect ไปยัง `https://wa-mtpulse.wa.net/auth/start` เข้าสู่ระบบ MTPulse ได้อย่างราบรื่นโดยไม่ขึ้น error เซสชันหมดอายุ
-2. **การปรับแต่ง Edge Cases ของ Client Probe (Fine-tuning):**
-   - ตรวจสอบค่า Probe Timeout (ปัจจุบันตั้งไว้ 2.5 วินาที) หากพบว่าการต่อ VPN ผ่านเครือข่ายมือถือบางค่ายมี Latency สูง สามารถขยายเป็น 3.0-3.5 วินาที หรือปรับเป็น Adaptive Timeout
-   - หาก Spoke มีการพัฒนา endpoint เฉพาะ เช่น `/api/health` หรือ `/auth/ping` สามารถปรับเป้าหมาย Probe ให้เจาะจงยิ่งขึ้น
-   - หากมีระบบลูก On-Premise อื่นๆ ในอนาคต (เช่น WMS, ERP โรงงาน) ที่ตั้งเป็น `VPN_ONLY` สามารถนำ Probe Engine นี้ไปใช้ได้ทันที
-3. **การติดตามความร่วมมือกับทีม Spoke Mode C (MTPulse):**
-   - ตรวจสอบว่าทีม MTPulse ได้เพิ่มปุ่ม **`[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]`** ในหน้า User Management หรือ Central IAM ตามสเปก v2.7.0 เรียบร้อยแล้วหรือไม่
-   - ทดสอบรอบ Two-Way Reconciliation เมื่อ Admin สร้างหรือเปิดสิทธิ์ User ใหม่บน CIAM เพื่อให้ Spoke Mode C นำไป Provision สร้างในเครื่องลูกแบบ Real-Time
-4. **การเตรียม PHP Starter Template & เอกสาร Onboarding สำหรับทีม Dev (On-Prem PHP + MySQL):**
-   - จัดทำ Starter Code ตัวอย่างภาษา PHP ดั้งเดิม (Native PHP) 2-3 ไฟล์ พร้อมคำอธิบายภาษาไทย:
-     - `ciam_sso.php`: ทำ PKCE Code Challenge และ Redirect ไปยัง CIAM Login
-     - `ciam_callback.php`: รับ Code แลก Token, ดึง UserInfo, และสร้าง Session ใน PHP พร้อม Mapping เข้ากับตาราง MySQL
-     - `ciam_agent.php`: สคริปต์รันเบื้องหลังสำหรับ Mode C ยิง Heartbeat รายงานสถานะ และรับคำสั่ง `DISABLE_USER` / `PROVISION_USER` กลับไปอัปเดตตาราง MySQL
-   - เอกสารแนะนำการตั้งค่า Git Repo, การทำ `.gitignore` ป้องกันข้อมูล Credentials รั่วไหล, และคำสั่ง `git pull` บนเครื่อง On-Premise Server
-   - สคริปต์ SQL Migration ตัวอย่างสำหรับเพิ่มคอลัมน์ `ciam_sub`, `auth_provider`, `is_active` บนตาราง `users` ของ MySQL เดิม
+เมื่อกลับมาพัฒนาต่อในรอบถัดไป ให้ดำเนินการตามลำดับความสำคัญดังต่อไปนี้:
+
+1. **User Acceptance Testing (UAT) การ Deploy และแสดงผลหน้า Login SSO จริงบน Production VPS:**
+   - นำคำสั่ง Deploy ในข้อ 5 ไปรันบน Production Server (`/var/www/Ciam`)
+   - ทดสอบเปิดหน้า Login SSO (`https://ciam.windowasia.com` หรือ Domain ทางการ) บนสมาร์ตโฟนทั้ง iOS และ Android เพื่อยืนยันว่าการ์ดเข้าสู่ระบบแสดงผลเต็มจอทันทีโดยไม่ต้องเลื่อนหน้าจอ
+   - ทดสอบเปิดบน Desktop เพื่อยืนยันว่า Split-Screen Layout (แผง Deep Navy ซ้าย และ การ์ดขาวขวา) แสดงผลคมชัดสวยงาม
+
+2. **การทดสอบ Interactive LINE IT Support Modal:**
+   - ทดสอบคลิกข้อความ `"ติดต่อฝ่าย IT"` ใต้การ์ด Login และปุ่ม Floating Quick Contact ที่มุมขวาล่าง
+   - ยืนยันว่า Modal แสดงผลภาพ LINE QR Code (`/line-it-support-qr.png`) อย่างถูกต้อง พร้อมคำแนะนำขั้นตอนการสแกน 1-2-3
+
+3. **การตรวจสอบผลลัพธ์ของ User `Chanpen.K` บน Production Directory:**
+   - รันการซิงก์ข้อมูลจาก AD หรือตรวจสอบหน้า `/directory` ยืนยันว่า `Chanpen.K` แสดงสถานะ AD เป็น Inactive (สีเทา/ขีด)
+   - สิทธิ์บน pfSense HO ยังคงปรากฏ และสถานะภาพรวมถูกจัดหมวดหมู่เป็น `DISCREPANCY` (Ghost Account) อย่างถูกต้อง
+   - คอลัมน์ "แผนก" ไม่แสดงคำว่า `Administrator` อีกต่อไป
+
+4. **การทดสอบความร่วมมือกับ Spoke Mode C (MTPulse):**
+   - ติดตามผลการเพิ่มปุ่ม `[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]` บนหน้าจอตั้งค่าของ MTPulse
+   - ทดสอบการ Provisioning และ Deprovisioning บัญชีแบบสองทางผ่าน Outbound Reverse Heartbeat API (`/api/v1/agent/heartbeat`)
+
+5. **การจัดเตรียม Starter Template ภาษา Native PHP + MySQL:**
+   - เตรียมตัวอย่างโค้ด PHP ดั้งเดิม (Native PHP 3 ไฟล์: `ciam_sso.php`, `ciam_callback.php`, `ciam_agent.php`) เพื่อส่งมอบให้ทีม Dev ภายในองค์กรนำไปเชื่อมต่อกับระบบ On-Premise เดิมของบริษัท
 
 ---
 
 ## 5. คำสั่ง Deploy บน VPS ประจำรอบ (Deploy Instructions)
 
-เมื่อต้องการ Deploy โค้ดล่าสุดขึ้นสู่ VPS Ubuntu (`/var/www/Ciam`):
+> ⚠️ **กฎเหล็กการ Deploy (Critical Deployment Protocols):**
+> 1. ชื่อ Service ใน `docker-compose.yml` คือ **`web`** (ห้ามใช้คำว่า `frontend` เด็ดขาด) และ **`api`**
+> 2. **ต้องเขียนคำสั่งแยกทีละบรรทัด ห้ามเชื่อมด้วย `&&` ยาวเป็นพรืด**
+> 3. ต้องมี `git pull` นำหน้าเสมอ
+> 4. หากมีการแก้ไขระบบลูก (เช่น IRM): ให้แสดงคำสั่ง Deploy ของระบบลูกคู่กันไปด้วยเสมอ
 
-```bash
-cd /var/www/Ciam
-git pull
-docker compose build api web
-docker compose up -d api web
-```
+### กรณี Deploy ฝั่ง Central-IAM (VPS: `/var/www/Ciam` - IP: `157.173.219.153`):
+- หากต้องการ Deploy การเปลี่ยนแปลงล่าสุด (Frontend & Backend):
+  ```bash
+  cd /var/www/Ciam
+  git pull
+  docker compose build api web
+  docker compose up -d api web
+  ```
+- หาก Deploy เฉพาะ Frontend (`web`):
+  ```bash
+  cd /var/www/Ciam
+  git pull
+  docker compose build web
+  docker compose up -d web
+  ```
+- หาก Deploy เฉพาะ Backend (`api`):
+  ```bash
+  cd /var/www/Ciam
+  git pull
+  docker compose build api
+  docker compose up -d api
+  ```
 
+### กรณี Deploy ฝั่ง IRM (Hostinger VPS: `/var/www/Irm`):
+- เมื่อมีการอัปเดตระบบลูก IRM:
+  ```bash
+  cd /var/www/Irm
+  git pull
+  docker compose build frontend
+  docker compose up -d frontend
+  ```

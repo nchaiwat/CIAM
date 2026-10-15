@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
-**Last Updated:** 2026-10-14  
-**Version:** 2.3.2 (Remove SAP B1 from Login, Add Interactive IT Support LINE QR Code Modal)  
+**Last Updated:** 2026-10-15  
+**Version:** 2.5.0 (Mobile Responsive SSO Login, Streamlined Username Placeholder, Clean IT Support Link, Administrator Role Sanitization, AD Single Source of Truth)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
