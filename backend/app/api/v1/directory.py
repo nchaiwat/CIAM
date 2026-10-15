@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from app.core.database import get_db
 from app.api.deps import get_current_admin
 from app.models.user import AdminUser

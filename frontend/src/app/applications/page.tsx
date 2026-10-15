@@ -288,7 +288,7 @@ export default function ApplicationsPage() {
         : editApiKey;
       await ciamApi.updateApplication(editApp.id, {
         app_name: editAppName,
-        is_active: editIsActive,
+        is_active: editApp.is_active,
         base_url: editBaseUrl || undefined,
         api_key: effectiveApiKey || undefined,
         connector_type: editConnectorType,
@@ -730,9 +730,9 @@ export default function ApplicationsPage() {
 
                 {/* Details */}
                 <div className="mt-4 pt-4 border-t-2 border-slate-200 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600 font-medium">URL ปลายทาง:</span>
-                    <span className="font-mono text-slate-900 font-bold truncate max-w-[170px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <span className="text-slate-600 font-medium shrink-0">URL ปลายทาง:</span>
+                    <span className="font-mono text-slate-900 font-bold break-all bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-xs sm:text-right" title={app.base_url || "Local"}>
                       {app.base_url || "Local"}
                     </span>
                   </div>
@@ -897,45 +897,12 @@ export default function ApplicationsPage() {
 
                   <button
                     onClick={() => handleOpenEdit(app, app.connector_type === "SSO_ONLY" ? "SSO" : "M2M")}
-                    title="ตั้งค่าการเชื่อมต่อระบบ, SSO Client และ M2M Management API"
+                    title="ตั้งค่าการเชื่อมต่อระบบ, SSO Client, Connector Settings และ M2M Management API"
                     className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border-2 border-indigo-300 rounded-md text-xs font-bold transition-colors flex items-center space-x-1 shadow-2xs cursor-pointer"
                   >
                     <Settings className="w-3.5 h-3.5 text-indigo-700" />
                     <span>ตั้งค่าเชื่อมต่อ</span>
                   </button>
-
-                  {(app.connector_type === "SAP_B1" || app.app_code.toLowerCase().includes("sap")) && (
-                    <button
-                      onClick={() => handleOpenEdit(app, "SAP_B1")}
-                      title="ตั้งค่าเชื่อมต่อ SAP Business One Service Layer v2"
-                      className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-2 border-emerald-300 rounded-md text-xs font-bold transition-colors flex items-center space-x-1 shadow-2xs cursor-pointer"
-                    >
-                      <Database className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>SAP B1</span>
-                    </button>
-                  )}
-
-                  {(app.connector_type === "AD_PROXY" || app.app_code.toLowerCase() === "ad") && (
-                    <button
-                      onClick={() => handleOpenEdit(app, "AD_PROXY")}
-                      title="ตั้งค่า Active Directory Gateway และความปลอดภัยคำสั่ง PATCH"
-                      className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border-2 border-purple-300 rounded-md text-xs font-bold transition-colors flex items-center space-x-1 shadow-2xs cursor-pointer"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5 text-purple-700" />
-                      <span>AD Settings</span>
-                    </button>
-                  )}
-
-                  {(app.connector_type === "M365" || app.app_code.toLowerCase().includes("m365")) && (
-                    <button
-                      onClick={() => handleOpenEdit(app, "M365")}
-                      title="ตั้งค่าเชื่อมต่อ Microsoft 365 (Entra ID & Graph API)"
-                      className="px-2.5 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-900 border-2 border-sky-300 rounded-md text-xs font-bold transition-colors flex items-center space-x-1 shadow-2xs cursor-pointer"
-                    >
-                      <Cloud className="w-3.5 h-3.5 text-sky-700" />
-                      <span>M365</span>
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
@@ -1091,7 +1058,7 @@ export default function ApplicationsPage() {
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
               {/* Common Details: Name, Base URL & Connector Type */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">ชื่อระบบเต็ม</label>
                   <input
@@ -1128,35 +1095,6 @@ export default function ApplicationsPage() {
                     <option value="M365">Microsoft 365</option>
                     <option value="RPA_WORKER">RPA Worker</option>
                   </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">สวิตช์เปิด/ปิด Spoke (ON / OFF)</label>
-                  <div className="flex items-center h-[38px]">
-                    <button
-                      type="button"
-                      onClick={() => setEditIsActive(!editIsActive)}
-                      className={`relative inline-flex items-center h-7 w-16 rounded-full transition-colors cursor-pointer border ${
-                        editIsActive
-                          ? "bg-emerald-600 border-emerald-700"
-                          : "bg-slate-300 border-slate-400"
-                      }`}
-                      title={editIsActive ? "คลิกเพื่อปิดใช้งาน (OFF)" : "คลิกเพื่อเปิดใช้งาน (ON)"}
-                    >
-                      <span
-                        className={`inline-block w-5 h-5 transform bg-white rounded-full transition-transform shadow-xs ${
-                          editIsActive ? "translate-x-9" : "translate-x-1"
-                        }`}
-                      />
-                      <span
-                        className={`absolute text-[10px] font-black uppercase tracking-wider select-none ${
-                          editIsActive ? "left-2.5 text-white" : "right-2.5 text-slate-700"
-                        }`}
-                      >
-                        {editIsActive ? "ON" : "OFF"}
-                      </span>
-                    </button>
-                  </div>
                 </div>
               </div>
 

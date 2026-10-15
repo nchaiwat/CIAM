@@ -94,6 +94,7 @@ def persist_spoke_inventory(
     """
     synced_count = 0
     now = datetime.now(timezone.utc)
+    is_ad_item = (app.app_code or "").lower() == "ad"
 
     # Deduplicate incoming accounts by username to guard against duplicate entries
     # (e.g. pfSense accounts present in both FreeRADIUS and Local user database)

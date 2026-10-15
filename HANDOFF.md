@@ -7,7 +7,7 @@
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 52/52 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 38 Shop Accounts Sanitization from AD Filter)
+> **Git Status:** Production Ready (Sprint 39 Spoke Unified Settings Modal & AD Sync 500 Fix)
 
 ---
 
@@ -15,7 +15,12 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Shop Accounts Sanitization from AD Filter & Spokes Matrix (Sprint 38 - บัญชี WA-Shop_*):**
+1. **Spoke UI Consolidation & AD Sync 500 Fix (Sprint 39):**
+   - **ลบสวิตช์ซ้ำซ้อนใน Modal:** นำสวิตช์เปิด/ปิด Spoke ออกจากป๊อปอัปตั้งค่าระบบ (`applications/page.tsx`) เนื่องจากหน้าการ์ดหลักมีสวิตช์เปิด/ปิดอยู่แล้ว และปรับฟอร์มส่วนหัวเป็น 3 คอลัมน์กว้างสบายตา
+   - **รวมปุ่มตั้งค่าระบบลูกเป็นการตั้งค่าเดียว (Unified Settings Modal):** รวมปุ่มแยกตามประเภทระบบ (`SAP B1`, `AD Settings`, `M365`) เข้าเป็นปุ่มเดียว `[ ⚙️ ตั้งค่าเชื่อมต่อ ]` โดยเมื่อกดปุ่ม ระบบจะสลับไปแท็บที่ถูกต้องของระบบนั้นๆ โดยอัตโนมัติ (AD_PROXY, SAP_B1, M365, SSO, M2M)
+   - **แสดง Base URL เต็มไม่ถูกตัดทอน:** ปรับการแสดงผล URL ปลายทางบนการ์ดระบบลูกให้แสดง URL เต็ม ไม่ตัดคำด้วย `...` (ใช้ `break-all`)
+   - **แก้ไขบั๊ก 500 NameError ในการซิงก์จาก AD:** แก้ไข `backend/app/api/v1/directory.py` ที่เรียกใช้ `func.lower()` แต่ไม่ได้ import `func` จาก `sqlalchemy` ทำให้เกิด HTTP 500 เมื่อกดปุ่ม "ซิงก์จาก AD" ในหน้าทะเบียนผู้ใช้
+2. **Shop Accounts Sanitization from AD Filter & Spokes Matrix (Sprint 38 - บัญชี WA-Shop_*):**
    - แก้ไขปัญหาบัญชีสาขาร้านค้า (เช่น `25 WA Shop - น่าน`, `46 WA Shop - โคราช`) หลุดไปแสดงในตัวกรอง `Active Directory (DC Gateway)` และตัวกรอง `เฉพาะที่ยังใช้งานอยู่ (Active)` ทั้งที่คอลัมน์สถานะ AD เป็นขีด `-` (Local Acc)
    - ปรับปรุง `directory.py`: เมื่อกรอง `app_code == 'ad'` บัญชีจะต้องเป็นตัวตน AD จริง (`is_ad == True`) เท่านั้น บัญชีประเภท Shop (`is_shop_acc`) ถูกตัดสิทธิ์จากการแสดงในตัวกรอง AD อย่างเด็ดขาด และตัดป้าย `🔴 AD` ออกจากคอลัมน์ Spokes ของร้านค้า (แสดงเฉพาะ Spoke ที่ใช้งานจริง เช่น `PFSENSE_FAC`)
    - ปรับปรุง `scheduler.py`: ข้ามการ sync บัญชีร้านค้าจาก AD และลบการแมป AD ตกค้างของร้านค้าทิ้ง
@@ -26,6 +31,28 @@
    - ปรับปรุง `directory.py`: คำนวณ `effective_ad_active = bool(identity.is_active_in_ad and (has_ad_mapping or identity.ad_guid or identity.last_login_ad_at))` และมีกลไก Auto-heal ปรับตัวตนที่ไม่มี AD Footprint ให้เป็น `is_active_in_ad = False`
    - ปรับปรุง Tooltip ใน `frontend/src/app/directory/page.tsx` แสดงคำอธิบายสถานะให้ชัดเจนว่าบัญชีถูกปิดหรือไม่มีใน AD
 3. **Single Unified Front Door (Sprint 36):** ปรับปรุงโครงสร้าง Routing และ Authentication Guard ใน `AppShell.tsx` ให้ทุกคำขอที่ยังไม่ได้ล็อกอิน ไม่ว่าจะเป็นการพิมพ์ `ciam.windowasia.com` (Root Path `/`) หรือเปิดลิงก์ที่เซสชันหลุด จะวิ่งเข้าสู่หน้า `/login` (Window Asia App Portal สีขาว-น้ำเงิน) เสมอ 100% ป้องกันไม่ให้ผู้ใช้ทั่วไปหลุดเข้าไปเห็นหน้า `/admin/login` (Admin Console จอดำทะมึน พ.ร.บ.คอมฯ) ซึ่งสร้างความสับสนและตื่นตระหนกให้ผู้ใช้งาน
+
+---
+
+## Sprint 39: ปรับแต่ง Spoke Settings UI ให้กระชับ รวม Modal การตั้งค่า และแก้ไข Error 500 ตอนซิงก์จาก AD (15 ต.ค. 2026)
+### 1. ความต้องการและปัญหาที่พบ (Requirements & Problem Statement):
+1. **สวิตช์เปิด/ปิด Spoke ในป๊อปอัปตั้งค่าซ้ำซ้อน:** ป๊อปอัปการตั้งค่าระบบ (`applications/page.tsx`) มีสวิตช์ ON/OFF อยู่ด้านใน ทั้งที่การ์ดภายนอกมีสวิตช์เปิด/ปิดหลักอยู่แล้ว ทำให้หน้าจอดูรกและซ้ำซ้อน
+2. **ปุ่ม Setting กระจัดกระจาย:** การ์ดของแต่ละระบบมีปุ่มตั้งค่าเฉพาะแยกย่อย เช่น `[ SAP B1 ]`, `[ AD Settings ]`, `[ M365 ]` นอกเหนือจากปุ่ม `[ ⚙️ ตั้งค่าเชื่อมต่อ ]` ต้องการรวมให้อยู่ในปุ่มตั้งค่าเดียว
+3. **URL Base โดนตัดคำ:** ข้อความ URL ปลายทางของการ์ดแสดงไม่ครบ เช่น `https://sapb1.waapps.n...` เนื่องจากมีคลาส `truncate max-w-[170px]` ต้องการให้แสดง URL เต็ม
+4. **ซิงก์จาก AD แล้วขึ้น Error 500:** เมื่อกดปุ่ม "ซิงก์จาก AD" ในหน้าทะเบียนผู้ใช้ (`/directory`) เกิด `HTTP 500: Internal Server Error`
+
+### 2. รายละเอียดการแก้ไข (Implementation Details):
+1. **ลบสวิตช์ซ้ำซ้อนใน Modal ([applications/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/applications/page.tsx)):**
+   - ตัดคอลัมน์สวิตช์เปิด/ปิดออกจากป๊อปอัปตั้งค่า และปรับกริดฟอร์มจาก `grid-cols-4` เป็น `grid-cols-3` (ชื่อระบบเต็ม, Base URL ของระบบ, ประเภทการเชื่อมต่อ)
+   - ปรับ `handleSaveEdit` ให้คงค่า `is_active: editApp.is_active` จากการ์ดหลัก
+2. **รวมปุ่มตั้งค่าเป็นการตั้งค่าเดียว (Unified Setting Button):**
+   - นำปุ่มแยก `[ SAP B1 ]`, `[ AD Settings ]`, `[ M365 ]` ออกจากการ์ด เหลือเพียงปุ่มหลัก `[ ⚙️ ตั้งค่าเชื่อมต่อ ]`
+   - เมื่อกดปุ่ม `handleOpenEdit` ระบบจะเปิดแท็บที่เกี่ยวข้องโดยอัตโนมัติตาม Connector Type (`AD_PROXY`, `SAP_B1`, `M365`, `SSO`, `M2M`) และผู้ใช้สามารถสลับแท็บใดๆ ภายใน Modal ได้อย่างอิสระ
+3. **แสดง Base URL เต็มแบบไม่ตัดคำ:**
+   - เปลี่ยนจากการใช้ `truncate max-w-[170px]` เป็น `break-all` พร้อมการจัด layout แบบ flexbox responsive ทำให้ URL ปลายทางแสดงครบถ้วน 100%
+4. **แก้ไข Error 500 ใน Directory Sync AD ([directory.py](file:///d:/Python/Central-IAM/backend/app/api/v1/directory.py) & [scheduler.py](file:///d:/Python/Central-IAM/backend/app/services/scheduler.py)):**
+   - เพิ่มการ import `func` จาก `sqlalchemy`: `from sqlalchemy import or_, func` เพื่อแก้ไข `NameError: name 'func' is not defined` ในฟังก์ชัน `sync_active_directory_users` (บรรทัดที่ 1195, 1218, 1219)
+   - ประกาศ `is_ad_item = (app.app_code or "").lower() == "ad"` ที่ส่วนหัวของฟังก์ชัน `persist_spoke_inventory` ใน `scheduler.py` เพื่อป้องกัน unbound variable
 
 ---
 

@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-10-15  
-**Version:** 2.7.0 (AD Inactive Status Reconciliation, Ghost Account Auto-Heal, Single Unified Front Door, Default /login Routing)  
+**Version:** 2.8.0 (Spoke Unified Settings Modal, Full Base URL, AD Sync 500 Fix, Shop Accounts Sanitization)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
