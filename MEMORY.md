@@ -654,3 +654,13 @@ FRONTEND_URL=http://localhost:3000
   - **Effective AD Status & Auto-Healing (`directory.py`):** คำนวณ `has_direct_ad = bool(has_ad_mapping or identity.ad_guid or identity.last_login_ad_at)` และ `effective_ad_active = bool(identity.is_active_in_ad and has_direct_ad)` ป้องกันไม่ให้ตัวตนที่ไม่มีความเชื่อมโยงกับ AD แสดงสถานะเขียว พร้อม auto-heal บันทึกลงฐานข้อมูล
   - **Database Auto-Healing (`initial_data.py`):** ปรับ `worawut.s` เป็น `is_active_in_ad = False` และมี auto-heal กวาดตรวจตัวตนที่ไม่มี AD footprint
   - **Tooltip Clarity (`frontend/src/app/directory/page.tsx`):** ปรับ Tooltip เป็น `"Inactive: บัญชีถูกปิดใช้งาน หรือไม่มีตัวตนใน Active Directory"`
+
+### 21.2 ปัญหาบัญชีร้านค้าสาขา (`WA-Shop_*`) หลุดแสดงในตัวกรอง Active Directory
+* **สาเหตุ:**
+  - บัญชีร้านค้าสาขา (`WA-Shop_*`) มีการเชื่อมต่อ pfSense VPN แต่ในอดีตหรือบน Windows DC มีอ็อบเจกต์เหล่านี้ ทำให้เกิดแถวใน `AppAccountMapping` กับ AD
+  - ใน `directory.py` เงื่อนไขเดิม `if not has_ad_mapping and not is_ad: continue` ทำให้บัญชีที่มี mapping ของ AD ผ่านตัวกรองเข้ามาได้ แม้ระบบจะจัดเป็น `is_shop_acc` ก็ตาม
+* **การแก้ไข:**
+  - **Strict AD Filtering:** ใน `directory.py` การกรอง `app_code == 'ad'` บังคับต้องเป็น `is_ad == True` เท่านั้น บัญชีประเภท `is_shop_acc` จะถูกตัดทิ้งทันที
+  - **Prune AD Badge on Shop Accounts:** กรองป้ายและ mapping ของ AD ออกจากบัญชีร้านค้า ทำให้คอลัมน์ Spokes แสดงเฉพาะ Spoke ที่เกี่ยวข้องจริง (เช่น `PFSENSE_FAC`)
+  - **Prevent Ingestion:** ใน `scheduler.py` ให้ข้ามการ sync บัญชีร้านค้าจาก AD และลบ AD mapping ตกค้างออกอัตโนมัติ
+  - **DB Sanitation:** ใน `initial_data.py` ปรับให้ลบ AD mapping ของบัญชีร้านค้าทั้งหมด และตั้งค่า `is_active_in_ad = False`

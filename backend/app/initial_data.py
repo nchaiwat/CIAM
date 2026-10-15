@@ -349,12 +349,9 @@ def init_db():
         except Exception as e:
             logger.warning("Could not query offboard audit logs: %s", e)
 
-        corrupted_ad_identities = db.query(MasterIdentity).filter(MasterIdentity.is_active_in_ad == False).all()
-        for cid in corrupted_ad_identities:
+        all_master_identities = db.query(MasterIdentity).all()
+        for cid in all_master_identities:
             u_low = (cid.username or "").strip().lower()
-            if u_low in offboarded_usernames or u_low == "pinyada.s":
-                continue  # Legitimately offboarded via Central-IAM or local IRM-only account
-
             is_shop_user = (
                 u_low.startswith("wa-shop")
                 or u_low.startswith("ws-")

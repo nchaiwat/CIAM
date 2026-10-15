@@ -124,6 +124,10 @@ def persist_spoke_inventory(
         )
 
         is_ad_item = app.app_code.lower() == "ad"
+        if is_ad_item and is_shop_acc:
+            # Branch shop VPN accounts must NEVER be ingested or mapped as Active Directory accounts in Central IAM
+            continue
+
         is_active = bool(item.get("is_active", True))
 
         is_ad_format = len(uname.split(".")) == 2 and len(uname.split(".")[1]) <= 2
@@ -185,6 +189,14 @@ def persist_spoke_inventory(
                     identity.telegram_id = telegram_val
             elif is_shop_acc:
                 identity.is_active_in_ad = False
+                identity.ad_guid = None
+                identity.employee_id = None
+                ad_app = db.query(ConnectedApplication).filter(func.lower(ConnectedApplication.app_code) == "ad").first()
+                if ad_app:
+                    db.query(AppAccountMapping).filter(
+                        AppAccountMapping.identity_id == identity.id,
+                        AppAccountMapping.application_id == ad_app.id
+                    ).delete()
 
             if telegram_val and not identity.telegram_id:
                 identity.telegram_id = telegram_val

@@ -219,18 +219,7 @@ def list_users(
 
     for identity in identities:
         mappings = mappings_by_identity.get(identity.id, [])
-        app_summaries = _build_app_summaries(mappings, identity_is_active_in_ad=identity.is_active_in_ad, now=now)
-        created_at, last_access, days_since_access = _get_identity_activity(identity, mappings, now=now)
-
-        # AD users have ad_guid, employee_id, AD login history, AD mapping, corporate email, or corporate AD department
-        has_ad_mapping = any(app.app_code.lower() == "ad" for _, app in mappings)
-        dept_lower = (identity.department or "").strip().lower()
-        corporate_keywords = ("it", "pu", "purchasing", "accounting", "hr", "executive", "management", "general", "qa", "warehouse", "m365", "administration", "ธุรการ")
-        is_corp_dept = any(kw in dept_lower for kw in corporate_keywords) if dept_lower else False
-        has_corp_email = bool(identity.email and "@windowasia.com" in identity.email.lower())
         u_clean = (identity.username or "").strip().lower()
-        is_ad_username_fmt = len(u_clean.split(".")) == 2 and len(u_clean.split(".")[1]) <= 2
-
         is_shop_acc = (
             u_clean.startswith("wa-shop")
             or u_clean.startswith("ws-")
@@ -238,6 +227,18 @@ def list_users(
             or "shop_" in u_clean
             or (len(u_clean) > 2 and u_clean[:2].isdigit() and "-ws" in u_clean)
         )
+
+        # Shop accounts are exclusively local branch VPN accounts, never AD accounts
+        if is_shop_acc:
+            mappings = [m_pair for m_pair in mappings if m_pair[1].app_code.lower() != "ad"]
+
+        # AD users have ad_guid, employee_id, AD login history, AD mapping, corporate email, or corporate AD department
+        has_ad_mapping = (not is_shop_acc) and any(app.app_code.lower() == "ad" for _, app in mappings)
+        dept_lower = (identity.department or "").strip().lower()
+        corporate_keywords = ("it", "pu", "purchasing", "accounting", "hr", "executive", "management", "general", "qa", "warehouse", "m365", "administration", "ธุรการ")
+        is_corp_dept = any(kw in dept_lower for kw in corporate_keywords) if dept_lower else False
+        has_corp_email = bool(identity.email and "@windowasia.com" in identity.email.lower())
+        is_ad_username_fmt = len(u_clean.split(".")) == 2 and len(u_clean.split(".")[1]) <= 2
 
         is_ad = bool(
             not is_shop_acc
@@ -252,13 +253,16 @@ def list_users(
             and (u_clean not in ("pinyada.s", "winmonpan.p"))
         )
 
-        # An identity is genuinely active in AD only if it has an AD presence (ad mapping, ad_guid, or login) and identity.is_active_in_ad is True
+        # An identity is genuinely active in AD only if it is an AD identity, has AD presence, and identity.is_active_in_ad is True
         has_direct_ad = bool(has_ad_mapping or identity.ad_guid or identity.last_login_ad_at)
-        effective_ad_active = bool(identity.is_active_in_ad and has_direct_ad)
-        if identity.is_active_in_ad and not has_direct_ad and not getattr(identity, "is_approved_exception", False):
-            # Auto-heal: If an identity has no AD presence at all, it is no longer in AD
+        effective_ad_active = bool(is_ad and identity.is_active_in_ad and has_direct_ad)
+        if identity.is_active_in_ad and (not has_direct_ad or is_shop_acc) and not getattr(identity, "is_approved_exception", False):
+            # Auto-heal: If an identity has no AD presence at all or is a shop account, it is not in AD
             identity.is_active_in_ad = False
             effective_ad_active = False
+
+        app_summaries = _build_app_summaries(mappings, identity_is_active_in_ad=effective_ad_active, now=now)
+        created_at, last_access, days_since_access = _get_identity_activity(identity, mappings, now=now)
 
         # Check overall active status across AD and spokes
         has_active_spoke = any(m.is_active_in_app for m, _ in mappings)
@@ -268,7 +272,8 @@ def list_users(
         if app_code:
             target_app = app_code.lower().strip()
             if target_app == "ad":
-                if not has_ad_mapping and not is_ad:
+                # Only genuine Active Directory accounts belong to this filter
+                if not is_ad:
                     continue
                 if status:
                     stat = status.lower().strip()
@@ -359,10 +364,22 @@ def get_user_detail(
         .all()
     )
 
-    has_ad_mapping = any(app.app_code.lower() == "ad" for _, app in mappings)
+    u_clean = (identity.username or "").strip().lower()
+    is_shop_acc = (
+        u_clean.startswith("wa-shop")
+        or u_clean.startswith("ws-")
+        or "wa_shop" in u_clean
+        or "shop_" in u_clean
+        or (len(u_clean) > 2 and u_clean[:2].isdigit() and "-ws" in u_clean)
+    )
+    if is_shop_acc:
+        mappings = [m_pair for m_pair in mappings if m_pair[1].app_code.lower() != "ad"]
+
+    has_ad_mapping = (not is_shop_acc) and any(app.app_code.lower() == "ad" for _, app in mappings)
     has_direct_ad = bool(has_ad_mapping or identity.ad_guid or identity.last_login_ad_at)
-    effective_ad_active = bool(identity.is_active_in_ad and has_direct_ad)
-    if identity.is_active_in_ad and not has_direct_ad and not getattr(identity, "is_approved_exception", False):
+    is_ad = bool((not is_shop_acc) and (identity.ad_guid or has_ad_mapping))
+    effective_ad_active = bool(is_ad and identity.is_active_in_ad and has_direct_ad)
+    if identity.is_active_in_ad and (not has_direct_ad or is_shop_acc) and not getattr(identity, "is_approved_exception", False):
         identity.is_active_in_ad = False
         effective_ad_active = False
 

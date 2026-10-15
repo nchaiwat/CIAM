@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 15 ตุลาคม 2026 (Local Time: ~14:30 ICT)  
+> **Date Updated:** 15 ตุลาคม 2026 (Local Time: ~15:15 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 52/52 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 37 AD Inactive Status Sync & Ghost Account Reconciliation)
+> **Git Status:** Production Ready (Sprint 38 Shop Accounts Sanitization from AD Filter)
 
 ---
 
@@ -15,14 +15,35 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **AD Inactive Status Reconciliation & Auto-heal (Sprint 37 - กรณี Worawut.S):**
+1. **Shop Accounts Sanitization from AD Filter & Spokes Matrix (Sprint 38 - บัญชี WA-Shop_*):**
+   - แก้ไขปัญหาบัญชีสาขาร้านค้า (เช่น `25 WA Shop - น่าน`, `46 WA Shop - โคราช`) หลุดไปแสดงในตัวกรอง `Active Directory (DC Gateway)` และตัวกรอง `เฉพาะที่ยังใช้งานอยู่ (Active)` ทั้งที่คอลัมน์สถานะ AD เป็นขีด `-` (Local Acc)
+   - ปรับปรุง `directory.py`: เมื่อกรอง `app_code == 'ad'` บัญชีจะต้องเป็นตัวตน AD จริง (`is_ad == True`) เท่านั้น บัญชีประเภท Shop (`is_shop_acc`) ถูกตัดสิทธิ์จากการแสดงในตัวกรอง AD อย่างเด็ดขาด และตัดป้าย `🔴 AD` ออกจากคอลัมน์ Spokes ของร้านค้า (แสดงเฉพาะ Spoke ที่ใช้งานจริง เช่น `PFSENSE_FAC`)
+   - ปรับปรุง `scheduler.py`: ข้ามการ sync บัญชีร้านค้าจาก AD และลบการแมป AD ตกค้างของร้านค้าทิ้ง
+   - ปรับปรุง `initial_data.py`: กวาดล้างและตัด AD mapping ของบัญชีร้านค้าทั้งหมดในฐานข้อมูล
+2. **AD Inactive Status Reconciliation & Auto-heal (Sprint 37 - กรณี Worawut.S):**
    - แก้ไขปัญหาผู้ใช้ที่ถูกลบหรือไม่มีตัวตนใน Active Directory แล้ว (เช่น `worawut.s`) แต่ยังคงแสดงสถานะเป็น On (จุดเขียวกระพริบ 🟢) ในหน้า User Directory
    - ปรับปรุง `persist_spoke_inventory` ใน `scheduler.py`: เมื่อเชื่อมต่อ AD Sync Agent และดึงรายชื่อผู้ใช้ล่าสุด บัญชีใดที่ไม่อยู่ใน AD แล้วจะถูกปรับ `is_active_in_ad = False` ทันที และลบการแมปกับ AD ออก
    - ปรับปรุง `directory.py`: คำนวณ `effective_ad_active = bool(identity.is_active_in_ad and (has_ad_mapping or identity.ad_guid or identity.last_login_ad_at))` และมีกลไก Auto-heal ปรับตัวตนที่ไม่มี AD Footprint ให้เป็น `is_active_in_ad = False`
    - ปรับปรุง Tooltip ใน `frontend/src/app/directory/page.tsx` แสดงคำอธิบายสถานะให้ชัดเจนว่าบัญชีถูกปิดหรือไม่มีใน AD
-2. **Single Unified Front Door (Sprint 36):** ปรับปรุงโครงสร้าง Routing และ Authentication Guard ใน `AppShell.tsx` ให้ทุกคำขอที่ยังไม่ได้ล็อกอิน ไม่ว่าจะเป็นการพิมพ์ `ciam.windowasia.com` (Root Path `/`) หรือเปิดลิงก์ที่เซสชันหลุด จะวิ่งเข้าสู่หน้า `/login` (Window Asia App Portal สีขาว-น้ำเงิน) เสมอ 100% ป้องกันไม่ให้ผู้ใช้ทั่วไปหลุดเข้าไปเห็นหน้า `/admin/login` (Admin Console จอดำทะมึน พ.ร.บ.คอมฯ) ซึ่งสร้างความสับสนและตื่นตระหนกให้ผู้ใช้งาน
-3. **Unified Post-Login Landing:** ทั้งพนักงานทั่วไปและผู้ดูแลระบบล็อกอินผ่านหน้า `/login` เดียวกัน โดยจะเข้าสู่ `/portal` เป็นค่าเริ่มต้น ซึ่งพนักงานทั่วไปจะเห็นเฉพาะระบบงานที่ตนเองได้รับสิทธิ์ ส่วน Admin จะเห็นระบบงานพร้อมปุ่มลัด `[ 🛡️ Admin Console ]` บน Header เพื่อคลิกสลับเข้าสู่แดชบอร์ดบริหารจัดการได้ทันที
-4. **Responsive Admin Switcher on Portal:** ปรับปุ่ม `Admin Console` บนแถบ Header ของ `/portal` ให้แสดงผลและรองรับทั้งบน Mobile (`[ 🛡️ Admin ]`) และ Desktop (`[ 🛡️ Admin Console ]`) สำหรับผู้ใช้ที่มีสิทธิ์ Admin
+3. **Single Unified Front Door (Sprint 36):** ปรับปรุงโครงสร้าง Routing และ Authentication Guard ใน `AppShell.tsx` ให้ทุกคำขอที่ยังไม่ได้ล็อกอิน ไม่ว่าจะเป็นการพิมพ์ `ciam.windowasia.com` (Root Path `/`) หรือเปิดลิงก์ที่เซสชันหลุด จะวิ่งเข้าสู่หน้า `/login` (Window Asia App Portal สีขาว-น้ำเงิน) เสมอ 100% ป้องกันไม่ให้ผู้ใช้ทั่วไปหลุดเข้าไปเห็นหน้า `/admin/login` (Admin Console จอดำทะมึน พ.ร.บ.คอมฯ) ซึ่งสร้างความสับสนและตื่นตระหนกให้ผู้ใช้งาน
+
+---
+
+## Sprint 38: แก้ไขบัญชีร้านค้าสาขา (WA-Shop_*) หลุดแสดงใน Filter ของ Active Directory (15 ต.ค. 2026)
+### 1. สาเหตุของปัญหา (Root Cause Analysis):
+- บัญชีร้านค้าสาขา (`WA-Shop_*`) มีวัตถุประสงค์เพื่อเชื่อมต่อเครือข่าย VPN ของแต่ละสาขาเข้า pfSense (FreeRADIUS / OpenVPN) แต่ในอดีตหรือบน Windows Domain Controller มี Account อ็อบเจกต์เหล่านี้อยู่ด้วย
+- ใน `directory.py` เงื่อนไขตัวกรอง `target_app == "ad"` เดิมเขียนไว้ว่า `if not has_ad_mapping and not is_ad: continue` ซึ่งหากบัญชีมีแถวใน `AppAccountMapping` กับ AD แม้ว่าตัวระบบจะตรวจพบว่าเป็น `is_shop_acc` และตั้งค่า `is_ad = False` แล้วก็ตาม เงื่อนไขก็ยังยอมให้บัญชีนี้ผ่านตัวกรองเข้ามาได้
+- และเนื่องจากฟิลด์ `is_active_in_ad` ใน MasterIdentity เดิมเป็น `True` ทำให้เมื่อเลือก Filter `Active (เปิดใช้งาน)` บัญชีร้านค้าเหล่านี้จึงผ่านเงื่อนไขเข้ามาแสดงผลทั้งหมด ทั้งที่ในตารางหน้าจอแสดงป้ายเป็น `Local Acc` และสถานะ AD เป็นขีด `-`
+
+### 2. รายละเอียดการแก้ไข (Implementation Details):
+1. **Strict AD Filtering ใน Directory ([directory.py](file:///d:/Python/Central-IAM/backend/app/api/v1/directory.py)):**
+   - ใน `list_users` เมื่อกรองระบบ `target_app == "ad"` บัญชีจะต้องเป็น `is_ad == True` เท่านั้น หากเป็นบัญชีร้านค้า (`is_shop_acc`) หรือ Local Account จะถูกตัดทิ้ง (`continue`) ทันที 100%
+   - สำหรับบัญชีร้านค้า ให้กรองป้ายและ mapping ของ AD ออกจาก `mappings` และ `app_summaries` ทำให้ไม่แสดงป้าย `🔴 AD` ที่สร้างความเข้าใจผิดอีกต่อไป (จะแสดงเฉพาะ `PFSENSE_FAC` / Spoke ที่เกี่ยวข้องจริง)
+2. **Prevent AD Ingestion of Shop Accounts ([scheduler.py](file:///d:/Python/Central-IAM/backend/app/services/scheduler.py)):**
+   - เมื่อเชื่อมต่อและดึงข้อมูลจาก AD Agent หากพบว่าเป็นบัญชีร้านค้า (`is_shop_acc`) ให้ข้าม (`continue`) ไม่นำเข้าหรือสร้าง AD mapping เด็ดขาด
+   - เมื่อซิงก์จาก pfSense ให้ลบ AD mapping ตกค้างของบัญชีร้านค้านั้นๆ ออกอัตโนมัติ
+3. **Database Cleansing Routine ([initial_data.py](file:///d:/Python/Central-IAM/backend/app/initial_data.py)):**
+   - ปรับรูทีนใน `init_db()` ให้กวาดล้างบัญชีร้านค้า (`WA-Shop_*`) ทั้งหมด: ลบ AD mapping ออกทั้งหมด และตั้งค่า `is_active_in_ad = False`
 
 ---
 
