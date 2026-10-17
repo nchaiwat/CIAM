@@ -3,7 +3,11 @@
 import React, { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ShieldCheck, RefreshCw } from "lucide-react";
-import { clearSessionStorage } from "@/lib/session";
+import {
+  checkTokenValidOnReturn,
+  clearSessionStorage,
+  markSessionActivity,
+} from "@/lib/session";
 
 function OAuthLogoutContent() {
   const router = useRouter();
@@ -12,9 +16,32 @@ function OAuthLogoutContent() {
     searchParams.get("post_logout_redirect_uri") ||
     searchParams.get("redirect_uri") ||
     "";
+  const fullLogout = searchParams.get("full_logout") === "1";
 
   useEffect(() => {
-    clearSessionStorage();
+    const tokenCheck = checkTokenValidOnReturn();
+
+    // If full_logout=1 is explicitly requested or CIAM JWT token is missing/expired, perform full sign-out to /login
+    if (fullLogout || !tokenCheck.valid) {
+      clearSessionStorage();
+      const timer = setTimeout(() => {
+        if (
+          postLogoutRedirectUri &&
+          (postLogoutRedirectUri.startsWith("http://") ||
+            postLogoutRedirectUri.startsWith("https://") ||
+            postLogoutRedirectUri.startsWith("/"))
+        ) {
+          window.location.replace(postLogoutRedirectUri);
+        } else {
+          router.replace("/login?logged_out=1&redirect=/portal");
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+
+    // Standard Logout from a Spoke App Client:
+    // Keep CIAM SSO Portal session active, reset the 30-minute Portal Idle Timer, and return directly to /portal!
+    markSessionActivity();
 
     const timer = setTimeout(() => {
       if (
@@ -25,12 +52,12 @@ function OAuthLogoutContent() {
       ) {
         window.location.replace(postLogoutRedirectUri);
       } else {
-        router.replace("/login?logged_out=1&redirect=/portal");
+        router.replace("/portal");
       }
-    }, 300);
+    }, 250);
 
     return () => clearTimeout(timer);
-  }, [postLogoutRedirectUri, router]);
+  }, [postLogoutRedirectUri, fullLogout, router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#070d1e] via-[#0b1426] to-[#0f2347] flex flex-col items-center justify-center p-4 text-slate-100">
@@ -39,10 +66,10 @@ function OAuthLogoutContent() {
           <ShieldCheck className="w-6 h-6 text-white" />
         </div>
         <h1 className="text-lg font-extrabold text-white">
-          กำลังออกจากระบบ Single Sign-On...
+          กำลังกลับสู่หน้า SSO App Portal...
         </h1>
         <p className="text-xs text-slate-400">
-          ระบบได้ล้างเซสชันการใช้งานของคุณเรียบร้อยแล้ว กำลังนำทางไปยังหน้าเข้าสู่ระบบ
+          ออกจากระบบลูกเรียบร้อยแล้ว กำลังนำท่านกลับไปยังหน้า Central IAM SSO Portal
         </p>
         <RefreshCw className="w-5 h-5 text-sky-400 animate-spin mx-auto" />
       </div>
@@ -55,7 +82,7 @@ export default function OAuthLogoutPage() {
     <Suspense
       fallback={
         <div className="min-h-screen bg-[#070d1e] flex items-center justify-center text-slate-300 text-sm">
-          กำลังออกจากระบบ...
+          กำลังนำทางกลับสู่หน้า SSO Portal...
         </div>
       }
     >

@@ -8,7 +8,9 @@ import CiamCopilotWidget from "@/components/ai/CiamCopilotWidget";
 import {
   useSessionWatchdog,
   checkSessionExpiration,
+  checkTokenValidOnReturn,
   clearSessionStorage,
+  markSessionActivity,
 } from "@/lib/session";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -30,11 +32,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const token = localStorage.getItem("ciam_token");
+    const tokenReturnCheck = checkTokenValidOnReturn();
     const sessionCheck = checkSessionExpiration();
-    const isTokenValid = Boolean(token && !sessionCheck.expired);
-    if (token && sessionCheck.expired) {
-      clearSessionStorage();
-    }
 
     const storedUserStr = localStorage.getItem("ciam_user");
     let userRole = "";
@@ -46,14 +45,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     if (pathname?.startsWith("/portal")) {
-      // Portal requires authentication
-      if (!isTokenValid) {
-        const expiredParam = token && sessionCheck.expired ? "expired=1&" : "";
+      // Returning to /portal from an App Client: only verify JWT token validity (do NOT apply old idle time)
+      if (!tokenReturnCheck.valid) {
+        if (token) clearSessionStorage();
+        const expiredParam = token && tokenReturnCheck.reason === "token_expired" ? "expired=1&" : "";
         router.replace(`/login?${expiredParam}redirect=/portal`);
         return;
       }
+      markSessionActivity();
       setAuthChecked(true);
-    } else if (pathname === "/login") {
+      return;
+    }
+
+    const isTokenValid = Boolean(token && !sessionCheck.expired);
+    if (token && sessionCheck.expired) {
+      clearSessionStorage();
+    }
+
+    if (pathname === "/login") {
       // If already logged in with valid active session, redirect to portal
       if (isTokenValid) {
         router.replace("/portal");

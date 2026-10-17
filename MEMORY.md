@@ -773,17 +773,18 @@ FRONTEND_URL=http://localhost:3000
   - เพิ่มฟังก์ชัน `extract_user_search_term` ใน `ai_service.py` เพื่อสกัด Username (`Firstname.L`), อีเมล หรือชื่อผู้ใช้จากทั้งข้อความปัจจุบันและประวัติการสนทนา แล้วส่ง `search=user_search` เข้า `ciam_list_users` ทันที
   - ปรับการเรียงลำดับใน `ciam_list_users` (`mcp/server.py`) เป็น `MasterIdentity.is_active_in_ad.desc(), MasterIdentity.username.asc()` เพื่อให้บัญชี AD ที่ Active แสดงขึ้นมาก่อนบัญชีรหัสสาขาเสมอ พร้อมเพิ่ม Prefix Fallback (`Firstname`) และปรับ `is_ad_account` ให้เช็ค `bool(ident.is_active_in_ad or has_ad_spoke or ident.ad_guid or ident.employee_id)`
 
-### 24.6 Proactive Zero-Action Session Auto-Logoff Watchdog & OIDC Single Logout Flow (Sprint 46)
+### 24.6 Proactive Zero-Action Session Auto-Logoff Watchdog & App Client Logout Return to `/portal` (Sprint 46)
 * **ค่ากำหนดเวลาเซสชัน (Session Timeout Policy):**
-  - **Idle Timeout (ไม่มีการขยับเมาส์/คีย์บอร์ด/คลิก):** **30 นาที** (`DEFAULT_IDLE_TIMEOUT_MINUTES = 30` ใน `frontend/src/lib/session.ts`)
+  - **Portal Idle Timeout (เปิดหน้า `/portal` ทิ้งไว้โดยไม่มีการขยับเมาส์/คีย์บอร์ด/คลิก):** **30 นาที** (`DEFAULT_IDLE_TIMEOUT_MINUTES = 30` ใน `frontend/src/lib/session.ts`)
   - **Absolute JWT Token Lifetime:** **480 นาที / 8 ชั่วโมง** (`ACCESS_TOKEN_EXPIRE_MINUTES = 480` ใน `backend/app/core/config.py`)
   - **Server Session Heartbeat:** ตรวจสอบ `/api/v1/auth/me` อัตโนมัติทุก **60 วินาที** (ตรวจจับกรณีถูกระงับสิทธิ์จากฝั่ง Server)
-* **กลไก Proactive Auto-Logoff (ตัดทันทีเมื่อถึงเวลาโดยไม่ต้องรอ User คลิก):**
+* **กลไก Proactive Auto-Logoff บนหน้า SSO Portal (ตัดทันทีเมื่อถึงเวลาโดยไม่ต้องรอ User คลิก):**
   - ใช้ `useSessionWatchdog()` ใน `portal/page.tsx` และ `AppShell.tsx` ตั้งทั้ง `setTimeout` ที่มิลลิวินาทีหมดอายุจริง + `setInterval` ทุก 1 วินาที + Cross-Tab `storage` listener
-  - เมื่อครบกำหนดเวลา ระบบล้าง `ciam_token`, `ciam_user`, `ciam_last_activity` ทันที และสั่ง `window.location.replace("/login?expired=1&reason=...")` โดยอัตโนมัติ
-* **การกลับมาของผู้ใช้เมื่อ Timeout แล้วกด Logout จาก App Client (Spoke App):**
-  1. หาก App Client ส่งกลับมาที่ `/portal` หรือผู้ใช้กลับมาที่แท็บ `/portal`: ระบบพาเข้าหน้า `/login?expired=1&redirect=/portal` พร้อมแสดงแบนเนอร์แจ้งเตือน เมื่อล็อกอินใหม่จะกลับเข้าหน้า `/portal` ทันที
-  2. หากผู้ใช้กดปุ่ม `"เข้าสู่ระบบด้วย Central IAM (SSO)"` จากหน้า Login ของ App Client (วิ่งมาที่ `/oauth/authorize`): หน้า `oauth/authorize/page.tsx` ตรวจเช็ค `checkSessionExpiration()` หากหมดเวลาแล้วจะบังคับให้กรอกรหัสผ่านใหม่ และเมื่อล็อกอินสำเร็จจะส่ง Authorization Code พากลับเข้า App Client เดิมทันที
-  3. หาก App Client เรียก OIDC `end_session_endpoint` (`/api/v1/oauth/logout` หรือ `/oauth/logout`): ระบบล้างเซสชัน CIAM และพาไปหน้า `/login?logged_out=1&redirect=/portal` (หรือ `post_logout_redirect_uri`)
+  - เมื่อเปิดหน้า `/portal` ทิ้งไว้ครบ 30 นาทีโดยไม่ได้เข้าใช้งาน App Client ระบบจะล้าง `ciam_token`, `ciam_user`, `ciam_last_activity` ทันที และสั่ง `window.location.replace("/login?expired=1&reason=...")` โดยอัตโนมัติ
+* **กฎสำคัญ: เมื่อผู้ใช้ออกไปใช้งาน App Client (Spoke App) จะไม่นำ Idle Time 30 นาทีของ SSO Portal มาคิด และเมื่อกด Logout จาก App Client จะกลับมาหน้า `/portal` ทันที:**
+  1. เมื่อผู้ใช้กดเข้าสู่ระบบลูกจากหน้า `/portal` (`handleLaunch`) หรือผ่าน `/oauth/authorize` ระบบเรียก `markNavigatingToSpokeApp()` (`ciam_in_spoke_app = "1"`) เพื่อพักการนับ Idle Time ของ SSO Portal
+  2. เมื่อผู้ใช้ทำงานใน App Client (เช่น IRM, MTPulse, QMS) นานเท่าใดก็ตาม (ตราบใดที่ JWT 8 ชม. ยังไม่หมดอายุ) แล้วกด **Logout จากหน้า App Client**:
+     - หาก App Client พากลับมาที่ `https://ciam.windowasia.com/portal` (เช่น IRM) หรือเรียก `/oauth/logout`: ระบบตรวจเช็คด้วย `checkTokenValidOnReturn()` (ไม่คิด Idle Time ย้อนหลัง) แล้วพาผู้ใช้เข้าสู่หน้า **SSO Portal (`/portal`) ของ CIAM ทันที** พร้อมรีเซ็ตเวลา Idle Time ของหน้า SSO Portal เริ่มนับ `30:00` นาทีใหม่!
+  3. เฉพาะเมื่อผู้ใช้กดปุ่ม `ออกจากระบบ` บนหน้า SSO Portal เอง (หรือส่ง `?full_logout=1`) เท่านั้น ระบบจึงจะล้างเซสชัน CIAM และพาไปหน้า `/login`
 
 

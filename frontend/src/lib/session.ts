@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { API_BASE_URL } from "./api";
 
 /**
- * Default Idle Session Timeout: 30 minutes (1,800,000 ms)
- * Default Absolute Token Timeout (configured on Backend): 480 minutes (8 hours)
- * Server Session Heartbeat Check Interval: 60 seconds
+ * Default SSO Portal Idle Session Timeout: 30 minutes (1,800,000 ms)
+ * Note: Idle time is ONLY counted while the user is staying on the CIAM SSO Portal / Admin Console.
+ * When the user navigates to a Spoke App Client (e.g., IRM, MTPulse, QMS), Portal Idle Time is NOT counted,
+ * so when the user logs out from the App Client, they return directly to the CIAM SSO Portal (/portal)
+ * with a fresh 30-minute Portal idle timer (provided the 8-hour JWT token itself has not expired).
  */
 export const DEFAULT_IDLE_TIMEOUT_MINUTES = 30;
 export const DEFAULT_IDLE_TIMEOUT_MS = DEFAULT_IDLE_TIMEOUT_MINUTES * 60 * 1000;
@@ -15,6 +17,7 @@ export const SERVER_SESSION_CHECK_INTERVAL_MS = 60 * 1000;
 const STORAGE_TOKEN_KEY = "ciam_token";
 const STORAGE_USER_KEY = "ciam_user";
 const STORAGE_LAST_ACTIVITY_KEY = "ciam_last_activity";
+const STORAGE_IN_SPOKE_APP_KEY = "ciam_in_spoke_app";
 
 /**
  * Decode JWT payload safely on the client without external libraries.
@@ -45,17 +48,30 @@ export function getJwtExpirationMs(token: string | null): number | null {
 }
 
 /**
- * Record user activity timestamp in localStorage (shared across tabs).
+ * Record user activity on the CIAM Portal and clear the "in spoke app" pause flag.
  */
 export function markSessionActivity(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(STORAGE_LAST_ACTIVITY_KEY, String(Date.now()));
+    localStorage.removeItem(STORAGE_IN_SPOKE_APP_KEY);
   } catch {}
 }
 
 /**
- * Clear all session storage keys cleanly.
+ * Mark that the user has launched / navigated to a Spoke App Client.
+ * While in a Spoke App Client, SSO Portal Idle Time is paused and NOT counted.
+ */
+export function markNavigatingToSpokeApp(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_IN_SPOKE_APP_KEY, "1");
+    localStorage.setItem(STORAGE_LAST_ACTIVITY_KEY, String(Date.now()));
+  } catch {}
+}
+
+/**
+ * Clear all CIAM session storage keys cleanly (Full Logout from CIAM).
  */
 export function clearSessionStorage(): void {
   if (typeof window === "undefined") return;
@@ -63,11 +79,37 @@ export function clearSessionStorage(): void {
     localStorage.removeItem(STORAGE_TOKEN_KEY);
     localStorage.removeItem(STORAGE_USER_KEY);
     localStorage.removeItem(STORAGE_LAST_ACTIVITY_KEY);
+    localStorage.removeItem(STORAGE_IN_SPOKE_APP_KEY);
   } catch {}
 }
 
 /**
- * Check if the current session is expired either by JWT `exp` or by Idle Timeout.
+ * Check ONLY whether the underlying CIAM JWT token exists and has not passed its absolute `exp` (8 hours).
+ * Used when returning from a Spoke App Client to /portal or /oauth/authorize so that time spent working
+ * inside an App Client is never treated as Portal Idle Time.
+ */
+export function checkTokenValidOnReturn(): {
+  valid: boolean;
+  reason: "missing" | "token_expired" | null;
+} {
+  if (typeof window === "undefined") {
+    return { valid: true, reason: null };
+  }
+  const token = localStorage.getItem(STORAGE_TOKEN_KEY);
+  if (!token) {
+    return { valid: false, reason: "missing" };
+  }
+  const jwtExpMs = getJwtExpirationMs(token);
+  if (jwtExpMs !== null && Date.now() >= jwtExpMs) {
+    return { valid: false, reason: "token_expired" };
+  }
+  return { valid: true, reason: null };
+}
+
+/**
+ * Check if the current CIAM Portal session is expired either by JWT `exp` or by Portal Idle Timeout (30 mins).
+ * If the user is currently flagged as working inside a Spoke App (`ciam_in_spoke_app === "1"`),
+ * Portal Idle Timeout is paused and only JWT `exp` applies.
  */
 export function checkSessionExpiration(
   idleTimeoutMs: number = DEFAULT_IDLE_TIMEOUT_MS
@@ -83,13 +125,24 @@ export function checkSessionExpiration(
 
   const now = Date.now();
 
-  // 1. Check JWT absolute expiration (`exp` claim)
+  // 1. Check JWT absolute expiration (`exp` claim, default 8 hours)
   const jwtExpMs = getJwtExpirationMs(token);
   if (jwtExpMs !== null && now >= jwtExpMs) {
     return { expired: true, reason: "token_expired", remainingMs: 0 };
   }
 
-  // 2. Check Idle Timeout
+  // 2. If user is currently inside a Spoke App Client, do NOT count Portal Idle Time
+  const inSpokeApp = localStorage.getItem(STORAGE_IN_SPOKE_APP_KEY) === "1";
+  if (inSpokeApp) {
+    const remaining = jwtExpMs !== null ? Math.max(0, jwtExpMs - now) : idleTimeoutMs;
+    return {
+      expired: false,
+      reason: null,
+      remainingMs: Math.min(remaining, idleTimeoutMs),
+    };
+  }
+
+  // 3. Check Portal Idle Timeout (30 minutes of inactivity while on SSO Portal)
   let lastActivityMs = Number(localStorage.getItem(STORAGE_LAST_ACTIVITY_KEY) || "0");
   if (!lastActivityMs || Number.isNaN(lastActivityMs) || lastActivityMs > now) {
     lastActivityMs = now;
@@ -112,7 +165,9 @@ export function checkSessionExpiration(
 /**
  * Immediately log off the user and redirect to /login without waiting for any user action.
  */
-export function triggerImmediateLogoff(reason: "token_expired" | "idle_timeout" | "missing" | "revoked" = "token_expired"): void {
+export function triggerImmediateLogoff(
+  reason: "token_expired" | "idle_timeout" | "missing" | "revoked" = "token_expired"
+): void {
   if (typeof window === "undefined") return;
   clearSessionStorage();
 
@@ -120,7 +175,8 @@ export function triggerImmediateLogoff(reason: "token_expired" | "idle_timeout" 
   if (
     currentPath.includes("/login") ||
     currentPath.includes("/portal/callback") ||
-    currentPath.includes("/oauth/authorize")
+    currentPath.includes("/oauth/authorize") ||
+    currentPath.includes("/oauth/logout")
   ) {
     return;
   }
@@ -130,9 +186,11 @@ export function triggerImmediateLogoff(reason: "token_expired" | "idle_timeout" 
 }
 
 /**
- * Proactive React Hook that monitors the user's session in real-time and automatically
- * logs off the exact moment the Idle Timeout (30 mins) or JWT Expiration (480 mins / 8 hrs)
- * is reached — or if the server revokes/expires the session — WITHOUT waiting for user action.
+ * Proactive React Hook for SSO Portal (/portal) and Admin Console.
+ * - On arrival at /portal (including when returning after logging out from an App Client),
+ *   verifies the JWT token is still valid and resets the 30-minute Portal Idle Timer to 30:00.
+ * - While staying on /portal without going to an App Client, counts down the 30-minute Idle Timer
+ *   and immediately logs off the exact second it reaches 00:00 WITHOUT waiting for any user action.
  */
 export function useSessionWatchdog(options?: {
   enabled?: boolean;
@@ -147,13 +205,16 @@ export function useSessionWatchdog(options?: {
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
 
-    // Initial check on mount
-    const initial = checkSessionExpiration(idleTimeoutMs);
-    if (initial.expired) {
-      triggerImmediateLogoff(initial.reason || "token_expired");
+    // When entering/returning to SSO Portal (e.g. after logging out from a Spoke App Client),
+    // verify the JWT token is valid and start a fresh 30-minute Portal Idle Timer!
+    const tokenCheck = checkTokenValidOnReturn();
+    if (!tokenCheck.valid) {
+      triggerImmediateLogoff(tokenCheck.reason || "token_expired");
       return;
     }
-    setRemainingSeconds(Math.ceil(initial.remainingMs / 1000));
+
+    // Reset Portal Idle Timer to full 30 minutes upon entering/returning to Portal
+    markSessionActivity();
 
     let exactTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -165,7 +226,6 @@ export function useSessionWatchdog(options?: {
         return;
       }
       setRemainingSeconds(Math.ceil(status.remainingMs / 1000));
-      // Schedule exact millisecond callback so logoff happens immediately when deadline is reached
       exactTimeoutId = setTimeout(() => {
         const verify = checkSessionExpiration(idleTimeoutMs);
         if (verify.expired) {
@@ -178,13 +238,12 @@ export function useSessionWatchdog(options?: {
 
     scheduleExactDeadlineTimer();
 
-    // Throttled user activity listener (updates ciam_last_activity at most every 5 seconds)
+    // Throttled user activity listener (updates ciam_last_activity at most every 5 seconds while on Portal)
     let lastRecordedAt = Date.now();
     const handleUserActivity = () => {
       const now = Date.now();
       if (now - lastRecordedAt >= 5000) {
         lastRecordedAt = now;
-        // Before extending idle activity, verify JWT hasn't already expired
         const token = localStorage.getItem(STORAGE_TOKEN_KEY);
         const jwtExpMs = getJwtExpirationMs(token);
         if (!token || (jwtExpMs !== null && now >= jwtExpMs)) {
@@ -208,7 +267,7 @@ export function useSessionWatchdog(options?: {
       window.addEventListener(evt, handleUserActivity, { passive: true })
     );
 
-    // 1-second tick interval to update remaining time & catch OS sleep/wake expiration immediately
+    // 1-second tick interval to update remaining time & trigger immediate zero-action logoff at 00:00
     const tickInterval = setInterval(() => {
       const status = checkSessionExpiration(idleTimeoutMs);
       if (status.expired) {
@@ -238,11 +297,11 @@ export function useSessionWatchdog(options?: {
           triggerImmediateLogoff("revoked");
         }
       } catch {
-        // Ignore transient network hiccups; local timer still enforces strict expiration
+        // Ignore transient network hiccups
       }
     }, SERVER_SESSION_CHECK_INTERVAL_MS);
 
-    // Cross-tab synchronization: if user logs out in another tab, log off this tab immediately
+    // Cross-tab synchronization
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === STORAGE_TOKEN_KEY && !e.newValue) {
         triggerImmediateLogoff("missing");
@@ -252,9 +311,20 @@ export function useSessionWatchdog(options?: {
     };
     window.addEventListener("storage", handleStorageChange);
 
-    // Immediate check when returning to tab or waking screen
+    // When returning to the Portal tab after being in a Spoke App, reset idle timer if coming back from spoke
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === "visible") {
+        const wasInSpoke = localStorage.getItem(STORAGE_IN_SPOKE_APP_KEY) === "1";
+        if (wasInSpoke) {
+          const validCheck = checkTokenValidOnReturn();
+          if (!validCheck.valid) {
+            triggerImmediateLogoff(validCheck.reason || "token_expired");
+            return;
+          }
+          markSessionActivity();
+          scheduleExactDeadlineTimer();
+          return;
+        }
         const status = checkSessionExpiration(idleTimeoutMs);
         if (status.expired) {
           triggerImmediateLogoff(status.reason || "token_expired");

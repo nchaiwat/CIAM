@@ -20,9 +20,9 @@ import {
 } from "lucide-react";
 import { api, AuthorizeMeta } from "@/lib/api";
 import {
-  checkSessionExpiration,
+  checkTokenValidOnReturn,
   clearSessionStorage,
-  markSessionActivity,
+  markNavigatingToSpokeApp,
 } from "@/lib/session";
 
 function AuthorizeContent() {
@@ -92,16 +92,16 @@ function AuthorizeContent() {
         return;
       }
 
-      // Check if user already has a valid, non-expired CIAM session
+      // Check if user already has a valid, non-expired CIAM JWT token
       const savedToken = typeof window !== "undefined" ? localStorage.getItem("ciam_token") : null;
       const savedUserStr = typeof window !== "undefined" ? localStorage.getItem("ciam_user") : null;
-      const sessionStatus = checkSessionExpiration();
+      const tokenCheck = checkTokenValidOnReturn();
 
-      if (savedToken && sessionStatus.expired) {
+      if (savedToken && !tokenCheck.valid) {
         clearSessionStorage();
       }
 
-      if (savedToken && !sessionStatus.expired && !switchAccount) {
+      if (savedToken && tokenCheck.valid && !switchAccount) {
         let cachedUser = null;
         try {
           if (savedUserStr) cachedUser = JSON.parse(savedUserStr);
@@ -127,7 +127,7 @@ function AuthorizeContent() {
           });
 
           if (ssoRes.status === "SUCCESS" && ssoRes.redirect_to) {
-            markSessionActivity();
+            markNavigatingToSpokeApp();
             if (ssoRes.user) {
               setSeamlessUser(ssoRes.user);
             }
@@ -203,7 +203,7 @@ function AuthorizeContent() {
           if (res.user) {
             localStorage.setItem("ciam_user", JSON.stringify(res.user));
           }
-          markSessionActivity();
+          markNavigatingToSpokeApp();
         }
 
         if (res.user) {

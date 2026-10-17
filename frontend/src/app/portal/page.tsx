@@ -33,9 +33,10 @@ import {
 import { api, PortalAppItem, AdminUserOut } from "@/lib/api";
 import {
   useSessionWatchdog,
-  checkSessionExpiration,
+  checkTokenValidOnReturn,
   clearSessionStorage,
   markSessionActivity,
+  markNavigatingToSpokeApp,
 } from "@/lib/session";
 
 export default function PortalPage() {
@@ -144,12 +145,15 @@ export default function PortalPage() {
 
   // Load user profile & authorized apps
   useEffect(() => {
-    const sessionCheck = checkSessionExpiration();
-    if (sessionCheck.expired) {
+    const tokenCheck = checkTokenValidOnReturn();
+    if (!tokenCheck.valid) {
       clearSessionStorage();
-      router.replace(`/login?expired=1&reason=${sessionCheck.reason || "token_expired"}&redirect=/portal`);
+      router.replace(`/login?expired=1&reason=${tokenCheck.reason || "token_expired"}&redirect=/portal`);
       return;
     }
+
+    // Returning to /portal (e.g. after logging out from a Spoke App Client) starts a fresh 30-min Portal Idle Timer
+    markSessionActivity();
 
     const storedUser = localStorage.getItem("ciam_user");
     if (storedUser) {
@@ -256,6 +260,8 @@ export default function PortalPage() {
       const isVerified = app.network_policy === "VPN_ONLY" ? vpnReachability[app.app_code] === "connected" : true;
       const res = await api.launchPortalApp(app.client_id, undefined, undefined, isVerified);
       if (res && res.launch_url) {
+        // Pause SSO Portal 30-min Idle Timer while the user is working in the Spoke App Client
+        markNavigatingToSpokeApp();
         // Navigate directly in the same tab to save RAM and avoid spawning duplicate browser tabs
         window.location.href = res.launch_url;
         return;
