@@ -26,8 +26,9 @@
      6. `ciam_reactivate_user`: คำสั่งคืนสิทธิ์พนักงาน Re-enable ใน AD และระบบลูกในคลิกเดียว
      7. `ciam_get_audit_logs`: ตรวจสอบ Security Audit Trail และ Governance Logs
      8. `ciam_dispatch_spoke_command`: ออกคำสั่งเข้าคิว Mode C Outbound Agent (`REQUEST_FULL_SYNC`, `DISABLE_USER`)
-   - **Template การเชื่อมต่อ IDE (`mcp_config.json`):** จัดเตรียมไฟล์คอนฟิกสำหรับ Cursor, Antigravity และ Claude Desktop ให้พร้อมเชื่อมต่อใช้งานได้ทันที
-   - **Test Suite ครบ 100%:** เพิ่มชุดทดสอบ `backend/tests/test_mcp_server.py` ผ่านครบ 8/8 tests (รวมทั้งระบบ 60/60 passed 100%)
+   - **Remote Cloud Transport (SSE over HTTPS):** พัฒนาโมดูล `backend/app/mcp/remote.py` เชื่อมต่อเข้ากับ FastAPI (`/mcp/sse` และ `/mcp/messages/`) พร้อม `RemoteMcpAuthMiddleware` ป้องกันความปลอดภัยด้วย Bearer Token (Admin JWT หรือ MCP Key) ทำให้สามารถต่อจากเครื่อง Local / Laptop ไปหา Cloud VPS Production ได้ 100%
+   - **Template การเชื่อมต่อ IDE ครบ 3 รูปแบบ (`mcp_config.json`):** รองรับทั้ง Cloud HTTPS SSE, Local Stdio, และ SSH Tunnel Bridge
+   - **Test Suite ครบ 100%:** เพิ่มชุดทดสอบ `backend/tests/test_mcp_server.py` ครอบคลุมทั้ง Tools, Remote SSE endpoint และ Auth Guard ผ่านครบ 9/9 tests (รวมทั้งระบบ 61/61 passed 100%)
 2. **Spoke UI Consolidation & AD Sync 500 Fix (Sprint 39):**
    - **ลบสวิตช์ซ้ำซ้อนใน Modal:** นำสวิตช์เปิด/ปิด Spoke ออกจากป๊อปอัปตั้งค่าระบบ (`applications/page.tsx`) เนื่องจากหน้าการ์ดหลักมีสวิตช์เปิด/ปิดอยู่แล้ว และปรับฟอร์มส่วนหัวเป็น 3 คอลัมน์กว้างสบายตา
    - **รวมปุ่มตั้งค่าระบบลูกเป็นการตั้งค่าเดียว (Unified Settings Modal):** รวมปุ่มแยกตามประเภทระบบ (`SAP B1`, `AD Settings`, `M365`) เข้าเป็นปุ่มเดียว `[ ⚙️ ตั้งค่าเชื่อมต่อ ]` โดยเมื่อกดปุ่ม ระบบจะสลับไปแท็บที่ถูกต้องของระบบนั้นๆ โดยอัตโนมัติ (AD_PROXY, SAP_B1, M365, SSO, M2M)

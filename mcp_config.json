@@ -1,12 +1,25 @@
 {
   "mcpServers": {
-    "central-iam": {
+    "central-iam-cloud": {
+      "url": "https://ciam.windowasia.com/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer central_iam_super_secret_jwt_key_2026_change_in_production"
+      }
+    },
+    "central-iam-local": {
       "command": "d:\\Python\\Central-IAM\\backend\\.venv\\Scripts\\python.exe",
       "args": ["-m", "app.mcp.server"],
       "cwd": "d:\\Python\\Central-IAM\\backend",
       "env": {
         "PYTHONPATH": "."
       }
+    },
+    "central-iam-ssh": {
+      "command": "ssh",
+      "args": [
+        "root@157.173.219.153",
+        "docker compose -f /var/www/Ciam/docker-compose.yml exec -i api python -m app.mcp.server"
+      ]
     }
   }
 }

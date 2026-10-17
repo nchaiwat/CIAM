@@ -60,6 +60,11 @@ app.include_router(audit_logs_router, prefix=settings.API_V1_PREFIX)
 app.include_router(oauth_router, prefix=settings.API_V1_PREFIX)
 app.include_router(agent_router, prefix=settings.API_V1_PREFIX)
 
+# Register Model Context Protocol (MCP) Router & Remote Transport
+from app.mcp import create_remote_mcp_app, mcp_router
+app.include_router(mcp_router, prefix=settings.API_V1_PREFIX)
+app.mount("/mcp", create_remote_mcp_app())
+
 # Expose standard OIDC Discovery and JWKS at root level (RFC 8414 & OIDC Core spec)
 app.include_router(well_known_router)
 app.include_router(well_known_router, prefix=settings.API_V1_PREFIX)

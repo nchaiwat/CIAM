@@ -671,8 +671,12 @@ FRONTEND_URL=http://localhost:3000
 
 ### 22.1 Background & Capabilities
 * **Official MCP 2.x Architecture:** Central IAM integrates `mcp` SDK (`mcp.server.mcpserver.MCPServer`) as an identity and spoke management command bridge for AI Agents (Antigravity IDE, Cursor, Claude Desktop).
-* **Location:** `backend/app/mcp/server.py`
-* **Transports Supported:** `stdio` (IDE Desktop direct execution), `sse` / `streamable-http` (webhooks).
+* **Location:** `backend/app/mcp/server.py` and `backend/app/mcp/remote.py`
+* **Transports Supported:**
+  1. **Remote Cloud SSE (`https://ciam.windowasia.com/mcp/sse`):** Allows any developer or AI Agent to connect from remote laptops over HTTPS with Bearer token authentication.
+  2. **Local Stdio (`python -m app.mcp.server`):** Direct process execution for local development.
+  3. **SSH Remote Bridge:** Direct command execution via SSH into production Docker container.
+* **Security Guard:** `RemoteMcpAuthMiddleware` validates Bearer token against `MCP_API_KEY`, `SECRET_KEY`, or Admin JWT token.
 * **Zero AI API Cost on Server:** When used via IDE Desktop (Cursor/Antigravity/Claude), all LLM inference cost is borne by the Client Host. CIAM executes as an MCP Tool Provider with zero server-side token cost.
 
 ### 22.2 Registered MCP Tools
@@ -689,7 +693,13 @@ FRONTEND_URL=http://localhost:3000
 ```json
 {
   "mcpServers": {
-    "central-iam": {
+    "central-iam-cloud": {
+      "url": "https://ciam.windowasia.com/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer <YOUR_ADMIN_JWT_OR_MCP_KEY>"
+      }
+    },
+    "central-iam-local": {
       "command": "d:\\Python\\Central-IAM\\backend\\.venv\\Scripts\\python.exe",
       "args": ["-m", "app.mcp.server"],
       "cwd": "d:\\Python\\Central-IAM\\backend",

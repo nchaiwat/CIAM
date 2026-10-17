@@ -64,3 +64,28 @@ async def test_mcp_deprovision_and_reactivate():
     # Test deprovisioning non-existent user returns FAILED
     res = await ciam_deprovision_user("non.existent.random.user.999", reason="Test offboard")
     assert res["status"] in ["FAILED", "SUCCESS", "PARTIAL"]
+
+def test_remote_mcp_endpoints_and_auth():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.mcp.remote import MCP_STATIC_KEY
+
+    client = TestClient(app)
+
+    # 1. Info endpoint
+    info_res = client.get("/api/v1/mcp/info")
+    assert info_res.status_code == 200
+    info = info_res.json()
+    assert info["status"] == "OPERATIONAL"
+    assert "tools" in info
+    assert len(info["tools"]) >= 8
+
+    # 2. Remote MCP endpoint without auth must return 401
+    unauth_res = client.get("/mcp/messages")
+    assert unauth_res.status_code == 401
+    assert unauth_res.json()["error"] == "UNAUTHORIZED_MCP_ACCESS"
+
+    # 3. Remote MCP endpoint with valid Bearer token passes auth guard
+    auth_res = client.get("/mcp/messages", headers={"Authorization": f"Bearer {MCP_STATIC_KEY}"})
+    assert auth_res.status_code != 401
+
