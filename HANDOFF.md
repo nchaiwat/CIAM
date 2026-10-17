@@ -6,8 +6,8 @@
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 67/67 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 44 - Identity Unification `Duanghathai.P` <-> `Duanghatai.P` & Phonetic Directory Search)
+> **Test Integrity:** Backend Pytest: 68/68 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready (Sprint 45 - AI Copilot Specific Username Search Extraction & Active AD Priority Ranking)
 
 ---
 
@@ -15,7 +15,11 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Identity Unification (`Duanghathai.P` <-> `Duanghatai.P`) & Phonetic Directory Search (Sprint 44):**
+1. **AI Copilot Specific Username Search Extraction & Active AD Priority Ranking (Sprint 45):**
+   - **สาเหตุปัญหาที่พบ:** เมื่อผู้ใช้ถาม AI Copilot ถึงบัญชีเฉพาะเจาะจง เช่น `"Chaiwat.N ตรวจดูดีๆ"` ระบบ `detect_tool_intent` เดิมไม่ได้สกัดชื่อบัญชีไปใส่ในพารามิเตอร์ `search` ของ `ciam_list_users` (หรือกรณีไม่มีคีย์เวิร์ดคำว่า `"ผู้ใช้"` ก็จะไม่เรียก Tool เลย) และเมื่อเรียก `ciam_list_users(limit=30)` โดยไม่มี `search` ระบบเรียงลำดับตาม ASCII (`username.asc()`) ทำให้ 30 รายการแรกเป็นบัญชีสาขาที่ขึ้นต้นด้วยตัวเลข (`01-WS_...`, `03-WS_...`) ส่งผลให้ AI มองไม่เห็น `Chaiwat.N` และเข้าใจผิดว่าไม่มีในระบบ
+   - **เพิ่มฟังก์ชัน `extract_user_search_term` ใน `ai_service.py`:** สกัดชื่อบัญชีรูปแบบ `Firstname.L` (เช่น `Chaiwat.N`), อีเมล, หรือคำค้นชื่อคนจากข้อความปัจจุบันและประวัติการสนทนา แล้วส่งเข้า `ciam_list_users(search=..., limit=50)` โดยตรง แม้ผู้ใช้พิมพ์แค่ `"Chaiwat.N ตรวจดูดีๆ"` ก็จะเรียกค้นหาทันที
+   - **จัดเรียง Active AD Users ขึ้นก่อนใน `ciam_list_users` (`mcp/server.py`):** เปลี่ยนการเรียงลำดับเป็น `MasterIdentity.is_active_in_ad.desc(), MasterIdentity.username.asc()` เพื่อให้พนักงานจริงใน AD แสดงก่อนรหัสสาขา `01-WS_...` เสมอ พร้อมรองรับ Fallback ค้นหาด้วยชื่อต้น (Prefix) และแก้ไขการคำนวณ `is_ad_account` ให้ตรวจเช็คจาก `is_active_in_ad` และ `has_ad_spoke` อย่างถูกต้อง
+2. **Identity Unification (`Duanghathai.P` <-> `Duanghatai.P`) & Phonetic Directory Search (Sprint 44):**
    - **รวมตัวตนบน Production สำเร็จทันที:** ผสานบัญชี `Duanghatai.P` (ID 427 จาก SAP B1) เข้ากับตัวตนหลักใน Active Directory `Duanghathai.P` (`Duanghathai Phasuk` แผนก `AC`, ID 164) ทำให้แสดงสถานะ 🟢 Active ใน AD พร้อมผูกสิทธิ์ `AD` และ `SAP_B1` ครบในแถวเดียว
    - **เพิ่ม Phonetic Transliteration Matching (`thai` <-> `tai`):** อัปเดต `scheduler.py` (`persist_spoke_inventory`), `initial_data.py`, และ `directory.py` (`sync_active_directory_users`) ให้จับคู่ตัวสะกด `thai` <-> `tai` อัตโนมัติ ป้องกันไม่ให้การซิงก์ SAP B1 รอบถัดไปสร้างแถวซ้ำขึ้นมาอีก
    - **ขยายระบบค้นหาใน User Directory & MCP Tool (`list_users` & `ciam_list_users`):** รองรับการค้นหาด้วย `app_username` ของระบบลูก และคำค้นหาแบบเทียบเสียง (`Duanghatai.P` หรือ `Duanghathai.P`) ให้แสดงผลตัวตนหลักได้ตรงกัน 100%

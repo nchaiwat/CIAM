@@ -763,3 +763,13 @@ FRONTEND_URL=http://localhost:3000
   - รวมตัวตน `Duanghatai.P` เข้ากับตัวตนหลัก `Duanghathai.P` บน Production และเพิ่มคู่ `("duanghathai.p", "duanghatai.p")` ใน Auto-heal routine (`initial_data.py`, `directory.py`)
   - เพิ่มกฎเทียบเสียง `thai` $\leftrightarrow$ `tai` ใน `persist_spoke_inventory` (`scheduler.py`) พร้อมตรวจเช็ค `identity_id` ใน `AppAccountMapping` เพื่อไม่ให้เกิดแถวซ้ำเมื่อซิงก์ SAP B1 รอบถัดไป
   - ขยายระบบค้นหาใน `list_users` (`directory.py`) และ `ciam_list_users` (`mcp/server.py`) ให้ค้นหาครอบคลุมทั้ง `AppAccountMapping.app_username` และคำค้นหาเทียบเสียง (`thai` $\leftrightarrow$ `tai`, `wut` $\leftrightarrow$ `woot`)
+
+### 24.5 AI Copilot Specific Username Lookup (`Chaiwat.N`) & Active AD Priority Ordering
+* **สาเหตุ:**
+  1. `detect_tool_intent` ใน `backend/app/services/ai_service.py` เดิมไม่ได้สกัดชื่อบัญชี (`Chaiwat.N`) ส่งเข้าพารามิเตอร์ `search` ของ `ciam_list_users` และหากข้อความไม่มีคีย์เวิร์ดทั่วไป (เช่น พิมพ์สั้นๆ ว่า `"Chaiwat.N ตรวจดูดีๆ"`) ระบบจะไม่เรียก MCP Tool เลย
+  2. เมื่อเรียก `ciam_list_users(limit=30)` โดยไม่มี `search` คิวรีเรียงตาม `MasterIdentity.username.asc()` (ASCII Order) ทำให้ 30 แถวแรกเป็นบัญชี VPN สาขาที่ขึ้นต้นด้วยตัวเลข (`01-WS_...`, `03-WS_...`, `25 WA Shop...`) ส่งผลให้ `Chaiwat.N` (หมวดตัวอักษร C) หลุดอยู่นอก Limit 30 และ AI เข้าใจผิดว่าไม่มีในระบบ
+  3. ฟิลด์ `is_ad_account` ใน `ciam_list_users` เดิมเช็คแค่ `bool(ident.ad_guid or ident.employee_id)` ทำให้บัญชี AD ที่ซิงก์ผ่าน AD Sync Agent (ซึ่งใช้ `is_active_in_ad=True` และ `AppAccountMapping` ของ `ad`) แสดง `is_ad_account: False`
+* **การแก้ไข:**
+  - เพิ่มฟังก์ชัน `extract_user_search_term` ใน `ai_service.py` เพื่อสกัด Username (`Firstname.L`), อีเมล หรือชื่อผู้ใช้จากทั้งข้อความปัจจุบันและประวัติการสนทนา แล้วส่ง `search=user_search` เข้า `ciam_list_users` ทันที
+  - ปรับการเรียงลำดับใน `ciam_list_users` (`mcp/server.py`) เป็น `MasterIdentity.is_active_in_ad.desc(), MasterIdentity.username.asc()` เพื่อให้บัญชี AD ที่ Active แสดงขึ้นมาก่อนบัญชีรหัสสาขาเสมอ พร้อมเพิ่ม Prefix Fallback (`Firstname`) และปรับ `is_ad_account` ให้เช็ค `bool(ident.is_active_in_ad or has_ad_spoke or ident.ad_guid or ident.employee_id)`
+

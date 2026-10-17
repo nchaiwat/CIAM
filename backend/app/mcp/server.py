@@ -151,7 +151,29 @@ def ciam_list_users(
             query = query.filter(MasterIdentity.is_active_in_ad == is_active)
 
         total = query.count()
-        identities = query.order_by(MasterIdentity.username.asc()).limit(limit).all()
+        # If searching with Firstname.L and 0 results, fallback to Firstname prefix
+        if search and total == 0 and "." in search.strip():
+            prefix_only = search.strip().split(".")[0]
+            if len(prefix_only) >= 3:
+                p_clean = f"%{prefix_only}%"
+                query = db.query(MasterIdentity).filter(
+                    or_(
+                        MasterIdentity.username.ilike(p_clean),
+                        MasterIdentity.full_name.ilike(p_clean),
+                        MasterIdentity.email.ilike(p_clean),
+                    )
+                )
+                total = query.count()
+
+        # Prioritize active AD corporate accounts first so shop/branch VPN accounts ('01-WS_...') never push real employees out of the limit window
+        identities = (
+            query.order_by(
+                MasterIdentity.is_active_in_ad.desc(),
+                MasterIdentity.username.asc()
+            )
+            .limit(limit)
+            .all()
+        )
 
         user_list = []
         for ident in identities:
@@ -167,11 +189,13 @@ def ciam_list_users(
                     "app_code": app.app_code,
                     "app_name": app.app_name,
                     "app_username": mapping.app_username,
+                    "group_name": mapping.app_group_name,
                     "is_active": mapping.is_active_in_app
                 }
                 for mapping, app in mappings
             ]
 
+            has_ad_spoke = any((s["app_code"] or "").lower() == "ad" for s in spokes)
             user_list.append({
                 "id": ident.id,
                 "username": ident.username,
@@ -180,7 +204,7 @@ def ciam_list_users(
                 "department": ident.department,
                 "email": ident.email,
                 "is_active_in_ad": ident.is_active_in_ad,
-                "is_ad_account": bool(ident.ad_guid or ident.employee_id),
+                "is_ad_account": bool(ident.is_active_in_ad or has_ad_spoke or ident.ad_guid or ident.employee_id),
                 "linked_spokes": spokes
             })
 

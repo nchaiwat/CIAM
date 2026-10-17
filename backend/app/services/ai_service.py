@@ -324,10 +324,79 @@ def execute_internal_mcp_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict
         logger.error(f"execute_internal_mcp_tool error on {tool_name}: {e}", exc_info=True)
         return {"error": f"Tool execution failed: {str(e)}"}
 
+_SYSTEM_STOPWORDS = {
+    "user", "users", "account", "accounts", "admin", "active", "inactive",
+    "directory", "spoke", "spokes", "app", "apps", "mtpulse", "pulse",
+    "irm", "qms", "qol", "sap", "b1", "sap_b1", "erp", "pfsense", "pfsense_fac",
+    "pfsense_ho", "fac", "ho", "vpn", "firewall", "m365", "ad", "sso", "oidc",
+    "oauth", "pkce", "mcp", "ghost", "audit", "log", "logs", "health", "check",
+    "status", "list", "all", "total", "online", "offline", "ciam", "central",
+    "iam", "window", "asia", "windowasia", "com", "net", "org", "local",
+    "true", "false", "null", "none", "api", "key", "token", "jwt", "rs256",
+    "system", "server", "connect", "test", "ping", "sync", "error", "role",
+    "roles", "group", "groups", "department", "dept", "office", "branch",
+    "shop", "code", "mode", "client", "agent", "bot", "telegram", "line",
+    "portal", "login", "password", "pass", "cert", "certificate", "offboard",
+    "offboarding", "provision", "provisioning", "deprovision", "reactivate",
+    "enable", "disable", "filter", "search", "help", "info", "data",
+    "discrepancy", "uptime", "inventory",
+}
+
+
+def extract_user_search_term(user_query: str, history_messages: Optional[List[ChatMessage]] = None) -> Optional[str]:
+    """
+    Extract a specific username (e.g. 'Chaiwat.N', 'Duanghathai.P') or person name
+    from the user's message, or from recent user messages on follow-up prompts.
+    """
+    import re
+
+    def _extract_from_text(text: str) -> Optional[str]:
+        # 1. Explicit email address -> username part
+        email_m = re.search(r"\b([A-Za-z0-9._%+-]+)@(?:windowasia\.com|wa\.net)\b", text, re.IGNORECASE)
+        if email_m:
+            return email_m.group(1)
+
+        # 2. Standard corporate username format: Firstname.I or Firstname.II (e.g. Chaiwat.N, Duanghathai.P)
+        dot_matches = re.findall(r"\b([A-Za-z][A-Za-z0-9_-]{1,25}\.[A-Za-z]{1,4})\b", text)
+        for dm in dot_matches:
+            low_dm = dm.lower()
+            if not any(low_dm.endswith(ext) for ext in (".com", ".net", ".org", ".md", ".py", ".js", ".ts", ".json")):
+                return dm
+
+        # 3. English name/username token (3+ chars) that is not a reserved system keyword
+        eng_tokens = re.findall(r"\b([A-Za-z][A-Za-z0-9_-]{2,25})\b", text)
+        for tok in eng_tokens:
+            if tok.lower() not in _SYSTEM_STOPWORDS:
+                return tok
+
+        # 4. Thai name following common person prefixes (คุณ..., ชื่อ...)
+        thai_m = re.search(r"(?:คุณ|ชื่อบัญชี|ชื่อผู้ใช้|พนักงานชื่อ|ค้นหาชื่อ)\s*([ก-๙A-Za-z0-9._-]{2,30})", text)
+        if thai_m:
+            cand = thai_m.group(1).strip()
+            if cand not in ("อะไร", "ใคร", "ไหน", "บ้าง", "ครับ", "ค่ะ"):
+                return cand
+
+        return None
+
+    # Check current user query first
+    found = _extract_from_text(user_query)
+    if found:
+        return found
+
+    # If current query is a follow-up (e.g. "ตรวจดูดีๆ", "เช็คอีกที", "มีสิทธิ์อะไรบ้าง"), check recent user messages
+    if history_messages and any(k in user_query.lower() for k in ["ตรวจ", "เช็ค", "ดูดีๆ", "อีกที", "อีกครั้ง", "สิทธิ์", "ไหม", "หรือเปล่า", "คนนี้"]):
+        for m in reversed(history_messages[:-1]):
+            if m.role == "user":
+                prev_found = _extract_from_text(m.content)
+                if prev_found:
+                    return prev_found
+    return None
+
+
 def detect_tool_intent(user_query: str, history_messages: Optional[List[ChatMessage]] = None) -> Optional[tuple[str, Dict[str, Any]]]:
     """Pattern matching for natural language questions to relevant MCP tools with conversation context awareness"""
     q = user_query.lower()
-    
+
     # Check context from recent messages if query lacks explicit app mention
     context_text = ""
     if history_messages:
@@ -346,6 +415,11 @@ def detect_tool_intent(user_query: str, history_messages: Optional[List[ChatMess
     if any(k in q for k in ["audit", "log", "ประวัติ", "ใครทำอะไร", "บันทึกการเข้า"]):
         return ("ciam_get_audit_logs", {"limit": 10})
 
+    # 4. Specific User / Person Lookup (e.g. 'Chaiwat.N', 'Chaiwat.N ตรวจดูดีๆ', 'ค้นหา Duanghathai.P')
+    user_search = extract_user_search_term(user_query, history_messages)
+    if user_search:
+        return ("ciam_list_users", {"search": user_search, "limit": 50})
+
     # 4. Spoke Apps: MTPulse, IRM, SAP B1, pfSense
     spoke_detected = None
     if any(k in q for k in ["mtpulse", "mt pulse", "mt_pulse"]) or ("mtpulse" in context_text and any(k in q for k in ["บัญชี", "ผู้ใช้", "แสดง", "กี่", "ทะเบียน", "คน", "ยืนยัน"])):
@@ -359,13 +433,13 @@ def detect_tool_intent(user_query: str, history_messages: Optional[List[ChatMess
 
     # If spoke is detected AND user is asking about directory / users / count / listing / confirmation
     if spoke_detected:
-        if any(k in q for k in ["ทะเบียน", "directory", "filter", "กรอง", "แสดงในหน้า", "หน้าทะเบียน", "กี่คน", "กี่บัญชี", "จำนวน", "กี่คน", "ยืนยัน"]):
-            return ("ciam_list_users", {"app_code": spoke_detected, "limit": 50})
+        if any(k in q for k in ["ทะเบียน", "directory", "filter", "กรอง", "แสดงในหน้า", "หน้าทะเบียน", "กี่คน", "กี่บัญชี", "จำนวน", "ยืนยัน"]):
+            return ("ciam_list_users", {"app_code": spoke_detected, "limit": 100})
         return ("ciam_get_spoke_data", {"app_code": spoke_detected})
 
     # 5. General User Directory Listing
-    if any(k in q for k in ["พนักงาน", "ผู้ใช้", "user", "บัญชีทั้งหมด", "list user", "ทะเบียน", "directory"]):
-        return ("ciam_list_users", {"limit": 30})
+    if any(k in q for k in ["พนักงาน", "ผู้ใช้", "user", "บัญชี", "list user", "ทะเบียน", "directory", "ตรวจ", "ค้นหา", "เช็ค", "สิทธิ์"]):
+        return ("ciam_list_users", {"limit": 100})
 
     return None
 

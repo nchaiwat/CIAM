@@ -96,3 +96,11 @@ def test_ai_chat_health_check_tool(admin_token):
     assert res.status_code == 200
     data = res.json()
     assert "ciam_health_check" in data["tools_used"]
+
+def test_ai_chat_specific_username_lookup():
+    from app.services.ai_service import detect_tool_intent
+    intent = detect_tool_intent("Chaiwat.N ตรวจดูดีๆ")
+    assert intent is not None
+    tool_name, tool_args = intent
+    assert tool_name == "ciam_list_users"
+    assert tool_args.get("search") == "Chaiwat.N"
