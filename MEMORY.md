@@ -525,8 +525,8 @@ FRONTEND_URL=http://localhost:3000
 ## 16. Versioned Spec Download, Non-Destructive AD Sync & Responsive Loading Feedback (Version 2.0.3)
 
 ### 16.1 Versioned Specification Filename
-* **Download Filename:** กำหนดชื่อไฟล์ที่ดาวน์โหลดจากระบบให้ระบุเลขเวอร์ชันชัดเจนเสมอคือ `CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.7.0.md` (ดึงเลขเวอร์ชันแบบไดนามิกจากหัวเอกสารสเปก) เพื่อป้องกันปัญหา Dev นำไฟล์ไปใช้ผิดเวอร์ชัน
-* **Download Feedback:** เพิ่ม `isDownloadingSpec` State บนหน้าจอพร้อมแสดง Animated Spinner และข้อความ `กำลังเตรียมไฟล์ (v2.7.0)...` และปุ่ม `📥 สเปกเชื่อมต่อ (.md v2.7.0)`
+* **Download Filename:** กำหนดชื่อไฟล์ที่ดาวน์โหลดจากระบบให้ระบุเลขเวอร์ชันชัดเจนเสมอคือ `CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.8.0.md` (ดึงเลขเวอร์ชันแบบไดนามิกจาก Content-Disposition และหัวเอกสารสเปก) เพื่อป้องกันปัญหา Dev นำไฟล์ไปใช้ผิดเวอร์ชัน
+* **Download Feedback:** เพิ่ม `isDownloadingSpec` State บนหน้าจอพร้อมแสดง Animated Spinner และข้อความ `กำลังเตรียมไฟล์ (v2.8.0)...` และปุ่ม `📥 สเปกเชื่อมต่อ (.md v2.8.0)`
 
 ### 16.2 Non-Destructive AD Sync & Startup Auto-Healing (แก้ไขถาวรปัญหา AD แสดง Inactive / บัญชีผี)
 * **Root Cause:** ก่อนหน้านี้ ใน `scheduler.py` (รอบ 04:00 น.) และ `applications.py` มีโค้ดค้นหา `stale_identities` โดยเทียบ `~func.lower(MasterIdentity.username).in_(live_usernames)` และสั่ง `st_id.is_active_in_ad = False` ส่งผลให้ผู้ใช้ใดๆ ที่ไม่ได้ถูกส่งกลับมาในรอบ Batch Sync ของ AD ถูกปรับเป็น Inactive ทันที ทำให้ตอนเช้ากลายเป็น "บัญชีผี"
@@ -735,4 +735,26 @@ FRONTEND_URL=http://localhost:3000
   2. ต้องซ่อนหน้าต่างหรือปุ่มแชทอัตโนมัติหาก `ai_copilot_enabled == false`
   3. API Key ต้องผ่านการ Masking เสมอ
   4. สามารถเชื่อมต่อกับ Central IAM MCP Server ผ่าน Remote SSE (`https://ciam.windowasia.com/mcp/sse`) ด้วย Bearer token เพื่อเรียกใช้ Enterprise Tools ส่วนกลางได้
+
+---
+
+## 24. AI Factual Grounding, SSO Portal Muted Gray UI & Spoke Spec v2.8.0 Synchronization (Version 2.9.1)
+
+### 24.1 AI Factual Grounding & Zero-Hallucination Policy
+* **Parameter Alignment:** ปรับปรุง `execute_internal_mcp_tool` ใน `ai_service.py` ให้แปลงค่าอาร์กิวเมนต์ตรงกับพารามิเตอร์จริงของ `server.py` (`is_active` แทน `status`, `app_code` แทน `app_client_id`, `action_type` แทน `category`) ป้องกัน Tool Crash 100%
+* **Direct App Filtering in `ciam_list_users`:** เพิ่มพารามิเตอร์ `app_code` ให้สามารถกรองผู้ใช้งานตามระบบลูก (เช่น MTPulse, IRM, SAP B1) ได้ผลลัพธ์และจำนวนตรงกับหน้า User Directory (`/directory`) แบบ 1:1
+* **Context-Aware Intent Detection:** ฟังก์ชัน `detect_tool_intent` สแกนประวัติการสนทนา 4 ข้อความย้อนหลัง ทำให้เมื่อผู้ใช้ถามคำถามติดตาม (เช่น *"แล้วแสดงในหน้าทะเบียนกี่บัญชี"*, *"ยืนยันใช่ไหม"*) ระบบสามารถตรวจจับระบบลูกที่กำลังพูดถึงได้อย่างแม่นยำ
+* **Strict Anti-Hallucination & Anti-Sycophancy Directives:** เพิ่มกฎเหล็กใน System Prompt และ Ground-Truth Context บังคับให้ AI ยึดตัวเลขจาก Tool Output เป็นความจริงสูงสุด ห้ามเออออตามตัวเลขผิดที่ผู้ใช้ถามนำเด็ดขาด และห้ามตอบ *"ยืนยันตามนี้ครับ"* หากตัวเลขไม่ตรงกับฐานข้อมูลจริง
+
+### 24.2 SSO Portal Muted Gray UI for Unavailable Applications
+* **Visual Hierarchy:** แอปพลิเคชันที่ยังไม่สามารถใช้งานได้ (ต้องต่อ VPN แต่ยังไม่ได้เชื่อมต่อ, ระบบออฟไลน์, หรือปิดรับ SSO):
+  - การ์ด: ปรับเป็นสีเทาหม่น (`bg-slate-100/70`, `border-slate-300`, `opacity-80`) ตัดเอฟเฟกต์แสงเงากระพริบ
+  - ไอคอน: ปรับเป็น 3D Grayscale (`bg-slate-200 text-slate-400 grayscale`) ตัดความสดใสออก
+  - ป้ายสถานะ & ปุ่มกด: ปรับเป็นโทน Slate (`bg-slate-200 text-slate-600 border-slate-300`)
+  - ข้อความ Greeting Header: ปรับเป็น `{apps.length} ระบบงานที่ได้รับสิทธิ์` เพื่อป้องกันความสับสน
+
+### 24.3 Spoke Integration Specification v2.8.0 Synchronization
+* **Backend Build Context Sync:** ซิงก์ไฟล์ `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` v2.8.0 เข้าสู่โฟลเดอร์ `backend/` ซึ่งเป็น Build Context ของ Docker
+* **Dynamic Spec Download:** ปรับปรุง `handleDownloadSpec` ใน `applications/page.tsx` ให้อ่านชื่อไฟล์จาก `Content-Disposition` Header ของ API แบบไดนามิก พร้อมอัปเดตปุ่มดาวน์โหลดเป็น `📥 สเปกเชื่อมต่อ (.md v2.8.0)` และบันทึกประวัติ Revision Changelog ใน Dev Guide Modal
+
 
