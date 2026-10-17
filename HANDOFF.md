@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~13:00 ICT)  
+> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~14:10 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 67/67 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 43 - Spoke Spec v2.8.0 Synchronized across Backend & Frontend)
+> **Git Status:** Production Ready (Sprint 44 - Identity Unification `Duanghathai.P` <-> `Duanghatai.P` & Phonetic Directory Search)
 
 ---
 
@@ -15,7 +15,11 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Spoke Spec v2.8.0 Synchronized across Backend & Frontend (Sprint 43):**
+1. **Identity Unification (`Duanghathai.P` <-> `Duanghatai.P`) & Phonetic Directory Search (Sprint 44):**
+   - **รวมตัวตนบน Production สำเร็จทันที:** ผสานบัญชี `Duanghatai.P` (ID 427 จาก SAP B1) เข้ากับตัวตนหลักใน Active Directory `Duanghathai.P` (`Duanghathai Phasuk` แผนก `AC`, ID 164) ทำให้แสดงสถานะ 🟢 Active ใน AD พร้อมผูกสิทธิ์ `AD` และ `SAP_B1` ครบในแถวเดียว
+   - **เพิ่ม Phonetic Transliteration Matching (`thai` <-> `tai`):** อัปเดต `scheduler.py` (`persist_spoke_inventory`), `initial_data.py`, และ `directory.py` (`sync_active_directory_users`) ให้จับคู่ตัวสะกด `thai` <-> `tai` อัตโนมัติ ป้องกันไม่ให้การซิงก์ SAP B1 รอบถัดไปสร้างแถวซ้ำขึ้นมาอีก
+   - **ขยายระบบค้นหาใน User Directory & MCP Tool (`list_users` & `ciam_list_users`):** รองรับการค้นหาด้วย `app_username` ของระบบลูก และคำค้นหาแบบเทียบเสียง (`Duanghatai.P` หรือ `Duanghathai.P`) ให้แสดงผลตัวตนหลักได้ตรงกัน 100%
+2. **Spoke Spec v2.8.0 Synchronized across Backend & Frontend (Sprint 43):**
    - **ซิงก์ไฟล์สเปกสู่โฟลเดอร์ Backend:** ทำการคัดลอก `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` v2.8.0 (ที่มีหมวด E: In-App AI Copilot & MCP Tools) เข้าสู่โฟลเดอร์ `backend/` ซึ่งเป็น Build Context ของ Docker Container `/app` ทำให้ Backend ให้บริการไฟล์ v2.8.0 จริง
    - **ปรับปรุง API Endpoint `/applications/spec/download`:** อัปเดตการดึงเวอร์ชันไดนามิกและ fallback เป็น `v2.8.0` ใน `backend/app/api/v1/applications.py` และอัปเดต `tests/test_api_flow.py` ให้ตรวจเช็ค `v2.8.0` (ผ่าน 100%)
    - **ปรับปรุงปุ่มดาวน์โหลดและ Modal บน Frontend:** ปรับปุ่มดาวน์โหลด `📥 สเปกเชื่อมต่อ (.md v2.8.0)` ใน `frontend/src/app/applications/page.tsx` และเปลี่ยนการตั้งชื่อไฟล์ดาวน์โหลดให้อ่านจาก `Content-Disposition` แบบไดนามิก พร้อมเพิ่มรายละเอียดสเปก v2.8.0 ลงในแท็บประวัติการปรับปรุง (Revision Changelog) ในป๊อปอัปคู่มือ Dev

@@ -175,16 +175,34 @@ def list_users(
     query = db.query(MasterIdentity)
 
     if search:
-        search_term = f"%{search.strip()}%"
-        query = query.filter(
-            or_(
-                MasterIdentity.username.ilike(search_term),
-                MasterIdentity.full_name.ilike(search_term),
-                MasterIdentity.employee_id.ilike(search_term),
-                MasterIdentity.department.ilike(search_term),
-                MasterIdentity.email.ilike(search_term)
+        raw_s = search.strip()
+        s_low = raw_s.lower()
+        search_variants = {raw_s}
+        if "thai" in s_low:
+            search_variants.add(s_low.replace("thai", "tai"))
+        if "tai" in s_low and "thai" not in s_low:
+            search_variants.add(s_low.replace("tai", "thai"))
+        if "wut" in s_low:
+            search_variants.add(s_low.replace("wut", "woot"))
+        if "woot" in s_low:
+            search_variants.add(s_low.replace("woot", "wut"))
+
+        or_clauses = []
+        for sv in search_variants:
+            st = f"%{sv}%"
+            mapped_ids_subq = (
+                db.query(AppAccountMapping.identity_id)
+                .filter(AppAccountMapping.app_username.ilike(st))
             )
-        )
+            or_clauses.extend([
+                MasterIdentity.username.ilike(st),
+                MasterIdentity.full_name.ilike(st),
+                MasterIdentity.employee_id.ilike(st),
+                MasterIdentity.department.ilike(st),
+                MasterIdentity.email.ilike(st),
+                MasterIdentity.id.in_(mapped_ids_subq),
+            ])
+        query = query.filter(or_(*or_clauses))
 
     if status:
         stat = status.lower().strip()
@@ -1214,23 +1232,25 @@ async def sync_active_directory_users(
 
         synced_count = persist_spoke_inventory(ad_app, raw_accounts, db, actor_username=current_admin.username)
 
-        # Auto-heal Wachirawut.B into wachirawoot.b
-        canonical_w = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "wachirawoot.b").first()
-        dup_w = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "wachirawut.b").first()
-        if canonical_w and dup_w and canonical_w.id != dup_w.id:
-            dup_mappings = db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == dup_w.id).all()
-            for dm in dup_mappings:
-                existing_cm = db.query(AppAccountMapping).filter(
-                    AppAccountMapping.identity_id == canonical_w.id,
-                    AppAccountMapping.application_id == dm.application_id
-                ).first()
-                if not existing_cm:
-                    dm.identity_id = canonical_w.id
-                else:
-                    db.delete(dm)
-            db.flush()
-            db.delete(dup_w)
-            db.flush()
+        # Auto-heal phonetic / transliteration duplicate pairs into canonical AD identity
+        for canon_u, dup_u in [("wachirawoot.b", "wachirawut.b"), ("duanghathai.p", "duanghatai.p")]:
+            canonical_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == canon_u).first()
+            dup_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == dup_u).first()
+            if canonical_ident and dup_ident and canonical_ident.id != dup_ident.id:
+                dup_mappings = db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == dup_ident.id).all()
+                for dm in dup_mappings:
+                    existing_cm = db.query(AppAccountMapping).filter(
+                        AppAccountMapping.identity_id == canonical_ident.id,
+                        AppAccountMapping.application_id == dm.application_id
+                    ).first()
+                    if not existing_cm:
+                        dm.identity_id = canonical_ident.id
+                        dm.last_sync_status = "IN_SYNC" if canonical_ident.is_active_in_ad else "DISCREPANCY"
+                    else:
+                        db.delete(dm)
+                db.flush()
+                db.delete(dup_ident)
+                db.flush()
 
         db.add(IamAuditLog(
             actor_username=current_admin.username,

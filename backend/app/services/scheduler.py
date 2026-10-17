@@ -144,7 +144,7 @@ def persist_spoke_inventory(
         if not identity and item.get("full_name") and item.get("full_name").strip() != uname:
             identity = db.query(MasterIdentity).filter(MasterIdentity.full_name.ilike(item.get("full_name").strip())).first()
 
-        # Check phonetic / transliteration aliases for usernames (e.g. wachirawut.b <-> wachirawoot.b)
+        # Check phonetic / transliteration aliases for usernames (e.g. wachirawut.b <-> wachirawoot.b, duanghatai.p <-> duanghathai.p)
         if not identity and "." in uname:
             prefix, initial = uname.rsplit(".", 1)
             p_low = prefix.lower()
@@ -153,6 +153,10 @@ def persist_spoke_inventory(
                 alt_prefixes.append(p_low.replace("wut", "woot"))
             if "woot" in p_low:
                 alt_prefixes.append(p_low.replace("woot", "wut"))
+            if "thai" in p_low:
+                alt_prefixes.append(p_low.replace("thai", "tai"))
+            if "tai" in p_low and "thai" not in p_low:
+                alt_prefixes.append(p_low.replace("tai", "thai"))
             for ap in alt_prefixes:
                 alt_uname = f"{ap}.{initial.lower()}"
                 identity = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == alt_uname).first()
@@ -209,12 +213,16 @@ def persist_spoke_inventory(
             if (not identity.full_name or identity.full_name == identity.username) and item.get("full_name"):
                 identity.full_name = item.get("full_name")
 
-        # Check existing mapping
+        # Check existing mapping (by app_username or already linked identity_id)
+        from sqlalchemy import or_
         existing_mappings = (
             db.query(AppAccountMapping)
             .filter(
                 AppAccountMapping.application_id == app.id,
-                func.lower(AppAccountMapping.app_username) == uname.lower()
+                or_(
+                    func.lower(AppAccountMapping.app_username) == uname.lower(),
+                    AppAccountMapping.identity_id == identity.id
+                )
             )
             .all()
         )

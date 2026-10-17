@@ -566,25 +566,27 @@ def init_db():
                             m.is_active_in_app = map_spec["active"]
                             m.last_sync_status = "IN_SYNC"
 
-        # Auto-heal Wachirawut.B into wachirawoot.b (Transliteration and case sensitivity unification)
-        canonical_wachira = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "wachirawoot.b").first()
-        duplicate_wachira = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "wachirawut.b").first()
-        if canonical_wachira and duplicate_wachira and canonical_wachira.id != duplicate_wachira.id:
-            logger.info("Auto-healing duplicate Wachirawut.B into canonical wachirawoot.b...")
-            dup_mappings = db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == duplicate_wachira.id).all()
-            for dm in dup_mappings:
-                existing_cm = db.query(AppAccountMapping).filter(
-                    AppAccountMapping.identity_id == canonical_wachira.id,
-                    AppAccountMapping.application_id == dm.application_id
-                ).first()
-                if not existing_cm:
-                    dm.identity_id = canonical_wachira.id
-                else:
-                    db.delete(dm)
-            db.flush()
-            db.delete(duplicate_wachira)
-            db.flush()
-            logger.info("Successfully merged Wachirawut.B into wachirawoot.b (spoke mappings preserved)")
+        # Auto-heal phonetic / transliteration duplicate pairs into canonical AD identity
+        for canon_u, dup_u in [("wachirawoot.b", "wachirawut.b"), ("duanghathai.p", "duanghatai.p")]:
+            canonical_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == canon_u).first()
+            duplicate_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == dup_u).first()
+            if canonical_ident and duplicate_ident and canonical_ident.id != duplicate_ident.id:
+                logger.info("Auto-healing duplicate %s into canonical %s...", dup_u, canon_u)
+                dup_mappings = db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == duplicate_ident.id).all()
+                for dm in dup_mappings:
+                    existing_cm = db.query(AppAccountMapping).filter(
+                        AppAccountMapping.identity_id == canonical_ident.id,
+                        AppAccountMapping.application_id == dm.application_id
+                    ).first()
+                    if not existing_cm:
+                        dm.identity_id = canonical_ident.id
+                        dm.last_sync_status = "IN_SYNC" if canonical_ident.is_active_in_ad else "DISCREPANCY"
+                    else:
+                        db.delete(dm)
+                db.flush()
+                db.delete(duplicate_ident)
+                db.flush()
+                logger.info("Successfully merged %s into %s (spoke mappings preserved)", dup_u, canon_u)
 
         # Auto-recover MTPulse commands for legitimate IT users
         from app.models.application import SpokePendingCommand

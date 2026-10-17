@@ -116,15 +116,33 @@ def ciam_list_users(
             )
 
         if search:
-            s_clean = f"%{search.strip()}%"
-            query = query.filter(
-                or_(
+            raw_s = search.strip()
+            s_low = raw_s.lower()
+            search_variants = {raw_s}
+            if "thai" in s_low:
+                search_variants.add(s_low.replace("thai", "tai"))
+            if "tai" in s_low and "thai" not in s_low:
+                search_variants.add(s_low.replace("tai", "thai"))
+            if "wut" in s_low:
+                search_variants.add(s_low.replace("wut", "woot"))
+            if "woot" in s_low:
+                search_variants.add(s_low.replace("woot", "wut"))
+
+            or_clauses = []
+            for sv in search_variants:
+                s_clean = f"%{sv}%"
+                mapped_ids_subq = (
+                    db.query(AppAccountMapping.identity_id)
+                    .filter(AppAccountMapping.app_username.ilike(s_clean))
+                )
+                or_clauses.extend([
                     MasterIdentity.username.ilike(s_clean),
                     MasterIdentity.full_name.ilike(s_clean),
                     MasterIdentity.employee_id.ilike(s_clean),
-                    MasterIdentity.email.ilike(s_clean)
-                )
-            )
+                    MasterIdentity.email.ilike(s_clean),
+                    MasterIdentity.id.in_(mapped_ids_subq),
+                ])
+            query = query.filter(or_(*or_clauses))
 
         if department:
             query = query.filter(MasterIdentity.department.ilike(f"%{department.strip()}%"))

@@ -757,4 +757,9 @@ FRONTEND_URL=http://localhost:3000
 * **Backend Build Context Sync:** ซิงก์ไฟล์ `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` v2.8.0 เข้าสู่โฟลเดอร์ `backend/` ซึ่งเป็น Build Context ของ Docker
 * **Dynamic Spec Download:** ปรับปรุง `handleDownloadSpec` ใน `applications/page.tsx` ให้อ่านชื่อไฟล์จาก `Content-Disposition` Header ของ API แบบไดนามิก พร้อมอัปเดตปุ่มดาวน์โหลดเป็น `📥 สเปกเชื่อมต่อ (.md v2.8.0)` และบันทึกประวัติ Revision Changelog ใน Dev Guide Modal
 
-
+### 24.4 Phonetic Identity Unification (`Duanghathai.P` <-> `Duanghatai.P`) & Spoke Username Search
+* **สาเหตุ:** ใน Active Directory คอลัมน์ `Name`/`DisplayName` ของคุณดวงหทัย ผาสุข (แผนก AC) สะกดเป็น `Duanghatai.P` (ไม่มี `h`) แต่ `sAMAccountName` (User logon name) สะกดเป็น `Duanghathai.P` (มี `h`) ในขณะที่ฝั่ง SAP B1 ใช้ `Duanghatai.P`
+* **การแก้ไข:**
+  - รวมตัวตน `Duanghatai.P` เข้ากับตัวตนหลัก `Duanghathai.P` บน Production และเพิ่มคู่ `("duanghathai.p", "duanghatai.p")` ใน Auto-heal routine (`initial_data.py`, `directory.py`)
+  - เพิ่มกฎเทียบเสียง `thai` $\leftrightarrow$ `tai` ใน `persist_spoke_inventory` (`scheduler.py`) พร้อมตรวจเช็ค `identity_id` ใน `AppAccountMapping` เพื่อไม่ให้เกิดแถวซ้ำเมื่อซิงก์ SAP B1 รอบถัดไป
+  - ขยายระบบค้นหาใน `list_users` (`directory.py`) และ `ciam_list_users` (`mcp/server.py`) ให้ค้นหาครอบคลุมทั้ง `AppAccountMapping.app_username` และคำค้นหาเทียบเสียง (`thai` $\leftrightarrow$ `tai`, `wut` $\leftrightarrow$ `woot`)
