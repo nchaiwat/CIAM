@@ -83,6 +83,10 @@
    - เพิ่ม `mcp>=2.3.0` ใน `backend/requirements.txt` ป้องกัน Container `api` เกิด `ModuleNotFoundError: No module named 'mcp'` ตอน build บน VPS
    - เพิ่ม `rewrites()` ใน `frontend/next.config.ts` ให้ proxy ทราฟฟิก `/api/v1` และ `/mcp` ไปยัง Backend Engine อัตโนมัติ (`BACKEND_INTERNAL_URL` หรือ `http://127.0.0.1:8001`) ป้องกัน Error 404 HTML
    - เพิ่ม `BACKEND_INTERNAL_URL=http://api:8001` ใน `docker-compose.yml` service `web`
+7. **Gemini 2.0 Flash & Resilient Multi-Version Support:**
+   - ปรับปรุงโมเดลเริ่มต้นของ Google Gemini ให้เป็น `gemini-2.0-flash`
+   - พัฒนาระบบ Multi-Version Fallback ใน `ai_service.py` ตรวจสอบทั้ง `v1` และ `v1beta` พร้อม auto-retry ข้ามรุ่นโมเดล
+   - เพิ่มปุ่มลัดเลือก Model Identifier (`gemini-2.0-flash`, `gemini-2.5-flash`, `gemini-1.5-flash-latest`) และคำแนะนำการกรอกเฉพาะ API Key บนหน้า UI
 
 ---
 

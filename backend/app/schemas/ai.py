@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 class AICopilotSettings(BaseModel):
     enabled: bool = Field(default=False, description="Master toggle for CIAM AI Copilot")
     provider: str = Field(default="google", description="AI Provider: google, openai, anthropic, ollama, custom")
-    model: str = Field(default="gemini-1.5-flash", description="Model identifier e.g. gemini-1.5-flash, gpt-4o-mini")
+    model: str = Field(default="gemini-2.0-flash", description="Model identifier e.g. gemini-2.0-flash, gpt-4o-mini")
     api_key_masked: Optional[str] = Field(default=None, description="Masked API Key for secure UI display")
     has_api_key: bool = Field(default=False, description="Whether an API key is configured")
     base_url: Optional[str] = Field(default=None, description="Custom API endpoint (for Ollama or self-hosted LLM)")

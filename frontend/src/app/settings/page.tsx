@@ -1146,7 +1146,7 @@ export default function SettingsPage() {
                   value={aiSettings.provider}
                   onChange={(e) => {
                     const prov = e.target.value;
-                    let defaultModel = "gemini-1.5-flash";
+                    let defaultModel = "gemini-2.0-flash";
                     if (prov === "openai") defaultModel = "gpt-4o-mini";
                     else if (prov === "anthropic") defaultModel = "claude-3-5-sonnet";
                     else if (prov === "ollama") defaultModel = "deepseek-r1";
@@ -1173,18 +1173,69 @@ export default function SettingsPage() {
                   onChange={(e) =>
                     setAiSettings({ ...aiSettings, model: e.target.value })
                   }
-                  placeholder="e.g. gemini-1.5-flash, gpt-4o-mini"
+                  placeholder="e.g. gemini-2.0-flash, gpt-4o-mini"
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
                 />
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  <span className="text-[10px] text-slate-500 font-medium">โมเดลแนะนำ:</span>
+                  {aiSettings.provider === "google" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-2.0-flash" })}
+                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
+                      >
+                        gemini-2.0-flash (แนะนำ)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-2.5-flash" })}
+                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer"
+                      >
+                        gemini-2.5-flash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-1.5-flash-latest" })}
+                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer"
+                      >
+                        gemini-1.5-flash-latest
+                      </button>
+                    </>
+                  )}
+                  {aiSettings.provider === "openai" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setAiSettings({ ...aiSettings, model: "gpt-4o-mini" })}
+                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 cursor-pointer"
+                      >
+                        gpt-4o-mini (แนะนำ)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAiSettings({ ...aiSettings, model: "gpt-4o" })}
+                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer"
+                      >
+                        gpt-4o
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* API Key Input */}
               <div className="md:col-span-2">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1.5">
-                    <Key className="w-3.5 h-3.5 text-slate-500" />
-                    <span>API Key ({aiSettings.provider.toUpperCase()})</span>
-                  </label>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1.5">
+                      <Key className="w-3.5 h-3.5 text-slate-500" />
+                      <span>API Key ({aiSettings.provider.toUpperCase()})</span>
+                    </label>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      💡 คัดลอกเฉพาะค่าจากช่อง &quot;API Key&quot; (เช่น AQ.Ab8RN... หรือ AIzaSy...) มาวางที่นี่ โดยไม่ต้องใส่ Name หรือ Project Name
+                    </p>
+                  </div>
                   {aiSettings.has_api_key && (
                     <span className="text-[10px] text-emerald-600 font-mono font-medium">
                       ✓ มีคีย์ในระบบแล้ว: {aiSettings.api_key_masked}
