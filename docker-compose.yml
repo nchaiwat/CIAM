@@ -78,6 +78,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - BACKEND_INTERNAL_URL=http://api:8001
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.ciam-web.rule=Host(`ciam.windowasia.com`)"

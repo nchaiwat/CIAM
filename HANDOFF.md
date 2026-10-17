@@ -79,6 +79,10 @@
 5. **Quality Assurance:**
    - Backend Pytest: 67/67 passed (100%) รวมถึง `test_ai_service.py` และ `test_mcp_server.py`
    - Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)
+6. **Fix Deployment Dependency & Next.js Proxy Rewrites:**
+   - เพิ่ม `mcp>=2.3.0` ใน `backend/requirements.txt` ป้องกัน Container `api` เกิด `ModuleNotFoundError: No module named 'mcp'` ตอน build บน VPS
+   - เพิ่ม `rewrites()` ใน `frontend/next.config.ts` ให้ proxy ทราฟฟิก `/api/v1` และ `/mcp` ไปยัง Backend Engine อัตโนมัติ (`BACKEND_INTERNAL_URL` หรือ `http://127.0.0.1:8001`) ป้องกัน Error 404 HTML
+   - เพิ่ม `BACKEND_INTERNAL_URL=http://api:8001` ใน `docker-compose.yml` service `web`
 
 ---
 
