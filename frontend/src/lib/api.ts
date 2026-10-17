@@ -962,7 +962,9 @@ export interface AIChatResponse {
   message: ChatMessage;
   tools_used: string[];
   session_id?: string;
+  model_used?: string | null;
 }
+
 
 export interface AITestRequest {
   provider?: string;

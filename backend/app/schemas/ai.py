@@ -33,6 +33,8 @@ class AIChatResponse(BaseModel):
     message: ChatMessage
     tools_used: List[str] = Field(default_factory=list)
     session_id: Optional[str] = None
+    model_used: Optional[str] = None
+
 
 class AITestRequest(BaseModel):
     provider: Optional[str] = None

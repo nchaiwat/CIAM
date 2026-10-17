@@ -85,11 +85,16 @@
    - เพิ่ม `BACKEND_INTERNAL_URL=http://api:8001` ใน `docker-compose.yml` service `web`
 8. **Dynamic Gemini Model Discovery & Smart Diagnostic Engine:**
    - พัฒนาระบบ Auto-Discovery ผ่าน Google Generative Language API (`GET /v1beta/models?key={api_key}`) ก่อนทดสอบข้อความ
-   - ตรวจจับรายการโมเดลจริงที่ได้รับสิทธิ์ในโปรเจกต์ Google Cloud อัตโนมัติ (เช่น `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-1.5-pro`)
+   - ตรวจจับรายการโมเดลจริงที่ได้รับสิทธิ์ในโปรเจกต์ Google Cloud อัตโนมัติ (เช่น `gemini-2.5-flash`, `gemini-flash-latest`, `gemini-flash-lite-latest`)
    - ระบบ auto-select โมเดลที่เหมาะสมให้อัตโนมัติ พร้อมแสดง Clickable Badges บนหน้า Settings ให้อนุญาตสลับโมเดลได้ทันที
    - หากเกิด Error จาก Google (เช่น โปรเจกต์ยังไม่ได้เปิดใช้งาน API หรือคีย์ผิด) ระบบจะดึงข้อความแจ้งเตือนที่แท้จริงจาก Google API Response มาแสดงใน UI อย่างชัดเจน ช่วยชี้เป้าสาเหตุให้ผู้ดูแลระบบแก้ไขได้ตรงจุด 100%
+9. **Copilot Thai Language Enforcement, High-Speed Response & Model Sync:**
+   - บังคับการตอบกลับเป็น **ภาษาไทย 100%** ผ่าน `DEFAULT_SYSTEM_PROMPT` และ `ensure_thai_directive()` ห้ามแสดง Internal Chain-of-Thought หรือแปลคำถามซ้ำเป็นภาษาอังกฤษ
+   - เร่งความเร็วการตอบสนอง (Response Latency) ให้เร็วขึ้นหลายเท่า โดยใช้ `generationConfig` กำหนด `temperature: 0.2` และ `maxOutputTokens: 2048` พร้อมจัดลำดับโมเดลตระกูล Flash (`gemini-2.5-flash`, `gemini-flash-lite-latest`) ขึ้นเป็นอันดับแรก หลีกเลี่ยงโมเดลขนาดใหญ่ที่ช้า
+   - ซิงก์ป้ายชื่อโมเดลบน Copilot Widget ให้ตรงกับการตั้งค่าที่บันทึกไว้ในหน้า Settings เสมอผ่าน Custom Event `ciam-ai-settings-updated` และฟิลด์ `model_used` ในคำตอบ
 
 ---
+
 
 
 ## Sprint 39: ปรับแต่ง Spoke Settings UI ให้กระชับ รวม Modal การตั้งค่า และแก้ไข Error 500 ตอนซิงก์จาก AD (15 ต.ค. 2026)

@@ -163,6 +163,9 @@ export default function SettingsPage() {
       setAiSettings(res);
       setInputApiKey("");
       setAiSaveMessage("บันทึกการตั้งค่า AI Copilot สำเร็จเรียบร้อย");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("ciam-ai-settings-updated", { detail: res }));
+      }
       setTimeout(() => setAiSaveMessage(null), 5000);
     } catch (err: any) {
       alert(`บันทึกการตั้งค่า AI ล้มเหลว: ${err.message || err}`);
@@ -1151,7 +1154,7 @@ export default function SettingsPage() {
                   value={aiSettings.provider}
                   onChange={(e) => {
                     const prov = e.target.value;
-                    let defaultModel = "gemini-2.0-flash";
+                    let defaultModel = "gemini-2.5-flash";
                     if (prov === "openai") defaultModel = "gpt-4o-mini";
                     else if (prov === "anthropic") defaultModel = "claude-3-5-sonnet";
                     else if (prov === "ollama") defaultModel = "deepseek-r1";
@@ -1182,15 +1185,29 @@ export default function SettingsPage() {
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
                 />
                 <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                  <span className="text-[10px] text-slate-500 font-medium">โมเดลแนะนำ:</span>
+                  <span className="text-[10px] text-slate-500 font-medium">โมเดลแนะนำ (เรียงตามความเร็ว):</span>
                   {aiSettings.provider === "google" && (
                     <>
                       <button
                         type="button"
                         onClick={() => setAiSettings({ ...aiSettings, model: "gemini-2.5-flash" })}
-                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
+                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer font-bold"
                       >
-                        gemini-2.5-flash (แนะนำ)
+                        gemini-2.5-flash (แนะนำ / เร็วสูง)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-flash-lite-latest" })}
+                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 cursor-pointer font-bold"
+                      >
+                        gemini-flash-lite-latest (เร็วที่สุด ⚡)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-flash-latest" })}
+                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer"
+                      >
+                        gemini-flash-latest
                       </button>
                       <button
                         type="button"
@@ -1198,20 +1215,6 @@ export default function SettingsPage() {
                         className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer"
                       >
                         gemini-2.0-flash
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-1.5-flash" })}
-                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer"
-                      >
-                        gemini-1.5-flash
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-1.5-pro" })}
-                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer"
-                      >
-                        gemini-1.5-pro
                       </button>
                     </>
                   )}

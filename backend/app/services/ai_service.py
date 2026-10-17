@@ -20,19 +20,55 @@ logger = logging.getLogger(__name__)
 
 SETTING_KEY = "ai_copilot_settings"
 
+DEFAULT_SYSTEM_PROMPT = (
+    "คุณคือ Central IAM Enterprise Copilot ผู้ช่วยอัจฉริยะด้านการบริหารจัดการตัวตนและความปลอดภัย (IAM) "
+    "ประจำบริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)\n\n"
+    "### กฎเหล็กในการตอบ (Strict Directives):\n"
+    "1. ตอบกลับเป็น 'ภาษาไทย' ที่สุภาพ เป็นมืออาชีพ ชัดเจน และกระชับเสมอ เว้นแต่ผู้ใช้จะระบุภาษาอื่น\n"
+    "2. ห้ามแสดงความคิดในใจ (Chain-of-thought) ห้ามแปลคำถามซ้ำเป็นภาษาอังกฤษ ให้ตอบคำตอบสุดท้ายแก่ผู้ใช้โดยตรงทันที\n"
+    "3. ช่วยตรวจสอบบัญชีผี (Ghost Accounts), ข้อมูลตัวตนใน Active Directory, สถานะระบบลูก (MTPulse, IRM, QMS, SAP B1), สุขภาพระบบ และ Audit Logs\n"
+    "4. ใช้ Markdown (หัวข้อ, ข้อย่อย, ตาราง, ตัวหนา) ให้อ่านง่าย สบายตา"
+)
+
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "enabled": False,
     "provider": "google",
-    "model": "gemini-2.0-flash",
+    "model": "gemini-2.5-flash",
     "api_key": None,
     "base_url": None,
-    "system_prompt": (
-        "You are Central IAM Enterprise Copilot for Window Asia Public Company Limited. "
-        "You help IT Administrators query identity directory, check spoke system sync status, "
-        "investigate ghost accounts, and explain SSO/M2M security policies."
-    ),
+    "system_prompt": DEFAULT_SYSTEM_PROMPT,
     "allow_mcp_tools": True,
 }
+
+def ensure_thai_directive(prompt: Optional[str]) -> str:
+    if not prompt or "You are Central IAM Enterprise Copilot" in prompt:
+        return DEFAULT_SYSTEM_PROMPT
+    if "ภาษาไทย" not in prompt:
+        return f"{prompt}\n\n[ข้อกำหนดสำคัญ]: ต้องตอบเป็นภาษาไทยอย่างสุภาพ กระชับ และตรงประเด็นเสมอ ห้ามแสดงความคิดในใจหรือแปลคำถามซ้ำ"
+    return prompt
+
+def prioritize_models(models: List[str]) -> List[str]:
+    """Sort models so recommended fast flash models come first, slow models last"""
+    priority_order = [
+        "gemini-2.5-flash",
+        "gemini-flash-latest",
+        "gemini-flash-lite-latest",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-2.5-pro",
+        "gemini-1.5-pro",
+    ]
+    result: List[str] = []
+    for p in priority_order:
+        if p in models and p not in result:
+            result.append(p)
+    for m in models:
+        if m not in result and "gemini" in m.lower() and "tts" not in m.lower():
+            result.append(m)
+    for m in models:
+        if m not in result:
+            result.append(m)
+    return result
 
 def mask_key(key: Optional[str]) -> Optional[str]:
     if not key or len(key) < 8:
@@ -45,6 +81,8 @@ def get_raw_settings(db: Session) -> Dict[str, Any]:
         return DEFAULT_SETTINGS.copy()
     data = DEFAULT_SETTINGS.copy()
     data.update(row.setting_value)
+    # Ensure system_prompt enforces Thai
+    data["system_prompt"] = ensure_thai_directive(data.get("system_prompt"))
     return data
 
 def get_ai_settings(db: Session) -> AICopilotSettings:
@@ -53,13 +91,14 @@ def get_ai_settings(db: Session) -> AICopilotSettings:
     return AICopilotSettings(
         enabled=bool(raw.get("enabled", False)),
         provider=str(raw.get("provider", "google")),
-        model=str(raw.get("model", "gemini-2.0-flash")),
+        model=str(raw.get("model", "gemini-2.5-flash")),
         api_key_masked=mask_key(api_key),
         has_api_key=bool(api_key),
         base_url=raw.get("base_url"),
         system_prompt=raw.get("system_prompt"),
         allow_mcp_tools=bool(raw.get("allow_mcp_tools", True)),
     )
+
 
 def update_ai_settings(db: Session, update: AICopilotSettingsUpdate) -> AICopilotSettings:
     row = db.query(SystemSetting).filter_by(setting_key=SETTING_KEY).first()
@@ -100,7 +139,7 @@ def update_ai_settings(db: Session, update: AICopilotSettingsUpdate) -> AICopilo
 async def test_ai_connection(db: Session, req: AITestRequest) -> AITestResponse:
     raw = get_raw_settings(db)
     provider = req.provider or raw.get("provider", "google")
-    model = req.model or raw.get("model", "gemini-2.0-flash")
+    model = req.model or raw.get("model", "gemini-2.5-flash")
     api_key = req.api_key if req.api_key and "..." not in req.api_key else raw.get("api_key")
     base_url = req.base_url or raw.get("base_url")
 
@@ -112,9 +151,13 @@ async def test_ai_connection(db: Session, req: AITestRequest) -> AITestResponse:
             return AITestResponse(success=False, message="กรุณากรอก Google Gemini API Key ก่อนทดสอบ", latency_ms=0)
         
         headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
-        payload = {"contents": [{"parts": [{"text": "Hello, ping"}]}]}
+        # Fast lightweight ping payload with 5 tokens limit to minimize latency
+        payload = {
+            "contents": [{"parts": [{"text": "ping"}]}],
+            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 5}
+        }
         
-        async with httpx.AsyncClient(timeout=12.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             # 1. Query available models dynamically via ListModels API
             available_models: List[str] = []
             try:
@@ -143,56 +186,53 @@ async def test_ai_connection(db: Session, req: AITestRequest) -> AITestResponse:
             except Exception as e:
                 logger.warning(f"Failed to query ListModels: {e}")
 
-            # 2. Determine models to test
+            # 2. Sort available models by speed/priority (flash first)
+            ordered_available = prioritize_models(available_models)
+
+            # Determine candidates: try user requested model first, then prioritized list
             models_to_try: List[str] = []
             if model:
                 models_to_try.append(model)
-
-            # Add discovered models from Google
-            for cand in available_models:
+            for cand in ordered_available:
                 if cand not in models_to_try:
                     models_to_try.append(cand)
-
-            # Fallback static candidate list if ListModels was empty
-            if not available_models:
-                for default_cand in ("gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-2.0-flash-exp"):
-                    if default_cand not in models_to_try:
-                        models_to_try.append(default_cand)
+            if not models_to_try:
+                models_to_try = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.0-flash"]
 
             last_error = ""
-            for m in models_to_try[:6]:
-                for api_ver in ("v1beta", "v1"):
-                    url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{m}:generateContent?key={api_key}"
-                    try:
-                        res = await client.post(url, headers=headers, json=payload)
-                        if res.status_code == 200:
-                            matched_msg = f"เชื่อมต่อ Google Gemini ({m}) สำเร็จ!"
-                            suggested = m if m != model else None
-                            if suggested:
-                                matched_msg += f" (แนะนำให้บันทึก Model ID เป็น '{m}')"
-                            return AITestResponse(
-                                success=True,
-                                message=matched_msg,
-                                latency_ms=latency(),
-                                suggested_model=suggested,
-                                available_models=available_models[:8] if available_models else None
-                            )
-                        else:
-                            try:
-                                err_data = res.json().get("error", {})
-                                google_msg = err_data.get("message", res.text[:200])
-                            except Exception:
-                                google_msg = res.text[:200]
-                            last_error = f"Google API {res.status_code} ({m}/{api_ver}): {google_msg}"
-                    except Exception as e:
-                        last_error = f"Connection Error: {str(e)}"
+            for m in models_to_try[:4]:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+                try:
+                    res = await client.post(url, headers=headers, json=payload)
+                    if res.status_code == 200:
+                        matched_msg = f"เชื่อมต่อ Google Gemini ({m}) สำเร็จ!"
+                        suggested = m if m != model else None
+                        if suggested:
+                            matched_msg += f" (แนะนำให้ใช้โมเดลความเร็วสูง '{m}')"
+                        return AITestResponse(
+                            success=True,
+                            message=matched_msg,
+                            latency_ms=latency(),
+                            suggested_model=suggested,
+                            available_models=ordered_available[:8] if ordered_available else None
+                        )
+                    else:
+                        try:
+                            err_data = res.json().get("error", {})
+                            google_msg = err_data.get("message", res.text[:200])
+                        except Exception:
+                            google_msg = res.text[:200]
+                        last_error = f"Google API {res.status_code} ({m}): {google_msg}"
+                except Exception as e:
+                    last_error = f"Connection Error: {str(e)}"
             
             return AITestResponse(
                 success=False,
                 message=last_error or "ไม่สามารถเชื่อมต่อโมเดลใดๆ ได้",
                 latency_ms=latency(),
-                available_models=available_models[:8] if available_models else None
+                available_models=ordered_available[:8] if ordered_available else None
             )
+
 
 
     elif provider in ("openai", "custom"):
@@ -294,15 +334,16 @@ async def call_external_llm(
     system_prompt: str,
     messages: List[ChatMessage],
     tool_context: Optional[str] = None
-) -> str:
-    """Invoke External LLM API (Google Gemini / OpenAI)"""
-    sys_instruction = system_prompt
+) -> tuple[str, str]:
+    """Invoke External LLM API (Google Gemini / OpenAI) and return (response_text, model_used)"""
+    sys_instruction = ensure_thai_directive(system_prompt)
     if tool_context:
-        sys_instruction += f"\n\n[Real-Time System Context via Central IAM Tools]:\n{tool_context}\n\nPlease summarize and present the findings clearly in professional Thai."
+        sys_instruction += f"\n\n[Real-Time System Context via Central IAM Tools]:\n{tool_context}\n\n[ข้อกำหนดสำคัญ]: สรุปและตอบคำถามเป็นภาษาไทยอย่างสุภาพ กระชับ และตรงประเด็น"
 
     if provider == "google":
+        # Prioritize requested model, then fast flash fallbacks
         models_to_try = [model]
-        for fallback_m in ("gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"):
+        for fallback_m in ("gemini-2.5-flash", "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.0-flash", "gemini-1.5-flash"):
             if fallback_m not in models_to_try:
                 models_to_try.append(fallback_m)
 
@@ -311,33 +352,36 @@ async def call_external_llm(
             role = "user" if m.role == "user" else "model"
             contents.append({"role": role, "parts": [{"text": m.content}]})
 
-        # Prepend system instruction
+        # Prepend system instruction and generationConfig for speed & strict Thai adherence
         payload = {
             "system_instruction": {"parts": [{"text": sys_instruction}]},
-            "contents": contents
+            "contents": contents,
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 2048,
+            }
         }
         headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=25.0) as client:
             last_err = ""
             for m_candidate in models_to_try:
-                for api_ver in ("v1beta", "v1"):
-                    url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{m_candidate}:generateContent?key={api_key}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m_candidate}:generateContent?key={api_key}"
+                try:
+                    res = await client.post(url, headers=headers, json=payload)
+                    if res.status_code == 200:
+                        data = res.json()
+                        text = data["candidates"][0]["content"]["parts"][0]["text"]
+                        return text, m_candidate
                     try:
-                        res = await client.post(url, headers=headers, json=payload)
-                        if res.status_code == 200:
-                            data = res.json()
-                            return data["candidates"][0]["content"]["parts"][0]["text"]
-                        try:
-                            err_data = res.json().get("error", {})
-                            google_msg = err_data.get("message", res.text[:200])
-                        except Exception:
-                            google_msg = res.text[:200]
-                        last_err = f"Gemini API Error {res.status_code} ({m_candidate}/{api_ver}): {google_msg}"
-                    except Exception as e:
-                        last_err = str(e)
+                        err_data = res.json().get("error", {})
+                        google_msg = err_data.get("message", res.text[:200])
+                    except Exception:
+                        google_msg = res.text[:200]
+                    last_err = f"Gemini API Error {res.status_code} ({m_candidate}): {google_msg}"
+                except Exception as e:
+                    last_err = str(e)
             raise Exception(last_err)
-
 
     elif provider in ("openai", "custom"):
         url = (base_url or "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
@@ -345,12 +389,12 @@ async def call_external_llm(
         api_messages = [{"role": "system", "content": sys_instruction}]
         for m in messages:
             api_messages.append({"role": m.role, "content": m.content})
-        payload = {"model": model, "messages": api_messages, "temperature": 0.3}
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        payload = {"model": model, "messages": api_messages, "temperature": 0.2}
+        async with httpx.AsyncClient(timeout=25.0) as client:
             res = await client.post(url, headers=headers, json=payload)
             if res.status_code == 200:
                 data = res.json()
-                return data["choices"][0]["message"]["content"]
+                return data["choices"][0]["message"]["content"], model
             else:
                 raise Exception(f"OpenAI API Error {res.status_code}: {res.text[:200]}")
 
@@ -370,6 +414,7 @@ async def process_ai_chat(db: Session, req: AIChatRequest, current_user: Any) ->
             ),
             tools_used=[],
             session_id=req.session_id,
+            model_used=None,
         )
 
     last_user_msg = ""
@@ -393,13 +438,13 @@ async def process_ai_chat(db: Session, req: AIChatRequest, current_user: Any) ->
     # Step 2: Call LLM if API Key is configured
     api_key = raw.get("api_key")
     provider = raw.get("provider", "google")
-    model = raw.get("model", "gemini-1.5-flash")
+    model = raw.get("model", "gemini-2.5-flash")
     base_url = raw.get("base_url")
     system_prompt = raw.get("system_prompt", DEFAULT_SETTINGS["system_prompt"])
 
     if api_key:
         try:
-            llm_text = await call_external_llm(
+            llm_text, model_used = await call_external_llm(
                 provider=provider,
                 model=model,
                 api_key=api_key,
@@ -412,6 +457,7 @@ async def process_ai_chat(db: Session, req: AIChatRequest, current_user: Any) ->
                 message=ChatMessage(role="assistant", content=llm_text),
                 tools_used=tools_used,
                 session_id=req.session_id,
+                model_used=model_used,
             )
         except Exception as e:
             logger.error(f"External LLM call failed: {e}")
@@ -440,4 +486,5 @@ async def process_ai_chat(db: Session, req: AIChatRequest, current_user: Any) ->
         message=ChatMessage(role="assistant", content=content),
         tools_used=tools_used,
         session_id=req.session_id,
+        model_used="Central IAM Rules",
     )

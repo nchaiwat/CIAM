@@ -32,29 +32,49 @@ export default function CiamCopilotWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [settings, setSettings] = useState<AICopilotSettings | null>(null);
+  const [activeModel, setActiveModel] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch settings on mount to see if Copilot is enabled
+  const fetchLatestSettings = async () => {
+    try {
+      const data = await ciamApi.getAICopilotSettings();
+      setSettings(data);
+      if (data?.model) {
+        setActiveModel(data.model);
+      }
+    } catch {
+      // Ignored if unauthenticated
+    }
+  };
+
+  // Fetch settings on mount and listen to settings update events
   useEffect(() => {
-    let mounted = true;
-    const loadSettings = async () => {
-      try {
-        const data = await ciamApi.getAICopilotSettings();
-        if (mounted) setSettings(data);
-      } catch (err) {
-        // Not authenticated or settings unavailable
-        if (mounted) setSettings(null);
+    fetchLatestSettings();
+
+    const onSettingsUpdated = (e: any) => {
+      if (e?.detail) {
+        setSettings(e.detail);
+        if (e.detail.model) setActiveModel(e.detail.model);
+      } else {
+        fetchLatestSettings();
       }
     };
-    loadSettings();
+    window.addEventListener("ciam-ai-settings-updated", onSettingsUpdated);
     return () => {
-      mounted = false;
+      window.removeEventListener("ciam-ai-settings-updated", onSettingsUpdated);
     };
   }, []);
+
+  // When widget is opened, re-sync with latest settings immediately
+  useEffect(() => {
+    if (isOpen) {
+      fetchLatestSettings();
+    }
+  }, [isOpen]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -100,6 +120,10 @@ export default function CiamCopilotWidget() {
       const res = await ciamApi.sendAIChat({
         messages: newMessages,
       });
+
+      if (res.model_used) {
+        setActiveModel(res.model_used);
+      }
 
       const assistantMsg: ChatMessage = {
         role: "assistant",
@@ -172,7 +196,7 @@ export default function CiamCopilotWidget() {
                 <div className="flex items-center space-x-2">
                   <h3 className="font-bold text-sm tracking-wide text-white">Central IAM Copilot</h3>
                   <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-mono font-medium">
-                    {settings?.model || "Intelligence Engine"}
+                    {activeModel || settings?.model || "gemini-2.5-flash"}
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400">Enterprise Identity & Spoke Assistant</p>
