@@ -975,7 +975,10 @@ export interface AITestResponse {
   success: boolean;
   message: string;
   latency_ms?: number;
+  suggested_model?: string | null;
+  available_models?: string[] | null;
 }
+
 
 
 

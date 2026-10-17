@@ -111,33 +111,88 @@ async def test_ai_connection(db: Session, req: AITestRequest) -> AITestResponse:
         if not api_key:
             return AITestResponse(success=False, message="กรุณากรอก Google Gemini API Key ก่อนทดสอบ", latency_ms=0)
         
-        models_to_try = [model]
-        if model in ("gemini-1.5-flash", "gemini-1.5-flash-latest"):
-            models_to_try.extend(["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-pro"])
-        
-        last_error = ""
-        payload = {"contents": [{"parts": [{"text": "Hello, ping"}]}]}
         headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+        payload = {"contents": [{"parts": [{"text": "Hello, ping"}]}]}
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            for m in models_to_try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            # 1. Query available models dynamically via ListModels API
+            available_models: List[str] = []
+            try:
+                list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+                res_list = await client.get(list_url, headers=headers)
+                if res_list.status_code == 200:
+                    data = res_list.json()
+                    models_raw = data.get("models", [])
+                    for item in models_raw:
+                        methods = item.get("supportedGenerationMethods", [])
+                        if "generateContent" in methods:
+                            clean_name = item.get("name", "").replace("models/", "")
+                            if clean_name:
+                                available_models.append(clean_name)
+                elif res_list.status_code in (400, 403):
+                    try:
+                        err_data = res_list.json().get("error", {})
+                        list_error = err_data.get("message", res_list.text[:250])
+                    except Exception:
+                        list_error = res_list.text[:250]
+                    return AITestResponse(
+                        success=False,
+                        message=f"Google API Error ({res_list.status_code}): {list_error}",
+                        latency_ms=latency(),
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to query ListModels: {e}")
+
+            # 2. Determine models to test
+            models_to_try: List[str] = []
+            if model:
+                models_to_try.append(model)
+
+            # Add discovered models from Google
+            for cand in available_models:
+                if cand not in models_to_try:
+                    models_to_try.append(cand)
+
+            # Fallback static candidate list if ListModels was empty
+            if not available_models:
+                for default_cand in ("gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-2.0-flash-exp"):
+                    if default_cand not in models_to_try:
+                        models_to_try.append(default_cand)
+
+            last_error = ""
+            for m in models_to_try[:6]:
                 for api_ver in ("v1beta", "v1"):
                     url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{m}:generateContent?key={api_key}"
                     try:
                         res = await client.post(url, headers=headers, json=payload)
                         if res.status_code == 200:
-                            matched_msg = f"เชื่อมต่อ Google Gemini ({m} บน {api_ver}) สำเร็จ!"
-                            if m != model:
+                            matched_msg = f"เชื่อมต่อ Google Gemini ({m}) สำเร็จ!"
+                            suggested = m if m != model else None
+                            if suggested:
                                 matched_msg += f" (แนะนำให้บันทึก Model ID เป็น '{m}')"
-                            return AITestResponse(success=True, message=matched_msg, latency_ms=latency())
-                        elif res.status_code == 404:
-                            last_error = f"Google API 404: Model '{m}' ไม่พบใน {api_ver} (แนะนำลองเปลี่ยน Model Identifier เป็น gemini-2.0-flash)"
+                            return AITestResponse(
+                                success=True,
+                                message=matched_msg,
+                                latency_ms=latency(),
+                                suggested_model=suggested,
+                                available_models=available_models[:8] if available_models else None
+                            )
                         else:
-                            last_error = f"Google API Error {res.status_code}: {res.text[:200]}"
+                            try:
+                                err_data = res.json().get("error", {})
+                                google_msg = err_data.get("message", res.text[:200])
+                            except Exception:
+                                google_msg = res.text[:200]
+                            last_error = f"Google API {res.status_code} ({m}/{api_ver}): {google_msg}"
                     except Exception as e:
                         last_error = f"Connection Error: {str(e)}"
             
-            return AITestResponse(success=False, message=last_error, latency_ms=latency())
+            return AITestResponse(
+                success=False,
+                message=last_error or "ไม่สามารถเชื่อมต่อโมเดลใดๆ ได้",
+                latency_ms=latency(),
+                available_models=available_models[:8] if available_models else None
+            )
 
 
     elif provider in ("openai", "custom"):
@@ -247,8 +302,9 @@ async def call_external_llm(
 
     if provider == "google":
         models_to_try = [model]
-        if model in ("gemini-1.5-flash", "gemini-1.5-flash-latest"):
-            models_to_try.extend(["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-pro"])
+        for fallback_m in ("gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"):
+            if fallback_m not in models_to_try:
+                models_to_try.append(fallback_m)
 
         contents = []
         for m in messages:
@@ -272,7 +328,12 @@ async def call_external_llm(
                         if res.status_code == 200:
                             data = res.json()
                             return data["candidates"][0]["content"]["parts"][0]["text"]
-                        last_err = f"Gemini API Error {res.status_code} ({m_candidate}/{api_ver}): {res.text[:200]}"
+                        try:
+                            err_data = res.json().get("error", {})
+                            google_msg = err_data.get("message", res.text[:200])
+                        except Exception:
+                            google_msg = res.text[:200]
+                        last_err = f"Gemini API Error {res.status_code} ({m_candidate}/{api_ver}): {google_msg}"
                     except Exception as e:
                         last_err = str(e)
             raise Exception(last_err)

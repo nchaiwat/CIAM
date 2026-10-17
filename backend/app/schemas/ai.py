@@ -44,3 +44,6 @@ class AITestResponse(BaseModel):
     success: bool
     message: str
     latency_ms: Optional[int] = None
+    suggested_model: Optional[str] = None
+    available_models: Optional[List[str]] = None
+

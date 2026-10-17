@@ -110,6 +110,8 @@ export default function SettingsPage() {
     success: boolean;
     message: string;
     latency_ms?: number;
+    suggested_model?: string | null;
+    available_models?: string[] | null;
   } | null>(null);
 
   const fetchSettings = async () => {
@@ -180,6 +182,9 @@ export default function SettingsPage() {
         base_url: aiSettings.base_url || undefined,
       });
       setAiTestResult(res);
+      if (res.success && res.suggested_model && res.suggested_model !== aiSettings.model) {
+        setAiSettings((prev) => ({ ...prev, model: res.suggested_model! }));
+      }
     } catch (err: any) {
       setAiTestResult({
         success: false,
@@ -1182,24 +1187,31 @@ export default function SettingsPage() {
                     <>
                       <button
                         type="button"
-                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-2.0-flash" })}
+                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-2.5-flash" })}
                         className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
                       >
-                        gemini-2.0-flash (แนะนำ)
+                        gemini-2.5-flash (แนะนำ)
                       </button>
                       <button
                         type="button"
-                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-2.5-flash" })}
+                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-2.0-flash" })}
                         className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer"
                       >
-                        gemini-2.5-flash
+                        gemini-2.0-flash
                       </button>
                       <button
                         type="button"
-                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-1.5-flash-latest" })}
+                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-1.5-flash" })}
                         className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer"
                       >
-                        gemini-1.5-flash-latest
+                        gemini-1.5-flash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAiSettings({ ...aiSettings, model: "gemini-1.5-pro" })}
+                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer"
+                      >
+                        gemini-1.5-pro
                       </button>
                     </>
                   )}
@@ -1285,22 +1297,47 @@ export default function SettingsPage() {
                 {/* Test Result Alert */}
                 {aiTestResult && (
                   <div
-                    className={`mt-2 p-2.5 rounded-lg text-xs flex items-center space-x-2 ${
+                    className={`mt-2 p-3 rounded-lg text-xs space-y-2 ${
                       aiTestResult.success
                         ? "bg-emerald-50 text-emerald-800 border border-emerald-300"
                         : "bg-rose-50 text-rose-800 border border-rose-300"
                     }`}
                   >
-                    {aiTestResult.success ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    ) : (
-                      <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
-                    )}
-                    <span className="flex-1">{aiTestResult.message}</span>
-                    {aiTestResult.latency_ms !== undefined && (
-                      <span className="text-[10px] font-mono font-bold">
-                        {aiTestResult.latency_ms} ms
-                      </span>
+                    <div className="flex items-center space-x-2">
+                      {aiTestResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                      )}
+                      <span className="flex-1 font-medium">{aiTestResult.message}</span>
+                      {aiTestResult.latency_ms !== undefined && (
+                        <span className="text-[10px] font-mono font-bold">
+                          {aiTestResult.latency_ms} ms
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Dynamic Available Models from Google */}
+                    {aiTestResult.available_models && aiTestResult.available_models.length > 0 && (
+                      <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-semibold text-slate-600">
+                          โมเดลที่พบบน API Key นี้ (คลิกเพื่อเลือก):
+                        </span>
+                        {aiTestResult.available_models.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setAiSettings((prev) => ({ ...prev, model: m }))}
+                            className={`px-2 py-0.5 rounded text-[10px] font-mono cursor-pointer transition ${
+                              aiSettings.model === m
+                                ? "bg-blue-600 text-white font-bold shadow-xs"
+                                : "bg-white hover:bg-slate-100 text-slate-700 border border-slate-300"
+                            }`}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}
