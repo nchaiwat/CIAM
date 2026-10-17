@@ -1,10 +1,10 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Current Version:** 2.7.0 (Mode C Two-Way Directory Reconciliation, Immediate Sync Button & RFC 9700 SSO)  
-**Effective Date:** 8 ตุลาคม 2026 (08/10/2026)  
+**Current Version:** 2.8.0 (Enterprise In-App AI Copilot Standard, MCP Tools Integration & Dynamic AI Settings)  
+**Effective Date:** 17 ตุลาคม 2026 (17/10/2026)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
 **Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
-**Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636) / OAuth 2.0 Security BCP (RFC 9700)
+**Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636) / OAuth 2.0 Security BCP (RFC 9700) / Model Context Protocol (MCP)
 
 ---
 
@@ -14,7 +14,8 @@
 
 | เวอร์ชัน (Version) | วันที่มีผล (Date) | สถานะ (Status) | สรุปรายการปรับปรุงจากเวอร์ชันก่อนหน้า (Change Summary & Key Differences) |
 | :---: | :---: | :---: | :--- |
-| **v2.7.0** | 08/10/2026 | **Current Active** | • **Mode C Two-Way Directory Reconciliation & Auto-Provisioning (หมวด D.2, D.4):** กำหนดให้การเชื่อมต่อ Mode C เป็นแบบ Two-Way Reconciliation อย่างแท้จริง โดยเมื่อ Spoke ส่ง Heartbeat / Full Sync ขึ้นมา CIAM จะเปรียบเทียบกับบัญชีที่ได้รับสิทธิ์ใน CIAM (`AppAccountMapping`). หาก CIAM มีบัญชีใหม่ที่ Spoke ยังไม่มี CIAM จะส่ง `assigned_accounts` และคำสั่ง `PROVISION_USER` กลับไปเพื่อให้ Spoke สร้างบัญชีใน Local Database ทันที (Role เริ่มต้นตาม `ciam_auto_provision_group`, `is_active: true`) และส่งคำสั่ง `DISABLE_USER` หากถูกระงับสิทธิ์ ทำให้จำนวนและสถานะตรงกัน 100% โดยไม่ต้องรอ User ล็อกอิน<br/>• **Mandatory Spoke Mode C Immediate Sync Button (หมวด D.4, 5.1):** ข้อบังคับสำหรับ Spoke Mode C ต้องมีปุ่ม **`[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]` (Immediate Account Sync)** บนหน้าจอ System Setting เพื่อให้ Admin สั่งแลกเปลี่ยนข้อมูลและปรับยอดจำนวนบัญชีรวมถึงสถานะ Active/Inactive ให้ตรงกันได้แบบเรียลไทม์โดยไม่ต้องรอรอบเวลา 120 วินาที<br/>• **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`) เพื่อให้ Spoke ผูก Client State & PKCE กับเบราว์เซอร์ได้สมบูรณ์ 100% ตามคำแนะนำ RFC 9700 |
+| **v2.8.0** | 17/10/2026 | **Current Active** | • **หมวด E: ข้อกำหนดมาตรฐาน In-App AI Copilot & MCP Tools ประจำระบบลูก (Spoke AI Assistant & Dynamic Settings Standard):** กำหนดมาตรฐานสำหรับ Spoke Application ที่ต้องการมีหน้าต่างแชท AI ประจำระบบของตนเอง ให้จัดเก็บการตั้งค่าแบบไดนามิกลงในตาราง `system_settings` (`ai_copilot_enabled`, `ai_provider`, `ai_api_key`, `ai_model`, `ai_system_prompt`) และบังคับให้ปิดการแสดงผลหน้า Chat หรือ Floating Widget อัตโนมัติเมื่อ `ai_copilot_enabled: false` หรือยังไม่ได้ระบุ API Key เพื่อความปลอดภัยและประหยัดค่าใช้จ่าย<br/>• **Model Context Protocol (MCP) Integration:** กำหนดแนวทางให้ AI ประจำ Spoke สามารถเรียกใช้งาน Central IAM Core MCP Server (Remote SSE over HTTPS via Bearer token) เพื่อตรวจเช็คความปลอดภัยของบัญชีผู้ใช้ และอนุญาตให้ Spoke พัฒนา MCP Tools ประจำระบบของตนเองได้ |
+| **v2.7.0** | 08/10/2026 | Superseded | • **Mode C Two-Way Directory Reconciliation & Auto-Provisioning (หมวด D.2, D.4):** กำหนดให้การเชื่อมต่อ Mode C เป็นแบบ Two-Way Reconciliation อย่างแท้จริง โดยเมื่อ Spoke ส่ง Heartbeat / Full Sync ขึ้นมา CIAM จะเปรียบเทียบกับบัญชีที่ได้รับสิทธิ์ใน CIAM (`AppAccountMapping`). หาก CIAM มีบัญชีใหม่ที่ Spoke ยังไม่มี CIAM จะส่ง `assigned_accounts` และคำสั่ง `PROVISION_USER` กลับไปเพื่อให้ Spoke สร้างบัญชีใน Local Database ทันที (Role เริ่มต้นตาม `ciam_auto_provision_group`, `is_active: true`) และส่งคำสั่ง `DISABLE_USER` หากถูกระงับสิทธิ์ ทำให้จำนวนและสถานะตรงกัน 100% โดยไม่ต้องรอ User ล็อกอิน<br/>• **Mandatory Spoke Mode C Immediate Sync Button (หมวด D.4, 5.1):** ข้อบังคับสำหรับ Spoke Mode C ต้องมีปุ่ม **`[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]` (Immediate Account Sync)** บนหน้าจอ System Setting เพื่อให้ Admin สั่งแลกเปลี่ยนข้อมูลและปรับยอดจำนวนบัญชีรวมถึงสถานะ Active/Inactive ให้ตรงกันได้แบบเรียลไทม์โดยไม่ต้องรอรอบเวลา 120 วินาที<br/>• **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`) เพื่อให้ Spoke ผูก Client State & PKCE กับเบราว์เซอร์ได้สมบูรณ์ 100% ตามคำแนะนำ RFC 9700 |
 | **v2.6.0** | 07/10/2026 | Superseded | • **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`)<br/>• **Architecture Equivalence Principles (หมวด 1.4):** บรรจุหลักการยอมรับสถาปัตยกรรมภายในที่เทียบเท่า<br/>• **Mode C Full Sync Trigger Protocol (หมวด D.2):** เพิ่มคำสั่ง `REQUEST_FULL_SYNC` ใน Heartbeat Command Queue |
 | **v2.5.0** | 07/10/2026 | Superseded | • **Dual-Mode SSO & Portal Launch Support:** เพิ่มข้อกำหนดการรองรับการเปิดจาก Portal และข้อกำหนดความปลอดภัยของ Callback |
 | **v2.4.0** | 05/10/2026 | Superseded | • **Mode C Outbound Agent Specification:** เพิ่มมาตรฐาน Reverse Heartbeat & Command Pull (`POST /api/v1/agent/heartbeat`) สำหรับระบบ On-Premise ที่ไม่มี Inbound Public Port |
@@ -128,6 +129,18 @@ CREATE INDEX idx_system_settings_key ON system_settings(key);
 | `ciam_ad_gateway_url` | string | `http://172.18.0.1:3100` | URL เซิร์ฟเวอร์ AD Gateway ภายในองค์กร |
 | `ciam_auto_provision_group`| string | `PU Staff` | ชื่อกลุ่มสิทธิ์เริ่มต้นสำหรับพนักงานใหม่ที่ล็อกอินผ่าน SSO ครั้งแรก |
 | `ciam_session_ttl_minutes` | integer | `480` | อายุ Access Token ของระบบลูก (ค่าแนะนำ: 8 ชั่วโมง / 480 นาที) |
+
+#### ชุดข้อมูลมาตรฐานตั้งต้น (Seed Data) สำหรับหมวด `ai_copilot` (กรณีระบบลูกมีฟีเจอร์ AI Assistant):
+
+| Key | Data Type | Default Value ตัวอย่าง (MTPulse/IRM) | คำอธิบาย |
+| :--- | :---: | :--- | :--- |
+| `ai_copilot_enabled` | boolean | `false` | สวิตช์หลักเปิด/ปิดการแสดงผลหน้า Chat หรือ Floating Widget ประจำระบบลูก |
+| `ai_provider` | string | `google` | ผู้ให้บริการ AI: `google`, `openai`, `anthropic`, `ollama`, `custom` |
+| `ai_model` | string | `gemini-1.5-flash` | รหัสโมเดล เช่น `gemini-1.5-flash`, `gpt-4o-mini`, `claude-3-5-sonnet` |
+| `ai_api_key` | encrypted | `null` | API Key ของผู้ให้บริการ AI (ห้ามส่งคืนค่าเต็มผ่าน GET API ต้อง Masking เสมอ) |
+| `ai_base_url` | string | `null` | Endpoint URL กำหนดเอง (จำเป็นกรณีใช้ Ollama หรือ Private LLM Proxy) |
+| `ai_system_prompt` | string | `คุณคือผู้ช่วย AI ประจำระบบ MTPulse...` | ข้อความกำกับบทบาท หน้าที่ และข้อจำกัดความปลอดภัยของ AI ประจำระบบ |
+| `ai_allow_mcp_tools` | boolean | `true` | สวิตช์อนุญาตให้ AI เรียกใช้งาน Central IAM และ Spoke MCP Tools |
 
 ---
 
@@ -1766,4 +1779,246 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+```
+
+---
+
+## 11. หมวด E: ข้อกำหนดมาตรฐานการพัฒนา In-App AI Copilot & MCP Tools ประจำระบบลูก (Spoke In-App AI Assistant & Dynamic Settings Standard)
+
+เอกสารหมวดนี้กำหนดข้อกำหนดสถาปัตยกรรมสำหรับระบบลูก (Spoke Applications เช่น MTPulse, IRM, QMS, SAP B1 Service) ที่ประสงค์จะมี**หน้าต่างแชท AI ผู้ช่วยอัจฉริยะส่วนตัว (Private In-App AI Copilot)** ประจำระบบของตนเอง เพื่อช่วยให้ผู้ใช้งานสามารถสอบถามข้อมูลงาน, ออกเอกสาร, สรุปสถิติ หรือสั่งการระบบผ่านภาษาธรรมชาติได้อย่างปลอดภัย
+
+---
+
+### 11.1 กฎเหล็กการเปิด/ปิดหน้าต่างแชทและการตั้งค่า (Dynamic On/Off & Zero Hardcoded Keys)
+
+> ⚠️ **ข้อบังคับระดับองค์กร:**
+> 1. **ห้ามเปิดหน้าต่างแชทหรือแสดง Floating Chat Widget หาก `ai_copilot_enabled == false` หรือยังไม่มี API Key:**  
+>    ระบบลูกต้องตรวจเช็คการตั้งค่าก่อนเรนเดอร์ UI เสมอ เพื่อป้องกันข้อผิดพลาดในการเรียกใช้ API และป้องกันพนักงานสับสน
+> 2. **ห้าม Hardcode AI API Key ลงในซอร์สโค้ด หรือไฟล์ `.env`:**  
+>    API Key ต้องจัดเก็บลงในตาราง `system_settings` (Key: `ai_api_key`) และต้องผ่านการ Masking (เช่น `AIzaSy...XYZ`) ทุกครั้งที่ส่งคืนมายังหน้าจอ System Settings ฝั่ง Frontend เพื่อป้องกันกุญแจรั่วไหล
+> 3. **ต้องมีปุ่ม [ ⚡ ทดสอบเชื่อมต่อ API Key ] (Test Connection Button):**  
+>    เพื่อให้ Admin สามารถตรวจสอบความถูกต้องของ API Key และ Latency (ms) ก่อนเปิดใช้งานระบบจริง
+> 4. **ต้องรองรับ Zero-Cost Fallback (Internal Logic):**  
+>    ในกรณีที่องค์กรยังไม่ได้ซื้อ Subscription API Key จากภายนอก AI Router ของระบบลูกควรมีโหมด Rule-based / Function Lookup ที่สามารถตอบคำถามพื้นฐานประจำระบบได้โดยไม่ต้องพึ่งพาบริการภายนอก
+
+---
+
+### 11.2 โครงสร้าง API Endpoints มาตรฐานสำหรับระบบลูก
+
+ระบบลูกที่รองรับ AI Copilot ต้องเปิด Endpoint 4 เส้นนี้ (หรือเทียบเท่า) ภายใต้สิทธิ์ Administrator:
+
+| Endpoint | Method | คำอธิบาย | สิทธิ์การเข้าถึง |
+| :--- | :---: | :--- | :--- |
+| `/api/settings/ai` | `GET` | ดึงค่าคอนฟิก AI ปัจจุบัน (API Key ต้องถูก Masking) | Admin เท่านั้น |
+| `/api/settings/ai` | `PUT` | บันทึกการตั้งค่า AI (เปิด/ปิด, เปลี่ยน Provider, อัปเดต API Key) | Admin เท่านั้น |
+| `/api/settings/ai/test` | `POST` | ทดสอบความถูกต้องของ API Key กับ Provider ที่เลือก | Admin เท่านั้น |
+| `/api/ai/chat` | `POST` | ส่งข้อความสนทนาไปยัง AI Engine พร้อมรับการประมวลผล Tool Calling | Authenticated Users |
+
+---
+
+### 11.3 การเชื่อมต่อ Central IAM Core MCP Server ผ่าน Remote Transport (SSE over HTTPS)
+
+ระบบลูกสามารถเชื่อมต่อกับ Central IAM เพื่อตรวจสอบความปลอดภัยของบัญชีผู้ใช้ หรือดึงข้อมูลข้ามระบบผ่าน Remote Model Context Protocol (MCP) ด้วย Bearer Token:
+
+```json
+{
+  "mcpServers": {
+    "central-iam-cloud": {
+      "url": "https://ciam.windowasia.com/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer <CENTRAL_IAM_ADMIN_OR_M2M_SECRET>"
+      }
+    }
+  }
+}
+```
+
+เมื่อเชื่อมต่อแล้ว AI ประจำระบบลูกสามารถเรียกใช้ Enterprise Tools กลางได้ทันที:
+* `ciam_health_check`: ตรวจสอบสถานะ Online ของระบบเครือข่ายกลาง
+* `ciam_list_users`: ค้นหารายชื่อพนักงานและอีเมลจาก Active Directory
+* `ciam_get_ghost_accounts`: ตรวจสอบบัญชีผีที่ยังหลงเหลืออยู่ในระบบ
+* `ciam_get_spoke_data`: แลกเปลี่ยนข้อมูลกับระบบลูกอื่นๆ เช่น MTPulse หรือ IRM
+
+---
+
+### 11.4 ตัวอย่างโค้ด Backend API ประจำระบบลูก (Python FastAPI Reference)
+
+```python
+# spoke_backend/app/routers/ai_copilot.py
+import time
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+
+router = APIRouter(prefix="/api", tags=["AI Copilot"])
+
+class AIChatMessage(BaseModel):
+    role: str # user, assistant, system
+    content: str
+
+class AIChatRequest(BaseModel):
+    messages: List[AIChatMessage]
+
+@router.get("/settings/ai")
+def get_ai_settings(db = Depends(get_db), current_user = Depends(get_admin_user)):
+    # ดึงค่าจากตาราง system_settings
+    settings = db.query(SystemSetting).filter(SystemSetting.category == "ai_copilot").all()
+    config = {s.key: s.value for s in settings}
+    raw_key = config.get("ai_api_key", "")
+    masked_key = f"{raw_key[:6]}...{raw_key[-4:]}" if len(raw_key) > 10 else None
+    
+    return {
+        "enabled": config.get("ai_copilot_enabled", "false").lower() == "true",
+        "provider": config.get("ai_provider", "google"),
+        "model": config.get("ai_model", "gemini-1.5-flash"),
+        "has_api_key": bool(raw_key),
+        "api_key_masked": masked_key,
+        "system_prompt": config.get("ai_system_prompt", ""),
+    }
+
+@router.post("/ai/chat")
+async def chat_with_copilot(req: AIChatRequest, db = Depends(get_db), current_user = Depends(get_current_user)):
+    # 1. ตรวจสอบสวิตช์เปิด/ปิด
+    enabled_setting = db.query(SystemSetting).filter_by(key="ai_copilot_enabled").first()
+    if not enabled_setting or enabled_setting.value.lower() != "true":
+        return {
+            "message": {
+                "role": "assistant",
+                "content": "⚠️ ระบบ AI Copilot ถูกปิดใช้งานอยู่ กรุณาติดต่อผู้ดูแลระบบเพื่อเปิดใช้งานในหน้า System Settings"
+            }
+        }
+
+    api_key_setting = db.query(SystemSetting).filter_by(key="ai_api_key").first()
+    api_key = api_key_setting.value if api_key_setting else None
+    user_query = req.messages[-1].content
+
+    # 2. กรณีมี API Key: เรียก External LLM (เช่น Google Gemini)
+    if api_key:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        payload = {
+            "contents": [{"parts": [{"text": user_query}]}]
+        }
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            res = await client.post(url, json=payload)
+            if res.status_code == 200:
+                answer = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+                return {"message": {"role": "assistant", "content": answer}}
+
+    # 3. Fallback: Local Rule-Based Data Lookup (กรณีไม่มี API Key)
+    return {
+        "message": {
+            "role": "assistant",
+            "content": f"🤖 (Local Assistant): ได้รับข้อความ '{user_query}' เรียบร้อยแล้ว ขณะนี้ระบบเชื่อมต่อฐานข้อมูลภายในพร้อมใช้งาน กรุณาตั้งค่า API Key เพื่อการวิเคราะห์ภาษาธรรมชาติเต็มรูปแบบ"
+        }
+    }
+```
+
+---
+
+### 11.5 ตัวอย่างโค้ด Frontend Floating Chat Widget สำหรับระบบลูก (React / Next.js)
+
+```tsx
+// spoke_frontend/components/SpokeCopilotWidget.tsx
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { Sparkles, X, Send, Bot } from "lucide-react";
+
+export default function SpokeCopilotWidget() {
+  const [enabled, setEnabled] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // ตรวจสอบสถานะ On/Off จาก Backend ก่อนเรนเดอร์
+  useEffect(() => {
+    fetch("/api/settings/ai")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.enabled) setEnabled(true);
+      })
+      .catch(() => setEnabled(false));
+  }, []);
+
+  // หากปิดอยู่ ห้ามแสดงผล Widget โดยเด็ดขาด
+  if (!enabled) return null;
+
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
+    const newMsg = { role: "user", content: input };
+    setMessages((prev) => [...prev, newMsg]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: [...messages, newMsg] }),
+      });
+      const data = await res.json();
+      setMessages((prev) => [...prev, data.message]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "เกิดข้อผิดพลาดในการเชื่อมต่อกับผู้ช่วย AI" },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-6 right-6 z-50 p-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl transition flex items-center space-x-2"
+        >
+          <Sparkles className="w-5 h-5 text-amber-300" />
+          <span className="text-xs font-bold">AI Assistant</span>
+        </button>
+      )}
+
+      {isOpen && (
+        <div className="fixed bottom-6 right-6 w-96 h-[500px] z-50 bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700 flex flex-col overflow-hidden">
+          <div className="p-3 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
+            <div className="flex items-center space-x-2">
+              <Bot className="w-5 h-5 text-blue-400" />
+              <span className="text-sm font-bold">Spoke AI Copilot</span>
+            </div>
+            <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex-1 p-3 overflow-y-auto space-y-2 text-xs">
+            {messages.map((m, i) => (
+              <div key={i} className={`p-2 rounded-lg ${m.role === "user" ? "bg-blue-600 ml-auto max-w-[80%]" : "bg-slate-800 max-w-[80%]"}`}>
+                {m.content}
+              </div>
+            ))}
+            {loading && <div className="text-slate-400 text-xs italic">กำลังคิด...</div>}
+          </div>
+
+          <div className="p-2 bg-slate-950 border-t border-slate-800 flex space-x-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder="พิมพ์คำถามที่ต้องการ..."
+              className="flex-1 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-lg text-xs text-white focus:outline-none"
+            />
+            <button onClick={handleSend} className="p-2 bg-blue-600 rounded-lg">
+              <Send className="w-3.5 h-3.5 text-white" />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 ```

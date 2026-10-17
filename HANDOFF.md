@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~12:50 ICT)  
+> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~13:00 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 67/67 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 42 - SSO Portal Muted Gray UI for Unavailable & VPN-Locked Apps)
+> **Git Status:** Production Ready (Sprint 43 - Spoke Spec v2.8.0 Synchronized across Backend & Frontend)
 
 ---
 
@@ -15,7 +15,11 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **SSO Portal Muted Gray UI for Unavailable & VPN-Locked Apps (Sprint 42):**
+1. **Spoke Spec v2.8.0 Synchronized across Backend & Frontend (Sprint 43):**
+   - **ซิงก์ไฟล์สเปกสู่โฟลเดอร์ Backend:** ทำการคัดลอก `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` v2.8.0 (ที่มีหมวด E: In-App AI Copilot & MCP Tools) เข้าสู่โฟลเดอร์ `backend/` ซึ่งเป็น Build Context ของ Docker Container `/app` ทำให้ Backend ให้บริการไฟล์ v2.8.0 จริง
+   - **ปรับปรุง API Endpoint `/applications/spec/download`:** อัปเดตการดึงเวอร์ชันไดนามิกและ fallback เป็น `v2.8.0` ใน `backend/app/api/v1/applications.py` และอัปเดต `tests/test_api_flow.py` ให้ตรวจเช็ค `v2.8.0` (ผ่าน 100%)
+   - **ปรับปรุงปุ่มดาวน์โหลดและ Modal บน Frontend:** ปรับปุ่มดาวน์โหลด `📥 สเปกเชื่อมต่อ (.md v2.8.0)` ใน `frontend/src/app/applications/page.tsx` และเปลี่ยนการตั้งชื่อไฟล์ดาวน์โหลดให้อ่านจาก `Content-Disposition` แบบไดนามิก พร้อมเพิ่มรายละเอียดสเปก v2.8.0 ลงในแท็บประวัติการปรับปรุง (Revision Changelog) ในป๊อปอัปคู่มือ Dev
+2. **SSO Portal Muted Gray UI for Unavailable & VPN-Locked Apps (Sprint 42):**
    - **ปรับโทนสีการ์ดระบบที่ยังไม่พร้อมใช้งาน (MTPulse VPN Locked / Offline / Disabled):** เปลี่ยนจากการ์ดสีขาวขอบส้มสดใส เป็นโทนสีเทาหม่น (`bg-slate-100/70`, `border-slate-300`, `opacity-80`)
    - **ไอคอน 3D Grayscale:** แปลงสีไอคอนระบบลูกที่ล็อกหรือไม่พร้อมใช้งาน (เช่น ไอคอนชีพจรสีส้มของ MTPulse) ให้เป็นสีเทา Muted Grayscale (`bg-slate-200 text-slate-400 grayscale`) ตัดความสดใสออกทั้งหมด
    - **ป้ายสถานะและปุ่มกดสีเทาชัดเจน:** เปลี่ยนป้าย `ต้องต่อ VPN` และปุ่ม `ต่อ VPN แล้วตรวจใหม่` ให้เป็นโทนสีเทา Slate เพื่อให้ผู้ใช้งานมองเห็นความแตกต่างได้ทันทีว่าระบบยังไม่พร้อมใช้งาน ต้องต่อ VPN เสียก่อน จึงจะไม่สับสนกับการ์ดระบบงานที่พร้อมใช้งาน (สีขาว ขอบสดใส ปุ่มไล่เฉดสีฟ้า-ส้ม-ม่วง)

@@ -95,11 +95,20 @@ export default function ApplicationsPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error(`Download failed with status ${res.status}`);
+      // Try to parse filename from Content-Disposition header if available
+      let filename = "CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.8.0.md";
+      const disposition = res.headers.get("content-disposition");
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename=["']?([^"']+)["']?/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+      }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.7.0.md";
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -598,12 +607,12 @@ export default function ApplicationsPage() {
             {isDownloadingSpec ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
-                <span>กำลังเตรียมไฟล์ (v2.7.0)...</span>
+                <span>กำลังเตรียมไฟล์ (v2.8.0)...</span>
               </>
             ) : (
               <>
                 <Download className="w-4 h-4 text-emerald-600" />
-                <span>📥 สเปกเชื่อมต่อ (.md v2.7.0)</span>
+                <span>📥 สเปกเชื่อมต่อ (.md v2.8.0)</span>
               </>
             )}
           </button>
@@ -3031,7 +3040,7 @@ export default function ApplicationsPage() {
                 <Clock className="w-3.5 h-3.5" />
                 <span>📜 ประวัติการปรับปรุงสเปก (Revision Changelog)</span>
                 <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1">
-                  v2.7.0
+                  v2.8.0
                 </span>
               </button>
             </div>
@@ -3043,14 +3052,14 @@ export default function ApplicationsPage() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center space-x-2.5">
                       <span className="px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-500 text-slate-950">
-                        v2.7.0 ล่าสุด
+                        v2.8.0 ล่าสุด
                       </span>
                       <h4 className="font-extrabold text-sm text-white">
                         Enterprise Spoke Integration Standard
                       </h4>
                     </div>
                     <div className="text-[11px] text-slate-300 font-medium">
-                      วันที่มีผล: <span className="font-bold text-white">8 ตุลาคม 2026</span> • มาตรฐานความปลอดภัย ISO 27001
+                      วันที่มีผล: <span className="font-bold text-white">17 ตุลาคม 2026</span> • มาตรฐานความปลอดภัย ISO 27001
                     </div>
                   </div>
                   <p className="text-xs text-slate-300 leading-relaxed">
@@ -3060,14 +3069,32 @@ export default function ApplicationsPage() {
 
                 {/* Changelog Timeline */}
                 <div className="space-y-3">
-                  {/* v2.7.0 */}
+                  {/* v2.8.0 */}
                   <div className="p-3.5 rounded-lg border-2 border-emerald-300 bg-emerald-50/40 space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center space-x-2">
-                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.7.0</span>
-                        <span className="font-bold text-emerald-950">Mode C Two-Way Directory Reconciliation &amp; Mandatory Immediate Sync Button</span>
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.8.0</span>
+                        <span className="font-bold text-emerald-950">หมวด E: In-App AI Copilot Standard, MCP Tools &amp; Dynamic Settings</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                           Active Current
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">17/10/2026</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-700 text-[11.5px] leading-relaxed">
+                      <li><strong>Spoke AI Copilot &amp; Dynamic Settings:</strong> กำหนดมาตรฐานสำหรับ Spoke Application ที่ต้องการมีหน้าต่างแชท AI ประจำระบบของตนเอง ให้จัดเก็บการตั้งค่าแบบไดนามิกลงในตาราง <code>system_settings</code> (<code>ai_copilot_enabled</code>, <code>ai_provider</code>, <code>ai_api_key</code>, <code>ai_model</code>, <code>ai_system_prompt</code>) และบังคับให้ปิดการแสดงผลหน้า Chat หรือ Floating Widget อัตโนมัติเมื่อ <code>ai_copilot_enabled: false</code> หรือยังไม่ได้ระบุ API Key เพื่อความปลอดภัยและประหยัดค่าใช้จ่าย</li>
+                      <li><strong>Model Context Protocol (MCP) Integration:</strong> กำหนดแนวทางให้ AI ประจำ Spoke สามารถเรียกใช้งาน Central IAM Core MCP Server (Remote SSE over HTTPS via Bearer token) เพื่อตรวจเช็คความปลอดภัยของบัญชีผู้ใช้ และอนุญาตให้ Spoke พัฒนา MCP Tools ประจำระบบของตนเองได้</li>
+                    </ul>
+                  </div>
+
+                  {/* v2.7.0 */}
+                  <div className="p-3.5 rounded-lg border-2 border-slate-200 bg-white space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-slate-700 text-white">v2.7.0</span>
+                        <span className="font-bold text-slate-900">Mode C Two-Way Directory Reconciliation &amp; Mandatory Immediate Sync Button</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-300">
+                          Superseded
                         </span>
                       </div>
                       <span className="text-[11px] text-slate-500 font-medium">08/10/2026</span>
