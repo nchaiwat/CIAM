@@ -456,7 +456,7 @@ export default function PortalPage() {
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/90 border border-sky-200 text-xs font-bold text-sky-900 shadow-2xs self-start sm:self-auto">
             <Layers className="w-3.5 h-3.5 text-sky-600" />
-            <span>{apps.length} ระบบพร้อมใช้งาน</span>
+            <span>{apps.length} ระบบงานที่ได้รับสิทธิ์</span>
           </div>
         </div>
 
@@ -558,39 +558,36 @@ export default function PortalPage() {
               const isVpnChecking = isVpnRequired && vpnStatus === "checking";
               const isVpnConnected = isVpnRequired && vpnStatus === "connected";
               const isVpnLocked = isVpnRequired && !isVpnConnected;
+              const isUnavailable = isOffline || isSpokeSsoDisabled || isVpnLocked;
 
               return (
                 <div
                   key={app.id}
-                  className={`group relative overflow-hidden rounded-2xl bg-white/95 backdrop-blur-md border p-4 sm:p-4.5 shadow-2xs hover:shadow-lg hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between space-y-3.5 ${
+                  className={`group relative overflow-hidden rounded-2xl border p-4 sm:p-4.5 transition-all duration-200 flex flex-col justify-between space-y-3.5 ${
                     isOffline
-                      ? "border-rose-200 bg-rose-50/20"
+                      ? "border-slate-300/80 bg-slate-100/70 shadow-none opacity-75"
                       : isSpokeSsoDisabled
-                      ? "border-amber-200 bg-amber-50/20"
+                      ? "border-slate-300/80 bg-slate-100/70 shadow-none opacity-75"
                       : isVpnChecking
-                      ? "border-slate-200"
+                      ? "border-slate-200 bg-slate-50/80 shadow-none"
                       : isVpnConnected
-                      ? "border-sky-300 hover:border-sky-400"
+                      ? "border-sky-300 hover:border-sky-400 bg-white/95 backdrop-blur-md shadow-2xs hover:shadow-lg hover:-translate-y-1"
                       : isVpnLocked
-                      ? "border-amber-300 bg-amber-50/25"
-                      : `border-slate-200/90 ${theme.cardGlow}`
+                      ? "border-slate-300/80 bg-slate-100/70 shadow-none opacity-80 hover:opacity-100 hover:border-slate-400"
+                      : `bg-white/95 backdrop-blur-md shadow-2xs hover:shadow-lg hover:-translate-y-1 border-slate-200/90 ${theme.cardGlow}`
                   }`}
                 >
                   <div className="space-y-2.5">
                     {/* Top: App Icon, Code & Status */}
                     <div className="flex items-start justify-between gap-2.5">
-                      {/* Compact Squircle 3D Icon */}
+                      {/* Compact Squircle 3D Icon - Grayed out when unavailable */}
                       <div
-                        className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 ring-2 ring-white ${
-                          isOffline
-                            ? "bg-slate-300 text-slate-500 shadow-xs"
-                            : isVpnChecking
-                            ? "bg-slate-200 text-slate-600 shadow-xs"
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 ring-2 ring-white ${
+                          isOffline || isSpokeSsoDisabled || isVpnLocked || isVpnChecking
+                            ? "bg-slate-200 text-slate-400 shadow-none grayscale"
                             : isVpnConnected
-                            ? "bg-gradient-to-tr from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/25"
-                            : isVpnLocked
-                            ? "bg-gradient-to-tr from-amber-500 to-orange-600 text-white shadow-md shadow-amber-500/25"
-                            : theme.iconContainer
+                            ? "bg-gradient-to-tr from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/25 group-hover:scale-105"
+                            : `${theme.iconContainer} group-hover:scale-105`
                         }`}
                       >
                         {theme.icon}
@@ -603,33 +600,33 @@ export default function PortalPage() {
                         </span>
 
                         {isOffline ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 border border-slate-300 font-sans">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                             ออฟไลน์
                           </span>
                         ) : isSpokeSsoDisabled ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 border border-slate-300 font-sans">
                             Break-Glass
                           </span>
                         ) : isVpnRequired ? (
                           isVpnChecking ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-sans">
                               <RefreshCw className="w-2.5 h-2.5 animate-spin text-slate-500" />
                               ตรวจ VPN
                             </span>
                           ) : isVpnConnected ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-sky-50 text-sky-700 border border-sky-300">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-300 font-sans">
                               <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span>
                               VPN พร้อม
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
-                              <Lock className="w-2.5 h-2.5 text-amber-600" />
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 border border-slate-300 font-sans">
+                              <Lock className="w-2.5 h-2.5 text-slate-500" />
                               ต้องต่อ VPN
                             </span>
                           )
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-sans">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                             พร้อมใช้
                           </span>
@@ -640,12 +637,12 @@ export default function PortalPage() {
                     {/* App Name & Category */}
                     <div>
                       <h2 className={`font-black text-sm leading-snug transition-colors line-clamp-1 ${
-                        isOffline ? "text-slate-500" : "text-slate-900 group-hover:text-blue-600"
+                        isUnavailable ? "text-slate-600" : "text-slate-900 group-hover:text-blue-600"
                       }`}>
                         {app.app_name}
                       </h2>
                       {app.category && (
-                        <span className="text-[10px] text-slate-500 font-medium block truncate mt-0.5">
+                        <span className="text-[10px] text-slate-400 font-medium block truncate mt-0.5">
                           {app.category.split(" (")[0]}
                         </span>
                       )}
@@ -657,7 +654,9 @@ export default function PortalPage() {
                       const match = desc.match(/^(.*?)\s*\((.*?)\)$/);
                       const displayDesc = match ? match[1].trim() : desc;
                       return (
-                        <p className="text-xs text-slate-600 leading-snug line-clamp-2 min-h-[2.5rem]">
+                        <p className={`text-xs leading-snug line-clamp-2 min-h-[2.5rem] ${
+                          isUnavailable ? "text-slate-500" : "text-slate-600"
+                        }`}>
                           {displayDesc}
                         </p>
                       );
@@ -665,7 +664,7 @@ export default function PortalPage() {
                   </div>
 
                   {/* Bottom: Compact Single Launch Button */}
-                  <div className="pt-2 border-t border-slate-100">
+                  <div className={`pt-2 border-t ${isUnavailable ? "border-slate-200" : "border-slate-100"}`}>
                     <button
                       onClick={() => {
                         if (isVpnLocked) {
@@ -677,15 +676,15 @@ export default function PortalPage() {
                       disabled={isLaunching || isOffline || isSpokeSsoDisabled || isVpnChecking}
                       className={`w-full py-2.5 px-3 rounded-xl text-xs font-black transition-all shadow-sm flex items-center justify-center gap-1.5 active:scale-[0.98] ${
                         isOffline
-                          ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
+                          ? "bg-slate-200/70 text-slate-400 border border-slate-300/60 cursor-not-allowed shadow-none"
                           : isSpokeSsoDisabled
-                          ? "bg-amber-50 text-amber-700 border border-amber-300 cursor-not-allowed shadow-none"
+                          ? "bg-slate-200/70 text-slate-400 border border-slate-300/60 cursor-not-allowed shadow-none"
                           : isVpnChecking
-                          ? "bg-slate-100 text-slate-600 border border-slate-200 cursor-wait shadow-none font-semibold"
+                          ? "bg-slate-200/70 text-slate-500 border border-slate-300/60 cursor-wait shadow-none font-semibold"
                           : isVpnConnected
                           ? "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-sky-500/20 cursor-pointer"
                           : isVpnLocked
-                          ? "bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 cursor-pointer shadow-none font-bold"
+                          ? "bg-slate-200/90 hover:bg-slate-300 text-slate-600 border border-slate-300 cursor-pointer shadow-none font-bold"
                           : `${theme.btn} cursor-pointer`
                       }`}
                     >
@@ -710,9 +709,9 @@ export default function PortalPage() {
                         </>
                       ) : isVpnLocked ? (
                         <span className="flex items-center justify-center gap-1 text-center">
-                          <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+                          <Lock className="w-3 h-3 text-slate-500 shrink-0" />
                           <span>ต่อ VPN แล้วตรวจใหม่</span>
-                          <RefreshCw className="w-3 h-3 ml-0.5 text-amber-700 shrink-0" />
+                          <RefreshCw className="w-3 h-3 ml-0.5 text-slate-500 shrink-0" />
                         </span>
                       ) : (
                         <>

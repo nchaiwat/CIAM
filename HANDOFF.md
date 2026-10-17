@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~12:30 ICT)  
+> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~12:50 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 67/67 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 41 - AI Factual Grounding, Zero-Hallucination Policy & MCP Parameter Alignment)
+> **Git Status:** Production Ready (Sprint 42 - SSO Portal Muted Gray UI for Unavailable & VPN-Locked Apps)
 
 ---
 
@@ -15,7 +15,12 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **AI Factual Grounding, Zero-Hallucination Policy & MCP Parameter Alignment (Sprint 41):**
+1. **SSO Portal Muted Gray UI for Unavailable & VPN-Locked Apps (Sprint 42):**
+   - **ปรับโทนสีการ์ดระบบที่ยังไม่พร้อมใช้งาน (MTPulse VPN Locked / Offline / Disabled):** เปลี่ยนจากการ์ดสีขาวขอบส้มสดใส เป็นโทนสีเทาหม่น (`bg-slate-100/70`, `border-slate-300`, `opacity-80`)
+   - **ไอคอน 3D Grayscale:** แปลงสีไอคอนระบบลูกที่ล็อกหรือไม่พร้อมใช้งาน (เช่น ไอคอนชีพจรสีส้มของ MTPulse) ให้เป็นสีเทา Muted Grayscale (`bg-slate-200 text-slate-400 grayscale`) ตัดความสดใสออกทั้งหมด
+   - **ป้ายสถานะและปุ่มกดสีเทาชัดเจน:** เปลี่ยนป้าย `ต้องต่อ VPN` และปุ่ม `ต่อ VPN แล้วตรวจใหม่` ให้เป็นโทนสีเทา Slate เพื่อให้ผู้ใช้งานมองเห็นความแตกต่างได้ทันทีว่าระบบยังไม่พร้อมใช้งาน ต้องต่อ VPN เสียก่อน จึงจะไม่สับสนกับการ์ดระบบงานที่พร้อมใช้งาน (สีขาว ขอบสดใส ปุ่มไล่เฉดสีฟ้า-ส้ม-ม่วง)
+   - **ปรับข้อความส่วนหัว Greeting Bar:** ปรับข้อความ `{apps.length} ระบบพร้อมใช้งาน` เป็น `{apps.length} ระบบงานที่ได้รับสิทธิ์` เพื่อความถูกต้องชัดเจนตามสถานะสิทธิ์ของผู้ใช้
+2. **AI Factual Grounding, Zero-Hallucination Policy & MCP Parameter Alignment (Sprint 41):**
    - **แก้ไข Tool Signature Mismatch 100%:** แก้ไข `execute_internal_mcp_tool` ใน `backend/app/services/ai_service.py` ให้ส่งอาร์กิวเมนต์ตรงกับฟังก์ชันจริงใน `server.py` (`ciam_list_users`, `ciam_get_spoke_data`, `ciam_get_audit_logs`) ไม่เกิด Exception จากพารามิเตอร์ผิดพลาดอีกต่อไป
    - **เพิ่มตัวกรองระบบลูกใน `ciam_list_users`:** เพิ่มพารามิเตอร์ `app_code` ใน `ciam_list_users` เพื่อให้สามารถค้นหาและนับจำนวนบัญชีที่ผูกกับระบบลูกแต่ละระบบ (MTPulse, IRM, SAP, pfSense) ได้ตรงเป๊ะกับหน้าทะเบียนผู้ใช้ (`/directory`)
    - **สร้าง Context-Aware Intent Detection:** ปรับปรุง `detect_tool_intent` ให้ตรวจจับบริบทจากประวัติการสนทนา 4 ข้อความย้อนหลัง ทำให้เมื่อผู้ใช้ถามคำถามต่อเนื่อง (เช่น "แล้วแสดงในหน้าทะเบียนกี่บัญชี", "ยืนยันใช่ไหม") ระบบยังคงระบุระบบลูก (เช่น MTPulse) ได้อย่างแม่นยำ
