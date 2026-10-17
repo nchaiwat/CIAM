@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 15 ตุลาคม 2026 (Local Time: ~20:45 ICT)  
+> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~09:30 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 52/52 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Synced with `origin/main` at commit `2e73e5e` - Sprint 39)
+> **Test Integrity:** Backend Pytest: 60/60 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready (Sprint 40 - Phase 1: CIAM Core MCP Server)
 
 ---
 
@@ -15,7 +15,20 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Spoke UI Consolidation & AD Sync 500 Fix (Sprint 39):**
+1. **Central IAM Core MCP Server & IDE Bridge (Sprint 40 - Phase 1):**
+   - **Official MCP 2.x Server:** ติดตั้งแพ็กเกจ `mcp` (v2.3) พัฒนาโมดูล `backend/app/mcp/server.py` รองรับการเชื่อมต่อกับ AI Agents (Antigravity IDE, Cursor, Claude Desktop)
+   - **8 Actionable Enterprise Tools:**
+     1. `ciam_health_check`: ตรวจสอบสถานะ Online, Latency และ Spoke SSO Status ของทุกระบบ (IRM, MTPulse, SAP B1, pfSense, M365, AD)
+     2. `ciam_list_users`: ค้นหารายชื่อพนักงาน แผนก สถานะ และระบบลูกที่ได้รับสิทธิ์
+     3. `ciam_get_ghost_accounts`: ตรวจจับบัญชีผี (Discrepancy) ที่ถูกปิดใน AD แต่ยังมีสิทธิ์ตกค้างในระบบลูก
+     4. `ciam_get_spoke_data`: ตรวจสอบข้อมูลเฉพาะของระบบลูก เช่น ดึงข้อมูลช่าง MT แต่ละเจ้าบน MTPulse หรือบัญชีใน IRM
+     5. `ciam_deprovision_user`: คำสั่ง 1-Click Offboard ตัดสิทธิ์พนักงานออกจากทุกระบบทันที พร้อมออกรหัสใบรับรอง
+     6. `ciam_reactivate_user`: คำสั่งคืนสิทธิ์พนักงาน Re-enable ใน AD และระบบลูกในคลิกเดียว
+     7. `ciam_get_audit_logs`: ตรวจสอบ Security Audit Trail และ Governance Logs
+     8. `ciam_dispatch_spoke_command`: ออกคำสั่งเข้าคิว Mode C Outbound Agent (`REQUEST_FULL_SYNC`, `DISABLE_USER`)
+   - **Template การเชื่อมต่อ IDE (`mcp_config.json`):** จัดเตรียมไฟล์คอนฟิกสำหรับ Cursor, Antigravity และ Claude Desktop ให้พร้อมเชื่อมต่อใช้งานได้ทันที
+   - **Test Suite ครบ 100%:** เพิ่มชุดทดสอบ `backend/tests/test_mcp_server.py` ผ่านครบ 8/8 tests (รวมทั้งระบบ 60/60 passed 100%)
+2. **Spoke UI Consolidation & AD Sync 500 Fix (Sprint 39):**
    - **ลบสวิตช์ซ้ำซ้อนใน Modal:** นำสวิตช์เปิด/ปิด Spoke ออกจากป๊อปอัปตั้งค่าระบบ (`applications/page.tsx`) เนื่องจากหน้าการ์ดหลักมีสวิตช์เปิด/ปิดอยู่แล้ว และปรับฟอร์มส่วนหัวเป็น 3 คอลัมน์กว้างสบายตา
    - **รวมปุ่มตั้งค่าระบบลูกเป็นการตั้งค่าเดียว (Unified Settings Modal):** รวมปุ่มแยกตามประเภทระบบ (`SAP B1`, `AD Settings`, `M365`) เข้าเป็นปุ่มเดียว `[ ⚙️ ตั้งค่าเชื่อมต่อ ]` โดยเมื่อกดปุ่ม ระบบจะสลับไปแท็บที่ถูกต้องของระบบนั้นๆ โดยอัตโนมัติ (AD_PROXY, SAP_B1, M365, SSO, M2M)
    - **แสดง Base URL เต็มไม่ถูกตัดทอน:** ปรับการแสดงผล URL ปลายทางบนการ์ดระบบลูกให้แสดง URL เต็ม ไม่ตัดคำด้วย `...` (ใช้ `break-all`)

@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
-**Last Updated:** 2026-10-15  
-**Version:** 2.8.0 (Spoke Unified Settings Modal, Full Base URL, AD Sync 500 Fix, Shop Accounts Sanitization)  
+**Last Updated:** 2026-10-17  
+**Version:** 2.9.0 (Core Model Context Protocol (MCP) Server for AI Agents, Spoke Data Bridge)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -664,3 +664,39 @@ FRONTEND_URL=http://localhost:3000
   - **Prune AD Badge on Shop Accounts:** กรองป้ายและ mapping ของ AD ออกจากบัญชีร้านค้า ทำให้คอลัมน์ Spokes แสดงเฉพาะ Spoke ที่เกี่ยวข้องจริง (เช่น `PFSENSE_FAC`)
   - **Prevent Ingestion:** ใน `scheduler.py` ให้ข้ามการ sync บัญชีร้านค้าจาก AD และลบ AD mapping ตกค้างออกอัตโนมัติ
   - **DB Sanitation:** ใน `initial_data.py` ปรับให้ลบ AD mapping ของบัญชีร้านค้าทั้งหมด และตั้งค่า `is_active_in_ad = False`
+
+---
+
+## 22. Model Context Protocol (MCP) Server Architecture (Version 2.9.0)
+
+### 22.1 Background & Capabilities
+* **Official MCP 2.x Architecture:** Central IAM integrates `mcp` SDK (`mcp.server.mcpserver.MCPServer`) as an identity and spoke management command bridge for AI Agents (Antigravity IDE, Cursor, Claude Desktop).
+* **Location:** `backend/app/mcp/server.py`
+* **Transports Supported:** `stdio` (IDE Desktop direct execution), `sse` / `streamable-http` (webhooks).
+* **Zero AI API Cost on Server:** When used via IDE Desktop (Cursor/Antigravity/Claude), all LLM inference cost is borne by the Client Host. CIAM executes as an MCP Tool Provider with zero server-side token cost.
+
+### 22.2 Registered MCP Tools
+1. `ciam_health_check`: Real-time probe of all connected child applications (IRM, MTPulse, SAP B1, pfSense, M365, AD)
+2. `ciam_list_users`: Master identity query with department, email, AD status, and mapped spoke systems
+3. `ciam_get_ghost_accounts`: 04:00 AM Reconciliation engine detection for accounts inactive in AD but active in spokes
+4. `ciam_get_spoke_data`: Spoke-specific deep inspection (e.g. `app_code='mtpulse'` for contractor mappings and Mode C queue)
+5. `ciam_deprovision_user`: 1-Click Offboarding across AD, pfSense VPN, SAP B1, M365, IRM, and MTPulse
+6. `ciam_reactivate_user`: 1-Click Reactivation and re-provisioning across child systems
+7. `ciam_get_audit_logs`: Query immutable security audit trail
+8. `ciam_dispatch_spoke_command`: Queue Mode C async commands (`DISABLE_USER`, `ENABLE_USER`, `REQUEST_FULL_SYNC`)
+
+### 22.3 IDE Integration Config (`mcp_config.json`)
+```json
+{
+  "mcpServers": {
+    "central-iam": {
+      "command": "d:\\Python\\Central-IAM\\backend\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "app.mcp.server"],
+      "cwd": "d:\\Python\\Central-IAM\\backend",
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}
+```

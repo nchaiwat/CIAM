@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "central-iam": {
+      "command": "d:\\Python\\Central-IAM\\backend\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "app.mcp.server"],
+      "cwd": "d:\\Python\\Central-IAM\\backend",
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}
