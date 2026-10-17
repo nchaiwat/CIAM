@@ -47,6 +47,41 @@
 
 ---
 
+## Sprint 40: Central IAM AI Ecosystem — Core MCP Server, In-House AI Copilot & Spoke Spec v2.8.0 (17 ต.ค. 2026)
+
+### 1. ความต้องการและเป้าหมาย (Requirements & Objectives):
+1. **Phase 1: Central IAM Core Model Context Protocol (MCP) Server:**
+   - ต้องการให้ AI Agents (Antigravity IDE, Cursor, Claude Desktop) สามารถเชื่อมต่อระบบ Central IAM เพื่อตรวจสอบสถานะระบบ ค้นหาบัญชีผู้ใช้ บัญชีผี (Ghost Accounts) และออกคำสั่งบริหารจัดการได้โดยตรง
+   - เนื่องจาก Central IAM Production อยู่บน Cloud VPS (`157.173.219.153`) ไม่สามารถใช้ Local Stdio เพียงอย่างเดียวได้ จึงต้องรองรับ **Remote SSE Transport (over HTTPS)** พร้อมระบบความปลอดภัย Bearer Authentication
+2. **Phase 2: In-House AI Copilot บนหน้าเว็บ Central IAM:**
+   - จัดทำหน้าจอตั้งค่า AI Provider (Google Gemini, OpenAI, Anthropic, Ollama, Custom API) พร้อมฟิลด์ Masking API Key และปุ่มทดสอบเชื่อมต่อ (Test Connection)
+   - ผู้ดูแลระบบสามารถเปิด/ปิดการทำงานของ AI ได้ หากปิดจะซ่อนปุ่มและหน้าจอแชททั้งหมด
+   - มีระบบความฉลาดภายใน (Zero-External Fallback) ที่วิเคราะห์ Intent ดึงข้อมูลสดผ่าน MCP Tools ภายในระบบโดยอัตโนมัติ แม้ไม่ได้ใส่ External API Key
+   - จัดทำ Floating Chat Widget บน Frontend สะดวกในการสอบถามสถานะระบบ
+3. **Phase 3: Spoke Enterprise Integration Specification (v2.8.0):**
+   - เพิ่ม **หมวด E: ข้อกำหนดมาตรฐานการพัฒนา In-App AI Copilot & MCP Tools ประจำระบบลูก** เพื่อให้ระบบลูก (เช่น MTPulse, IRM) นำมาตรฐานไปพัฒนาต่อยอดได้อย่างสอดคล้องกัน
+
+### 2. รายละเอียดการทำงานและการเปลี่ยนแปลง (Implementation Details):
+1. **Core MCP Server & Remote Transport ([backend/app/mcp/](file:///d:/Python/Central-IAM/backend/app/mcp/)):**
+   - พัฒนา `server.py` พร้อม 8 Enterprise Tools (`ciam_health_check`, `ciam_list_users`, `ciam_get_ghost_accounts`, `ciam_get_spoke_data`, `ciam_deprovision_user`, `ciam_reactivate_user`, `ciam_get_audit_logs`, `ciam_dispatch_spoke_command`)
+   - พัฒนา `remote.py` ให้บริการ `/mcp/sse` และ `/mcp/messages/` ควบคุมการเข้าถึงด้วย `RemoteMcpAuthMiddleware`
+   - จัดเตรียมไฟล์คอนฟิก `mcp_config.json` ให้พร้อมนำไปตั้งค่าบน IDE ทันที
+2. **In-House AI Engine & Backend APIs ([backend/app/api/v1/ai.py](file:///d:/Python/Central-IAM/backend/app/api/v1/ai.py)):**
+   - พัฒนา Schema `AICopilotSettings`, `AIChatRequest`, `AITestRequest` ใน `schemas/ai.py`
+   - พัฒนา Service `ai_service.py` จัดเก็บการตั้งค่าลง `system_settings` (คีย์ `ai_copilot_settings`), ฟังก์ชันเชื่อมต่อ Gemini/OpenAI/Ollama, และตัวเชื่อมต่อไปยัง MCP Tools
+   - ลงทะเบียน Router `/api/v1/ai` ใน `backend/app/main.py`
+3. **Frontend UI Components & Settings Integration:**
+   - เพิ่มฟังก์ชัน API ใน `frontend/src/lib/api.ts` (`getAiSettings`, `updateAiSettings`, `testAiConnection`, `chatWithAi`)
+   - พัฒนา Floating Widget [CiamCopilotWidget.tsx](file:///d:/Python/Central-IAM/frontend/src/components/ai/CiamCopilotWidget.tsx) และผูกใน [AppShell.tsx](file:///d:/Python/Central-IAM/frontend/src/components/layout/AppShell.tsx)
+   - เพิ่มแท็บการตั้งค่า **AI Copilot & Intelligence Engine** ใน [settings/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/settings/page.tsx)
+4. **Spoke Spec v2.8.0 ([SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md)):**
+   - บรรจุหมวด E ครบถ้วนตามมาตรฐาน ISO 27001
+5. **Quality Assurance:**
+   - Backend Pytest: 67/67 passed (100%) รวมถึง `test_ai_service.py` และ `test_mcp_server.py`
+   - Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)
+
+---
+
 ## Sprint 39: ปรับแต่ง Spoke Settings UI ให้กระชับ รวม Modal การตั้งค่า และแก้ไข Error 500 ตอนซิงก์จาก AD (15 ต.ค. 2026)
 ### 1. ความต้องการและปัญหาที่พบ (Requirements & Problem Statement):
 1. **สวิตช์เปิด/ปิด Spoke ในป๊อปอัปตั้งค่าซ้ำซ้อน:** ป๊อปอัปการตั้งค่าระบบ (`applications/page.tsx`) มีสวิตช์ ON/OFF อยู่ด้านใน ทั้งที่การ์ดภายนอกมีสวิตช์เปิด/ปิดหลักอยู่แล้ว ทำให้หน้าจอดูรกและซ้ำซ้อน
