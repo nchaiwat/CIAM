@@ -27,7 +27,12 @@ DEFAULT_SYSTEM_PROMPT = (
     "1. ตอบกลับเป็น 'ภาษาไทย' ที่สุภาพ เป็นมืออาชีพ ชัดเจน และกระชับเสมอ เว้นแต่ผู้ใช้จะระบุภาษาอื่น\n"
     "2. ห้ามแสดงความคิดในใจ (Chain-of-thought) ห้ามแปลคำถามซ้ำเป็นภาษาอังกฤษ ให้ตอบคำตอบสุดท้ายแก่ผู้ใช้โดยตรงทันที\n"
     "3. ช่วยตรวจสอบบัญชีผี (Ghost Accounts), ข้อมูลตัวตนใน Active Directory, สถานะระบบลูก (MTPulse, IRM, QMS, SAP B1), สุขภาพระบบ และ Audit Logs\n"
-    "4. ใช้ Markdown (หัวข้อ, ข้อย่อย, ตาราง, ตัวหนา) ให้อ่านง่าย สบายตา"
+    "4. ใช้ Markdown (หัวข้อ, ข้อย่อย, ตาราง, ตัวหนา) ให้อ่านง่าย สบายตา\n"
+    "5. [ความถูกต้องแม่นยำสูงสุดและห้ามแต่งข้อมูล (Zero-Hallucination & Anti-Sycophancy Policy)]:\n"
+    "   - ให้ยึดถือข้อมูลตัวเลขและสถานะจาก [Real-Time System Context via Central IAM Tools] เป็นความจริงสูงสุด (Ground Truth) เท่านั้น\n"
+    "   - ห้ามเออออตามตัวเลขหรือสมมุติฐานที่ผู้ใช้ถามนำเด็ดขาด หากผู้ใช้ถามว่า 'มี 120 บัญชีใช่ไหม' หรือ 'แสดง 120 บัญชีในหน้าทะเบียนใช่ไหม' แต่ข้อมูลจากระบบ Tool Output ระบุว่ามี 6 บัญชี คุณต้องปฏิเสธและแก้ไขทันทีว่า 'ไม่ถูกต้องครับ ในระบบจริงมีเพียง 6 บัญชี' พร้อมแจกแจงรายชื่อจริงจากระบบ\n"
+    "   - ห้ามตอบรับว่า 'ยืนยันตามนี้ครับ' กับตัวเลขที่ผิดพลาดหรือไม่ตรงกับ Context จาก Tool เด็ดขาด\n"
+    "   - หากข้อมูลจาก Tool ไม่พบ หรือเกิดข้อผิดพลาด ให้ตอบตามตรงว่าไม่พบข้อมูลหรือระบบขัดข้อง ห้ามแต่งเรื่องหรือคาดเดาขึ้นมาเอง"
 )
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
@@ -44,7 +49,7 @@ def ensure_thai_directive(prompt: Optional[str]) -> str:
     if not prompt or "You are Central IAM Enterprise Copilot" in prompt:
         return DEFAULT_SYSTEM_PROMPT
     if "ภาษาไทย" not in prompt:
-        return f"{prompt}\n\n[ข้อกำหนดสำคัญ]: ต้องตอบเป็นภาษาไทยอย่างสุภาพ กระชับ และตรงประเด็นเสมอ ห้ามแสดงความคิดในใจหรือแปลคำถามซ้ำ"
+        return f"{prompt}\n\n[ข้อกำหนดสำคัญ]: ต้องตอบเป็นภาษาไทยอย่างสุภาพ กระชับ และตรงประเด็นเสมอ ห้ามแสดงความคิดในใจหรือแปลคำถามซ้ำ และยึดความจริงจากระบบ ห้ามเดาตัวเลข"
     return prompt
 
 def prioritize_models(models: List[str]) -> List[str]:
@@ -273,7 +278,7 @@ async def test_ai_connection(db: Session, req: AITestRequest) -> AITestResponse:
 # --- MCP Tool Executor & Fallback Engine ---
 
 def execute_internal_mcp_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Central IAM Core MCP Tools directly"""
+    """Execute Central IAM Core MCP Tools directly with robust parameter translation"""
     from app.mcp.server import (
         ciam_health_check,
         ciam_list_users,
@@ -285,45 +290,83 @@ def execute_internal_mcp_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict
         if tool_name == "ciam_health_check":
             return ciam_health_check()
         elif tool_name == "ciam_list_users":
+            is_act = arguments.get("is_active")
+            if is_act is None and "status" in arguments:
+                st = str(arguments["status"]).lower().strip()
+                if st in ("active", "true", "1", "ad_active"):
+                    is_act = True
+                elif st in ("inactive", "false", "0", "ad_inactive", "terminated"):
+                    is_act = False
             return ciam_list_users(
-                status=arguments.get("status"),
-                search=arguments.get("search"),
-                limit=int(arguments.get("limit", 20))
+                search=str(arguments.get("search") or ""),
+                department=str(arguments.get("department") or ""),
+                is_active=is_act,
+                app_code=str(arguments.get("app_code") or ""),
+                limit=int(arguments.get("limit", 50))
             )
         elif tool_name == "ciam_get_ghost_accounts":
             return ciam_get_ghost_accounts()
         elif tool_name == "ciam_get_spoke_data":
+            app_target = str(arguments.get("app_code") or arguments.get("app_client_id") or "")
             return ciam_get_spoke_data(
-                app_client_id=arguments.get("app_client_id", ""),
-                query_type=arguments.get("query_type", "users"),
-                filter_param=arguments.get("filter_param")
+                app_code=app_target,
+                search=str(arguments.get("search") or "")
             )
         elif tool_name == "ciam_get_audit_logs":
+            action_target = str(arguments.get("action_type") or arguments.get("action") or arguments.get("category") or "")
             return ciam_get_audit_logs(
                 limit=int(arguments.get("limit", 15)),
-                category=arguments.get("category"),
-                action=arguments.get("action")
+                action_type=action_target
             )
         else:
             return {"error": f"Unknown tool '{tool_name}'"}
     except Exception as e:
+        logger.error(f"execute_internal_mcp_tool error on {tool_name}: {e}", exc_info=True)
         return {"error": f"Tool execution failed: {str(e)}"}
 
-def detect_tool_intent(user_query: str) -> Optional[tuple[str, Dict[str, Any]]]:
-    """Pattern matching for natural language questions to relevant MCP tools"""
+def detect_tool_intent(user_query: str, history_messages: Optional[List[ChatMessage]] = None) -> Optional[tuple[str, Dict[str, Any]]]:
+    """Pattern matching for natural language questions to relevant MCP tools with conversation context awareness"""
     q = user_query.lower()
-    if any(k in q for k in ["ghost", "บัญชีผี", "ghost account", "ผี"]):
+    
+    # Check context from recent messages if query lacks explicit app mention
+    context_text = ""
+    if history_messages:
+        recent = history_messages[-4:]
+        context_text = " ".join(m.content for m in recent).lower()
+
+    # 1. Ghost Accounts
+    if any(k in q for k in ["ghost", "บัญชีผี", "ghost account", "ผี", "ค้าง", "discrepancy"]):
         return ("ciam_get_ghost_accounts", {})
-    if any(k in q for k in ["health", "สถานะระบบ", "health check", "เซิร์ฟเวอร์", "พอร์ต"]):
+
+    # 2. Health check
+    if any(k in q for k in ["health", "สถานะระบบ", "health check", "เซิร์ฟเวอร์", "พอร์ต", "uptime"]):
         return ("ciam_health_check", {})
+
+    # 3. Audit logs
     if any(k in q for k in ["audit", "log", "ประวัติ", "ใครทำอะไร", "บันทึกการเข้า"]):
         return ("ciam_get_audit_logs", {"limit": 10})
-    if any(k in q for k in ["mtpulse", "mt pulse", "mt_pulse"]):
-        return ("ciam_get_spoke_data", {"app_client_id": "mtpulse-agent", "query_type": "users"})
-    if any(k in q for k in ["irm", "จัดซื้อ", "inventory"]):
-        return ("ciam_get_spoke_data", {"app_client_id": "irm-spoke-client", "query_type": "users"})
-    if any(k in q for k in ["พนักงาน", "ผู้ใช้", "user", "บัญชีทั้งหมด", "list user"]):
-        return ("ciam_list_users", {"limit": 15})
+
+    # 4. Spoke Apps: MTPulse, IRM, SAP B1, pfSense
+    spoke_detected = None
+    if any(k in q for k in ["mtpulse", "mt pulse", "mt_pulse"]) or ("mtpulse" in context_text and any(k in q for k in ["บัญชี", "ผู้ใช้", "แสดง", "กี่", "ทะเบียน", "คน", "ยืนยัน"])):
+        spoke_detected = "mtpulse"
+    elif any(k in q for k in ["irm", "จัดซื้อ", "inventory"]) or ("irm" in context_text and any(k in q for k in ["บัญชี", "ผู้ใช้", "แสดง", "กี่", "ทะเบียน", "คน", "ยืนยัน"])):
+        spoke_detected = "irm"
+    elif any(k in q for k in ["sap", "sap b1", "sap_b1", "erp"]) or ("sap" in context_text and any(k in q for k in ["บัญชี", "ผู้ใช้", "แสดง", "กี่", "ทะเบียน", "คน", "ยืนยัน"])):
+        spoke_detected = "sap_b1"
+    elif any(k in q for k in ["pfsense", "vpn", "firewall"]) or ("pfsense" in context_text and any(k in q for k in ["บัญชี", "ผู้ใช้", "แสดง", "กี่", "ทะเบียน", "คน", "ยืนยัน"])):
+        spoke_detected = "pfsense_fac"
+
+    # If spoke is detected AND user is asking about directory / users / count / listing / confirmation
+    if spoke_detected:
+        if any(k in q for k in ["ทะเบียน", "directory", "filter", "กรอง", "แสดงในหน้า", "หน้าทะเบียน", "กี่คน", "กี่บัญชี", "จำนวน", "กี่คน", "ยืนยัน"]):
+            return ("ciam_list_users", {"app_code": spoke_detected, "limit": 50})
+        return ("ciam_get_spoke_data", {"app_code": spoke_detected})
+
+    # 5. General User Directory Listing
+    if any(k in q for k in ["พนักงาน", "ผู้ใช้", "user", "บัญชีทั้งหมด", "list user", "ทะเบียน", "directory"]):
+        return ("ciam_list_users", {"limit": 30})
+
     return None
 
 async def call_external_llm(
@@ -338,7 +381,15 @@ async def call_external_llm(
     """Invoke External LLM API (Google Gemini / OpenAI) and return (response_text, model_used)"""
     sys_instruction = ensure_thai_directive(system_prompt)
     if tool_context:
-        sys_instruction += f"\n\n[Real-Time System Context via Central IAM Tools]:\n{tool_context}\n\n[ข้อกำหนดสำคัญ]: สรุปและตอบคำถามเป็นภาษาไทยอย่างสุภาพ กระชับ และตรงประเด็น"
+        sys_instruction += (
+            f"\n\n[Real-Time System Context via Central IAM Tools - GROUND TRUTH]:\n{tool_context}\n\n"
+            f"[ข้อกำหนดสำคัญด้านความถูกต้องของข้อมูล (Zero-Hallucination & Anti-Sycophancy)]:\n"
+            f"1. ให้ยึดถือข้อมูลตัวเลขและรายชื่อจาก Tool Output ด้านบนเป็นความจริง 100% เท่านั้น\n"
+            f"2. หากผู้ใช้ถามนำด้วยตัวเลขที่ผิดพลาด หรือขอให้ยืนยันตัวเลขที่ไม่ตรงกับ Tool Output "
+            f"(เช่น ผู้ใช้ถามว่ามี 120 บัญชี แต่ข้อมูลจริงใน Tool Output ระบุว่ามี 6 บัญชี) "
+            f"คุณต้องปฏิเสธอย่างชัดเจนทันทีและแก้ไขตัวเลขให้ถูกต้องตาม Tool Output พร้อมแจกแจงรายชื่อจริง ห้ามตอบรับว่า 'ยืนยันตามนี้ครับ' หรือเออออตามตัวเลขผิดเด็ดขาด!\n"
+            f"3. สรุปและตอบคำถามเป็นภาษาไทยอย่างสุภาพ กระชับ เป็นมืออาชีพ และตรงประเด็น"
+        )
 
     if provider == "google":
         # Prioritize requested model, then fast flash fallbacks
@@ -428,7 +479,7 @@ async def process_ai_chat(db: Session, req: AIChatRequest, current_user: Any) ->
 
     # Step 1: Detect intent and execute MCP tool if allowed
     if raw.get("allow_mcp_tools", True) and last_user_msg:
-        intent = detect_tool_intent(last_user_msg)
+        intent = detect_tool_intent(last_user_msg, req.messages)
         if intent:
             tool_name, tool_args = intent
             tool_result = execute_internal_mcp_tool(tool_name, tool_args)

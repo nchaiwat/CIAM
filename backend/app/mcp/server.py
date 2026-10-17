@@ -93,16 +93,27 @@ def ciam_list_users(
     search: str = "",
     department: str = "",
     is_active: Optional[bool] = None,
-    limit: int = 25
+    app_code: str = "",
+    limit: int = 50
 ) -> Dict[str, Any]:
     """
     Search and list enterprise users in Central IAM directory.
+    Supports filtering by app_code ('mtpulse', 'irm', 'sap_b1', 'pfsense_fac', 'pfsense_ho', 'm365', 'ad').
     Returns identity details (username, full name, department, employee ID, email, AD status)
-    along with their assigned spoke applications (IRM, MTPulse, SAP, etc.).
+    along with their assigned spoke applications.
     """
     db = SessionLocal()
     try:
         query = db.query(MasterIdentity)
+
+        if app_code:
+            clean_app = app_code.strip().lower()
+            query = (
+                query.join(AppAccountMapping, AppAccountMapping.identity_id == MasterIdentity.id)
+                .join(ConnectedApplication, AppAccountMapping.application_id == ConnectedApplication.id)
+                .filter(ConnectedApplication.app_code.ilike(f"%{clean_app}%"))
+                .distinct()
+            )
 
         if search:
             s_clean = f"%{search.strip()}%"
@@ -155,7 +166,25 @@ def ciam_list_users(
                 "linked_spokes": spokes
             })
 
+        filter_notes = []
+        if app_code:
+            filter_notes.append(f"ระบบ '{app_code.upper()}'")
+        if department:
+            filter_notes.append(f"แผนก '{department}'")
+        if search:
+            filter_notes.append(f"คำค้น '{search}'")
+        if is_active is not None:
+            filter_notes.append(f"สถานะ {'ACTIVE' if is_active else 'INACTIVE'}")
+        filter_desc = " + ".join(filter_notes) if filter_notes else "ทั้งหมด"
+
+        summary_text = (
+            f"หน้าทะเบียนผู้ใช้ (User Directory) ของ Central IAM พบผู้ใช้งานจริงตามเงื่อนไข ({filter_desc}) "
+            f"ทั้งสิ้น {total} บัญชี (ดึงแสดงผล {len(user_list)} บัญชี)"
+        )
+
         return {
+            "summary": summary_text,
+            "total_users_in_directory": total,
             "total_matches": total,
             "returned_count": len(user_list),
             "users": user_list
@@ -209,16 +238,31 @@ def ciam_get_ghost_accounts() -> Dict[str, Any]:
 # 4. Spoke-Specific Query & Contractor Tools (e.g. MTPulse, IRM)
 # ---------------------------------------------------------------------------
 @mcp_server.tool()
-def ciam_get_spoke_data(app_code: str, search: str = "") -> Dict[str, Any]:
+def ciam_get_spoke_data(app_code: str, search: str = "", **kwargs) -> Dict[str, Any]:
     """
     Query accounts, pending commands, and operational context for a specific spoke application.
-    Supports 'mtpulse' (Maintenance & Contractors), 'irm' (Incoming Raw Materials),
-    'sap_b1' (ERP), 'pfsense_fac', 'pfsense_ho', and 'm365'.
+    Supports 'mtpulse' (Modern Trade & Maintenance), 'irm' (Incoming Raw Materials),
+    'sap_b1' (ERP), 'pfsense_fac', 'pfsense_ho', 'm365', and 'ad'.
     """
     db = SessionLocal()
     try:
-        app_code_clean = app_code.strip().lower()
-        app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code.ilike(app_code_clean)).first()
+        app_code_clean = (app_code or "").strip().lower()
+        if "mtpulse" in app_code_clean:
+            app_target = "mtpulse"
+        elif "irm" in app_code_clean:
+            app_target = "irm"
+        else:
+            app_target = app_code_clean
+
+        app = db.query(ConnectedApplication).filter(
+            or_(
+                ConnectedApplication.app_code.ilike(app_target),
+                ConnectedApplication.app_code.ilike(app_code_clean),
+                ConnectedApplication.client_id.ilike(app_code_clean),
+                ConnectedApplication.app_name.ilike(f"%{app_code_clean}%")
+            )
+        ).first()
+
         if not app:
             available_apps = [a.app_code for a in db.query(ConnectedApplication).all()]
             return {
@@ -259,6 +303,8 @@ def ciam_get_spoke_data(app_code: str, search: str = "") -> Dict[str, Any]:
             for m, ident in mappings
         ]
 
+        active_in_app_count = sum(1 for a in accounts if a["is_active_in_app"])
+
         # Query pending command queue (Mode C agents like MTPulse)
         pending_commands = (
             db.query(SpokePendingCommand)
@@ -280,13 +326,21 @@ def ciam_get_spoke_data(app_code: str, search: str = "") -> Dict[str, Any]:
             for cmd in pending_commands
         ]
 
+        summary_text = (
+            f"ระบบ {app.app_name} (รหัส '{app.app_code}') มีบัญชีที่ผูกและแสดงผลในหน้าทะเบียนผู้ใช้ (User Directory) "
+            f"ของ Central IAM ทั้งสิ้น {len(accounts)} บัญชี (เป็นบัญชี Active ในระบบลูก {active_in_app_count} บัญชี)"
+        )
+
         return {
+            "summary": summary_text,
+            "total_accounts_in_directory": len(accounts),
+            "total_mapped_accounts": len(accounts),
+            "active_in_app_count": active_in_app_count,
             "app_code": app.app_code,
             "app_name": app.app_name,
             "connector_type": app.connector_type,
             "health_status": app.health_status or "ONLINE",
             "base_url": app.base_url,
-            "total_mapped_accounts": len(accounts),
             "accounts": accounts,
             "recent_command_queue": commands_list
         }

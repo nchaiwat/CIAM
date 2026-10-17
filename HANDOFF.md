@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~09:30 ICT)  
+> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~12:30 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 67/67 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 40 - Central IAM MCP Server, In-House AI Copilot & Spoke Framework Spec v2.8.0)
+> **Git Status:** Production Ready (Sprint 41 - AI Factual Grounding, Zero-Hallucination Policy & MCP Parameter Alignment)
 
 ---
 
@@ -15,7 +15,13 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Central IAM In-House AI Copilot, Remote MCP Server & Spoke Framework (Sprint 40):**
+1. **AI Factual Grounding, Zero-Hallucination Policy & MCP Parameter Alignment (Sprint 41):**
+   - **แก้ไข Tool Signature Mismatch 100%:** แก้ไข `execute_internal_mcp_tool` ใน `backend/app/services/ai_service.py` ให้ส่งอาร์กิวเมนต์ตรงกับฟังก์ชันจริงใน `server.py` (`ciam_list_users`, `ciam_get_spoke_data`, `ciam_get_audit_logs`) ไม่เกิด Exception จากพารามิเตอร์ผิดพลาดอีกต่อไป
+   - **เพิ่มตัวกรองระบบลูกใน `ciam_list_users`:** เพิ่มพารามิเตอร์ `app_code` ใน `ciam_list_users` เพื่อให้สามารถค้นหาและนับจำนวนบัญชีที่ผูกกับระบบลูกแต่ละระบบ (MTPulse, IRM, SAP, pfSense) ได้ตรงเป๊ะกับหน้าทะเบียนผู้ใช้ (`/directory`)
+   - **สร้าง Context-Aware Intent Detection:** ปรับปรุง `detect_tool_intent` ให้ตรวจจับบริบทจากประวัติการสนทนา 4 ข้อความย้อนหลัง ทำให้เมื่อผู้ใช้ถามคำถามต่อเนื่อง (เช่น "แล้วแสดงในหน้าทะเบียนกี่บัญชี", "ยืนยันใช่ไหม") ระบบยังคงระบุระบบลูก (เช่น MTPulse) ได้อย่างแม่นยำ
+   - **บรรจุ Zero-Hallucination & Anti-Sycophancy Policy:** เพิ่มกฎเหล็กใน System Prompt และ Context Injection ให้ AI ยึดตัวเลขจริงจาก Tool Context 100% ห้ามเออออหรือตอบรับ "ยืนยันตามนี้ครับ" กับตัวเลขที่ผู้ใช้ถามนำเด็ดขาด หากตัวเลขไม่ตรง (เช่น ผู้ใช้ถาม 120 บัญชี แต่ข้อมูลจริงมี 6 บัญชี) AI จะปฏิเสธและแก้ไขตัวเลขจริงจากฐานข้อมูลทันที
+   - **Explicit Factual Summaries ใน MCP Return:** เพิ่มฟิลด์ `summary`, `total_users_in_directory`, `total_accounts_in_directory` ในผลลัพธ์ของ Tool เพื่อให้ LLM อ่านและเข้าใจตัวเลขได้ทันที
+2. **Central IAM In-House AI Copilot, Remote MCP Server & Spoke Framework (Sprint 40):**
    - **Phase 1: Central IAM Core MCP Server (Remote Cloud Transport):**
      - พัฒนา MCP Server ด้วย SDK `mcp` (v2.3) ติดตั้ง 8 Enterprise Tools (`ciam_health_check`, `ciam_list_users`, `ciam_get_ghost_accounts`, `ciam_get_spoke_data`, `ciam_deprovision_user`, `ciam_reactivate_user`, `ciam_get_audit_logs`, `ciam_dispatch_spoke_command`)
      - รองรับการเชื่อมต่อข้าม Cloud ผ่าน Remote SSE Transport (`https://ciam.windowasia.com/mcp/sse`) ป้องกันด้วย `RemoteMcpAuthMiddleware` รองรับ Bearer token (Admin JWT, `MCP_API_KEY`)
