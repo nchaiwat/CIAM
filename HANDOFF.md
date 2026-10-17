@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~14:10 ICT)  
+> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~16:17 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 68/68 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 45 - AI Copilot Specific Username Search Extraction & Active AD Priority Ranking)
+> **Git Status:** Production Ready (Sprint 45 - AI Copilot Specific Username Search Extraction & Active AD Priority Ranking, Commit `f02e978`)
 
 ---
 
@@ -19,26 +19,27 @@
    - **สาเหตุปัญหาที่พบ:** เมื่อผู้ใช้ถาม AI Copilot ถึงบัญชีเฉพาะเจาะจง เช่น `"Chaiwat.N ตรวจดูดีๆ"` ระบบ `detect_tool_intent` เดิมไม่ได้สกัดชื่อบัญชีไปใส่ในพารามิเตอร์ `search` ของ `ciam_list_users` (หรือกรณีไม่มีคีย์เวิร์ดคำว่า `"ผู้ใช้"` ก็จะไม่เรียก Tool เลย) และเมื่อเรียก `ciam_list_users(limit=30)` โดยไม่มี `search` ระบบเรียงลำดับตาม ASCII (`username.asc()`) ทำให้ 30 รายการแรกเป็นบัญชีสาขาที่ขึ้นต้นด้วยตัวเลข (`01-WS_...`, `03-WS_...`) ส่งผลให้ AI มองไม่เห็น `Chaiwat.N` และเข้าใจผิดว่าไม่มีในระบบ
    - **เพิ่มฟังก์ชัน `extract_user_search_term` ใน `ai_service.py`:** สกัดชื่อบัญชีรูปแบบ `Firstname.L` (เช่น `Chaiwat.N`), อีเมล, หรือคำค้นชื่อคนจากข้อความปัจจุบันและประวัติการสนทนา แล้วส่งเข้า `ciam_list_users(search=..., limit=50)` โดยตรง แม้ผู้ใช้พิมพ์แค่ `"Chaiwat.N ตรวจดูดีๆ"` ก็จะเรียกค้นหาทันที
    - **จัดเรียง Active AD Users ขึ้นก่อนใน `ciam_list_users` (`mcp/server.py`):** เปลี่ยนการเรียงลำดับเป็น `MasterIdentity.is_active_in_ad.desc(), MasterIdentity.username.asc()` เพื่อให้พนักงานจริงใน AD แสดงก่อนรหัสสาขา `01-WS_...` เสมอ พร้อมรองรับ Fallback ค้นหาด้วยชื่อต้น (Prefix) และแก้ไขการคำนวณ `is_ad_account` ให้ตรวจเช็คจาก `is_active_in_ad` และ `has_ad_spoke` อย่างถูกต้อง
-2. **Identity Unification (`Duanghathai.P` <-> `Duanghatai.P`) & Phonetic Directory Search (Sprint 44):**
+2. **Identity Unification (`Duanghathai.P` <-> `Duanghatai.P`) & Phonetic Directory Search + Facebook Technical Article (Sprint 44):**
    - **รวมตัวตนบน Production สำเร็จทันที:** ผสานบัญชี `Duanghatai.P` (ID 427 จาก SAP B1) เข้ากับตัวตนหลักใน Active Directory `Duanghathai.P` (`Duanghathai Phasuk` แผนก `AC`, ID 164) ทำให้แสดงสถานะ 🟢 Active ใน AD พร้อมผูกสิทธิ์ `AD` และ `SAP_B1` ครบในแถวเดียว
    - **เพิ่ม Phonetic Transliteration Matching (`thai` <-> `tai`):** อัปเดต `scheduler.py` (`persist_spoke_inventory`), `initial_data.py`, และ `directory.py` (`sync_active_directory_users`) ให้จับคู่ตัวสะกด `thai` <-> `tai` อัตโนมัติ ป้องกันไม่ให้การซิงก์ SAP B1 รอบถัดไปสร้างแถวซ้ำขึ้นมาอีก
    - **ขยายระบบค้นหาใน User Directory & MCP Tool (`list_users` & `ciam_list_users`):** รองรับการค้นหาด้วย `app_username` ของระบบลูก และคำค้นหาแบบเทียบเสียง (`Duanghatai.P` หรือ `Duanghathai.P`) ให้แสดงผลตัวตนหลักได้ตรงกัน 100%
-2. **Spoke Spec v2.8.0 Synchronized across Backend & Frontend (Sprint 43):**
+   - **จัดทำบทความเชิงวิชาการและภาพประกอบสถาปัตยกรรมสำหรับโพสต์ Facebook (`docs/facebook_article/`):** สร้างบทความฉบับเต็มพร้อมภาพ Infographic 3 ภาพ (`01_ciam_cover_architecture.jpg`, `02_ciam_pain_vs_solution.jpg`, `03_ciam_hybrid_3_modes.jpg`) ใน `docs/facebook_article/FACEBOOK_POST_CIAM.md`
+3. **Spoke Spec v2.8.0 Synchronized across Backend & Frontend (Sprint 43):**
    - **ซิงก์ไฟล์สเปกสู่โฟลเดอร์ Backend:** ทำการคัดลอก `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` v2.8.0 (ที่มีหมวด E: In-App AI Copilot & MCP Tools) เข้าสู่โฟลเดอร์ `backend/` ซึ่งเป็น Build Context ของ Docker Container `/app` ทำให้ Backend ให้บริการไฟล์ v2.8.0 จริง
    - **ปรับปรุง API Endpoint `/applications/spec/download`:** อัปเดตการดึงเวอร์ชันไดนามิกและ fallback เป็น `v2.8.0` ใน `backend/app/api/v1/applications.py` และอัปเดต `tests/test_api_flow.py` ให้ตรวจเช็ค `v2.8.0` (ผ่าน 100%)
    - **ปรับปรุงปุ่มดาวน์โหลดและ Modal บน Frontend:** ปรับปุ่มดาวน์โหลด `📥 สเปกเชื่อมต่อ (.md v2.8.0)` ใน `frontend/src/app/applications/page.tsx` และเปลี่ยนการตั้งชื่อไฟล์ดาวน์โหลดให้อ่านจาก `Content-Disposition` แบบไดนามิก พร้อมเพิ่มรายละเอียดสเปก v2.8.0 ลงในแท็บประวัติการปรับปรุง (Revision Changelog) ในป๊อปอัปคู่มือ Dev
-2. **SSO Portal Muted Gray UI for Unavailable & VPN-Locked Apps (Sprint 42):**
+4. **SSO Portal Muted Gray UI for Unavailable & VPN-Locked Apps (Sprint 42):**
    - **ปรับโทนสีการ์ดระบบที่ยังไม่พร้อมใช้งาน (MTPulse VPN Locked / Offline / Disabled):** เปลี่ยนจากการ์ดสีขาวขอบส้มสดใส เป็นโทนสีเทาหม่น (`bg-slate-100/70`, `border-slate-300`, `opacity-80`)
    - **ไอคอน 3D Grayscale:** แปลงสีไอคอนระบบลูกที่ล็อกหรือไม่พร้อมใช้งาน (เช่น ไอคอนชีพจรสีส้มของ MTPulse) ให้เป็นสีเทา Muted Grayscale (`bg-slate-200 text-slate-400 grayscale`) ตัดความสดใสออกทั้งหมด
    - **ป้ายสถานะและปุ่มกดสีเทาชัดเจน:** เปลี่ยนป้าย `ต้องต่อ VPN` และปุ่ม `ต่อ VPN แล้วตรวจใหม่` ให้เป็นโทนสีเทา Slate เพื่อให้ผู้ใช้งานมองเห็นความแตกต่างได้ทันทีว่าระบบยังไม่พร้อมใช้งาน ต้องต่อ VPN เสียก่อน จึงจะไม่สับสนกับการ์ดระบบงานที่พร้อมใช้งาน (สีขาว ขอบสดใส ปุ่มไล่เฉดสีฟ้า-ส้ม-ม่วง)
    - **ปรับข้อความส่วนหัว Greeting Bar:** ปรับข้อความ `{apps.length} ระบบพร้อมใช้งาน` เป็น `{apps.length} ระบบงานที่ได้รับสิทธิ์` เพื่อความถูกต้องชัดเจนตามสถานะสิทธิ์ของผู้ใช้
-2. **AI Factual Grounding, Zero-Hallucination Policy & MCP Parameter Alignment (Sprint 41):**
+5. **AI Factual Grounding, Zero-Hallucination Policy & MCP Parameter Alignment (Sprint 41):**
    - **แก้ไข Tool Signature Mismatch 100%:** แก้ไข `execute_internal_mcp_tool` ใน `backend/app/services/ai_service.py` ให้ส่งอาร์กิวเมนต์ตรงกับฟังก์ชันจริงใน `server.py` (`ciam_list_users`, `ciam_get_spoke_data`, `ciam_get_audit_logs`) ไม่เกิด Exception จากพารามิเตอร์ผิดพลาดอีกต่อไป
    - **เพิ่มตัวกรองระบบลูกใน `ciam_list_users`:** เพิ่มพารามิเตอร์ `app_code` ใน `ciam_list_users` เพื่อให้สามารถค้นหาและนับจำนวนบัญชีที่ผูกกับระบบลูกแต่ละระบบ (MTPulse, IRM, SAP, pfSense) ได้ตรงเป๊ะกับหน้าทะเบียนผู้ใช้ (`/directory`)
    - **สร้าง Context-Aware Intent Detection:** ปรับปรุง `detect_tool_intent` ให้ตรวจจับบริบทจากประวัติการสนทนา 4 ข้อความย้อนหลัง ทำให้เมื่อผู้ใช้ถามคำถามต่อเนื่อง (เช่น "แล้วแสดงในหน้าทะเบียนกี่บัญชี", "ยืนยันใช่ไหม") ระบบยังคงระบุระบบลูก (เช่น MTPulse) ได้อย่างแม่นยำ
    - **บรรจุ Zero-Hallucination & Anti-Sycophancy Policy:** เพิ่มกฎเหล็กใน System Prompt และ Context Injection ให้ AI ยึดตัวเลขจริงจาก Tool Context 100% ห้ามเออออหรือตอบรับ "ยืนยันตามนี้ครับ" กับตัวเลขที่ผู้ใช้ถามนำเด็ดขาด หากตัวเลขไม่ตรง (เช่น ผู้ใช้ถาม 120 บัญชี แต่ข้อมูลจริงมี 6 บัญชี) AI จะปฏิเสธและแก้ไขตัวเลขจริงจากฐานข้อมูลทันที
    - **Explicit Factual Summaries ใน MCP Return:** เพิ่มฟิลด์ `summary`, `total_users_in_directory`, `total_accounts_in_directory` ในผลลัพธ์ของ Tool เพื่อให้ LLM อ่านและเข้าใจตัวเลขได้ทันที
-2. **Central IAM In-House AI Copilot, Remote MCP Server & Spoke Framework (Sprint 40):**
+6. **Central IAM In-House AI Copilot, Remote MCP Server & Spoke Framework (Sprint 40):**
    - **Phase 1: Central IAM Core MCP Server (Remote Cloud Transport):**
      - พัฒนา MCP Server ด้วย SDK `mcp` (v2.3) ติดตั้ง 8 Enterprise Tools (`ciam_health_check`, `ciam_list_users`, `ciam_get_ghost_accounts`, `ciam_get_spoke_data`, `ciam_deprovision_user`, `ciam_reactivate_user`, `ciam_get_audit_logs`, `ciam_dispatch_spoke_command`)
      - รองรับการเชื่อมต่อข้าม Cloud ผ่าน Remote SSE Transport (`https://ciam.windowasia.com/mcp/sse`) ป้องกันด้วย `RemoteMcpAuthMiddleware` รองรับ Bearer token (Admin JWT, `MCP_API_KEY`)
@@ -50,23 +51,44 @@
    - **Phase 3: Spoke Enterprise Integration Specification (v2.8.0):**
      - อัปเดต [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) เป็นเวอร์ชัน **2.8.0**
      - เพิ่ม **หมวด E: ข้อกำหนดมาตรฐานการพัฒนา In-App AI Copilot & MCP Tools ประจำระบบลูก** ให้คำแนะนำในการสร้างตาราง `system_settings` (`ai_copilot_enabled`, `ai_api_key`), กฎการปิดหน้า Chat เมื่อไม่มี Key, และโค้ดตัวอย่าง Backend/Frontend สำหรับทีมผู้พัฒนาระบบลูก (MTPulse, IRM, QMS, SAP B1 Service)
-   - **Test Suite 100%:** Pytest ผ่าน 67/67 tests (100%), Frontend TypeScript `npx tsc --noEmit` 0 errors (100%)
-2. **Spoke UI Consolidation & AD Sync 500 Fix (Sprint 39):**
+   - **Test Suite 100%:** Pytest ผ่าน 68/68 tests (100%), Frontend TypeScript `npx tsc --noEmit` 0 errors (100%)
+7. **Spoke UI Consolidation & AD Sync 500 Fix (Sprint 39):**
    - **ลบสวิตช์ซ้ำซ้อนใน Modal:** นำสวิตช์เปิด/ปิด Spoke ออกจากป๊อปอัปตั้งค่าระบบ (`applications/page.tsx`) เนื่องจากหน้าการ์ดหลักมีสวิตช์เปิด/ปิดอยู่แล้ว และปรับฟอร์มส่วนหัวเป็น 3 คอลัมน์กว้างสบายตา
    - **รวมปุ่มตั้งค่าระบบลูกเป็นการตั้งค่าเดียว (Unified Settings Modal):** รวมปุ่มแยกตามประเภทระบบ (`SAP B1`, `AD Settings`, `M365`) เข้าเป็นปุ่มเดียว `[ ⚙️ ตั้งค่าเชื่อมต่อ ]` โดยเมื่อกดปุ่ม ระบบจะสลับไปแท็บที่ถูกต้องของระบบนั้นๆ โดยอัตโนมัติ (AD_PROXY, SAP_B1, M365, SSO, M2M)
    - **แสดง Base URL เต็มไม่ถูกตัดทอน:** ปรับการแสดงผล URL ปลายทางบนการ์ดระบบลูกให้แสดง URL เต็ม ไม่ตัดคำด้วย `...` (ใช้ `break-all`)
    - **แก้ไขบั๊ก 500 NameError ในการซิงก์จาก AD:** แก้ไข `backend/app/api/v1/directory.py` ที่เรียกใช้ `func.lower()` แต่ไม่ได้ import `func` จาก `sqlalchemy` ทำให้เกิด HTTP 500 เมื่อกดปุ่ม "ซิงก์จาก AD" ในหน้าทะเบียนผู้ใช้
-2. **Shop Accounts Sanitization from AD Filter & Spokes Matrix (Sprint 38 - บัญชี WA-Shop_*):**
+8. **Shop Accounts Sanitization from AD Filter & Spokes Matrix (Sprint 38 - บัญชี WA-Shop_*):**
    - แก้ไขปัญหาบัญชีสาขาร้านค้า (เช่น `25 WA Shop - น่าน`, `46 WA Shop - โคราช`) หลุดไปแสดงในตัวกรอง `Active Directory (DC Gateway)` และตัวกรอง `เฉพาะที่ยังใช้งานอยู่ (Active)` ทั้งที่คอลัมน์สถานะ AD เป็นขีด `-` (Local Acc)
    - ปรับปรุง `directory.py`: เมื่อกรอง `app_code == 'ad'` บัญชีจะต้องเป็นตัวตน AD จริง (`is_ad == True`) เท่านั้น บัญชีประเภท Shop (`is_shop_acc`) ถูกตัดสิทธิ์จากการแสดงในตัวกรอง AD อย่างเด็ดขาด และตัดป้าย `🔴 AD` ออกจากคอลัมน์ Spokes ของร้านค้า (แสดงเฉพาะ Spoke ที่ใช้งานจริง เช่น `PFSENSE_FAC`)
    - ปรับปรุง `scheduler.py`: ข้ามการ sync บัญชีร้านค้าจาก AD และลบการแมป AD ตกค้างของร้านค้าทิ้ง
    - ปรับปรุง `initial_data.py`: กวาดล้างและตัด AD mapping ของบัญชีร้านค้าทั้งหมดในฐานข้อมูล
-2. **AD Inactive Status Reconciliation & Auto-heal (Sprint 37 - กรณี Worawut.S):**
+9. **AD Inactive Status Reconciliation & Auto-heal (Sprint 37 - กรณี Worawut.S):**
    - แก้ไขปัญหาผู้ใช้ที่ถูกลบหรือไม่มีตัวตนใน Active Directory แล้ว (เช่น `worawut.s`) แต่ยังคงแสดงสถานะเป็น On (จุดเขียวกระพริบ 🟢) ในหน้า User Directory
    - ปรับปรุง `persist_spoke_inventory` ใน `scheduler.py`: เมื่อเชื่อมต่อ AD Sync Agent และดึงรายชื่อผู้ใช้ล่าสุด บัญชีใดที่ไม่อยู่ใน AD แล้วจะถูกปรับ `is_active_in_ad = False` ทันที และลบการแมปกับ AD ออก
    - ปรับปรุง `directory.py`: คำนวณ `effective_ad_active = bool(identity.is_active_in_ad and (has_ad_mapping or identity.ad_guid or identity.last_login_ad_at))` และมีกลไก Auto-heal ปรับตัวตนที่ไม่มี AD Footprint ให้เป็น `is_active_in_ad = False`
    - ปรับปรุง Tooltip ใน `frontend/src/app/directory/page.tsx` แสดงคำอธิบายสถานะให้ชัดเจนว่าบัญชีถูกปิดหรือไม่มีใน AD
-3. **Single Unified Front Door (Sprint 36):** ปรับปรุงโครงสร้าง Routing และ Authentication Guard ใน `AppShell.tsx` ให้ทุกคำขอที่ยังไม่ได้ล็อกอิน ไม่ว่าจะเป็นการพิมพ์ `ciam.windowasia.com` (Root Path `/`) หรือเปิดลิงก์ที่เซสชันหลุด จะวิ่งเข้าสู่หน้า `/login` (Window Asia App Portal สีขาว-น้ำเงิน) เสมอ 100% ป้องกันไม่ให้ผู้ใช้ทั่วไปหลุดเข้าไปเห็นหน้า `/admin/login` (Admin Console จอดำทะมึน พ.ร.บ.คอมฯ) ซึ่งสร้างความสับสนและตื่นตระหนกให้ผู้ใช้งาน
+10. **Single Unified Front Door (Sprint 36):** ปรับปรุงโครงสร้าง Routing และ Authentication Guard ใน `AppShell.tsx` ให้ทุกคำขอที่ยังไม่ได้ล็อกอิน ไม่ว่าจะเป็นการพิมพ์ `ciam.windowasia.com` (Root Path `/`) หรือเปิดลิงก์ที่เซสชันหลุด จะวิ่งเข้าสู่หน้า `/login` (Window Asia App Portal สีขาว-น้ำเงิน) เสมอ 100% ป้องกันไม่ให้ผู้ใช้ทั่วไปหลุดเข้าไปเห็นหน้า `/admin/login` (Admin Console จอดำทะมึน พ.ร.บ.คอมฯ) ซึ่งสร้างความสับสนและตื่นตระหนกให้ผู้ใช้งาน
+
+---
+
+## Sprint 44 & 45: Phonetic Identity Unification (`Duanghathai.P` <-> `Duanghatai.P`), AI Copilot Specific Username Search (`Chaiwat.N`) & Active AD Priority Ranking (17 ต.ค. 2026)
+
+### 1. การรวมตัวตน `Duanghathai.P` และ `Duanghatai.P` & ระบบค้นหาเทียบเสียง (Sprint 44):
+- **ปัญหาที่พบ:** ใน Active Directory ชื่อแสดงผล (`Name` / `DisplayName`) สะกดว่า `Duanghatai.P` (ไม่มี `h`) แต่ `sAMAccountName` (User logon name) สะกดว่า `Duanghathai.P` (มี `h`) ในขณะที่ระบบ SAP B1 ใช้ `Duanghatai.P` ส่งผลให้เมื่อค้นหาคำว่า `Duanghatai` บนหน้าทะเบียนผู้ใช้ของ CIAM จึงพบเฉพาะแถวของ SAP B1 ที่ขึ้นสถานะ AD เป็น `-` (Local Acc)
+- **การแก้ไข:**
+  1. ผสานบัญชี `Duanghatai.P` (ID 427) เข้ากับ `Duanghathai.P` (ID 164, แผนก AC) บน Production ทันที และเพิ่มคู่ `("duanghathai.p", "duanghatai.p")` ใน Auto-heal routine (`backend/app/db/initial_data.py` และ `backend/app/api/v1/directory.py`)
+  2. เพิ่มกฎเทียบเสียง `thai` $\leftrightarrow$ `tai` ใน `persist_spoke_inventory` (`backend/app/services/scheduler.py`) พร้อมตรวจเช็ค `identity_id` ใน `AppAccountMapping` เพื่อป้องกันไม่ให้เกิดแถวซ้ำเมื่อซิงก์ SAP B1 รอบถัดไป
+  3. ขยายระบบค้นหาใน `list_users` (`directory.py`) และ `ciam_list_users` (`mcp/server.py`) ให้ค้นหาครอบคลุมทั้ง `AppAccountMapping.app_username` และคำค้นหาเทียบเสียง (`thai` $\leftrightarrow$ `tai`, `wut` $\leftrightarrow$ `woot`)
+
+### 2. การสกัดชื่อบัญชีเฉพาะเจาะจงใน AI Copilot (`Chaiwat.N`) & การจัดเรียง Active AD Users ขึ้นก่อน (Sprint 45):
+- **ปัญหาที่พบ:** เมื่อถาม AI Copilot ถึงบัญชี `Chaiwat.N` (เช่น พิมพ์ `"Chaiwat.N ตรวจดูดีๆ"`) AI ตอบว่าไม่พบบัญชีนี้ในระบบและเข้าใจผิดว่าบัญชีในระบบมีแต่รหัสสาขา `03-WS_...` เนื่องจาก:
+  1. `detect_tool_intent` ใน `backend/app/services/ai_service.py` เดิมไม่ได้สกัดชื่อบัญชี (`Chaiwat.N`) ส่งเข้าพารามิเตอร์ `search` ของ `ciam_list_users` และเมื่อข้อความไม่มีคำว่า `"ผู้ใช้"` หรือ `"พนักงาน"` ระบบจึงไม่เรียก Tool เลย
+  2. เมื่อเรียก `ciam_list_users(limit=30)` โดยไม่มี `search` คิวรีเรียงตาม `MasterIdentity.username.asc()` (ASCII) ทำให้ 30 แถวแรกเป็นรหัสสาขาที่ขึ้นต้นด้วยตัวเลข (`01-WS_...`, `03-WS_...`) ทั้งหมด
+  3. ฟิลด์ `is_ad_account` ใน `ciam_list_users` เดิมเช็คแค่ `bool(ident.ad_guid or ident.employee_id)` ไม่ได้เช็ค `ident.is_active_in_ad` หรือ `has_ad_spoke`
+- **การแก้ไข:**
+  1. เพิ่มฟังก์ชัน `extract_user_search_term()` ใน [`backend/app/services/ai_service.py`](file:///d:/Python/Central-IAM/backend/app/services/ai_service.py) สกัดชื่อบัญชีรูปแบบ `Firstname.L` (เช่น `Chaiwat.N`), อีเมล หรือชื่อผู้ใช้จากทั้งข้อความปัจจุบันและประวัติการสนทนา แล้วส่ง `search=user_search` เข้า `ciam_list_users` ทันที
+  2. ปรับการเรียงลำดับใน `ciam_list_users()` ([`backend/app/mcp/server.py`](file:///d:/Python/Central-IAM/backend/app/mcp/server.py)) เป็น `MasterIdentity.is_active_in_ad.desc(), MasterIdentity.username.asc()` เพื่อให้พนักงาน Active ใน AD แสดงขึ้นมาก่อนรหัสสาขา `01-WS_...` เสมอ พร้อมเพิ่ม Prefix Fallback (`Firstname`) และปรับ `is_ad_account` ให้เช็ค `bool(ident.is_active_in_ad or has_ad_spoke or ident.ad_guid or ident.employee_id)`
+  3. เพิ่มชุดทดสอบ `test_ai_chat_specific_username_lookup` ใน [`backend/tests/test_ai_service.py`](file:///d:/Python/Central-IAM/backend/tests/test_ai_service.py) (ผ่าน 68/68 tests 100%)
 
 ---
 
@@ -1473,49 +1495,46 @@ docker compose up -d api web
 
 ### 4.1 สถานะระบบที่ตรวจสอบและส่งมอบแล้ว (Verified & Production Ready)
 * **Git Commits ล่าสุด (10 Commits ล่าสุดบน `origin/main`):**
-  - `2e73e5e` — `fix(applications): unify settings modal, full base url, remove duplicate switch, and fix sync-ad 500 error` (Sprint 39)
-  - `843ba41` — `fix(directory): exclude shop vpn accounts from ad filter and sanitize ad spoke badge` (Sprint 38)
-  - `c687e8e` — `fix(sync): sanitize shop accounts from ad ingest and auto-heal existing database records` (Sprint 38)
-  - `d5fe6f7` — `fix(ad-sync): reconcile missing ad users to inactive status and fix worawut.s status` (Sprint 37)
-  - `9ecab21` — `fix(routing): guarantee root path '/' and default navigation land on /login portal front door` (Sprint 36)
-  - `4470ffe` — `refactor(login): hide left blue branding panel on mobile for instant login access`
-  - `0d5cfd1` — `refactor(login): replace green LINE button with clean 'ติดต่อฝ่าย IT' link in login card`
-  - `75bce6b` — `refactor(login): remove 'หรือ Somchai.S' from username placeholder`
-  - `d5e42d7` — `feat(login): remove SAP B1 from supported apps and add interactive LINE IT Support QR modal`
-  - `205d6b4` — `fix(ad-sync): prevent spoke inventory overwriting AD disabled status and sanitize Administrator role from department`
+  - `f02e978` — `fix(ai): extract specific username queries in AI Copilot and prioritize active AD users in ciam_list_users` (Sprint 45)
+  - `8f5d84a` — `fix(directory): unify Duanghathai.P and Duanghatai.P identity and support phonetic search` (Sprint 44)
+  - `3f7627b` — `docs(memory): document Sprints 41-43 and spec v2.8.0 synchronization` (Sprint 43)
+  - `e913ed5` — `fix(spec): sync Spoke Specification v2.8.0 across backend and frontend download button` (Sprint 43)
+  - `fb7b817` — `style(portal): display unavailable and vpn-locked app cards in muted gray` (Sprint 42)
+  - `88c7b7e` — `fix(ai): enforce zero-hallucination policy and align internal mcp tool parameters` (Sprint 41)
+  - `fb3f046` — `fix(copilot): enforce Thai response, accelerate latency with Flash models, and sync active model` (Sprint 40)
+  - `e4551a5` — `feat(ai): integrate dynamic Gemini ListModels auto-discovery and smart error diagnostics` (Sprint 40)
+  - `09a0a56` — `feat(ai): support gemini-2.0-flash with resilient multi-version fallbacks and quick model selectors` (Sprint 40)
+  - `baba904` — `fix(deploy): add mcp>=2.3.0 to requirements.txt and add api rewrites to next.config.ts` (Sprint 40)
 
 * **ผลการตรวจสอบคุณภาพและความถูกต้อง (Test & Type Integrity):**
-  - **Backend Test Suite:** รัน `pytest` ผ่านครบถ้วน **52/52 tests (100% Passed)**
+  - **Backend Test Suite:** รัน `pytest` ผ่านครบถ้วน **68/68 tests (100% Passed)**
   - **Frontend Type Check:** รัน `npx tsc --noEmit` ผ่านสมบูรณ์ **0 TypeScript Errors**
-  - **Git Working Tree:** สะอาด (Working tree clean, synced with `origin/main` at commit `2e73e5e`)
+  - **Git Working Tree:** สะอาด (Working tree clean, synced with `origin/main` at commit `f02e978`)
 
-* **สรุปฟังก์ชันและสถาปัตยกรรมหลักที่ส่งมอบแล้วในรอบล่าสุด (Sprints 36 - 39):**
-  1. **Unified Spoke Settings Modal (Sprint 39):** ยุบรวมปุ่มตั้งค่าระบบลูกที่กระจัดกระจาย (`SAP B1`, `AD Settings`, `M365`) เข้าเป็นปุ่มเดียว `[ ⚙️ ตั้งค่าเชื่อมต่อ ]` บนการ์ดทุกใบ พร้อมกลไก Auto-select แท็บที่ตรงกับประเภท Connector ของระบบนั้นๆ โดยอัตโนมัติ และสลับแท็บใดๆ ภายใน Modal ได้อิสระ
-  2. **Removal of Duplicate Spoke Switch (Sprint 39):** ลบสวิตช์ ON/OFF ซ้ำซ้อนภายในป๊อปอัปตั้งค่าระบบ เหลือเฉพาะสวิตช์หลักบนการ์ดภายนอก และจัดวางฟอร์มข้อมูลส่วนหัวเป็น 3 คอลัมน์กว้างสบายตา
-  3. **Full Base URL Display (Sprint 39):** เปลี่ยนการแสดงผล URL ปลายทางบนการ์ดระบบลูกจากการใช้ `truncate max-w-[170px]` เป็น `break-all` responsive แสดงชื่อ URL เต็มทุกตัวอักษร
-  4. **Active Directory Sync 500 Resolution (Sprint 39):** แก้ไข `NameError: name 'func' is not defined` ใน `directory.py` ที่เกิดจากการเรียก `func.lower()` โดยไม่ได้ import `func` จาก `sqlalchemy` ทำให้ปุ่ม "ซิงก์จาก AD" ในหน้าทะเบียนผู้ใช้ทำงานได้อย่างสมบูรณ์
-  5. **Shop Accounts Sanitization from AD Filter (Sprint 38):** บัญชีร้านค้าสาขา (`WA-Shop_*`) ถูกตัดสิทธิ์จากการแสดงในตัวกรอง `Active Directory (DC Gateway)` และตัวกรอง `Active` อย่างเด็ดขาด พร้อมตัดป้าย `🔴 AD` ออกจากคอลัมน์ Spokes ของร้านค้า
-  6. **AD Inactive Reconciliation & Ghost Account Auto-Heal (Sprint 37):** แก้ไขปัญหาผู้ใช้ที่ไม่อยู่ใน AD แล้ว (เช่น `worawut.s`) ให้ถูกปรับเป็น Inactive (จุดสีเทา) และตัดการแมป AD ทันทีเมื่อซิงก์
-  7. **Single Unified Front Door (Sprint 36):** บังคับให้ผู้ใช้ทุกคนที่เข้าสู่ระบบผ่าน `ciam.windowasia.com` (Root Path `/`) เข้าสู่หน้า `/login` (App Portal) เสมอ ป้องกันไม่ให้หลุดเข้าหน้าจอดำ Admin Console โดยไม่ตั้งใจ
+* **สรุปฟังก์ชันและสถาปัตยกรรมหลักที่ส่งมอบแล้วในรอบล่าสุด (Sprints 40 - 45):**
+  1. **AI Copilot Specific Username Search & Active AD Priority Ranking (Sprint 45):** เพิ่ม `extract_user_search_term` ใน `ai_service.py` เพื่อสกัดชื่อบัญชี (`Chaiwat.N`, อีเมล, ชื่อพนักงาน) ส่งเข้า `ciam_list_users(search=...)` โดยตรง และจัดเรียงผู้ใช้ที่ Active ใน AD ขึ้นก่อนบัญชีรหัสสาขา (`01-WS_...`) เสมอ พร้อมแก้ไข `is_ad_account` ใน `mcp/server.py`
+  2. **Phonetic Identity Unification (`Duanghathai.P` <-> `Duanghatai.P`) & Directory Search (Sprint 44):** รวมตัวตนของคุณดวงหทัย ผาสุข บน Production และเพิ่มระบบจับคู่ตัวสะกดเทียบเสียง `thai` $\leftrightarrow$ `tai` ใน `scheduler.py`, `directory.py`, `initial_data.py`, และ `mcp/server.py` พร้อมจัดทำบทความวิชาการและภาพประกอบสถาปัตยกรรมสำหรับโพสต์ Facebook ใน `docs/facebook_article/FACEBOOK_POST_CIAM.md`
+  3. **Spoke Spec v2.8.0 Synchronized across Backend & Frontend (Sprint 43):** ซิงก์ไฟล์ `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` v2.8.0 เข้าสู่โฟลเดอร์ `backend/` และอัปเดตปุ่มดาวน์โหลดบนหน้า `/applications` ให้แสดงเวอร์ชัน v2.8.0
+  4. **SSO Portal Muted Gray UI for Unavailable Apps (Sprint 42):** ปรับโทนสีการ์ดแอปพลิเคชันที่ยังไม่พร้อมใช้งานหรือต้องต่อ VPN (เช่น MTPulse เมื่ออยู่นอกวงแลน) เป็นสีเทาหม่น (`grayscale`) แยกความแตกต่างจากระบบที่พร้อมใช้งานอย่างชัดเจน
+  5. **AI Factual Grounding & Zero-Hallucination Policy (Sprint 41):** บังคับให้ AI Copilot ยึดตัวเลขจริงจากฐานข้อมูล 100% ห้ามเออออตามตัวเลขที่ผู้ใช้ถามนำ และปรับพารามิเตอร์ Tool Calling ให้ตรงกับ `mcp/server.py` ทุกฟังก์ชัน
+  6. **Central IAM In-House AI Copilot & Remote MCP Server (Sprint 40):** พัฒนา MCP Server (8 Tools) รองรับ Remote SSE Transport (`/mcp/sse`) และสร้าง Floating AI Copilot Widget พร้อมหน้าตั้งค่า Provider (Gemini, OpenAI, Anthropic, Ollama)
 
 ---
 
 ### 4.2 แผนงานและข้อสังเกตสำหรับการปรับปรุงในรอบถัดไป (Next Iteration Roadmap)
 เมื่อกลับมาทำงานต่อในรอบถัดไป ให้ดำเนินการตามลำดับความสำคัญดังต่อไปนี้:
 
-1. **User Acceptance Testing (UAT) บน Production VPS:**
-   - นำคำสั่ง Deploy ล่าสุดไปรันบน Production Server (`/var/www/Ciam`)
-   - ยืนยันการทำงานของปุ่ม `[ ⚙️ ตั้งค่าเชื่อมต่อ ]` บนการ์ด Spokes (SAP B1, AD, M365, MTPulse) ว่าเปิดแท็บที่ถูกต้อง
-   - ยืนยันการแสดงผล URL ปลายทางเต็มทุกระบบ
-   - ทดสอบกดปุ่ม "ซิงก์จาก AD" ในหน้าทะเบียนผู้ใช้ (`/directory`) เพื่อยืนยันว่าซิงก์ได้สำเร็จ ไม่มี Error 500
+1. **อัปเดต Production VPS (`/var/www/Ciam`) และทดสอบ AI Copilot ล่าสุด:**
+   - รันคำสั่ง Deploy `api` บน Production Server (`/var/www/Ciam`) เพื่อนำโค้ด Sprint 44-45 ขึ้นใช้งานจริง
+   - ทดสอบถาม AI Copilot ด้วยชื่อบัญชีเฉพาะเจาะจง เช่น `"Chaiwat.N"`, `"Duanghathai.P"` เพื่อยืนยันว่า AI แสดงข้อมูลสถานะ AD และระบบลูกที่ผูกอยู่ได้ถูกต้องแม่นยำ 100%
 
-2. **ระบบจัดการพนักงานลาออกอัตโนมัติ (Offboarding & Deprovisioning Orchestration):**
-   - ตรวจสอบหน้า `/offboarding` สำหรับการปิดสิทธิ์พนักงานออกจากทุก Spoke Applications แบบ One-Click Kill Switch (AD, pfSense, M365, SAP B1, IRM)
-   - ทดสอบการตัด Token, Revoke OAuth Sessions และเปลี่ยนสถานะตัวตนใน Master Identity
+2. **การทดสอบความร่วมมือกับ Spoke Mode C (MTPulse) และระบบลูกอื่นๆ (QMS, IRM):**
+   - ติดตามผลการเชื่อมโยงข้อมูลผ่าน Outbound Reverse Heartbeat API (`/api/v1/agent/heartbeat`) และทดสอบการส่งคำสั่ง `DISABLE_USER` / `ENABLE_USER` / `REQUEST_FULL_SYNC`
+   - ตรวจสอบการนำมาตรฐาน Spoke Spec v2.8.0 (รวมถึงหมวด E: In-App AI Copilot & MCP Tools) ไปประยุกต์ใช้ในระบบลูก
 
-3. **การทดสอบความร่วมมือกับ Spoke Mode C (MTPulse):**
-   - ติดตามผลการเพิ่มปุ่ม `[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]` บนหน้าจอตั้งค่าของ MTPulse
-   - ทดสอบการ Provisioning และ Deprovisioning บัญชีแบบสองทางผ่าน Outbound Reverse Heartbeat API (`/api/v1/agent/heartbeat`)
+3. **ระบบจัดการพนักงานลาออกอัตโนมัติ (Offboarding & Deprovisioning Orchestration):**
+   - ตรวจสอบหน้า `/offboarding` สำหรับการปิดสิทธิ์พนักงานออกจากทุก Spoke Applications แบบ One-Click Kill Switch (AD, pfSense, M365, SAP B1, IRM, MTPulse)
+   - ทดสอบการออกใบรับรองการเพิกถอนสิทธิ์ (ISO/IEC 27001 Revocation Certificate)
 
 4. **การเตรียม Starter Template ภาษา Native PHP + MySQL:**
    - เตรียมตัวอย่างโค้ด PHP ดั้งเดิม (Native PHP 3 ไฟล์: `ciam_sso.php`, `ciam_callback.php`, `ciam_agent.php`) เพื่อส่งมอบให้ทีม Dev ภายในองค์กรนำไปเชื่อมต่อกับระบบ On-Premise เดิมของบริษัท
