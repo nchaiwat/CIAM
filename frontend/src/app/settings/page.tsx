@@ -23,6 +23,10 @@ import {
   Radio,
   Wifi,
   WifiOff,
+  Sparkles,
+  Bot,
+  Wrench,
+  Key,
 } from "lucide-react";
 import {
   ciamApi,
@@ -31,6 +35,7 @@ import {
   SyncSchedule,
   SyncAllResult,
   AdMonitorState,
+  AICopilotSettings,
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
 
@@ -85,12 +90,35 @@ export default function SettingsPage() {
   // Live System Health
   const [liveHealth, setLiveHealth] = useState<LiveHealthSnapshot | null>(null);
 
+  // AI Copilot State
+  const [aiSettings, setAiSettings] = useState<AICopilotSettings>({
+    enabled: false,
+    provider: "google",
+    model: "gemini-1.5-flash",
+    api_key_masked: null,
+    has_api_key: false,
+    base_url: null,
+    system_prompt: "",
+    allow_mcp_tools: true,
+  });
+  const [inputApiKey, setInputApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiSaveMessage, setAiSaveMessage] = useState<string | null>(null);
+  const [aiTesting, setAiTesting] = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<{
+    success: boolean;
+    message: string;
+    latency_ms?: number;
+  } | null>(null);
+
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const [healthData, scheduleData] = await Promise.all([
+      const [healthData, scheduleData, aiData] = await Promise.all([
         ciamApi.getHealthMonitorStatus().catch(() => null),
         ciamApi.getSyncSchedule().catch(() => null),
+        ciamApi.getAICopilotSettings().catch(() => null),
       ]);
 
       if (healthData) {
@@ -106,10 +134,59 @@ export default function SettingsPage() {
       if (scheduleData) {
         setSyncSchedule(scheduleData);
       }
+      if (aiData) {
+        setAiSettings(aiData);
+      }
     } catch (err) {
       console.error("Error loading system settings:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveAICopilot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setAiSaving(true);
+      setAiSaveMessage(null);
+      const res = await ciamApi.updateAICopilotSettings({
+        enabled: aiSettings.enabled,
+        provider: aiSettings.provider,
+        model: aiSettings.model,
+        api_key: inputApiKey.trim() ? inputApiKey.trim() : undefined,
+        base_url: aiSettings.base_url || undefined,
+        system_prompt: aiSettings.system_prompt || undefined,
+        allow_mcp_tools: aiSettings.allow_mcp_tools,
+      });
+      setAiSettings(res);
+      setInputApiKey("");
+      setAiSaveMessage("บันทึกการตั้งค่า AI Copilot สำเร็จเรียบร้อย");
+      setTimeout(() => setAiSaveMessage(null), 5000);
+    } catch (err: any) {
+      alert(`บันทึกการตั้งค่า AI ล้มเหลว: ${err.message || err}`);
+    } finally {
+      setAiSaving(false);
+    }
+  };
+
+  const handleTestAICopilot = async () => {
+    try {
+      setAiTesting(true);
+      setAiTestResult(null);
+      const res = await ciamApi.testAICopilotConnection({
+        provider: aiSettings.provider,
+        model: aiSettings.model,
+        api_key: inputApiKey.trim() || undefined,
+        base_url: aiSettings.base_url || undefined,
+      });
+      setAiTestResult(res);
+    } catch (err: any) {
+      setAiTestResult({
+        success: false,
+        message: `ข้อผิดพลาด: ${err.message || err}`,
+      });
+    } finally {
+      setAiTesting(false);
     }
   };
 
@@ -1017,6 +1094,252 @@ export default function SettingsPage() {
               กำลังโหลดสถานะความพร้อมของระบบ...
             </div>
           )}
+        </div>
+
+        {/* AI Copilot & Intelligence Engine Card */}
+        <div className="bg-white rounded-xl border border-slate-300 shadow-sm p-5 space-y-4 md:col-span-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 gap-2">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-sm">
+                <Sparkles className="w-4 h-4 text-amber-300" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 flex items-center space-x-2">
+                  <span>AI Copilot & Intelligence Engine</span>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold border ${
+                      aiSettings.enabled
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                        : "bg-slate-100 text-slate-600 border-slate-300"
+                    }`}
+                  >
+                    {aiSettings.enabled ? "ACTIVE / ONLINE" : "DISABLED"}
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  ตั้งค่าผู้ช่วย AI ประจำองค์กร, ใส่ API Key และเปิด/ปิดหน้าต่างแชทอัจฉริยะร่วมกับ MCP Tools
+                </p>
+              </div>
+            </div>
+
+            <label className="flex items-center space-x-2 cursor-pointer self-start sm:self-auto">
+              <span className="text-xs font-semibold text-slate-700">เปิดใช้งาน AI Copilot:</span>
+              <input
+                type="checkbox"
+                checked={aiSettings.enabled}
+                onChange={(e) =>
+                  setAiSettings({ ...aiSettings, enabled: e.target.checked })
+                }
+                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+              />
+            </label>
+          </div>
+
+          <form onSubmit={handleSaveAICopilot} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Provider Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  AI Provider (ผู้ให้บริการ)
+                </label>
+                <select
+                  value={aiSettings.provider}
+                  onChange={(e) => {
+                    const prov = e.target.value;
+                    let defaultModel = "gemini-1.5-flash";
+                    if (prov === "openai") defaultModel = "gpt-4o-mini";
+                    else if (prov === "anthropic") defaultModel = "claude-3-5-sonnet";
+                    else if (prov === "ollama") defaultModel = "deepseek-r1";
+                    setAiSettings({ ...aiSettings, provider: prov, model: defaultModel });
+                  }}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="google">Google Gemini (แนะนำสำหรับองค์กร)</option>
+                  <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
+                  <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
+                  <option value="ollama">Local Ollama (Self-Hosted LLM)</option>
+                  <option value="custom">Custom OpenAI-Compatible API</option>
+                </select>
+              </div>
+
+              {/* Model ID */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Model Identifier (รหัสโมเดล)
+                </label>
+                <input
+                  type="text"
+                  value={aiSettings.model}
+                  onChange={(e) =>
+                    setAiSettings({ ...aiSettings, model: e.target.value })
+                  }
+                  placeholder="e.g. gemini-1.5-flash, gpt-4o-mini"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
+
+              {/* API Key Input */}
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1.5">
+                    <Key className="w-3.5 h-3.5 text-slate-500" />
+                    <span>API Key ({aiSettings.provider.toUpperCase()})</span>
+                  </label>
+                  {aiSettings.has_api_key && (
+                    <span className="text-[10px] text-emerald-600 font-mono font-medium">
+                      ✓ มีคีย์ในระบบแล้ว: {aiSettings.api_key_masked}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showApiKey ? "text" : "password"}
+                      value={inputApiKey}
+                      onChange={(e) => setInputApiKey(e.target.value)}
+                      placeholder={
+                        aiSettings.has_api_key
+                          ? "ปล่อยว่างไว้เพื่อใช้คีย์เดิม หรือกรอกใหม่เพื่อแทนที่..."
+                          : "กรอก API Key เช่น AIzaSy... หรือ sk-..."
+                      }
+                      className="w-full pl-3 pr-9 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="w-3.5 h-3.5" />
+                      ) : (
+                        <Eye className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleTestAICopilot}
+                    disabled={aiTesting}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition flex items-center space-x-1 cursor-pointer disabled:opacity-50"
+                  >
+                    {aiTesting ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    )}
+                    <span>{aiTesting ? "กำลังทดสอบ..." : "ทดสอบเชื่อมต่อ"}</span>
+                  </button>
+                </div>
+
+                {/* Test Result Alert */}
+                {aiTestResult && (
+                  <div
+                    className={`mt-2 p-2.5 rounded-lg text-xs flex items-center space-x-2 ${
+                      aiTestResult.success
+                        ? "bg-emerald-50 text-emerald-800 border border-emerald-300"
+                        : "bg-rose-50 text-rose-800 border border-rose-300"
+                    }`}
+                  >
+                    {aiTestResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                    )}
+                    <span className="flex-1">{aiTestResult.message}</span>
+                    {aiTestResult.latency_ms !== undefined && (
+                      <span className="text-[10px] font-mono font-bold">
+                        {aiTestResult.latency_ms} ms
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Base URL (Optional for Ollama/Custom) */}
+              {(aiSettings.provider === "ollama" || aiSettings.provider === "custom") && (
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Custom Base URL (Endpoint)
+                  </label>
+                  <input
+                    type="text"
+                    value={aiSettings.base_url || ""}
+                    onChange={(e) =>
+                      setAiSettings({ ...aiSettings, base_url: e.target.value })
+                    }
+                    placeholder="http://localhost:11434 หรือ https://api.custom-llm.com/v1"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                </div>
+              )}
+
+              {/* MCP Tool Execution Toggle */}
+              <div className="md:col-span-2 p-3 rounded-lg bg-blue-50/60 border border-blue-200 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Wrench className="w-4 h-4 text-blue-600" />
+                  <div>
+                    <div className="text-xs font-bold text-blue-950">
+                      อนุญาตให้ AI เรียกใช้งาน Central IAM & Spoke MCP Tools
+                    </div>
+                    <div className="text-[10px] text-blue-700">
+                      เปิดให้ AI ดึงข้อมูล Ghost Accounts, สถานะระบบลูก (MTPulse/IRM), Health Check และ Audit Logs แบบเรียลไทม์
+                    </div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={aiSettings.allow_mcp_tools}
+                  onChange={(e) =>
+                    setAiSettings({ ...aiSettings, allow_mcp_tools: e.target.checked })
+                  }
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                />
+              </div>
+
+              {/* System Prompt Persona */}
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  System Prompt & Agent Constraints (คำสั่งกำกับพฤติกรรม AI)
+                </label>
+                <textarea
+                  rows={2}
+                  value={aiSettings.system_prompt || ""}
+                  onChange={(e) =>
+                    setAiSettings({ ...aiSettings, system_prompt: e.target.value })
+                  }
+                  placeholder="กำหนดกรอบการตอบ เช่น You are Central IAM Enterprise Copilot for Window Asia..."
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 font-sans"
+                />
+              </div>
+            </div>
+
+            {/* Save Button & Feedback Message */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+              {aiSaveMessage ? (
+                <div className="text-xs text-emerald-600 font-bold flex items-center space-x-1">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{aiSaveMessage}</span>
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-500">
+                  ระบบรองรับ Fallback ดึงข้อมูลผ่าน MCP Tools อัตโนมัติแม้ยังไม่มี API Key ภายนอก
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={aiSaving}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition flex items-center space-x-1.5 cursor-pointer shadow-sm disabled:opacity-50"
+              >
+                {aiSaving ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                <span>{aiSaving ? "กำลังบันทึก..." : "บันทึกการตั้งค่า AI Copilot"}</span>
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

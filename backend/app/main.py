@@ -13,6 +13,7 @@ from app.api.v1.audit_logs import router as audit_logs_router
 from app.api.v1.oauth import router as oauth_router
 from app.api.v1.well_known import router as well_known_router
 from app.api.v1.agent import router as agent_router
+from app.api.v1.ai import router as ai_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,6 +60,7 @@ app.include_router(applications_router, prefix=settings.API_V1_PREFIX)
 app.include_router(audit_logs_router, prefix=settings.API_V1_PREFIX)
 app.include_router(oauth_router, prefix=settings.API_V1_PREFIX)
 app.include_router(agent_router, prefix=settings.API_V1_PREFIX)
+app.include_router(ai_router, prefix=settings.API_V1_PREFIX)
 
 # Register Model Context Protocol (MCP) Router & Remote Transport
 from app.mcp import create_remote_mcp_app, mcp_router

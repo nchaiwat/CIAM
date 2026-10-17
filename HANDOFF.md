@@ -6,8 +6,8 @@
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 60/60 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 40 - Phase 1: CIAM Core MCP Server)
+> **Test Integrity:** Backend Pytest: 67/67 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready (Sprint 40 - Central IAM MCP Server, In-House AI Copilot & Spoke Framework Spec v2.8.0)
 
 ---
 
@@ -15,20 +15,19 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Central IAM Core MCP Server & IDE Bridge (Sprint 40 - Phase 1):**
-   - **Official MCP 2.x Server:** ติดตั้งแพ็กเกจ `mcp` (v2.3) พัฒนาโมดูล `backend/app/mcp/server.py` รองรับการเชื่อมต่อกับ AI Agents (Antigravity IDE, Cursor, Claude Desktop)
-   - **8 Actionable Enterprise Tools:**
-     1. `ciam_health_check`: ตรวจสอบสถานะ Online, Latency และ Spoke SSO Status ของทุกระบบ (IRM, MTPulse, SAP B1, pfSense, M365, AD)
-     2. `ciam_list_users`: ค้นหารายชื่อพนักงาน แผนก สถานะ และระบบลูกที่ได้รับสิทธิ์
-     3. `ciam_get_ghost_accounts`: ตรวจจับบัญชีผี (Discrepancy) ที่ถูกปิดใน AD แต่ยังมีสิทธิ์ตกค้างในระบบลูก
-     4. `ciam_get_spoke_data`: ตรวจสอบข้อมูลเฉพาะของระบบลูก เช่น ดึงข้อมูลช่าง MT แต่ละเจ้าบน MTPulse หรือบัญชีใน IRM
-     5. `ciam_deprovision_user`: คำสั่ง 1-Click Offboard ตัดสิทธิ์พนักงานออกจากทุกระบบทันที พร้อมออกรหัสใบรับรอง
-     6. `ciam_reactivate_user`: คำสั่งคืนสิทธิ์พนักงาน Re-enable ใน AD และระบบลูกในคลิกเดียว
-     7. `ciam_get_audit_logs`: ตรวจสอบ Security Audit Trail และ Governance Logs
-     8. `ciam_dispatch_spoke_command`: ออกคำสั่งเข้าคิว Mode C Outbound Agent (`REQUEST_FULL_SYNC`, `DISABLE_USER`)
-   - **Remote Cloud Transport (SSE over HTTPS):** พัฒนาโมดูล `backend/app/mcp/remote.py` เชื่อมต่อเข้ากับ FastAPI (`/mcp/sse` และ `/mcp/messages/`) พร้อม `RemoteMcpAuthMiddleware` ป้องกันความปลอดภัยด้วย Bearer Token (Admin JWT หรือ MCP Key) ทำให้สามารถต่อจากเครื่อง Local / Laptop ไปหา Cloud VPS Production ได้ 100%
-   - **Template การเชื่อมต่อ IDE ครบ 3 รูปแบบ (`mcp_config.json`):** รองรับทั้ง Cloud HTTPS SSE, Local Stdio, และ SSH Tunnel Bridge
-   - **Test Suite ครบ 100%:** เพิ่มชุดทดสอบ `backend/tests/test_mcp_server.py` ครอบคลุมทั้ง Tools, Remote SSE endpoint และ Auth Guard ผ่านครบ 9/9 tests (รวมทั้งระบบ 61/61 passed 100%)
+1. **Central IAM In-House AI Copilot, Remote MCP Server & Spoke Framework (Sprint 40):**
+   - **Phase 1: Central IAM Core MCP Server (Remote Cloud Transport):**
+     - พัฒนา MCP Server ด้วย SDK `mcp` (v2.3) ติดตั้ง 8 Enterprise Tools (`ciam_health_check`, `ciam_list_users`, `ciam_get_ghost_accounts`, `ciam_get_spoke_data`, `ciam_deprovision_user`, `ciam_reactivate_user`, `ciam_get_audit_logs`, `ciam_dispatch_spoke_command`)
+     - รองรับการเชื่อมต่อข้าม Cloud ผ่าน Remote SSE Transport (`https://ciam.windowasia.com/mcp/sse`) ป้องกันด้วย `RemoteMcpAuthMiddleware` รองรับ Bearer token (Admin JWT, `MCP_API_KEY`)
+     - มีไฟล์คอนฟิก `mcp_config.json` สำหรับเชื่อมต่อ Cursor, Antigravity IDE, Claude Desktop
+   - **Phase 2: In-House AI Copilot & Settings UI บนหน้าเว็บ Central IAM:**
+     - สร้าง Backend AI Engine: `schemas/ai.py`, `services/ai_service.py`, `api/v1/ai.py` รองรับ Provider ยอดนิยม (Google Gemini, OpenAI, Anthropic, Local Ollama, Custom API) พร้อม Zero-Cost Fallback ทำงานร่วมกับ MCP Tools อัตโนมัติแม้ไม่มี External API Key
+     - สร้างหน้าจอตั้งค่าใน `settings/page.tsx`: Section **AI Copilot & Intelligence Engine** มีปุ่ม On/Off Toggle, ช่องกรอกและ Masking API Key, และปุ่ม **[ ⚡ ทดสอบเชื่อมต่อ (Test Connection) ]**
+     - สร้าง Floating Chat Widget `components/ai/CiamCopilotWidget.tsx` ฝังลงใน `AppShell.tsx` แสดงผลเมื่อเปิดใช้งาน AI Copilot เท่านั้น
+   - **Phase 3: Spoke Enterprise Integration Specification (v2.8.0):**
+     - อัปเดต [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) เป็นเวอร์ชัน **2.8.0**
+     - เพิ่ม **หมวด E: ข้อกำหนดมาตรฐานการพัฒนา In-App AI Copilot & MCP Tools ประจำระบบลูก** ให้คำแนะนำในการสร้างตาราง `system_settings` (`ai_copilot_enabled`, `ai_api_key`), กฎการปิดหน้า Chat เมื่อไม่มี Key, และโค้ดตัวอย่าง Backend/Frontend สำหรับทีมผู้พัฒนาระบบลูก (MTPulse, IRM, QMS, SAP B1 Service)
+   - **Test Suite 100%:** Pytest ผ่าน 67/67 tests (100%), Frontend TypeScript `npx tsc --noEmit` 0 errors (100%)
 2. **Spoke UI Consolidation & AD Sync 500 Fix (Sprint 39):**
    - **ลบสวิตช์ซ้ำซ้อนใน Modal:** นำสวิตช์เปิด/ปิด Spoke ออกจากป๊อปอัปตั้งค่าระบบ (`applications/page.tsx`) เนื่องจากหน้าการ์ดหลักมีสวิตช์เปิด/ปิดอยู่แล้ว และปรับฟอร์มส่วนหัวเป็น 3 คอลัมน์กว้างสบายตา
    - **รวมปุ่มตั้งค่าระบบลูกเป็นการตั้งค่าเดียว (Unified Settings Modal):** รวมปุ่มแยกตามประเภทระบบ (`SAP B1`, `AD Settings`, `M365`) เข้าเป็นปุ่มเดียว `[ ⚙️ ตั้งค่าเชื่อมต่อ ]` โดยเมื่อกดปุ่ม ระบบจะสลับไปแท็บที่ถูกต้องของระบบนั้นๆ โดยอัตโนมัติ (AD_PROXY, SAP_B1, M365, SSO, M2M)

@@ -740,6 +740,24 @@ export const ciamApi = {
       method: "PUT",
       body: JSON.stringify({ check_interval_seconds }),
     }),
+
+  // AI Copilot & Intelligence Engine
+  getAICopilotSettings: () => fetchApi<AICopilotSettings>("/ai/settings"),
+  updateAICopilotSettings: (payload: AICopilotSettingsUpdate) =>
+    fetchApi<AICopilotSettings>("/ai/settings", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  testAICopilotConnection: (payload: AITestRequest) =>
+    fetchApi<AITestResponse>("/ai/test", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  sendAIChat: (payload: AIChatRequest) =>
+    fetchApi<AIChatResponse>("/ai/chat", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };
 
 export const api = ciamApi;
@@ -907,5 +925,57 @@ export interface AdMonitorState {
   last_message: string;
   check_interval_seconds: number;
 }
+
+export interface AICopilotSettings {
+  enabled: boolean;
+  provider: string;
+  model: string;
+  api_key_masked?: string | null;
+  has_api_key: boolean;
+  base_url?: string | null;
+  system_prompt?: string | null;
+  allow_mcp_tools: boolean;
+}
+
+export interface AICopilotSettingsUpdate {
+  enabled?: boolean;
+  provider?: string;
+  model?: string;
+  api_key?: string;
+  base_url?: string;
+  system_prompt?: string;
+  allow_mcp_tools?: boolean;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant" | "system" | "tool";
+  content: string;
+  tool_calls?: any[] | null;
+}
+
+export interface AIChatRequest {
+  messages: ChatMessage[];
+  session_id?: string;
+}
+
+export interface AIChatResponse {
+  message: ChatMessage;
+  tools_used: string[];
+  session_id?: string;
+}
+
+export interface AITestRequest {
+  provider?: string;
+  model?: string;
+  api_key?: string;
+  base_url?: string;
+}
+
+export interface AITestResponse {
+  success: boolean;
+  message: string;
+  latency_ms?: number;
+}
+
 
 

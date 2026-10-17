@@ -710,3 +710,29 @@ FRONTEND_URL=http://localhost:3000
   }
 }
 ```
+
+---
+
+## 23. Central IAM In-House AI Copilot & Spoke Framework (Sprint 40)
+
+### 23.1 In-House AI Copilot Architecture
+* **Frontend Widget:** `frontend/src/components/ai/CiamCopilotWidget.tsx` ฝังอยู่ใน `AppShell.tsx` เรนเดอร์เป็น Floating Assistant Drawer หรูหรา พร้อมสถานะ On/Off อัตโนมัติตาม `ai_copilot_settings`
+* **System Settings Configuration:** หน้า `frontend/src/app/settings/page.tsx` มี Section **AI Copilot & Intelligence Engine** สำหรับ:
+  - สวิตช์ Master Toggle เปิด/ปิดหน้าต่างแชท (`enabled`)
+  - เลือก Provider: Google Gemini, OpenAI, Anthropic, Local Ollama, Custom API
+  - กำหนด Model Identifier: e.g. `gemini-1.5-flash`, `gpt-4o-mini`, `deepseek-r1`
+  - กรอกและ Masking API Key พร้อมปุ่ม **[ ⚡ ทดสอบเชื่อมต่อ (Test Connection) ]**
+  - สวิตช์เปิด/ปิดให้ AI เรียกใช้ Central IAM & Spoke MCP Tools (`allow_mcp_tools`)
+* **Backend Engine:**
+  - Schemas: `backend/app/schemas/ai.py`
+  - Service: `backend/app/services/ai_service.py`
+  - Router: `backend/app/api/v1/ai.py` (`GET /settings`, `PUT /settings`, `POST /test`, `POST /chat`)
+* **Zero External Cost Fallback:** หากไม่มีการตั้งค่า API Key หรือ API ภายนอกขัดข้อง ระบบจะสลับไปใช้ **Central IAM Rule-based Intelligence Engine** โดยประมวลผลคำถามผู้ใช้และดึงข้อมูลสดผ่าน MCP Tools (`ciam_health_check`, `ciam_get_ghost_accounts`, `ciam_list_users`, `ciam_get_spoke_data`) คืนกลับมาได้ 100%
+
+### 23.2 Spoke Framework Standard (หมวด E ใน Spec v2.8.0)
+* ระบบลูก (MTPulse, IRM, QMS, SAP B1 Service) ที่ต้องการมีหน้าต่างแชท AI ประจำระบบ ต้องปฏิบัติตามมาตรฐานกลาง:
+  1. เก็บการตั้งค่าลงในตาราง `system_settings`
+  2. ต้องซ่อนหน้าต่างหรือปุ่มแชทอัตโนมัติหาก `ai_copilot_enabled == false`
+  3. API Key ต้องผ่านการ Masking เสมอ
+  4. สามารถเชื่อมต่อกับ Central IAM MCP Server ผ่าน Remote SSE (`https://ciam.windowasia.com/mcp/sse`) ด้วย Bearer token เพื่อเรียกใช้ Enterprise Tools ส่วนกลางได้
+

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import CiamCopilotWidget from "@/components/ai/CiamCopilotWidget";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -130,6 +131,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </footer>
       </div>
+
+      {/* Central IAM AI Copilot Floating Assistant */}
+      <CiamCopilotWidget />
     </div>
   );
 }
