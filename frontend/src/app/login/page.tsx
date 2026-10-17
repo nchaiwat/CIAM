@@ -18,6 +18,11 @@ import {
   QrCode,
 } from "lucide-react";
 import { ciamApi } from "@/lib/api";
+import {
+  checkSessionExpiration,
+  clearSessionStorage,
+  markSessionActivity,
+} from "@/lib/session";
 
 export default function EmployeeLoginPage() {
   const router = useRouter();
@@ -28,6 +33,7 @@ export default function EmployeeLoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [redirectTarget, setRedirectTarget] = useState("/portal");
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -37,14 +43,43 @@ export default function EmployeeLoginPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const redir = params.get("redirect");
+      const isExpired = params.get("expired") === "1";
+      const isLoggedOut = params.get("logged_out") === "1";
+      const reason = params.get("reason");
+
       if (redir && !redir.includes("/login") && redir !== "/" && redir !== "/admin") {
         setRedirectTarget(redir);
       }
 
-      // Check if already authenticated
+      if (isExpired) {
+        clearSessionStorage();
+        if (reason === "idle_timeout") {
+          setSessionNotice(
+            "เซสชันหมดเวลาเนื่องจากไม่มีการเคลื่อนไหวเกินกำหนด (30 นาที) ระบบได้ทำการออกจากระบบอัตโนมัติเพื่อความปลอดภัย กรุณาเข้าสู่ระบบใหม่อีกครั้ง"
+          );
+        } else {
+          setSessionNotice(
+            "เซสชันการใช้งานของคุณหมดอายุแล้ว ระบบได้ทำการออกจากระบบอัตโนมัติ กรุณาเข้าสู่ระบบใหม่อีกครั้ง"
+          );
+        }
+        return;
+      }
+
+      if (isLoggedOut) {
+        clearSessionStorage();
+        setSessionNotice("ออกจากระบบเรียบร้อยแล้ว กรุณาลงชื่อเข้าใช้ใหม่เมื่อต้องการเข้าใช้งาน");
+        return;
+      }
+
+      // Check if already authenticated with a non-expired session
       const existingToken = localStorage.getItem("ciam_token");
       const existingUser = localStorage.getItem("ciam_user");
       if (existingToken && existingUser) {
+        const sessionStatus = checkSessionExpiration();
+        if (sessionStatus.expired) {
+          clearSessionStorage();
+          return;
+        }
         try {
           const user = JSON.parse(existingUser);
           if (user.role === "PORTAL_USER" || !redir || redir === "/" || redir === "/admin") {
@@ -68,6 +103,7 @@ export default function EmployeeLoginPage() {
 
     setSubmitting(true);
     setErrorMsg(null);
+    setSessionNotice(null);
 
     try {
       const res = await ciamApi.loginAdmin({
@@ -75,9 +111,10 @@ export default function EmployeeLoginPage() {
         password,
       });
 
-      // Save token & user metadata in browser storage
+      // Save token, user metadata & initial activity timestamp in browser storage
       localStorage.setItem("ciam_token", res.access_token);
       localStorage.setItem("ciam_user", JSON.stringify(res.user));
+      markSessionActivity();
 
       setSuccess(true);
       setTimeout(() => {
@@ -206,6 +243,14 @@ export default function EmployeeLoginPage() {
               </p>
             </div>
           </div>
+
+          {/* Session Expired / Logged Out Notice */}
+          {sessionNotice && !errorMsg && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-start gap-2.5 text-left animate-in fade-in zoom-in-95 duration-200 shadow-sm">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-800 leading-snug font-medium">{sessionNotice}</div>
+            </div>
+          )}
 
           {/* Error Alert Message */}
           {errorMsg && (

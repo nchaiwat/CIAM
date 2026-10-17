@@ -28,11 +28,25 @@ import {
   Search,
   X,
   AlertTriangle,
+  Clock,
 } from "lucide-react";
 import { api, PortalAppItem, AdminUserOut } from "@/lib/api";
+import {
+  useSessionWatchdog,
+  checkSessionExpiration,
+  clearSessionStorage,
+  markSessionActivity,
+} from "@/lib/session";
 
 export default function PortalPage() {
   const router = useRouter();
+  const { remainingSeconds } = useSessionWatchdog({ enabled: true });
+
+  const formatRemainingTime = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remSecs = secs % 60;
+    return `${String(mins).padStart(2, "0")}:${String(remSecs).padStart(2, "0")}`;
+  };
 
   const [apps, setApps] = useState<PortalAppItem[]>([]);
   const [currentUser, setCurrentUser] = useState<AdminUserOut | null>(null);
@@ -130,9 +144,10 @@ export default function PortalPage() {
 
   // Load user profile & authorized apps
   useEffect(() => {
-    const token = localStorage.getItem("ciam_token");
-    if (!token) {
-      router.replace("/login?redirect=/portal");
+    const sessionCheck = checkSessionExpiration();
+    if (sessionCheck.expired) {
+      clearSessionStorage();
+      router.replace(`/login?expired=1&reason=${sessionCheck.reason || "token_expired"}&redirect=/portal`);
       return;
     }
 
@@ -175,9 +190,8 @@ export default function PortalPage() {
 
   const handleLogout = () => {
     if (confirm("คุณต้องการออกจากระบบ Single Sign-On หรือไม่?")) {
-      localStorage.removeItem("ciam_token");
-      localStorage.removeItem("ciam_user");
-      router.replace("/login");
+      clearSessionStorage();
+      router.replace("/login?logged_out=1");
     }
   };
 
@@ -382,6 +396,19 @@ export default function PortalPage() {
 
         {/* User Profile & Actions */}
         <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* Live Session Auto-Logoff Timer Pill */}
+          <div
+            className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors ${
+              remainingSeconds <= 300
+                ? "bg-amber-50 text-amber-800 border-amber-300 animate-pulse"
+                : "bg-slate-50/90 text-slate-600 border-slate-200/90"
+            }`}
+            title="ระบบจะออกจากระบบอัตโนมัติทันทีเมื่อครบกำหนดเวลาว่าง (Idle 30 นาที) หรือเมื่อเซสชันหมดอายุ โดยไม่ต้องรอการคลิก"
+          >
+            <Clock className={`w-3.5 h-3.5 ${remainingSeconds <= 300 ? "text-amber-600" : "text-sky-600"}`} />
+            <span>เซสชัน {formatRemainingTime(remainingSeconds)}</span>
+          </div>
+
           {/* Admin Console Switcher (Visible to Admins only) */}
           {isAdmin && (
             <Link

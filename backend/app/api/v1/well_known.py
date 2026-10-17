@@ -27,5 +27,6 @@ def get_openid_configuration(request: Request):
         authorization_endpoint=f"{base_url}/api/v1/oauth/authorize",
         token_endpoint=f"{base_url}/api/v1/oauth/token",
         userinfo_endpoint=f"{base_url}/api/v1/oauth/userinfo",
+        end_session_endpoint=f"{base_url}/api/v1/oauth/logout",
         jwks_uri=f"{base_url}/.well-known/jwks.json"
     )

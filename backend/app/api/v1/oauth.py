@@ -658,3 +658,34 @@ def portal_exchange_code(
         user_info=user_info
     )
 
+
+@router.get("/logout")
+@router.post("/logout")
+def oidc_end_session_logout(
+    request: Request,
+    post_logout_redirect_uri: Optional[str] = Query(None, description="Optional URI to redirect after logout"),
+    client_id: Optional[str] = Query(None, description="Optional OIDC client_id"),
+    state: Optional[str] = Query(None, description="Optional state parameter"),
+):
+    """
+    OIDC RP-Initiated Logout (End-Session) Endpoint.
+    Redirects the browser to the Central IAM Frontend Logout handler (/oauth/logout)
+    which clears the browser's CIAM session storage and redirects to /login (or post_logout_redirect_uri).
+    """
+    params = {}
+    if post_logout_redirect_uri:
+        params["post_logout_redirect_uri"] = post_logout_redirect_uri
+    if client_id:
+        params["client_id"] = client_id
+    if state:
+        params["state"] = state
+
+    qs = urlencode(params)
+    target = f"/oauth/logout?{qs}" if qs else "/oauth/logout"
+
+    if request.query_params.get("format") == "json":
+        return {"status": "LOGGED_OUT", "redirect_to": target}
+
+    return RedirectResponse(url=target, status_code=status.HTTP_302_FOUND)
+
+

@@ -19,6 +19,11 @@ import {
   UserCheck,
 } from "lucide-react";
 import { api, AuthorizeMeta } from "@/lib/api";
+import {
+  checkSessionExpiration,
+  clearSessionStorage,
+  markSessionActivity,
+} from "@/lib/session";
 
 function AuthorizeContent() {
   const searchParams = useSearchParams();
@@ -87,11 +92,16 @@ function AuthorizeContent() {
         return;
       }
 
-      // Check if user already has an active CIAM session
+      // Check if user already has a valid, non-expired CIAM session
       const savedToken = typeof window !== "undefined" ? localStorage.getItem("ciam_token") : null;
       const savedUserStr = typeof window !== "undefined" ? localStorage.getItem("ciam_user") : null;
+      const sessionStatus = checkSessionExpiration();
 
-      if (savedToken && !switchAccount) {
+      if (savedToken && sessionStatus.expired) {
+        clearSessionStorage();
+      }
+
+      if (savedToken && !sessionStatus.expired && !switchAccount) {
         let cachedUser = null;
         try {
           if (savedUserStr) cachedUser = JSON.parse(savedUserStr);
@@ -117,6 +127,7 @@ function AuthorizeContent() {
           });
 
           if (ssoRes.status === "SUCCESS" && ssoRes.redirect_to) {
+            markSessionActivity();
             if (ssoRes.user) {
               setSeamlessUser(ssoRes.user);
             }
@@ -140,10 +151,7 @@ function AuthorizeContent() {
           }
 
           // In case session expired (401) or invalid, silently clear and drop back to login form
-          if (typeof window !== "undefined") {
-            localStorage.removeItem("ciam_token");
-            localStorage.removeItem("ciam_user");
-          }
+          clearSessionStorage();
           setCheckingSeamless(false);
           setSeamlessUser(null);
         }
@@ -156,10 +164,7 @@ function AuthorizeContent() {
   }, [clientId, redirectUri, responseType, scope, state, codeChallenge, codeChallengeMethod, switchAccount]);
 
   const handleSwitchAccount = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("ciam_token");
-      localStorage.removeItem("ciam_user");
-    }
+    clearSessionStorage();
     setSwitchAccount(true);
     setCheckingSeamless(false);
     setSeamlessUser(null);
@@ -198,6 +203,7 @@ function AuthorizeContent() {
           if (res.user) {
             localStorage.setItem("ciam_user", JSON.stringify(res.user));
           }
+          markSessionActivity();
         }
 
         if (res.user) {

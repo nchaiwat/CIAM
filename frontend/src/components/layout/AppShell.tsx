@@ -5,6 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import CiamCopilotWidget from "@/components/ai/CiamCopilotWidget";
+import {
+  useSessionWatchdog,
+  checkSessionExpiration,
+  clearSessionStorage,
+} from "@/lib/session";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -15,12 +20,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const isStandalone =
     pathname?.startsWith("/oauth/authorize") ||
+    pathname?.startsWith("/oauth/logout") ||
     pathname?.startsWith("/portal") ||
     pathname === "/login" ||
     pathname?.startsWith("/admin/login");
 
+  // Run proactive session watchdog for protected Admin Console routes
+  useSessionWatchdog({ enabled: !isStandalone && authChecked });
+
   useEffect(() => {
     const token = localStorage.getItem("ciam_token");
+    const sessionCheck = checkSessionExpiration();
+    const isTokenValid = Boolean(token && !sessionCheck.expired);
+    if (token && sessionCheck.expired) {
+      clearSessionStorage();
+    }
+
     const storedUserStr = localStorage.getItem("ciam_user");
     let userRole = "";
     if (storedUserStr) {
@@ -32,21 +47,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     if (pathname?.startsWith("/portal")) {
       // Portal requires authentication
-      if (!token) {
-        router.replace("/login?redirect=/portal");
+      if (!isTokenValid) {
+        const expiredParam = token && sessionCheck.expired ? "expired=1&" : "";
+        router.replace(`/login?${expiredParam}redirect=/portal`);
         return;
       }
       setAuthChecked(true);
     } else if (pathname === "/login") {
-      // If already logged in, redirect to portal
-      if (token) {
+      // If already logged in with valid active session, redirect to portal
+      if (isTokenValid) {
         router.replace("/portal");
         return;
       }
       setAuthChecked(true);
     } else if (pathname?.startsWith("/admin/login")) {
       // Forward any /admin/login traffic directly to unified /login
-      if (token) {
+      if (isTokenValid) {
         if (userRole === "PORTAL_USER") {
           router.replace("/portal");
         } else {
@@ -59,10 +75,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       return;
     } else if (!isStandalone) {
       // Protected Admin Console routes (/, /directory, /applications, /offboarding, /audit-logs)
-      if (!token) {
-        // Clean redirect to /login (no query if visiting root "/", preserve query if deep admin link)
-        const redirectParam = pathname && pathname !== "/" ? `?redirect=${encodeURIComponent(pathname)}` : "";
-        router.replace(`/login${redirectParam}`);
+      if (!isTokenValid) {
+        const expiredQuery = token && sessionCheck.expired ? "expired=1" : "";
+        const redirectQuery =
+          pathname && pathname !== "/" ? `redirect=${encodeURIComponent(pathname)}` : "";
+        const combined = [expiredQuery, redirectQuery].filter(Boolean).join("&");
+        router.replace(`/login${combined ? `?${combined}` : ""}`);
         return;
       }
       if (userRole === "PORTAL_USER") {

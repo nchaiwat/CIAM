@@ -68,6 +68,7 @@ class OpenIDConfigurationResponse(BaseModel):
     authorization_endpoint: str
     token_endpoint: str
     userinfo_endpoint: str
+    end_session_endpoint: Optional[str] = None
     jwks_uri: str
     response_types_supported: List[str] = ["code"]
     subject_types_supported: List[str] = ["public"]
