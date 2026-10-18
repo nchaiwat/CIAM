@@ -48,7 +48,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       // Returning to /portal from an App Client: only verify JWT token validity (do NOT apply old idle time)
       if (!tokenReturnCheck.valid) {
         if (token) clearSessionStorage();
-        const expiredParam = token && tokenReturnCheck.reason === "token_expired" ? "expired=1&" : "";
+        const expiredParam =
+          token && tokenReturnCheck.reason === "token_expired"
+            ? "expired=1&reason=token_expired&"
+            : "";
         router.replace(`/login?${expiredParam}redirect=/portal`);
         return;
       }
@@ -85,7 +88,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     } else if (!isStandalone) {
       // Protected Admin Console routes (/, /directory, /applications, /offboarding, /audit-logs)
       if (!isTokenValid) {
-        const expiredQuery = token && sessionCheck.expired ? "expired=1" : "";
+        const expiredQuery =
+          token &&
+          sessionCheck.expired &&
+          (sessionCheck.reason === "token_expired" || sessionCheck.reason === "idle_timeout")
+            ? `expired=1&reason=${sessionCheck.reason}`
+            : "";
         const redirectQuery =
           pathname && pathname !== "/" ? `redirect=${encodeURIComponent(pathname)}` : "";
         const combined = [expiredQuery, redirectQuery].filter(Boolean).join("&");

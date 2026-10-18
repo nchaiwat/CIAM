@@ -785,6 +785,6 @@ FRONTEND_URL=http://localhost:3000
   1. เมื่อผู้ใช้กดเข้าสู่ระบบลูกจากหน้า `/portal` (`handleLaunch`) หรือผ่าน `/oauth/authorize` ระบบเรียก `markNavigatingToSpokeApp()` (`ciam_in_spoke_app = "1"`) เพื่อพักการนับ Idle Time ของ SSO Portal
   2. เมื่อผู้ใช้ทำงานใน App Client (เช่น IRM, MTPulse, QMS) นานเท่าใดก็ตาม (ตราบใดที่ JWT 8 ชม. ยังไม่หมดอายุ) แล้วกด **Logout จากหน้า App Client**:
      - หาก App Client พากลับมาที่ `https://ciam.windowasia.com/portal` (เช่น IRM) หรือเรียก `/oauth/logout`: ระบบตรวจเช็คด้วย `checkTokenValidOnReturn()` (ไม่คิด Idle Time ย้อนหลัง) แล้วพาผู้ใช้เข้าสู่หน้า **SSO Portal (`/portal`) ของ CIAM ทันที** พร้อมรีเซ็ตเวลา Idle Time ของหน้า SSO Portal เริ่มนับ `30:00` นาทีใหม่!
-  3. เฉพาะเมื่อผู้ใช้กดปุ่ม `ออกจากระบบ` บนหน้า SSO Portal เอง (หรือส่ง `?full_logout=1`) เท่านั้น ระบบจึงจะล้างเซสชัน CIAM และพาไปหน้า `/login`
+  3. **เมื่อผู้ใช้กดปุ่ม `ออกจากระบบ` เอง (`performManualLogout`):** ระบบตั้งแฟล็ก `ciam_manual_logout` ป้องกันไม่ให้ Watchdog ยิง `expired=1` แทรกขณะปิดป๊อปอัปยืนยัน และเปิดหน้า `/login` แบบสะอาด **โดยไม่แสดงกล่องแจ้งเตือนเรื่องเซสชันหมดอายุ** (กล่องแจ้งเตือนสีเหลืองจะแสดงเฉพาะเมื่อหมดเวลา `idle_timeout`, `token_expired`, หรือ `revoked` จริงเท่านั้น)
 
 

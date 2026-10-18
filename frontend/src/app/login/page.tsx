@@ -46,12 +46,29 @@ export default function EmployeeLoginPage() {
       const isExpired = params.get("expired") === "1";
       const isLoggedOut = params.get("logged_out") === "1";
       const reason = params.get("reason");
+      let isManualLogout = false;
+      try {
+        isManualLogout = sessionStorage.getItem("ciam_manual_logout") === "1";
+        if (isManualLogout) {
+          sessionStorage.removeItem("ciam_manual_logout");
+        }
+      } catch {}
 
       if (redir && !redir.includes("/login") && redir !== "/" && redir !== "/admin") {
         setRedirectTarget(redir);
       }
 
-      if (isExpired) {
+      // User logged out intentionally: keep the login screen completely clean with no warning banner
+      if (isLoggedOut || isManualLogout || reason === "missing") {
+        clearSessionStorage();
+        setSessionNotice(null);
+        try {
+          window.history.replaceState({}, "", "/login");
+        } catch {}
+        return;
+      }
+
+      if (isExpired && (reason === "idle_timeout" || reason === "token_expired" || reason === "revoked")) {
         clearSessionStorage();
         if (reason === "idle_timeout") {
           setSessionNotice(
@@ -62,12 +79,6 @@ export default function EmployeeLoginPage() {
             "เซสชันการใช้งานของคุณหมดอายุแล้ว ระบบได้ทำการออกจากระบบอัตโนมัติ กรุณาเข้าสู่ระบบใหม่อีกครั้ง"
           );
         }
-        return;
-      }
-
-      if (isLoggedOut) {
-        clearSessionStorage();
-        setSessionNotice("ออกจากระบบเรียบร้อยแล้ว กรุณาลงชื่อเข้าใช้ใหม่เมื่อต้องการเข้าใช้งาน");
         return;
       }
 

@@ -33,7 +33,7 @@ function OAuthLogoutContent() {
         ) {
           window.location.replace(postLogoutRedirectUri);
         } else {
-          router.replace("/login?logged_out=1&redirect=/portal");
+          router.replace("/login");
         }
       }, 300);
       return () => clearTimeout(timer);

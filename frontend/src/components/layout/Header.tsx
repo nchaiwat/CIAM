@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Menu, LogOut, User, Shield, PanelLeft, Rocket, Activity } from "lucide-react";
 import { AdminUserOut, ciamApi } from "@/lib/api";
 import AdminProfileModal from "@/components/profile/AdminProfileModal";
+import { performManualLogout } from "@/lib/session";
 
 interface HeaderProps {
   collapsed: boolean;
@@ -58,9 +59,7 @@ export default function Header({
 
   const handleLogout = () => {
     if (confirm("คุณต้องการออกจากระบบ Central IAM หรือไม่?")) {
-      localStorage.removeItem("ciam_token");
-      localStorage.removeItem("ciam_user");
-      router.push("/login");
+      performManualLogout("/login");
     }
   };
 

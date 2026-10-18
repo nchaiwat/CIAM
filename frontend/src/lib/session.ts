@@ -18,6 +18,9 @@ const STORAGE_TOKEN_KEY = "ciam_token";
 const STORAGE_USER_KEY = "ciam_user";
 const STORAGE_LAST_ACTIVITY_KEY = "ciam_last_activity";
 const STORAGE_IN_SPOKE_APP_KEY = "ciam_in_spoke_app";
+const SESSION_MANUAL_LOGOUT_KEY = "ciam_manual_logout";
+
+let isManualLogoutInProgress = false;
 
 /**
  * Decode JWT payload safely on the client without external libraries.
@@ -53,6 +56,8 @@ export function getJwtExpirationMs(token: string | null): number | null {
 export function markSessionActivity(): void {
   if (typeof window === "undefined") return;
   try {
+    isManualLogoutInProgress = false;
+    sessionStorage.removeItem(SESSION_MANUAL_LOGOUT_KEY);
     localStorage.setItem(STORAGE_LAST_ACTIVITY_KEY, String(Date.now()));
     localStorage.removeItem(STORAGE_IN_SPOKE_APP_KEY);
   } catch {}
@@ -81,6 +86,19 @@ export function clearSessionStorage(): void {
     localStorage.removeItem(STORAGE_LAST_ACTIVITY_KEY);
     localStorage.removeItem(STORAGE_IN_SPOKE_APP_KEY);
   } catch {}
+}
+
+/**
+ * Perform an intentional user-initiated logout without triggering any session-expired warning.
+ */
+export function performManualLogout(targetUrl: string = "/login"): void {
+  if (typeof window === "undefined") return;
+  try {
+    isManualLogoutInProgress = true;
+    sessionStorage.setItem(SESSION_MANUAL_LOGOUT_KEY, "1");
+  } catch {}
+  clearSessionStorage();
+  window.location.replace(targetUrl);
 }
 
 /**
@@ -169,6 +187,14 @@ export function triggerImmediateLogoff(
   reason: "token_expired" | "idle_timeout" | "missing" | "revoked" = "token_expired"
 ): void {
   if (typeof window === "undefined") return;
+
+  // If the user explicitly clicked Logout, never hijack the navigation with an expired=1 notice
+  try {
+    if (isManualLogoutInProgress || sessionStorage.getItem(SESSION_MANUAL_LOGOUT_KEY) === "1") {
+      return;
+    }
+  } catch {}
+
   clearSessionStorage();
 
   const currentPath = window.location.pathname || "/portal";
@@ -182,6 +208,13 @@ export function triggerImmediateLogoff(
   }
 
   const redirectTarget = encodeURIComponent(currentPath + (window.location.search || ""));
+
+  // If token was simply missing (e.g. cleared in another tab or never logged in), redirect cleanly without expired=1
+  if (reason === "missing") {
+    window.location.replace(`/login?redirect=${redirectTarget}`);
+    return;
+  }
+
   window.location.replace(`/login?expired=1&reason=${reason}&redirect=${redirectTarget}`);
 }
 

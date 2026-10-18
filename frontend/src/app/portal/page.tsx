@@ -37,6 +37,7 @@ import {
   clearSessionStorage,
   markSessionActivity,
   markNavigatingToSpokeApp,
+  performManualLogout,
 } from "@/lib/session";
 
 export default function PortalPage() {
@@ -148,7 +149,11 @@ export default function PortalPage() {
     const tokenCheck = checkTokenValidOnReturn();
     if (!tokenCheck.valid) {
       clearSessionStorage();
-      router.replace(`/login?expired=1&reason=${tokenCheck.reason || "token_expired"}&redirect=/portal`);
+      if (tokenCheck.reason === "token_expired") {
+        router.replace(`/login?expired=1&reason=token_expired&redirect=/portal`);
+      } else {
+        router.replace(`/login?redirect=/portal`);
+      }
       return;
     }
 
@@ -194,8 +199,7 @@ export default function PortalPage() {
 
   const handleLogout = () => {
     if (confirm("คุณต้องการออกจากระบบ Single Sign-On หรือไม่?")) {
-      clearSessionStorage();
-      router.replace("/login?logged_out=1");
+      performManualLogout("/login");
     }
   };
 
