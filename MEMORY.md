@@ -789,4 +789,22 @@ FRONTEND_URL=http://localhost:3000
 * **Remote MCP Routing (`/api/v1/mcp/sse` & `/mcp/sse`):**
   - Mount MCP SSE Starlette App ทั้งที่ `/api/v1/mcp` และ `/mcp` ใน `backend/app/main.py` พร้อมเพิ่ม `PathPrefix(/mcp)` ใน `docker-compose.yml` และ `ARG BACKEND_INTERNAL_URL=http://api:8001` ใน `frontend/Dockerfile` เพื่อให้การเรียก `/mcp/sse` และ `/api/v1/mcp/sse` วิ่งตรงถึง FastAPI Backend เสมอ (ตอบ `401 UNAUTHORIZED_MCP_ACCESS` เมื่อไม่มี Token แทนที่จะเกิด 500 จาก Next.js Rewrite)
 
+### 24.7 AI Copilot Full Analytical Parity, RBAC Enforcement & Strict Read-Only Governance (Sprint 47)
+* **1. 100% Read & Analytical Parity (ทำงานด้านการแสดงผลและคำนวณได้ครบทุกเมนูของ CIAM):**
+  - `ciam_get_dashboard_summary`: คำนวณ KPI หน้าแดชบอร์ด, ตารางแยกตามแผนก (`department_breakdown`), ตารางบัญชีรายระบบลูก (`spoke_account_breakdown`), จำนวน Ghost Accounts, Approved Exceptions และเวลาตั้งต้น Auto-Sync
+  - `ciam_list_users`: ค้นหาและนับจำนวนผู้ใช้งาน แยกตามสถานะ AD, แผนก, ระบบลูก (`app_code`) และค้นหาชื่อเฉพาะเจาะจง
+  - `ciam_get_ghost_accounts`: ตรวจสอบ Ghost Accounts รายระบบลูก พร้อมรายการ `approved_exceptions` และเหตุผลการอนุโลม
+  - `ciam_get_spoke_data`: ตรวจสอบสถานะระบบลูก (`ALL` หรือรายแอป), โหมดการเชื่อมต่อ และคิวคำสั่ง (`SpokeCommandQueue`)
+  - `ciam_preview_offboarding_impact`: จำลองผลกระทบก่อนการตัดสิทธิ์ (`/offboarding` Impact Preview) แบบ Read-Only 100%
+  - `ciam_get_audit_logs`: ค้นหาและสรุปสถิติประวัติ Audit Logs พร้อมตัวกรอง `action_type` และ `search`
+  - `ciam_get_portal_my_access`: แสดงข้อมูลตัวตนและรายการระบบลูกที่ได้รับอนุญาตบน SSO Portal ของตนเอง
+* **2. Strict Role-Based Access Control (ทำงานตามสิทธิ์ของผู้ใช้ที่ล็อกอิน):**
+  - `SUPER_ADMIN` / `ADMIN` / `AUDITOR`: สามารถสอบถามและคำนวณข้อมูลได้ทุกฟังก์ชันข้างต้น
+  - `PORTAL_USER`: ถูกบังคับด้วย RBAC Guard ใน `execute_internal_mcp_tool` ให้เรียกได้เฉพาะ `ciam_get_portal_my_access(username=current_user.username)` ของตนเองเท่านั้น
+* **3. Strict Read-Only / Zero-Mutation Policy (ห้ามแก้ไข/อัปเดต/ตัดสิทธิ์ใดๆ เด็ดขาด):**
+  - บล็อก `FORBIDDEN_MUTATION_TOOLS` (`ciam_deprovision_user`, `ciam_reactivate_user`, `ciam_dispatch_spoke_command`) ในระดับโค้ดของ AI Copilot
+  - เมื่อผู้ใช้พิมพ์สั่งให้แก้ไข/ลบ/ตัดสิทธิ์ (`is_mutation_command_intent`) ระบบจะปฏิเสธการแก้ไข แสดงเฉพาะข้อมูลจำลองผลกระทบ (Read-Only Impact Preview) และแนะนำเมนูบนหน้าเว็บให้ผู้ใช้ไปกดดำเนินการเอง
+* **4. Spoke Framework Standard (`SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` หมวด E ข้อ 11.1–11.4):**
+  - บันทึกขอบเขต 3 เสาหลัก (100% Analytical Parity, Role-Based Access Control, Strict Read-Only / Zero-Mutation) ลงในสเปกกลางเพื่อให้ทุกระบบลูกในเครือปฏิบัติตามมาตรฐานเดียวกัน
+
 

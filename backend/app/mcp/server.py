@@ -85,6 +85,134 @@ def ciam_health_check() -> Dict[str, Any]:
         db.close()
 
 
+@mcp_server.tool()
+def ciam_get_dashboard_summary() -> Dict[str, Any]:
+    """
+    Retrieve complete Central IAM Dashboard KPIs, analytical calculations, department breakdown,
+    spoke account statistics, approved exceptions count, and sync schedule configuration.
+    Strictly Read-Only analytical tool covering all metrics displayed on the CIAM Dashboard (/),
+    Directory (/directory), and Connected Apps (/applications).
+    """
+    from sqlalchemy import func
+    from app.models.setting import SystemSetting
+
+    db = SessionLocal()
+    try:
+        total_identities = db.query(MasterIdentity).count()
+        active_ad_identities = db.query(MasterIdentity).filter(MasterIdentity.is_active_in_ad == True).count()
+        inactive_ad_identities = total_identities - active_ad_identities
+
+        active_spoke_accounts = (
+            db.query(AppAccountMapping)
+            .filter(AppAccountMapping.is_active_in_app == True)
+            .count()
+        )
+        deprovisioned_spoke_accounts = (
+            db.query(AppAccountMapping)
+            .filter(AppAccountMapping.is_active_in_app == False)
+            .count()
+        )
+
+        apps = db.query(ConnectedApplication).filter(ConnectedApplication.is_active == True).all()
+        connected_systems_total = len(apps)
+        connected_systems_online = sum(1 for a in apps if (a.health_status or "ONLINE") == "ONLINE")
+
+        discrepancies = find_account_discrepancies(db)
+        ghost_accounts_count = len(discrepancies)
+
+        approved_exceptions_count = (
+            db.query(AppAccountMapping)
+            .filter(AppAccountMapping.is_approved_exception == True)
+            .count()
+        )
+
+        # Department breakdown calculation
+        dept_rows = (
+            db.query(
+                MasterIdentity.department,
+                MasterIdentity.is_active_in_ad,
+                func.count(MasterIdentity.id),
+            )
+            .group_by(MasterIdentity.department, MasterIdentity.is_active_in_ad)
+            .all()
+        )
+        dept_stats: Dict[str, Dict[str, int]] = {}
+        for dept_name, is_act, cnt in dept_rows:
+            d_key = (dept_name or "ไม่ระบุแผนก (Unassigned)").strip()
+            if d_key not in dept_stats:
+                dept_stats[d_key] = {"total": 0, "active_in_ad": 0, "inactive_in_ad": 0}
+            dept_stats[d_key]["total"] += cnt
+            if is_act:
+                dept_stats[d_key]["active_in_ad"] += cnt
+            else:
+                dept_stats[d_key]["inactive_in_ad"] += cnt
+
+        department_breakdown = [
+            {"department": k, **v}
+            for k, v in sorted(dept_stats.items(), key=lambda x: (-x[1]["total"], x[0]))
+        ]
+
+        # Per-spoke account summary calculation
+        spoke_breakdown = []
+        for app in apps:
+            total_mapped = db.query(AppAccountMapping).filter(AppAccountMapping.application_id == app.id).count()
+            active_mapped = (
+                db.query(AppAccountMapping)
+                .filter(AppAccountMapping.application_id == app.id, AppAccountMapping.is_active_in_app == True)
+                .count()
+            )
+            spoke_breakdown.append({
+                "app_code": app.app_code,
+                "app_name": app.app_name,
+                "connector_type": app.connector_type,
+                "health_status": app.health_status or "ONLINE",
+                "spoke_sso_status": getattr(app, "spoke_sso_status", "ACTIVE") or "ACTIVE",
+                "network_policy": getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
+                "total_accounts": total_mapped,
+                "active_accounts": active_mapped,
+                "inactive_accounts": total_mapped - active_mapped,
+            })
+
+        # Sync schedule setting
+        sync_setting = db.query(SystemSetting).filter_by(setting_key="auto_sync_schedule").first()
+        sync_schedule = sync_setting.setting_value if (sync_setting and sync_setting.setting_value) else {"enabled": True, "cron_time": "04:00"}
+
+        summary_text = (
+            f"สรุปภาพรวมระบบ Central IAM (Dashboard KPI): มีตัวตนทั้งหมด {total_identities} รายการ "
+            f"(Active ใน AD {active_ad_identities} รายการ, Inactive/Local {inactive_ad_identities} รายการ), "
+            f"บัญชีในระบบลูกที่เปิดใช้งาน (Active Accounts) {active_spoke_accounts} บัญชี, "
+            f"บัญชีที่ระงับสิทธิ์แล้ว {deprovisioned_spoke_accounts} บัญชี, "
+            f"ระบบที่เชื่อมต่อออนไลน์ {connected_systems_online}/{connected_systems_total} ระบบ, "
+            f"พบความเสี่ยงบัญชีผี (Ghost Accounts) {ghost_accounts_count} รายการ "
+            f"(มีข้อยกเว้นที่อนุมัติแล้ว {approved_exceptions_count} รายการ)"
+        )
+
+        return {
+            "mode": "READ_ONLY_ANALYTICS",
+            "summary": summary_text,
+            "kpi": {
+                "total_identities": total_identities,
+                "active_ad_identities": active_ad_identities,
+                "inactive_ad_identities": inactive_ad_identities,
+                "active_accounts": active_spoke_accounts,
+                "deprovisioned_accounts": deprovisioned_spoke_accounts,
+                "connected_systems_online": connected_systems_online,
+                "connected_systems_total": connected_systems_total,
+                "ghost_accounts_count": ghost_accounts_count,
+                "approved_exceptions_count": approved_exceptions_count,
+            },
+            "spoke_breakdown": spoke_breakdown,
+            "department_breakdown": department_breakdown[:25],
+            "total_departments": len(department_breakdown),
+            "auto_sync_schedule": sync_schedule,
+        }
+    except Exception as e:
+        logger.error("Error in ciam_get_dashboard_summary: %s", e)
+        return {"status": "ERROR", "message": str(e)}
+    finally:
+        db.close()
+
+
 # ---------------------------------------------------------------------------
 # 2. User Directory & Identity Management Tools
 # ---------------------------------------------------------------------------
@@ -498,20 +626,32 @@ async def ciam_reactivate_user(
 
 
 # ---------------------------------------------------------------------------
-# 7. Audit Log Inspection Tool
+# 7. Audit Log Inspection Tool (Read-Only)
 # ---------------------------------------------------------------------------
 @mcp_server.tool()
-def ciam_get_audit_logs(limit: int = 15, action_type: str = "") -> Dict[str, Any]:
+def ciam_get_audit_logs(limit: int = 15, action_type: str = "", search: str = "") -> Dict[str, Any]:
     """
     Retrieve security audit trail and governance event logs from Central IAM.
-    Filterable by action type (e.g. 'DISABLE_USER', 'ENABLE_USER', 'SYSTEM_SETTING', 'LOGIN').
+    Filterable by action type (e.g. 'DISABLE_USER', 'ENABLE_USER', 'SYSTEM_SETTING', 'LOGIN') and search keyword.
     """
     db = SessionLocal()
     try:
+        total_logs = db.query(IamAuditLog).count()
         query = db.query(IamAuditLog)
         if action_type:
             query = query.filter(IamAuditLog.action_type.ilike(f"%{action_type.strip()}%"))
+        if search:
+            s_clean = f"%{search.strip()}%"
+            query = query.filter(
+                or_(
+                    IamAuditLog.actor_username.ilike(s_clean),
+                    IamAuditLog.target_username.ilike(s_clean),
+                    IamAuditLog.affected_app_code.ilike(s_clean),
+                    IamAuditLog.reason.ilike(s_clean),
+                )
+            )
 
+        matched_count = query.count()
         logs = query.order_by(desc(IamAuditLog.created_at)).limit(limit).all()
         records = [
             {
@@ -527,11 +667,148 @@ def ciam_get_audit_logs(limit: int = 15, action_type: str = "") -> Dict[str, Any
             for log in logs
         ]
         return {
+            "mode": "READ_ONLY",
+            "total_audit_logs_in_system": total_logs,
+            "matched_count": matched_count,
             "returned_count": len(records),
             "logs": records
         }
     except Exception as e:
         logger.error("Error in ciam_get_audit_logs: %s", e)
+        return {"status": "ERROR", "message": str(e)}
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# 7B. Offboarding Impact Preview Tool (100% Read-Only Simulation)
+# ---------------------------------------------------------------------------
+@mcp_server.tool()
+def ciam_preview_offboarding_impact(username: str) -> Dict[str, Any]:
+    """
+    Read-Only Offboarding Center Impact Analysis (mirrors /offboarding preview).
+    Calculates and displays which Active Directory and Spoke accounts would be affected
+    if an employee were to be offboarded, WITHOUT modifying or deactivating any account.
+    """
+    db = SessionLocal()
+    try:
+        clean_u = (username or "").strip()
+        if not clean_u:
+            return {"status": "NOT_FOUND", "message": "กรุณาระบุชื่อผู้ใช้งาน (username) ที่ต้องการจำลองผลกระทบ"}
+
+        identity = (
+            db.query(MasterIdentity)
+            .filter(
+                or_(
+                    MasterIdentity.username.ilike(clean_u),
+                    MasterIdentity.full_name.ilike(f"%{clean_u}%"),
+                    MasterIdentity.email.ilike(f"%{clean_u}%"),
+                )
+            )
+            .first()
+        )
+        if not identity:
+            return {"status": "NOT_FOUND", "message": f"ไม่พบบัญชีผู้ใช้ '{clean_u}' ในระบบ Central IAM"}
+
+        mappings = (
+            db.query(AppAccountMapping, ConnectedApplication)
+            .join(ConnectedApplication, AppAccountMapping.application_id == ConnectedApplication.id)
+            .filter(AppAccountMapping.identity_id == identity.id)
+            .all()
+        )
+
+        affected_systems = []
+        active_impact_count = 0
+        for m, app in mappings:
+            if m.is_active_in_app:
+                active_impact_count += 1
+            affected_systems.append({
+                "app_code": app.app_code,
+                "app_name": app.app_name,
+                "connector_type": app.connector_type,
+                "app_username": m.app_username,
+                "group_name": m.app_group_name,
+                "is_active_in_app": m.is_active_in_app,
+                "is_approved_exception": m.is_approved_exception,
+            })
+
+        return {
+            "mode": "READ_ONLY_SIMULATION_NO_CHANGES_MADE",
+            "governance_notice": "ข้อมูลนี้เป็นการจำลองผลกระทบแบบ Read-Only เท่านั้น ระบบ AI Copilot ไม่ได้รับอนุญาตให้ทำการระงับสิทธิ์หรือแก้ไขข้อมูลจริง หากต้องการดำเนินการจริง กรุณาไปที่เมนู 'ศูนย์ระงับสิทธิ์ (/offboarding)' บนหน้าเว็บ",
+            "username": identity.username,
+            "full_name": identity.full_name,
+            "department": identity.department,
+            "email": identity.email,
+            "is_active_in_ad": identity.is_active_in_ad,
+            "total_linked_systems": len(affected_systems),
+            "active_accounts_that_would_be_revoked": active_impact_count,
+            "affected_systems": affected_systems,
+        }
+    except Exception as e:
+        logger.error("Error in ciam_preview_offboarding_impact: %s", e)
+        return {"status": "ERROR", "message": str(e)}
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# 7C. Self-Service SSO Portal Access Inspection Tool (RBAC Scoped)
+# ---------------------------------------------------------------------------
+@mcp_server.tool()
+def ciam_get_portal_my_access(username: str) -> Dict[str, Any]:
+    """
+    Read-Only Self-Service SSO Portal inspection for a specific user.
+    Returns only that user's identity profile and the SSO applications they are authorized to access on /portal.
+    """
+    db = SessionLocal()
+    try:
+        clean_u = (username or "").strip()
+        identity = db.query(MasterIdentity).filter(MasterIdentity.username.ilike(clean_u)).first()
+        if not identity:
+            return {
+                "mode": "READ_ONLY_SELF_SERVICE",
+                "username": clean_u,
+                "status": "NOT_FOUND",
+                "message": f"ไม่พบข้อมูลตัวตนของ '{clean_u}'",
+            }
+
+        mappings = (
+            db.query(AppAccountMapping, ConnectedApplication)
+            .join(ConnectedApplication, AppAccountMapping.application_id == ConnectedApplication.id)
+            .filter(
+                AppAccountMapping.identity_id == identity.id,
+                AppAccountMapping.is_active_in_app == True,
+                ConnectedApplication.is_active == True,
+            )
+            .all()
+        )
+
+        authorized_apps = [
+            {
+                "app_code": app.app_code,
+                "app_name": app.app_name,
+                "app_username": m.app_username,
+                "role_or_group": m.app_group_name,
+                "health_status": app.health_status or "ONLINE",
+                "sso_enabled": bool(app.sso_enabled),
+                "network_policy": getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
+                "base_url": app.base_url,
+            }
+            for m, app in mappings
+        ]
+
+        return {
+            "mode": "READ_ONLY_SELF_SERVICE",
+            "username": identity.username,
+            "full_name": identity.full_name,
+            "department": identity.department,
+            "email": identity.email,
+            "is_active_in_ad": identity.is_active_in_ad,
+            "authorized_apps_count": len(authorized_apps),
+            "authorized_apps": authorized_apps,
+        }
+    except Exception as e:
+        logger.error("Error in ciam_get_portal_my_access: %s", e)
         return {"status": "ERROR", "message": str(e)}
     finally:
         db.close()

@@ -104,3 +104,50 @@ def test_ai_chat_specific_username_lookup():
     tool_name, tool_args = intent
     assert tool_name == "ciam_list_users"
     assert tool_args.get("search") == "Chaiwat.N"
+
+
+def test_ai_copilot_dashboard_summary_and_calculations(admin_token):
+    from app.services.ai_service import execute_internal_mcp_tool, detect_tool_intent
+
+    intent = detect_tool_intent("สรุปภาพรวม Dashboard KPI และสถิติแยกตามแผนก")
+    assert intent is not None
+    assert intent[0] == "ciam_get_dashboard_summary"
+
+    summary_res = execute_internal_mcp_tool("ciam_get_dashboard_summary", {})
+    assert summary_res.get("mode") == "READ_ONLY_ANALYTICS"
+    assert "kpi" in summary_res
+    assert "department_breakdown" in summary_res
+    assert "spoke_breakdown" in summary_res
+
+
+def test_ai_copilot_strict_read_only_blocks_mutations():
+    from app.services.ai_service import execute_internal_mcp_tool, is_mutation_command_intent
+
+    # Direct attempt to execute write tools must be blocked by governance guard
+    for forbidden_tool in ("ciam_deprovision_user", "ciam_reactivate_user", "ciam_dispatch_spoke_command"):
+        res = execute_internal_mcp_tool(forbidden_tool, {"username": "someone"})
+        assert res.get("status") == "READ_ONLY_POLICY_BLOCKED"
+        assert res.get("governance_policy") == "STRICT_READ_ONLY_NO_MUTATION"
+
+    # Natural language mutation commands must be flagged as mutation intent
+    assert is_mutation_command_intent("ช่วยระงับสิทธิ์พนักงาน Chaiwat.N ให้หน่อย") is True
+    assert is_mutation_command_intent("ช่วยลบบัญชีผู้ใช้คนนี้ออกจากระบบ") is True
+    assert is_mutation_command_intent("ถ้าจะระงับสิทธิ์ Chaiwat.N จะมีผลกระทบอะไรบ้าง") is False
+
+
+def test_ai_copilot_rbac_portal_user_restriction():
+    from types import SimpleNamespace
+    from app.services.ai_service import execute_internal_mcp_tool
+
+    portal_user = SimpleNamespace(username="portal.tester", full_name="Portal Tester", role="PORTAL_USER")
+
+    # Portal user trying to access company-wide ghost accounts or audit logs must be blocked by RBAC
+    ghost_attempt = execute_internal_mcp_tool("ciam_get_ghost_accounts", {}, current_user=portal_user)
+    assert ghost_attempt.get("status") == "RBAC_FORBIDDEN"
+    assert ghost_attempt.get("user_role") == "PORTAL_USER"
+
+    # Portal user querying own access is allowed in self-service mode
+    self_access = execute_internal_mcp_tool("ciam_get_portal_my_access", {}, current_user=portal_user)
+    assert self_access.get("mode") == "READ_ONLY_SELF_SERVICE"
+    assert self_access.get("username") == "portal.tester"
+

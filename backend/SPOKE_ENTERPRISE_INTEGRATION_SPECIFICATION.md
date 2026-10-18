@@ -1785,13 +1785,39 @@ api.interceptors.response.use(
 
 ## 11. หมวด E: ข้อกำหนดมาตรฐานการพัฒนา In-App AI Copilot & MCP Tools ประจำระบบลูก (Spoke In-App AI Assistant & Dynamic Settings Standard)
 
-เอกสารหมวดนี้กำหนดข้อกำหนดสถาปัตยกรรมสำหรับระบบลูก (Spoke Applications เช่น MTPulse, IRM, QMS, SAP B1 Service) ที่ประสงค์จะมี**หน้าต่างแชท AI ผู้ช่วยอัจฉริยะส่วนตัว (Private In-App AI Copilot)** ประจำระบบของตนเอง เพื่อช่วยให้ผู้ใช้งานสามารถสอบถามข้อมูลงาน, ออกเอกสาร, สรุปสถิติ หรือสั่งการระบบผ่านภาษาธรรมชาติได้อย่างปลอดภัย
+เอกสารหมวดนี้กำหนดข้อกำหนดสถาปัตยกรรมและขอบเขตธรรมาภิบาล (Governance Framework) สำหรับ Central IAM และระบบลูก (Spoke Applications เช่น MTPulse, IRM, QMS, SAP B1 Service) ที่ประสงค์จะมี**หน้าต่างแชท AI ผู้ช่วยอัจฉริยะส่วนตัว (Private In-App AI Copilot)** ประจำระบบของตนเอง เพื่อช่วยให้ผู้ใช้งานสามารถสอบถามข้อมูลงาน ค้นหา ตรวจสอบ และคำนวณสรุปสถิติผ่านภาษาธรรมชาติได้อย่างปลอดภัยตามมาตรฐาน ISO/IEC 27001
 
 ---
 
-### 11.1 กฎเหล็กการเปิด/ปิดหน้าต่างแชทและการตั้งค่า (Dynamic On/Off & Zero Hardcoded Keys)
+### 11.1 ขอบเขตอำนาจหน้าที่และกฎเหล็กด้านธรรมาภิบาลของ AI Copilot (AI Copilot Functional Scope, RBAC & Strict Read-Only Governance)
 
-> ⚠️ **ข้อบังคับระดับองค์กร:**
+> 🛡️ **กฎเหล็กขอบเขตการทำงานของ AI Copilot (Mandatory Enterprise AI Governance Scope):**
+>
+> 1. **ทำงานได้ครบทุกฟังก์ชันการแสดงผลและการคำนวณของแอปพลิเคชัน 100% (Full Read & Analytical Parity):**
+>    - ข้อมูลใดๆ ที่หน้าจอของแอปพลิเคชันนั้นมีการแสดงผล (Dashboard, ตารางรายการ, ข้อมูลเชิงลึก, สถานะระบบ) หรือมีการคำนวณ (KPI, ยอดรวม, สัดส่วนแยกตามแผนก/หมวดหมู่, การจำลองผลกระทบ Preview) **AI Copilot ต้องมี Read-Only Tools ที่สามารถดึงข้อมูล คำนวณ และสรุปแสดงผลตอบผู้ใช้ได้ครบทุกฟังก์ชัน**
+> 2. **ทำงานภายใต้ขอบเขตสิทธิ์ของผู้ใช้งานจริงอย่างเคร่งครัด (Strict Role-Based Access Control - RBAC):**
+>    - ทุกคำขอที่เรียกใช้ AI Copilot (`/api/ai/chat`) ต้องแนบบริบทสิทธิ์ของผู้ใช้ที่ล็อกอินอยู่จริง (`current_user.role`, `current_user.username`, `current_user.department`) เข้าไปกรองข้อมูลในระดับ Tool Execution เสมอ
+>    - ผู้ใช้งานมีสิทธิ์มองเห็นหรือเข้าถึงฟังก์ชันใดในแอปพลิเคชัน AI Copilot จะสามารถดึงและคำนวณข้อมูลได้**เฉพาะตามสิทธิ์ของผู้ใช้นั้นเท่านั้น** ห้ามแสดงข้อมูลข้ามสิทธิ์หรือข้อมูลระดับผู้ดูแลระบบแก่ผู้ใช้ทั่วไปโดยเด็ดขาด (Zero Privilege Escalation)
+> 3. **ห้ามทำการ Update, Create, Modify, หรือ Delete ข้อมูลใดๆ บนแอปพลิเคชันโดยเด็ดขาด (Strict Read-Only / Zero-Mutation Policy):**
+>    - คำว่า *"ทำงานได้ทุกอย่างตามสิทธิ์"* **จำกัดเฉพาะการอ่าน ค้นหา คำนวณ วิเคราะห์ และจำลองผลกระทบ (Read-Only & Analytical Operations) เท่านั้น**
+>    - **ห้ามมิให้ AI Copilot ทำการเพิ่มข้อมูล (INSERT/Create), แก้ไขหรืออัปเดตข้อมูล (UPDATE/Modify), ลบข้อมูล (DELETE), อนุมัติเอกสาร, เปลี่ยนสถานะรายการ, หรือสั่งระงับสิทธิ์ใดๆ ลงในฐานข้อมูลของแอปพลิเคชันโดยเด็ดขาด**
+>    - ทั้งในระดับโค้ด (`Tool Executor Guard`) และ `System Prompt` ต้องบล็อกคำสั่งประเภทแก้ไขข้อมูล (Mutation Tools) ทั้งหมด
+>    - หากผู้ใช้งานพิมพ์สั่งให้ AI ทำการแก้ไข อัปเดต หรือลบข้อมูล AI Copilot ต้อง **ปฏิเสธการแก้ไขข้อมูลอย่างสุภาพ** โดยชี้แจงว่าเป็นนโยบายความปลอดภัย Read-Only ของระบบ จากนั้นให้แสดงข้อมูลปัจจุบันหรือจำลองผลกระทบ (Preview) ให้ดู และ**แนะนำเมนูหรือปุ่มบนหน้าจอเว็บ UI เพื่อให้ผู้ใช้ไปกดดำเนินการด้วยตนเอง**
+> 4. **ความถูกต้องแม่นยำจากฐานข้อมูลจริง (Zero-Hallucination & Anti-Sycophancy Policy):**
+>    - AI Copilot ต้องอ้างอิงตัวเลขและสถานะจากผลลัพธ์ของ Tool ที่ดึงจากฐานข้อมูลจริงเท่านั้น ห้ามคาดเดา แต่งข้อมูล หรือเออออตามตัวเลขที่ผิดพลาดที่ผู้ใช้ถามนำ
+
+| มิติการกำกับดูแล (Governance Dimension) | สิ่งที่ AI Copilot ต้องทำได้ (Allowed - 100%) | สิ่งที่ห้าม AI Copilot ทำเด็ดขาด (Forbidden - 0%) |
+| :--- | :--- | :--- |
+| **1. ขอบเขตฟังก์ชัน (Functional Coverage)** | ดึงข้อมูล แสดงผล คำนวณสถิติ สรุป KPI และจำลองผลกระทบ (Preview) ได้ครบทุกหน้าจอที่มีในแอป | ห้ามมีฟังก์ชันที่ไปเปลี่ยนแปลงสถานะของข้อมูลจริงในฐานข้อมูล |
+| **2. การควบคุมสิทธิ์ (RBAC Enforcement)** | แสดงและคำนวณข้อมูลตาม Role และขอบเขตสิทธิ์ของ Token ผู้ใช้ที่กำลังสนทนาอยู่ | ห้ามดึงข้อมูลข้ามแผนก/ข้ามสิทธิ์ หรือใช้สิทธิ์ Admin แทนผู้ใช้ทั่วไป |
+| **3. การกระทำต่อข้อมูล (Data Operations)** | `SELECT`, `COUNT`, `SUM`, `AVG`, `GROUP BY`, และการคำนวณวิเคราะห์ (Read-Only) | **ห้าม** `INSERT`, `UPDATE`, `DELETE`, `PATCH`, การอนุมัติ, หรือการเปลี่ยนการตั้งค่า |
+| **4. เมื่อผู้ใช้สั่งให้แก้ไขข้อมูล (User Mutation Request)** | ปฏิเสธการแก้ไขอย่างสุภาพ + แสดงข้อมูล Preview ปัจจุบัน + แนะนำเมนูบนหน้าเว็บให้ผู้ใช้กดทำเอง | ห้ามรันคำสั่งแก้ไขข้อมูลให้โดยอัตโนมัติจากแชท |
+
+---
+
+### 11.2 กฎเหล็กการเปิด/ปิดหน้าต่างแชทและการตั้งค่า (Dynamic On/Off & Zero Hardcoded Keys)
+
+> ⚠️ **ข้อบังคับด้านการตั้งค่าระบบ:**
 > 1. **ห้ามเปิดหน้าต่างแชทหรือแสดง Floating Chat Widget หาก `ai_copilot_enabled == false` หรือยังไม่มี API Key:**  
 >    ระบบลูกต้องตรวจเช็คการตั้งค่าก่อนเรนเดอร์ UI เสมอ เพื่อป้องกันข้อผิดพลาดในการเรียกใช้ API และป้องกันพนักงานสับสน
 > 2. **ห้าม Hardcode AI API Key ลงในซอร์สโค้ด หรือไฟล์ `.env`:**  
@@ -1803,7 +1829,7 @@ api.interceptors.response.use(
 
 ---
 
-### 11.2 โครงสร้าง API Endpoints มาตรฐานสำหรับระบบลูก
+### 11.3 โครงสร้าง API Endpoints มาตรฐานสำหรับระบบลูก
 
 ระบบลูกที่รองรับ AI Copilot ต้องเปิด Endpoint 4 เส้นนี้ (หรือเทียบเท่า) ภายใต้สิทธิ์ Administrator:
 
@@ -1812,19 +1838,19 @@ api.interceptors.response.use(
 | `/api/settings/ai` | `GET` | ดึงค่าคอนฟิก AI ปัจจุบัน (API Key ต้องถูก Masking) | Admin เท่านั้น |
 | `/api/settings/ai` | `PUT` | บันทึกการตั้งค่า AI (เปิด/ปิด, เปลี่ยน Provider, อัปเดต API Key) | Admin เท่านั้น |
 | `/api/settings/ai/test` | `POST` | ทดสอบความถูกต้องของ API Key กับ Provider ที่เลือก | Admin เท่านั้น |
-| `/api/ai/chat` | `POST` | ส่งข้อความสนทนาไปยัง AI Engine พร้อมรับการประมวลผล Tool Calling | Authenticated Users |
+| `/api/ai/chat` | `POST` | ส่งข้อความสนทนาไปยัง AI Engine พร้อมรับการประมวลผล Read-Only Tool Calling ตามสิทธิ์ RBAC ของผู้ใช้ | Authenticated Users (RBAC Scoped) |
 
 ---
 
-### 11.3 การเชื่อมต่อ Central IAM Core MCP Server ผ่าน Remote Transport (SSE over HTTPS)
+### 11.4 การเชื่อมต่อ Central IAM Core MCP Server ผ่าน Remote Transport (SSE over HTTPS - Read-Only Tools)
 
-ระบบลูกสามารถเชื่อมต่อกับ Central IAM เพื่อตรวจสอบความปลอดภัยของบัญชีผู้ใช้ หรือดึงข้อมูลข้ามระบบผ่าน Remote Model Context Protocol (MCP) ด้วย Bearer Token:
+ระบบลูกหรือเครื่องมือของ Admin สามารถเชื่อมต่อกับ Central IAM เพื่อตรวจสอบความปลอดภัยของบัญชีผู้ใช้ หรือดึงข้อมูลวิเคราะห์ข้ามระบบผ่าน Remote Model Context Protocol (MCP) ด้วย Bearer Token:
 
 ```json
 {
   "mcpServers": {
     "central-iam-cloud": {
-      "url": "https://ciam.windowasia.com/mcp/sse",
+      "url": "https://ciam.windowasia.com/api/v1/mcp/sse",
       "headers": {
         "Authorization": "Bearer <CENTRAL_IAM_ADMIN_OR_M2M_SECRET>"
       }
@@ -1833,11 +1859,15 @@ api.interceptors.response.use(
 }
 ```
 
-เมื่อเชื่อมต่อแล้ว AI ประจำระบบลูกสามารถเรียกใช้ Enterprise Tools กลางได้ทันที:
-* `ciam_health_check`: ตรวจสอบสถานะ Online ของระบบเครือข่ายกลาง
-* `ciam_list_users`: ค้นหารายชื่อพนักงานและอีเมลจาก Active Directory
-* `ciam_get_ghost_accounts`: ตรวจสอบบัญชีผีที่ยังหลงเหลืออยู่ในระบบ
-* `ciam_get_spoke_data`: แลกเปลี่ยนข้อมูลกับระบบลูกอื่นๆ เช่น MTPulse หรือ IRM
+เมื่อเชื่อมต่อแล้ว AI Copilot สามารถเรียกใช้ Read-Only & Analytical Tools กลางได้ครบทุกมิติของระบบ:
+* `ciam_get_dashboard_summary`: ดึงตัวเลข KPI ภาพรวม, คำนวณสถิติแยกตามแผนก, สถิติบัญชีรายแอป และตารางเวลาซิงก์
+* `ciam_health_check`: ตรวจสอบสถานะ Online และ Latency ของระบบเครือข่ายกลางและระบบลูกทั้งหมด
+* `ciam_list_users`: ค้นหาและกรองรายชื่อพนักงาน, แผนก, สถานะ AD และสิทธิ์ในระบบลูก
+* `ciam_get_ghost_accounts`: ตรวจสอบบัญชีผี (Discrepancies) และข้อยกเว้นที่อนุมัติแล้ว
+* `ciam_get_spoke_data`: ตรวจสอบบัญชีและคิวคำสั่งของแต่ละระบบลูก (MTPulse, IRM, SAP B1, pfSense)
+* `ciam_preview_offboarding_impact`: จำลองผลกระทบก่อนการระงับสิทธิ์แบบ Read-Only (ไม่แก้ไขข้อมูลจริง)
+* `ciam_get_audit_logs`: ตรวจสอบและค้นหาประวัติการใช้งาน (Audit Trail)
+* `ciam_get_portal_my_access`: ตรวจสอบสิทธิ์การเข้าใช้งาน SSO Portal เฉพาะตัวตนของผู้ใช้ที่ล็อกอินอยู่ (สำหรับสิทธิ์ `PORTAL_USER`)
 
 ---
 

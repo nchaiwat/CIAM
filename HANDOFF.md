@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 17 ตุลาคม 2026 (Local Time: ~19:50 ICT)  
+> **Date Updated:** 18 ตุลาคม 2026 (Local Time: ~10:00 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 68/68 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready (Sprint 46 - Proactive Zero-Action Session Auto-Logoff Watchdog & OIDC Single Logout Return Flow)
+> **Test Integrity:** Backend Pytest: 71/71 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready (Sprint 47 - AI Copilot Full Analytical Parity, RBAC Enforcement & Strict Read-Only Governance in Spoke Framework)
 
 ---
 
@@ -15,7 +15,20 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Proactive Zero-Action Session Auto-Logoff Watchdog & App Client Logout Return to SSO Portal (Sprint 46):**
+1. **AI Copilot Full Analytical Parity, RBAC Enforcement & Strict Read-Only Governance (Sprint 47):**
+   - **100% Read & Analytical Parity (แสดงผลและคำนวณได้ครบทุกหน้าจอที่มีใน CIAM):**
+     - เพิ่ม MCP Tool `ciam_get_dashboard_summary()` ใน `backend/app/mcp/server.py` เพื่อให้ AI Copilot คำนวณและแสดง KPI ทั้งหมดของหน้าแดชบอร์ด (`/`) ได้แก่ จำนวนตัวตนรวม, Active/Inactive ใน AD, **ตารางสรุปผู้ใช้งานแยกตามแผนก (`department_breakdown`)**, สรุปจำนวนบัญชีรายระบบลูก (`spoke_account_breakdown`), จำนวน Ghost Accounts, จำนวน Approved Exceptions และตารางเวลา Auto-Sync (04:00 น.)
+     - เพิ่ม MCP Tool `ciam_preview_offboarding_impact(username)` สำหรับจำลองการตรวจสอบผลกระทบก่อนตัดสิทธิ์ (`/offboarding` Impact Preview) แบบ Read-Only 100%
+     - เพิ่ม MCP Tool `ciam_get_portal_my_access(username)` สำหรับตรวจสอบสิทธิ์ SSO Portal ของตนเอง (`/portal`) และเพิ่มตัวกรอง `search` ใน `ciam_get_audit_logs()`
+   - **Strict Role-Based Access Control (ทำงานตามสิทธิ์ของผู้ใช้ที่ล็อกอิน):**
+     - ใน `backend/app/services/ai_service.py` บังคับตรวจ `current_user.role`:
+       - `SUPER_ADMIN` / `ADMIN` / `AUDITOR`: เข้าถึงข้อมูลวิเคราะห์และแสดงผลได้ทุกฟังก์ชันของ CIAM
+       - `PORTAL_USER`: ถูกจำกัดสิทธิ์ให้เรียกได้เฉพาะ `ciam_get_portal_my_access` ของ `current_user.username` เองเท่านั้น ไม่สามารถดูข้อมูลพนักงานคนอื่น, Ghost Accounts หรือ Audit Logs ขององค์กรได้
+   - **Strict Read-Only / Zero-Mutation Policy (ห้ามแก้ไข/อัปเดต/ตัดสิทธิ์ใดๆ บนแอปเด็ดขาด):**
+     - กำหนด `READ_ONLY_ALLOWED_TOOLS` และ `FORBIDDEN_MUTATION_TOOLS` (`ciam_deprovision_user`, `ciam_reactivate_user`, `ciam_dispatch_spoke_command`) บล็อกในระดับโค้ด `execute_internal_mcp_tool()`
+     - เพิ่ม `is_mutation_command_intent()` เมื่อผู้ใช้สั่งให้ AI Copilot ตัดสิทธิ์/ปลดล็อก/ลบ/แก้ไขข้อมูล ระบบจะปฏิเสธการแก้ไขอย่างสุภาพ พร้อมรัน `ciam_preview_offboarding_impact` เพื่อแสดงข้อมูลผลกระทบแบบ Read-Only และแนะนำเมนูหน้าเว็บที่ถูกต้องให้ผู้ดูแลระบบไปกดดำเนินการเอง
+   - **บันทึกขอบเขต AI Copilot ลงใน Spoke Framework (`SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` หมวด E ข้อ 11.1–11.4):** กำหนดเป็นกฎเหล็กมาตรฐานกลางสำหรับ CIAM และทุกระบบลูก (Spoke Apps) พร้อมซิงก์ไฟล์เข้า `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`
+2. **Proactive Zero-Action Session Auto-Logoff Watchdog & App Client Logout Return to SSO Portal (Sprint 46):**
    - **สาเหตุปัญหาเดิม:** หน้า SSO Portal (`/portal`) และ Admin Console เดิมตรวจสอบเซสชันหมดอายุเฉพาะเมื่อผู้ใช้คลิกปุ่มที่ยิง API แล้วได้ HTTP 401 เท่านั้น (อายุ Token `ACCESS_TOKEN_EXPIRE_MINUTES = 480` นาที / 8 ชม.) หากเปิดหน้าจอทิ้งไว้เฉยๆ จะไม่ตัดออกจากระบบเอง
    - **สร้าง Proactive Session Watchdog (`frontend/src/lib/session.ts`):** ติดตั้งระบบจับเวลาถอยหลังแบบ Real-Time (`useSessionWatchdog`) ตรวจสอบ **Portal Idle Timeout (30 นาที)** และ **JWT Absolute Expiration (8 ชั่วโมง)** พร้อม Server Heartbeat (`/api/v1/auth/me` ทุก 60 วินาที) และ Cross-Tab Sync เมื่อเปิดหน้า SSO Portal ทิ้งไว้ครบ 30 นาทีโดยไม่ไปที่ระบบลูก ระบบจะสั่ง **Logoff ทันทีโดยไม่ต้องรอให้ User คลิกหรือกระทำการใดๆ** พร้อมแสดงป้ายนับเวลา `เซสชัน MM:SS` บนหัวเว็บ `/portal`
    - **ไม่คิด Idle Time ของ SSO Portal ขณะผู้ใช้อยู่ใน App Client (Spoke App) & กด Logout จาก App Client แล้วกลับมาหน้า `/portal` ทันที:**
