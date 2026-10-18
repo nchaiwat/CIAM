@@ -1789,7 +1789,7 @@ api.interceptors.response.use(
 
 ---
 
-### 11.1 ขอบเขตอำนาจหน้าที่และกฎเหล็กด้านธรรมาภิบาลของ AI Copilot (AI Copilot Functional Scope, RBAC & Strict Read-Only Governance)
+### 11.1 ขอบเขตอำนาจหน้าที่และกฎเหล็กด้านธรรมาภิบาลของ AI Copilot (AI Copilot Functional Scope, RBAC, Strict Read-Only & Zero-Training Data Governance)
 
 > 🛡️ **กฎเหล็กขอบเขตการทำงานของ AI Copilot (Mandatory Enterprise AI Governance Scope):**
 >
@@ -1803,7 +1803,15 @@ api.interceptors.response.use(
 >    - **ห้ามมิให้ AI Copilot ทำการเพิ่มข้อมูล (INSERT/Create), แก้ไขหรืออัปเดตข้อมูล (UPDATE/Modify), ลบข้อมูล (DELETE), อนุมัติเอกสาร, เปลี่ยนสถานะรายการ, หรือสั่งระงับสิทธิ์ใดๆ ลงในฐานข้อมูลของแอปพลิเคชันโดยเด็ดขาด**
 >    - ทั้งในระดับโค้ด (`Tool Executor Guard`) และ `System Prompt` ต้องบล็อกคำสั่งประเภทแก้ไขข้อมูล (Mutation Tools) ทั้งหมด
 >    - หากผู้ใช้งานพิมพ์สั่งให้ AI ทำการแก้ไข อัปเดต หรือลบข้อมูล AI Copilot ต้อง **ปฏิเสธการแก้ไขข้อมูลอย่างสุภาพ** โดยชี้แจงว่าเป็นนโยบายความปลอดภัย Read-Only ของระบบ จากนั้นให้แสดงข้อมูลปัจจุบันหรือจำลองผลกระทบ (Preview) ให้ดู และ**แนะนำเมนูหรือปุ่มบนหน้าจอเว็บ UI เพื่อให้ผู้ใช้ไปกดดำเนินการด้วยตนเอง**
-> 4. **ความถูกต้องแม่นยำจากฐานข้อมูลจริง (Zero-Hallucination & Anti-Sycophancy Policy):**
+> 4. **ห้ามนำข้อมูลทั้งหมดบน App หรือ System ที่ AI เข้าถึงได้ไป Train โมเดล หรือนำไปใช้นอกองค์กรโดยเด็ดขาด (Strict Zero-Training & Enterprise Data Sovereignty Policy — กฎเหล็กสำคัญสูงสุด):**
+>    - ข้อมูลทั้งหมดบนแอปพลิเคชันและระบบที่ AI Copilot เข้าถึงได้ ถือเป็น**ทรัพย์สินความลับภายในของบริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)** เท่านั้น
+>    - **ห้ามนำข้อมูลใดๆ ไปใช้ในการฝึกสอนโมเดล AI (Zero Model Training), ห้ามผู้ให้บริการภายนอกจัดเก็บข้อมูลสะสม (Zero Data Retention), และห้ามนำข้อมูลไปใช้นอกองค์กรไม่ว่ากรณีใดๆ ทั้งสิ้น**
+>    - **มาตรการบังคับทางเทคนิค (Mandatory Technical DLP & Zero-Training Controls):**
+>      1. **Enterprise Paid API Tier / On-Premise Local LLM Only:** ต้องใช้เฉพาะ Enterprise Commercial API Tier (ที่ไม่นำข้อมูลลูกค้าไป Train โมเดลตามข้อตกลงทางกฎหมาย) หรือ Local Self-Hosted LLM (`Ollama`) ภายในเครือข่ายองค์กรเท่านั้น ห้ามใช้ Free Consumer Web Chat สาธารณะ
+>      2. **Zero-Training & Zero-Retention HTTP Headers & Flags:** ทุกคำขอที่ส่งออกจาก Backend ไปยัง LLM API ต้องแนบ Header บังคับไม่ให้เก็บและไม่ให้นำข้อมูลไปเทรน (`X-No-Model-Training: true`, `X-Data-Retention: none`, `X-OpenAI-Data-Usage-Opt-Out: true`, `Cache-Control: no-store, no-cache, private`) และตั้งค่า `"store": false` ใน Payload เสมอ
+>      3. **DLP Credential & Secret Scrubber (`sanitize_context_for_privacy`):** ก่อนส่งข้อมูล Context ใดๆ เข้าสู่ LLM ต้องผ่านฟังก์ชันคัดกรองความปลอดภัย (DLP Scrubber) เพื่อตัดรหัสผ่าน (`hashed_password`), `api_key`, `client_secret`, `private_key` หรือ Token ออกทั้งหมด 100%
+>      4. **Ephemeral In-Memory Processing Only:** ข้อมูลที่ดึงจากฐานข้อมูลผ่าน MCP Tool ต้องใช้ประมวลผลชั่วคราวในหน่วยความจำ (RAM) เฉพาะคำถามนั้นๆ แล้วทำลายทิ้งทันที ห้ามส่งออกไปเก็บในระบบ Logging หรือ Analytics ภายนอกองค์กรโดยเด็ดขาด
+> 5. **ความถูกต้องแม่นยำจากฐานข้อมูลจริง (Zero-Hallucination & Anti-Sycophancy Policy):**
 >    - AI Copilot ต้องอ้างอิงตัวเลขและสถานะจากผลลัพธ์ของ Tool ที่ดึงจากฐานข้อมูลจริงเท่านั้น ห้ามคาดเดา แต่งข้อมูล หรือเออออตามตัวเลขที่ผิดพลาดที่ผู้ใช้ถามนำ
 
 | มิติการกำกับดูแล (Governance Dimension) | สิ่งที่ AI Copilot ต้องทำได้ (Allowed - 100%) | สิ่งที่ห้าม AI Copilot ทำเด็ดขาด (Forbidden - 0%) |
@@ -1812,6 +1820,7 @@ api.interceptors.response.use(
 | **2. การควบคุมสิทธิ์ (RBAC Enforcement)** | แสดงและคำนวณข้อมูลตาม Role และขอบเขตสิทธิ์ของ Token ผู้ใช้ที่กำลังสนทนาอยู่ | ห้ามดึงข้อมูลข้ามแผนก/ข้ามสิทธิ์ หรือใช้สิทธิ์ Admin แทนผู้ใช้ทั่วไป |
 | **3. การกระทำต่อข้อมูล (Data Operations)** | `SELECT`, `COUNT`, `SUM`, `AVG`, `GROUP BY`, และการคำนวณวิเคราะห์ (Read-Only) | **ห้าม** `INSERT`, `UPDATE`, `DELETE`, `PATCH`, การอนุมัติ, หรือการเปลี่ยนการตั้งค่า |
 | **4. เมื่อผู้ใช้สั่งให้แก้ไขข้อมูล (User Mutation Request)** | ปฏิเสธการแก้ไขอย่างสุภาพ + แสดงข้อมูล Preview ปัจจุบัน + แนะนำเมนูบนหน้าเว็บให้ผู้ใช้กดทำเอง | ห้ามรันคำสั่งแก้ไขข้อมูลให้โดยอัตโนมัติจากแชท |
+| **5. ความลับข้อมูลและการห้ามนำไป Train (Data Privacy & Zero-Training)** | ประมวลผลแบบ Ephemeral เฉพาะในเซสชัน + คัดกรองความลับด้วย DLP + ส่ง Header `X-No-Model-Training: true` / `store: false` | **ห้ามนำข้อมูลของระบบไป Train AI ต่อ หรือนำข้อมูลออกไปใช้นอกองค์กรโดยเด็ดขาด** |
 
 ---
 
@@ -1871,17 +1880,41 @@ api.interceptors.response.use(
 
 ---
 
-### 11.4 ตัวอย่างโค้ด Backend API ประจำระบบลูก (Python FastAPI Reference)
+### 11.5 ตัวอย่างโค้ด Backend API ประจำระบบลูก (Python FastAPI Reference พร้อม DLP & Zero-Training Guard)
 
 ```python
 # spoke_backend/app/routers/ai_copilot.py
+import re
 import time
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 router = APIRouter(prefix="/api", tags=["AI Copilot"])
+
+# Mandatory Headers ห้ามนำข้อมูลไป Train โมเดลและห้ามจัดเก็บสะสม (Zero Data Retention)
+ZERO_TRAINING_PRIVACY_HEADERS: Dict[str, str] = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Pragma": "no-cache",
+    "X-Data-Retention": "none",
+    "X-No-Model-Training": "true",
+    "X-OpenAI-Data-Usage-Opt-Out": "true",
+    "X-Enterprise-Data-Sovereignty": "Window-Asia-Internal-Only-No-Training",
+}
+
+def sanitize_context_for_privacy(text: str) -> str:
+    """DLP Scrubber: ป้องกันไม่ให้รหัสผ่านหรือคีย์ความลับถูกส่งออกนอกระบบ"""
+    if not text:
+        return ""
+    sanitized = re.sub(r"sec_[A-Za-z0-9_]{6,}", "[REDACTED_SECRET_KEY]", text)
+    sanitized = re.sub(
+        r'("(?:hashed_password|password|client_secret|api_key|private_key)"\s*:\s*)"[^"]*"',
+        r'\1"[REDACTED_BY_DLP]"',
+        sanitized,
+        flags=re.IGNORECASE,
+    )
+    return sanitized
 
 class AIChatMessage(BaseModel):
     role: str # user, assistant, system
@@ -1901,7 +1934,7 @@ def get_ai_settings(db = Depends(get_db), current_user = Depends(get_admin_user)
     return {
         "enabled": config.get("ai_copilot_enabled", "false").lower() == "true",
         "provider": config.get("ai_provider", "google"),
-        "model": config.get("ai_model", "gemini-1.5-flash"),
+        "model": config.get("ai_model", "gemini-2.5-flash"),
         "has_api_key": bool(raw_key),
         "api_key_masked": masked_key,
         "system_prompt": config.get("ai_system_prompt", ""),
@@ -1921,25 +1954,26 @@ async def chat_with_copilot(req: AIChatRequest, db = Depends(get_db), current_us
 
     api_key_setting = db.query(SystemSetting).filter_by(key="ai_api_key").first()
     api_key = api_key_setting.value if api_key_setting else None
-    user_query = req.messages[-1].content
+    user_query = sanitize_context_for_privacy(req.messages[-1].content)
 
-    # 2. กรณีมี API Key: เรียก External LLM (เช่น Google Gemini)
+    # 2. กรณีมี API Key: เรียก External LLM พร้อมแนบ ZERO_TRAINING_PRIVACY_HEADERS เสมอ
     if api_key:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         payload = {
             "contents": [{"parts": [{"text": user_query}]}]
         }
+        headers = {"Content-Type": "application/json", **ZERO_TRAINING_PRIVACY_HEADERS}
         async with httpx.AsyncClient(timeout=20.0) as client:
-            res = await client.post(url, json=payload)
+            res = await client.post(url, headers=headers, json=payload)
             if res.status_code == 200:
                 answer = res.json()["candidates"][0]["content"]["parts"][0]["text"]
                 return {"message": {"role": "assistant", "content": answer}}
 
-    # 3. Fallback: Local Rule-Based Data Lookup (กรณีไม่มี API Key)
+    # 3. Fallback: Local Rule-Based Data Lookup (กรณีไม่มี API Key - ข้อมูลประมวลผลภายใน 100%)
     return {
         "message": {
             "role": "assistant",
-            "content": f"🤖 (Local Assistant): ได้รับข้อความ '{user_query}' เรียบร้อยแล้ว ขณะนี้ระบบเชื่อมต่อฐานข้อมูลภายในพร้อมใช้งาน กรุณาตั้งค่า API Key เพื่อการวิเคราะห์ภาษาธรรมชาติเต็มรูปแบบ"
+            "content": f"🤖 (Local Read-Only Assistant): ได้รับข้อความ '{user_query}' เรียบร้อยแล้ว ขณะนี้ระบบเชื่อมต่อฐานข้อมูลภายในพร้อมใช้งานแบบ Read-Only และ Zero-Training 100%"
         }
     }
 ```

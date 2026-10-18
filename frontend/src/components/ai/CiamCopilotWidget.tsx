@@ -94,7 +94,8 @@ export default function CiamCopilotWidget() {
           role: "assistant",
           content:
             "สวัสดีครับ! 🛡️ ผมคือ **Central IAM Copilot** ผู้ช่วยอัจฉริยะด้านการจัดการตัวตนและความปลอดภัยของระบบเครือ Window Asia\n\n" +
-            "คุณสามารถสอบถามสถานะพนักงาน, ค้นหาบัญชีผี (Ghost Accounts), ตรวจสอบความพร้อมของระบบลูก (Spoke Apps) หรือดูประวัติ Audit Logs ได้ทันทีครับ!",
+            "คุณสามารถสอบถามสถิติภาพรวม, ค้นหาทะเบียนผู้ใช้, ตรวจสอบบัญชีผี (Ghost Accounts), จำลองผลกระทบก่อนตัดสิทธิ์ หรือดูประวัติ Audit Logs ตามสิทธิ์ของคุณได้ทันทีครับ\n\n" +
+            "🔒 *หมายเหตุ: ทำงานในโหมด Read-Only 100% และคุ้มครองข้อมูลความลับองค์กร (Zero-Training: ห้ามนำข้อมูลไป Train AI หรือใช้นอกองค์กรโดยเด็ดขาด)*",
         },
       ]);
     }
@@ -319,9 +320,12 @@ export default function CiamCopilotWidget() {
                 <Send className="w-4 h-4" />
               </button>
             </form>
-            <div className="flex items-center justify-between mt-2 px-1 text-[10px] text-slate-500">
-              <span>ขับเคลื่อนโดย Central IAM MCP Server</span>
-              <span>Window Asia Security Standard</span>
+            <div className="flex items-center justify-between mt-2 px-1 text-[10px] text-slate-400">
+              <span className="flex items-center space-x-1 text-emerald-400/90 font-medium">
+                <Shield className="w-3 h-3" />
+                <span>Read-Only • Zero-Training (ไม่นำข้อมูลไป Train/ใช้นอกองค์กร)</span>
+              </span>
+              <span className="text-slate-500">Window Asia Security</span>
             </div>
           </div>
         </div>

@@ -804,7 +804,11 @@ FRONTEND_URL=http://localhost:3000
 * **3. Strict Read-Only / Zero-Mutation Policy (ห้ามแก้ไข/อัปเดต/ตัดสิทธิ์ใดๆ เด็ดขาด):**
   - บล็อก `FORBIDDEN_MUTATION_TOOLS` (`ciam_deprovision_user`, `ciam_reactivate_user`, `ciam_dispatch_spoke_command`) ในระดับโค้ดของ AI Copilot
   - เมื่อผู้ใช้พิมพ์สั่งให้แก้ไข/ลบ/ตัดสิทธิ์ (`is_mutation_command_intent`) ระบบจะปฏิเสธการแก้ไข แสดงเฉพาะข้อมูลจำลองผลกระทบ (Read-Only Impact Preview) และแนะนำเมนูบนหน้าเว็บให้ผู้ใช้ไปกดดำเนินการเอง
-* **4. Spoke Framework Standard (`SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` หมวด E ข้อ 11.1–11.4):**
-  - บันทึกขอบเขต 3 เสาหลัก (100% Analytical Parity, Role-Based Access Control, Strict Read-Only / Zero-Mutation) ลงในสเปกกลางเพื่อให้ทุกระบบลูกในเครือปฏิบัติตามมาตรฐานเดียวกัน
+* **4. Strict Zero-Training & Enterprise Data Sovereignty Policy (ห้ามนำข้อมูลไป Train โมเดลหรือใช้นอกองค์กรโดยเด็ดขาด):**
+  - บังคับแนบ `ZERO_TRAINING_PRIVACY_HEADERS` (`X-No-Model-Training: true`, `X-Data-Retention: none`, `X-OpenAI-Data-Usage-Opt-Out: true`, `Cache-Control: no-store, no-cache, private`) และ `"store": False` ในทุกการเรียก LLM API
+  - บังคับผ่าน `sanitize_context_for_privacy()` (DLP Scrubber) เพื่อตัดรหัสผ่าน (`hashed_password`), `api_key`, `client_secret`, `private_key` ออกทั้งหมดก่อนส่งประมวลผล
+* **5. Spoke Framework Standard (`SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` หมวด E ข้อ 11.1–11.5):**
+  - บันทึกขอบเขต 4 เสาหลัก (100% Analytical Parity, Role-Based Access Control, Strict Read-Only / Zero-Mutation, และ Strict Zero-Training / No External Data Use) ลงในสเปกกลางเพื่อให้ทุกระบบลูกในเครือปฏิบัติตามมาตรฐานเดียวกัน
+
 
 

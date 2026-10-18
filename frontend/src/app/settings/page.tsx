@@ -1370,10 +1370,10 @@ export default function SettingsPage() {
                   <Wrench className="w-4 h-4 text-blue-600" />
                   <div>
                     <div className="text-xs font-bold text-blue-950">
-                      อนุญาตให้ AI เรียกใช้งาน Central IAM & Spoke MCP Tools
+                      อนุญาตให้ AI เรียกใช้งาน Central IAM & Spoke MCP Tools (โหมด Read-Only 100%)
                     </div>
                     <div className="text-[10px] text-blue-700">
-                      เปิดให้ AI ดึงข้อมูล Ghost Accounts, สถานะระบบลูก (MTPulse/IRM), Health Check และ Audit Logs แบบเรียลไทม์
+                      เปิดให้ AI ดึงและคำนวณข้อมูล Dashboard KPI, แยกตามแผนก, ทะเบียนผู้ใช้, Ghost Accounts, ระบบลูก และ Audit Logs ตามสิทธิ์ RBAC (ไม่อนุญาตให้แก้ไขหรือลบข้อมูล)
                     </div>
                   </div>
                 </div>
@@ -1385,6 +1385,24 @@ export default function SettingsPage() {
                   }
                   className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
                 />
+              </div>
+
+              {/* Zero-Training & Enterprise Data Sovereignty Guarantee Banner */}
+              <div className="md:col-span-2 p-3 rounded-lg bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-950 space-y-1">
+                <div className="font-bold flex items-center space-x-1.5 text-emerald-900">
+                  <Shield className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span>
+                    มาตรฐานธรรมาภิบาล AI องค์กร (Strict Read-Only &amp; Zero-Training Data Sovereignty)
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-800 leading-relaxed pl-5">
+                  • <strong>Zero Model Training &amp; No External Use:</strong> ข้อมูลทั้งหมดบนแอปและระบบที่ AI เข้าถึงได้ ถูกคัดกรองความลับด้วย DLP Scrubber และส่งพร้อม Header บังคับ{" "}
+                  <code className="bg-emerald-100 px-1 py-0.5 rounded font-mono text-[10px]">X-No-Model-Training: true</code>,{" "}
+                  <code className="bg-emerald-100 px-1 py-0.5 rounded font-mono text-[10px]">X-Data-Retention: none</code>,{" "}
+                  <code className="bg-emerald-100 px-1 py-0.5 rounded font-mono text-[10px]">store: false</code>{" "}
+                  <strong>ห้ามนำไป Train โมเดลหรือนำไปใช้นอกองค์กรโดยเด็ดขาด</strong>
+                  <br />• <strong>Strict Read-Only &amp; RBAC:</strong> แสดงผลและคำนวณได้ครบทุกฟังก์ชันตามสิทธิ์ผู้ใช้งานที่ล็อกอินจริง แต่บล็อกคำสั่งแก้ไข/อัปเดต/ลบข้อมูลในระบบ 100%
+                </p>
               </div>
 
               {/* System Prompt Persona */}

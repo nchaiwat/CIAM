@@ -151,3 +151,29 @@ def test_ai_copilot_rbac_portal_user_restriction():
     assert self_access.get("mode") == "READ_ONLY_SELF_SERVICE"
     assert self_access.get("username") == "portal.tester"
 
+
+def test_ai_copilot_zero_training_and_dlp_privacy_controls():
+    from app.services.ai_service import (
+        ZERO_TRAINING_PRIVACY_HEADERS,
+        sanitize_context_for_privacy,
+        DEFAULT_SYSTEM_PROMPT,
+    )
+
+    # 1. Verify mandatory Zero-Training & Zero-Retention HTTP headers exist
+    assert ZERO_TRAINING_PRIVACY_HEADERS.get("X-No-Model-Training") == "true"
+    assert ZERO_TRAINING_PRIVACY_HEADERS.get("X-Data-Retention") == "none"
+    assert ZERO_TRAINING_PRIVACY_HEADERS.get("X-OpenAI-Data-Usage-Opt-Out") == "true"
+    assert "no-store" in ZERO_TRAINING_PRIVACY_HEADERS.get("Cache-Control", "")
+
+    # 2. Verify DLP Scrubber strips secrets, keys, and password hashes
+    raw_leak = '{"username": "admin", "hashed_password": "$2b$12$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNO", "api_key": "sec_irm_mgmt_9a4f21e8d3b76c501e4a"}'
+    cleaned = sanitize_context_for_privacy(raw_leak)
+    assert "sec_irm_mgmt_9a4f21e8d3b76c501e4a" not in cleaned
+    assert "$2b$12$" not in cleaned
+    assert "[REDACTED" in cleaned
+
+    # 3. Verify System Prompt explicitly mandates Zero Model Training & No External Use
+    assert "Zero Model Training" in DEFAULT_SYSTEM_PROMPT
+    assert "ห้ามนำไปใช้นอกองค์กรโดยเด็ดขาด" in DEFAULT_SYSTEM_PROMPT
+
+

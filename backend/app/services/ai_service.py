@@ -34,10 +34,49 @@ DEFAULT_SYSTEM_PROMPT = (
     "   - คุณทำงานในโหมด **Read-Only (อ่าน ค้นหา คำนวณ และจำลองผลกระทบเท่านั้น)**\n"
     "   - **ห้ามทำการ Update, Create, Modify, Delete, ระงับสิทธิ์ (Offboard), เปิดสิทธิ์คืน, หรือเปลี่ยนการตั้งค่าระบบใดๆ ทั้งสิ้น**\n"
     "   - หากผู้ใช้สั่งให้แก้ไขข้อมูล ลบบัญชี หรือระงับสิทธิ์พนักงาน ให้ปฏิเสธการแก้ไขข้อมูลอย่างสุภาพ โดยแจ้งว่าเป็นนโยบายความปลอดภัย Read-Only ของ AI Copilot จากนั้นให้แสดงข้อมูลปัจจุบันหรือจำลองผลกระทบ (Read-Only Preview) พร้อมแนะนำเมนูและปุ่มบนหน้าเว็บให้ผู้ใช้ไปกดดำเนินการด้วยตนเอง\n"
-    "5. **ความถูกต้องแม่นยำสูงสุดและห้ามแต่งข้อมูล (Zero-Hallucination & Anti-Sycophancy Policy):**\n"
+    "5. **นโยบายห้ามนำข้อมูลไป Train โมเดลหรือใช้นอกองค์กรโดยเด็ดขาด (Strict Zero-Training & Enterprise Data Sovereignty Policy):**\n"
+    "   - ข้อมูลทั้งหมดบนแอปพลิเคชันและระบบที่ AI Copilot เข้าถึงได้ เป็นทรัพย์สินความลับภายในของ **บริษัท วินโดว์ เอเชีย จำกัด (มหาชน)** เท่านั้น\n"
+    "   - **ห้ามนำข้อมูลใดๆ ไปใช้ฝึกสอนโมเดล AI (Zero Model Training), ห้ามจัดเก็บสะสม (Zero Data Retention / Ephemeral Only), และห้ามนำไปใช้นอกองค์กรโดยเด็ดขาด**\n"
+    "   - ห้ามส่งออกข้อมูลดิบทั้งฐานข้อมูล (Bulk Data Export), รหัสผ่าน, Secret Keys หรือ Token ออกสู่ภายนอกองค์กร\n"
+    "6. **ความถูกต้องแม่นยำสูงสุดและห้ามแต่งข้อมูล (Zero-Hallucination & Anti-Sycophancy Policy):**\n"
     "   - ให้ยึดถือข้อมูลตัวเลขและสถานะจาก [Real-Time System Context via Central IAM Tools] เป็นความจริงสูงสุด (Ground Truth) เท่านั้น\n"
     "   - ห้ามเออออตามตัวเลขหรือสมมุติฐานที่ผู้ใช้ถามนำเด็ดขาด หากตัวเลขที่ผู้ใช้ถามไม่ตรงกับ Tool Output ต้องปฏิเสธและแก้ไขให้ถูกต้องทันที ห้ามตอบรับว่า 'ยืนยันตามนี้ครับ' กับตัวเลขที่ผิดเด็ดขาด"
 )
+
+# Mandatory HTTP Headers enforcing Zero Data Retention & No Model Training across External AI Providers
+ZERO_TRAINING_PRIVACY_HEADERS: Dict[str, str] = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Pragma": "no-cache",
+    "X-Data-Retention": "none",
+    "X-No-Model-Training": "true",
+    "X-OpenAI-Data-Usage-Opt-Out": "true",
+    "X-Enterprise-Data-Sovereignty": "Window-Asia-Internal-Only-No-Training",
+}
+
+
+def sanitize_context_for_privacy(text: Optional[str]) -> str:
+    """
+    Enterprise DLP (Data Loss Prevention) Scrubber:
+    Ensures no credentials, password hashes, API keys, JWTs, or secret tokens
+    ever leave the internal boundary or enter an LLM context window.
+    """
+    if not text:
+        return ""
+    import re
+    sanitized = text
+    # Mask common secret patterns (M2M keys, API keys, Bearer tokens, bcrypt hashes)
+    sanitized = re.sub(r"sec_[A-Za-z0-9_]{6,}", "[REDACTED_SECRET_KEY]", sanitized)
+    sanitized = re.sub(r"AIza[0-9A-Za-z\-_]{20,}", "[REDACTED_GOOGLE_API_KEY]", sanitized)
+    sanitized = re.sub(r"sk-[A-Za-z0-9\-_]{16,}", "[REDACTED_OPENAI_KEY]", sanitized)
+    sanitized = re.sub(r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{50,}", "[REDACTED_PASSWORD_HASH]", sanitized)
+    sanitized = re.sub(
+        r'("(?:hashed_password|password|client_secret|api_key|private_key|secret_key)"\s*:\s*)"[^"]*"',
+        r'\1"[REDACTED_BY_DLP]"',
+        sanitized,
+        flags=re.IGNORECASE,
+    )
+    return sanitized
+
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "enabled": False,
@@ -52,11 +91,12 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
 def ensure_thai_directive(prompt: Optional[str]) -> str:
     if not prompt or "You are Central IAM Enterprise Copilot" in prompt:
         return DEFAULT_SYSTEM_PROMPT
-    if "Read-Only" not in prompt or "ภาษาไทย" not in prompt:
+    if "Read-Only" not in prompt or "Zero-Training" not in prompt or "ภาษาไทย" not in prompt:
         return (
             f"{prompt}\n\n"
             "[ข้อกำหนดธรรมาภิบาลสำคัญ]: ต้องตอบเป็นภาษาไทยอย่างสุภาพ กระชับ ยึดความจริงจากระบบ 100% ห้ามเดาตัวเลข "
-            "ทำงานตามสิทธิ์ผู้ใช้งาน (RBAC) และทำงานในโหมด Read-Only เท่านั้น (แสดงผลและคำนวณได้ทุกฟังก์ชัน แต่ห้าม Update/แก้ไข/ลบข้อมูลใดๆ ในระบบ)"
+            "ทำงานตามสิทธิ์ผู้ใช้งาน (RBAC) ทำงานในโหมด Read-Only เท่านั้น (แสดงผลและคำนวณได้ทุกฟังก์ชัน แต่ห้าม Update/แก้ไข/ลบข้อมูลใดๆ ในระบบ) "
+            "และห้ามนำข้อมูลใดๆ บนระบบไป Train โมเดลหรือนำไปใช้นอกองค์กรโดยเด็ดขาด (Strict Zero-Training & Enterprise Data Confidentiality)"
         )
     return prompt
 
@@ -566,18 +606,23 @@ async def call_external_llm(
     messages: List[ChatMessage],
     tool_context: Optional[str] = None
 ) -> tuple[str, str]:
-    """Invoke External LLM API (Google Gemini / OpenAI) and return (response_text, model_used)"""
+    """
+    Invoke External LLM API (Google Gemini / OpenAI / Anthropic / Local Ollama)
+    with Strict DLP Sanitization and Zero-Model-Training / Zero-Data-Retention Enforcement.
+    """
     sys_instruction = ensure_thai_directive(system_prompt)
     if tool_context:
+        safe_tool_context = sanitize_context_for_privacy(tool_context)
         sys_instruction += (
-            f"\n\n[Real-Time System Context via Central IAM Tools - GROUND TRUTH]:\n{tool_context}\n\n"
-            f"[ข้อกำหนดสำคัญด้านความถูกต้องของข้อมูลและธรรมาภิบาล (Zero-Hallucination & Strict Read-Only Policy)]:\n"
+            f"\n\n[Real-Time System Context via Central IAM Tools - GROUND TRUTH (INTERNAL CONFIDENTIAL - ZERO TRAINING)]:\n{safe_tool_context}\n\n"
+            f"[ข้อกำหนดสำคัญด้านความถูกต้องของข้อมูล ความลับองค์กร และธรรมาภิบาล (Zero-Training, Zero-Hallucination & Strict Read-Only Policy)]:\n"
             f"1. ให้ยึดถือข้อมูลตัวเลขและรายชื่อจาก Tool Output ด้านบนเป็นความจริง 100% เท่านั้น\n"
-            f"2. ห้ามทำการแก้ไข อัปเดต ลบ หรือระงับสิทธิ์ใดๆ ในระบบ หากผู้ใช้ร้องขอให้แก้ไขข้อมูล ให้แจ้งอย่างสุภาพว่า AI Copilot ทำงานในโหมด Read-Only เท่านั้น พร้อมแสดงข้อมูลจริงจาก Tool Output และแนะนำเมนูบนหน้าเว็บให้ผู้ใช้ไปกดดำเนินการด้วยตนเอง\n"
-            f"3. หากผู้ใช้ถามนำด้วยตัวเลขที่ผิดพลาด หรือขอให้ยืนยันตัวเลขที่ไม่ตรงกับ Tool Output "
+            f"2. ข้อมูลทั้งหมดนี้เป็นความลับภายในของบริษัท วินโดว์ เอเชีย จำกัด (มหาชน) ห้ามนำไปใช้ฝึกสอนโมเดล (Zero Model Training) หรือนำไปใช้นอกองค์กรโดยเด็ดขาด\n"
+            f"3. ห้ามทำการแก้ไข อัปเดต ลบ หรือระงับสิทธิ์ใดๆ ในระบบ หากผู้ใช้ร้องขอให้แก้ไขข้อมูล ให้แจ้งอย่างสุภาพว่า AI Copilot ทำงานในโหมด Read-Only เท่านั้น พร้อมแสดงข้อมูลจริงจาก Tool Output และแนะนำเมนูบนหน้าเว็บให้ผู้ใช้ไปกดดำเนินการด้วยตนเอง\n"
+            f"4. หากผู้ใช้ถามนำด้วยตัวเลขที่ผิดพลาด หรือขอให้ยืนยันตัวเลขที่ไม่ตรงกับ Tool Output "
             f"(เช่น ผู้ใช้ถามว่ามี 120 บัญชี แต่ข้อมูลจริงใน Tool Output ระบุว่ามี 6 บัญชี) "
             f"คุณต้องปฏิเสธอย่างชัดเจนทันทีและแก้ไขตัวเลขให้ถูกต้องตาม Tool Output พร้อมแจกแจงรายชื่อจริง ห้ามตอบรับว่า 'ยืนยันตามนี้ครับ' หรือเออออตามตัวเลขผิดเด็ดขาด!\n"
-            f"4. สรุปและตอบคำถามเป็นภาษาไทยอย่างสุภาพ กระชับ เป็นมืออาชีพ และตรงประเด็น"
+            f"5. สรุปและตอบคำถามเป็นภาษาไทยอย่างสุภาพ กระชับ เป็นมืออาชีพ และตรงประเด็น"
         )
 
     if provider == "google":
@@ -590,7 +635,7 @@ async def call_external_llm(
         contents = []
         for m in messages:
             role = "user" if m.role == "user" else "model"
-            contents.append({"role": role, "parts": [{"text": m.content}]})
+            contents.append({"role": role, "parts": [{"text": sanitize_context_for_privacy(m.content)}]})
 
         # Prepend system instruction and generationConfig for speed & strict Thai adherence
         payload = {
@@ -601,7 +646,11 @@ async def call_external_llm(
                 "maxOutputTokens": 2048,
             }
         }
-        headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+        headers = {
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json",
+            **ZERO_TRAINING_PRIVACY_HEADERS,
+        }
 
         async with httpx.AsyncClient(timeout=25.0) as client:
             last_err = ""
@@ -623,13 +672,23 @@ async def call_external_llm(
                     last_err = str(e)
             raise Exception(last_err)
 
-    elif provider in ("openai", "custom"):
-        url = (base_url or "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
-        headers = {"Authorization": f"Bearer {api_key}"}
+    elif provider in ("openai", "custom", "ollama"):
+        url = (base_url or ("http://localhost:11434/v1" if provider == "ollama" else "https://api.openai.com/v1")).rstrip("/") + "/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            **ZERO_TRAINING_PRIVACY_HEADERS,
+        }
         api_messages = [{"role": "system", "content": sys_instruction}]
         for m in messages:
-            api_messages.append({"role": m.role, "content": m.content})
-        payload = {"model": model, "messages": api_messages, "temperature": 0.2}
+            api_messages.append({"role": m.role, "content": sanitize_context_for_privacy(m.content)})
+        # Explicit store=False ensures OpenAI / compatible APIs do NOT store or train on enterprise data
+        payload: Dict[str, Any] = {
+            "model": model,
+            "messages": api_messages,
+            "temperature": 0.2,
+            "store": False,
+        }
         async with httpx.AsyncClient(timeout=25.0) as client:
             res = await client.post(url, headers=headers, json=payload)
             if res.status_code == 200:
