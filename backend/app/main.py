@@ -65,6 +65,8 @@ app.include_router(ai_router, prefix=settings.API_V1_PREFIX)
 # Register Model Context Protocol (MCP) Router & Remote Transport
 from app.mcp import create_remote_mcp_app, mcp_router
 app.include_router(mcp_router, prefix=settings.API_V1_PREFIX)
+app.include_router(mcp_router)
+app.mount(f"{settings.API_V1_PREFIX}/mcp", create_remote_mcp_app())
 app.mount("/mcp", create_remote_mcp_app())
 
 # Expose standard OIDC Discovery and JWKS at root level (RFC 8414 & OIDC Core spec)

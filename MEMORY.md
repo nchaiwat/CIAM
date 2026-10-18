@@ -786,5 +786,7 @@ FRONTEND_URL=http://localhost:3000
   2. เมื่อผู้ใช้ทำงานใน App Client (เช่น IRM, MTPulse, QMS) นานเท่าใดก็ตาม (ตราบใดที่ JWT 8 ชม. ยังไม่หมดอายุ) แล้วกด **Logout จากหน้า App Client**:
      - หาก App Client พากลับมาที่ `https://ciam.windowasia.com/portal` (เช่น IRM) หรือเรียก `/oauth/logout`: ระบบตรวจเช็คด้วย `checkTokenValidOnReturn()` (ไม่คิด Idle Time ย้อนหลัง) แล้วพาผู้ใช้เข้าสู่หน้า **SSO Portal (`/portal`) ของ CIAM ทันที** พร้อมรีเซ็ตเวลา Idle Time ของหน้า SSO Portal เริ่มนับ `30:00` นาทีใหม่!
   3. **เมื่อผู้ใช้กดปุ่ม `ออกจากระบบ` เอง (`performManualLogout`):** ระบบตั้งแฟล็ก `ciam_manual_logout` ป้องกันไม่ให้ Watchdog ยิง `expired=1` แทรกขณะปิดป๊อปอัปยืนยัน และเปิดหน้า `/login` แบบสะอาด **โดยไม่แสดงกล่องแจ้งเตือนเรื่องเซสชันหมดอายุ** (กล่องแจ้งเตือนสีเหลืองจะแสดงเฉพาะเมื่อหมดเวลา `idle_timeout`, `token_expired`, หรือ `revoked` จริงเท่านั้น)
+* **Remote MCP Routing (`/api/v1/mcp/sse` & `/mcp/sse`):**
+  - Mount MCP SSE Starlette App ทั้งที่ `/api/v1/mcp` และ `/mcp` ใน `backend/app/main.py` พร้อมเพิ่ม `PathPrefix(/mcp)` ใน `docker-compose.yml` และ `ARG BACKEND_INTERNAL_URL=http://api:8001` ใน `frontend/Dockerfile` เพื่อให้การเรียก `/mcp/sse` และ `/api/v1/mcp/sse` วิ่งตรงถึง FastAPI Backend เสมอ (ตอบ `401 UNAUTHORIZED_MCP_ACCESS` เมื่อไม่มี Token แทนที่จะเกิด 500 จาก Next.js Rewrite)
 
 

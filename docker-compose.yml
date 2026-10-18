@@ -53,7 +53,7 @@ services:
       - ciam_keys:/app/keys
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.ciam-api.rule=Host(`ciam.windowasia.com`) && (PathPrefix(`/api`) || PathPrefix(`/.well-known`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.ciam-api.rule=Host(`ciam.windowasia.com`) && (PathPrefix(`/api`) || PathPrefix(`/mcp`) || PathPrefix(`/.well-known`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
       - "traefik.http.routers.ciam-api.entrypoints=websecure"
       - "traefik.http.routers.ciam-api.tls=true"
       - "traefik.http.routers.ciam-api.tls.certresolver=mytlschallenge"
@@ -73,6 +73,7 @@ services:
       dockerfile: Dockerfile
       args:
         - NEXT_PUBLIC_API_URL=https://ciam.windowasia.com/api/v1
+        - BACKEND_INTERNAL_URL=http://api:8001
     container_name: ciam-web
     restart: always
     environment:

@@ -61,6 +61,11 @@ class RemoteMcpAuthMiddleware(BaseHTTPMiddleware):
     Enforces Bearer token verification from Authorization header, X-MCP-API-Key, or ?token= query parameter.
     """
     async def dispatch(self, request: Request, call_next):
+        # Allow public discovery metadata on /info or root of /mcp so external clients can inspect capabilities cleanly
+        path = request.url.path.rstrip("/")
+        if path.endswith("/info") or path.endswith("/mcp"):
+            return JSONResponse(get_mcp_server_info())
+
         # Extract token from various client headers/params
         auth_header = request.headers.get("authorization") or request.headers.get("Authorization") or ""
         api_key_header = request.headers.get("x-mcp-api-key") or request.headers.get("X-MCP-API-Key") or ""
@@ -78,8 +83,12 @@ class RemoteMcpAuthMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 {
                     "error": "UNAUTHORIZED_MCP_ACCESS",
-                    "message": "Authentication required to access Window Asia Central IAM Remote MCP. Provide valid Authorization Bearer token or ?token= parameter.",
-                    "status_code": 401
+                    "message": "Authentication required to access Window Asia Central IAM Remote MCP. Provide valid Authorization Bearer token, X-MCP-API-Key header, or ?token= parameter.",
+                    "status_code": 401,
+                    "sse_endpoints": [
+                        "https://ciam.windowasia.com/api/v1/mcp/sse",
+                        "https://ciam.windowasia.com/mcp/sse"
+                    ]
                 },
                 status_code=401,
                 headers={"WWW-Authenticate": "Bearer"}
@@ -129,8 +138,9 @@ def get_mcp_server_info() -> Dict[str, Any]:
         "description": "Window Asia Central IAM Model Context Protocol (MCP) Server",
         "remote_transport": {
             "type": "SSE",
-            "sse_endpoint": "/mcp/sse",
-            "messages_endpoint": "/mcp/messages/",
+            "sse_endpoint": "/api/v1/mcp/sse",
+            "legacy_sse_endpoint": "/mcp/sse",
+            "messages_endpoint": "/api/v1/mcp/messages/",
             "auth_required": True,
             "auth_type": "Bearer Token / Admin JWT / X-MCP-API-Key"
         },
@@ -149,7 +159,7 @@ def get_mcp_server_info() -> Dict[str, Any]:
             "remote_cloud_https": {
                 "mcpServers": {
                     "central-iam-cloud": {
-                        "url": "https://ciam.windowasia.com/mcp/sse",
+                        "url": "https://ciam.windowasia.com/api/v1/mcp/sse",
                         "headers": {
                             "Authorization": "Bearer <YOUR_ADMIN_JWT_OR_MCP_KEY>"
                         }
