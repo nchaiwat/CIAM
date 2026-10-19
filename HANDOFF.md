@@ -111,15 +111,22 @@
 
 ### 0.2 รายการ Git Commits ล่าสุดและแผนงานสำหรับการพัฒนาต่อในรอบหน้า (Next Session Roadmap)
 - **Git Commits ล่าสุดบน `origin/main`:**
+  - `e81f248`: `feat: add WA-RDT2 Remote Desktop spoke app with SAP B1 RBAC and dynamic RDP generation`
   - `5027f34`: `feat(ai-copilot): enforce Zero-Training, DLP privacy scrubber, and No-External-Data-Use governance across CIAM and Spoke Framework`
   - `a4688ff`: `feat(ai-copilot): enforce 100% read-only analytical parity, RBAC scoping, and Spoke Framework governance`
   - `b23c3e9`: `fix(mcp): route /mcp and /api/v1/mcp directly to FastAPI backend so SSE returns 401 instead of 500`
   - `db5b8c3`: `fix(auth): suppress session expired notice when user manually logs out`
   - `b9a5ec0`: `feat(portal): pause SSO Portal 30-min idle timer while in Spoke App and return directly to /portal on App Client logout`
   - `a0d9fb1`: `feat(session): add proactive zero-action session auto-logoff watchdog and OIDC single logout return flow`
-- **แนวทางเมื่อกลับมาพัฒนาต่อรอบหน้า:**
-  1. ตรวจสอบการเชื่อมต่อ Spoke Applications ใหม่ๆ เพิ่มเติม (เช่น QMS Production Cutover หรือการขยาย In-App AI Copilot ไปยังระบบลูก IRM / MTPulse ตามมาตรฐานหมวด E ของ `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`)
-  2. ตรวจสอบผลการทำงานของระบบ Proactive Session Watchdog และ AI Copilot Read-Only / Zero-Training บน Production VPS (`https://ciam.windowasia.com`)
+- **แนวทางเมื่อกลับมาพัฒนาต่อรอบหน้า (Pending Issues & Next Session Roadmap):**
+  1. **[เรื่องค้างสำคัญ] การปรับปรุงช่องทางเข้าใช้งาน SAP B1 (WA-RDT2 Remote Desktop vs SAP B1 Web Client):**
+     - **ปัญหาเดิม:** การกดปุ่มเข้าใช้งานแบบ RDP เดิมใช้วิธีดาวน์โหลดไฟล์ `wa-rdt2.rdp` ส่งผลให้เบราว์เซอร์สร้างไฟล์สะสมซ้ำๆ ในโฟลเดอร์ Downloads (`wa-rdt2 (1).rdp`, `wa-rdt2 (2).rdp`)
+     - **แนวทางแก้ไขที่อยู่ระหว่างพิจารณาตัดสินใจ:**
+       - **แนวทาง A (ตรวจสอบ SAP Business One 10.0 Web Client):** ตรวจสอบว่าเครื่องเซิร์ฟเวอร์ SAP B1 (`WA-RDT2` IP `192.168.12.18`) มีการเปิดใช้งาน **SAP B1 Web Client** (พอร์ต `443` หรือ `2443`) หรือไม่ ผ่านหน้า System Landscape Directory (SLD: `https://<IP>:40000/ControlCenter/` แท็บ Services) หากเปิดใช้งานอยู่แล้ว จะสามารถปรับ Spoke Application ให้เชื่อมต่อไปยัง Web Client ตรงๆ แบบเดียวกับ MTPulse (`https://...`) ได้ทันที 100% โดยไม่ต้องใช้ Remote Desktop และไม่มีการดาวน์โหลดไฟล์ใดๆ
+       - **แนวทาง B (Apache Guacamole Clientless HTML5 Gateway):** เพิ่ม Container Guacamole ลงใน Docker Compose ของ CIAM เพื่อแปลงสัญญาณ RDP พอร์ต `3389` ของ `192.168.12.18` (ผ่าน AD Gateway `192.168.12.11` / `172.18.0.1`) ให้พนักงานเปิดหน้าต่าง Desktop ของ Windows SAP B1 รันบนแท็บเบราว์เซอร์ได้ทันที
+       - **แนวทาง C (Windows URI Protocol Handler `rdp://`):** สั่งเปิดโปรแกรม Remote Desktop Connection (`mstsc.exe`) บนเครื่องพนักงานตรงๆ ผ่าน Protocol โดยไม่ต้องดาวน์โหลดไฟล์ `.rdp` ลงโฟลเดอร์ Downloads
+  2. ตรวจสอบการเชื่อมต่อ Spoke Applications ใหม่ๆ เพิ่มเติม (เช่น QMS Production Cutover หรือการขยาย In-App AI Copilot ไปยังระบบลูก IRM / MTPulse ตามมาตรฐานหมวด E ของ `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`)
+  3. ตรวจสอบผลการทำงานของระบบ Proactive Session Watchdog และ AI Copilot Read-Only / Zero-Training บน Production VPS (`https://ciam.windowasia.com`)
 
 ---
 

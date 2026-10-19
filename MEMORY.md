@@ -106,12 +106,15 @@
   `pkg-static -C /dev/null add https://github.com/pfrest/pfSense-pkg-RESTAPI/releases/download/v2.4.3/pfSense-2.7.2-pkg-RESTAPI.pkg`
   *(Note: v2.4.3 is the latest release specifically built for pfSense 2.7.2; latest v2.10+ targets 2.8+)*
 ### 2.6 WA-RDT2 (SAP Remote Desktop Server) — LIVE RDP SPOKE
-* **Target Server:** `WA-RDT2` (Windows Terminal / RDS Server)
+* **Target Server:** `WA-RDT2` (Windows Terminal / RDS Server, Internal IP: `192.168.12.18`)
 * **Connector Type:** `RDP`
 * **Network Restrictions:** `network_policy: VPN_ONLY`, `vpn_restriction_mode: LOCK_WITH_BANNER` (Accessible from HO, FAC, and OpenVPN only)
 * **Authorization / RBAC Rule:** ผู้ใช้งานทั่วไปจะได้รับสิทธิ์เข้าใช้งานเฉพาะคนที่มีบัญชี Active ในระบบ SAP B1 (`sap_b1`) เท่านั้น
 * **Dynamic RDP Generator:** `GET /api/v1/oauth/portal/rdp/wa_rdt2.rdp` (Auto pre-configures server `WA-RDT2`, domain `WINDOWASIA\{sap_username}`, multimonitor, and clipboard redirection)
 * **Launch Behavior:** 1-Click Launch on SSO Portal (`/portal`) triggers instant `.rdp` file download directly in the same tab
+* **Pending Enhancement Under Evaluation:** ปัจจุบันไฟล์ `.rdp` ดาวน์โหลดซ้ำลงโฟลเดอร์ Downloads กำลังพิจารณา 2 ทางเลือก:
+  1. สลับไปใช้ **SAP B1 10.0 Web Client (HTTPS Port 443 / 2443, SLD Port 40000)** ชี้ตรงผ่านเบราว์เซอร์เหมือน MTPulse
+  2. ติดตั้ง **Apache Guacamole (Clientless HTML5 RDP Container)** ผ่าน AD Gateway Bridge (`192.168.12.11` / `172.18.0.1:3100`) เพื่อเปิด Desktop บนแท็บเบราว์เซอร์ตรงๆ
 
 ---
 
