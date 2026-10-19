@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 19 ตุลาคม 2026 (Local Time: ~08:30 ICT)  
+> **Date Updated:** 19 ตุลาคม 2026 (Local Time: ~12:45 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 72/72 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: `5027f34` (Sprint 47 - AI Copilot Full Analytical Parity, RBAC, Strict Read-Only & Zero-Training Data Governance in Spoke Framework)
+> **Test Integrity:** Backend Pytest: 73/73 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready — Latest Commit: Sprint 48 - Add Remote Desktop Spoke Application (WA-RDT2) with SAP B1 RBAC & Dynamic RDP Generation
 
 ---
 
@@ -15,7 +15,21 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **AI Copilot Full Analytical Parity, RBAC Enforcement, Strict Read-Only & Zero-Training Data Sovereignty Governance (Sprint 47 — Commits `a4688ff`, `5027f34`):**
+1. **Remote Desktop Spoke Application (WA-RDT2) with SAP B1 RBAC & Dynamic RDP Generation (Sprint 48):**
+   - **เพิ่ม Spoke App สำหรับ Windows Terminal / RDS Server `WA-RDT2`:**
+     - เพิ่ม `wa_rdt2` ใน `backend/app/initial_data.py` (`connector_type: "RDP"`, `network_policy: "VPN_ONLY"`, `vpn_restriction_mode: "LOCK_WITH_BANNER"`, `portal_launch_url: "/api/v1/oauth/portal/rdp/wa_rdt2.rdp"`, `category: "การเงินและ ERP"`) พร้อมระบบ Auto-Heal อัตโนมัติเมื่อ Start Service
+   - **ระบบคัดกรองสิทธิ์และ RBAC เฉพาะผู้ที่มีบัญชี SAP B1 (Strict SAP B1 Account Entitlement):**
+     - ใน [`backend/app/api/v1/oauth.py`](file:///d:/Python/Central-IAM/backend/app/api/v1/oauth.py):
+       - `get_portal_apps()`: ผู้ใช้งานทั่วไปจะมองเห็นการ์ด `WA-RDT2` บน SSO Portal **เฉพาะเมื่อมีบัญชีที่ Active ในระบบ SAP B1 (`sap_b1`) เท่านั้น** หากไม่มีสิทธิ์ SAP B1 การ์ดนี้จะไม่ปรากฏบน Portal ของผู้ใช้โดยเด็ดขาด
+       - `launch_portal_app()`: ตรวจสอบสิทธิ์ย้ำอีกชั้นก่อนออก Ticket หากไม่มี Mapping กับ SAP B1 จะปฏิเสธด้วย HTTP 403 Forbidden ทันที
+   - **Dynamic RDP Configuration Generator (`GET /api/v1/oauth/portal/rdp/{filename}`):**
+     - สร้าง Endpoint ให้บริการไฟล์ `.rdp` (MIME `application/x-rdp`) ไดนามิก โดยกำหนด Host ปลายทางคือ `WA-RDT2`, บังคับต่อ VPN/เครือข่ายภายใน (HO, FAC), พร้อมกรอกโดเมน `WINDOWASIA\{sap_username}` และเปิดโหมด Multimonitor, Clipboard redirection และ CredSSP support ให้โดยอัตโนมัติ
+   - **Frontend SSO Portal Integration (`frontend/src/app/portal/page.tsx`):**
+     - เพิ่ม Theme การ์ดสำหรับ `wa_rdt2`: ไอคอน `Monitor` โทนสีน้ำเงินเข้ม-สเลท (Slate & Deep Navy), แสดงปุ่ม `เปิด Remote Desktop (.rdp)` พร้อมไอคอน `Download`
+     - ใน `handleLaunch()`: เมื่อคลิกการ์ดที่เป็นประเภท RDP ระบบจะทำการดาวน์โหลดไฟล์ `wa-rdt2.rdp` โดยตรงบนแท็บเดิมทันที เพื่อให้ระบบปฏิบัติการ Windows เปิด Remote Desktop Connection โดยไม่ต้องเปลี่ยนหน้าจอหรือรบกวนเซสชัน SSO Portal
+   - **Unit Tests Coverage:**
+     - เพิ่ม `test_wa_rdt2_portal_entitlement_and_rdp_download` ใน [`backend/tests/test_oauth_oidc_flow.py`](file:///d:/Python/Central-IAM/backend/tests/test_oauth_oidc_flow.py) ครอบคลุมการบล็อก User ที่ไม่มี SAP B1, การอนุญาต User ที่มี SAP B1, และตรวจสอบโครงสร้างเนื้อหาไฟล์ `.rdp` ไดนามิก (ผ่าน 100%)
+2. **AI Copilot Full Analytical Parity, RBAC Enforcement, Strict Read-Only & Zero-Training Data Sovereignty Governance (Sprint 47 — Commits `a4688ff`, `5027f34`):**
    - **100% Read & Analytical Parity (แสดงผลและคำนวณได้ครบทุกหน้าจอที่มีใน CIAM):**
      - เพิ่ม MCP Tool `ciam_get_dashboard_summary()` ใน [`backend/app/mcp/server.py`](file:///d:/Python/Central-IAM/backend/app/mcp/server.py) เพื่อให้ AI Copilot คำนวณและแสดง KPI ทั้งหมดของหน้าแดชบอร์ด (`/`) ได้แก่ จำนวนตัวตนรวม, Active/Inactive ใน AD, **ตารางสรุปผู้ใช้งานแยกตามแผนก (`department_breakdown`)**, สรุปจำนวนบัญชีรายระบบลูก (`spoke_account_breakdown`), จำนวน Ghost Accounts, จำนวน Approved Exceptions และตารางเวลา Auto-Sync (04:00 น.)
      - เพิ่ม MCP Tool `ciam_preview_offboarding_impact(username)` สำหรับจำลองการตรวจสอบผลกระทบก่อนตัดสิทธิ์ (`/offboarding` Impact Preview) แบบ Read-Only 100%

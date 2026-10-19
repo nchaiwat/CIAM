@@ -105,8 +105,13 @@
 * **Installation Command (pfSense 2.7.2):**
   `pkg-static -C /dev/null add https://github.com/pfrest/pfSense-pkg-RESTAPI/releases/download/v2.4.3/pfSense-2.7.2-pkg-RESTAPI.pkg`
   *(Note: v2.4.3 is the latest release specifically built for pfSense 2.7.2; latest v2.10+ targets 2.8+)*
-* **Key Endpoints:** `GET /api/v1/user`, `PATCH /api/v1/user` (enable/disable), `GET /api/v1/services/openvpn`
-* **Primary Role in CIAM:** 1-Click Offboarding (immediate VPN revocation & account disable) and Ghost VPN Account detection.
+### 2.6 WA-RDT2 (SAP Remote Desktop Server) — LIVE RDP SPOKE
+* **Target Server:** `WA-RDT2` (Windows Terminal / RDS Server)
+* **Connector Type:** `RDP`
+* **Network Restrictions:** `network_policy: VPN_ONLY`, `vpn_restriction_mode: LOCK_WITH_BANNER` (Accessible from HO, FAC, and OpenVPN only)
+* **Authorization / RBAC Rule:** ผู้ใช้งานทั่วไปจะได้รับสิทธิ์เข้าใช้งานเฉพาะคนที่มีบัญชี Active ในระบบ SAP B1 (`sap_b1`) เท่านั้น
+* **Dynamic RDP Generator:** `GET /api/v1/oauth/portal/rdp/wa_rdt2.rdp` (Auto pre-configures server `WA-RDT2`, domain `WINDOWASIA\{sap_username}`, multimonitor, and clipboard redirection)
+* **Launch Behavior:** 1-Click Launch on SSO Portal (`/portal`) triggers instant `.rdp` file download directly in the same tab
 
 ---
 

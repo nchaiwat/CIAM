@@ -4,7 +4,7 @@ from typing import Optional, List
 from urllib.parse import urlencode, urlparse, parse_qs, urlunparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -362,6 +362,14 @@ def get_portal_apps(
                 AppAccountMapping.is_active_in_app == True
             ).all()
             authorized_app_ids = {m.application_id for m in active_mappings}
+
+            # If user has an active SAP B1 mapping, grant access to WA-RDT2 Remote Desktop
+            sap_app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "sap_b1").first()
+            if sap_app and sap_app.id in authorized_app_ids:
+                rdt2_app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "wa_rdt2").first()
+                if rdt2_app:
+                    authorized_app_ids.add(rdt2_app.id)
+
             apps = base_query.filter(ConnectedApplication.id.in_(authorized_app_ids)).all()
         else:
             apps = []
@@ -373,6 +381,7 @@ def get_portal_apps(
         "qms": "การควบคุมคุณภาพ (Quality Control)",
         "qol": "การขายและใบเสนอราคา (Sales & Quotations)",
         "sap_b1": "การเงินและ ERP (Enterprise Resource Planning)",
+        "wa_rdt2": "การเงินและ ERP (Enterprise Resource Planning)",
     }
 
     desc_map = {
@@ -380,6 +389,7 @@ def get_portal_apps(
         "qms": "ระบบบริหารจัดการคุณภาพและมาตรฐานสินค้า (Quality Management System)",
         "qol": "ระบบเสนอราคาและติดตามสถานะใบสั่งซื้อ (QT-Online Platform)",
         "sap_b1": "ระบบบริหารทรัพยากรองค์กรหลัก (SAP Business One ERP)",
+        "wa_rdt2": "เครื่องแม่ข่าย Remote Desktop สำหรับเข้าใช้งานระบบ SAP Business One (WA-RDT2)",
     }
 
     client_ip = get_client_ip(request)
@@ -510,15 +520,21 @@ def launch_portal_app(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"ไม่พบข้อมูลตัวตนของบัญชี '{current_user.username}' ในระบบ Central IAM"
                 )
+            target_app_id = app.id
+            if app.app_code == "wa_rdt2":
+                sap_app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "sap_b1").first()
+                if sap_app:
+                    target_app_id = sap_app.id
+
             mapping = db.query(AppAccountMapping).filter(
                 AppAccountMapping.identity_id == ident.id,
-                AppAccountMapping.application_id == app.id,
+                (AppAccountMapping.application_id == target_app_id) | (AppAccountMapping.application_id == app.id),
                 AppAccountMapping.is_active_in_app == True
             ).first()
             if not mapping:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"ท่านไม่ได้รับสิทธิ์เข้าใช้งานระบบ '{app.app_name}' กรุณาติดต่อฝ่ายเทคโนโลยีสารสนเทศ"
+                    detail=f"ท่านไม่ได้รับสิทธิ์เข้าใช้งานระบบ '{app.app_name}' กรุณาติดต่อฝ่ายเทคโนโลยีสารสนเทศ (ต้องมีสิทธิ์ในระบบ SAP B1)"
                 )
             launch_username = mapping.app_username or current_user.username
         else:
@@ -526,15 +542,20 @@ def launch_portal_app(
 
     # 1. Dedicated Portal Launch URL (RFC 9700 Seamless SSO Initiation Bounce, e.g. /auth/start)
     if app.portal_launch_url:
+        launch_target = app.portal_launch_url
+        if app.app_code == "wa_rdt2" and client_verified:
+            separator = "&" if "?" in launch_target else "?"
+            launch_target = f"{launch_target}{separator}vpn_verified=1"
+
         logger.info(
             "Portal launch for user '%s' to app '%s' via configured portal_launch_url: %s",
-            launch_username, app.app_code, app.portal_launch_url
+            launch_username, app.app_code, launch_target
         )
         return PortalLaunchResponse(
             status="SUCCESS",
             app_code=app.app_code,
             app_name=app.app_name,
-            launch_url=app.portal_launch_url,
+            launch_url=launch_target,
             code=None,
             expires_in=60
         )
@@ -687,5 +708,95 @@ def oidc_end_session_logout(
         return {"status": "LOGGED_OUT", "redirect_to": target}
 
     return RedirectResponse(url=target, status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/portal/rdp/{filename}")
+def download_rdp_file(
+    filename: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Optional[AdminUser] = Depends(get_current_user_optional)
+):
+    """
+    Dynamically generates and returns an enterprise Remote Desktop Protocol (.rdp) connection file.
+    Restricted to corporate network / VPN and authenticated users with SAP B1 access.
+    """
+    server_host = "WA-RDT2"
+    app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "wa_rdt2").first()
+    if not app:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Remote Desktop application not found")
+
+    # Network authorization check
+    client_ip = get_client_ip(request)
+    client_vpn_verified = request.query_params.get("vpn_verified") == "1" or request.headers.get("x-vpn-verified") == "1"
+    if not is_client_authorized_for_app_network(client_ip, app, db) and not client_vpn_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"การเข้าถึงเครื่องแม่ข่าย {server_host} ได้เฉพาะเครือข่ายภายในองค์กร (HO, FAC) หรือผ่าน VPN เท่านั้น"
+        )
+
+    # Entitlement authorization check
+    target_username = ""
+    if current_user:
+        if current_user.role not in ["SUPER_ADMIN", "ADMIN"]:
+            ident = db.query(MasterIdentity).filter(
+                func.lower(MasterIdentity.username) == current_user.username.lower()
+            ).first()
+            if not ident:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="ไม่พบข้อมูลตัวตนในระบบ")
+
+            sap_app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "sap_b1").first()
+            has_sap = False
+            if sap_app:
+                mapping = db.query(AppAccountMapping).filter(
+                    AppAccountMapping.identity_id == ident.id,
+                    AppAccountMapping.application_id == sap_app.id,
+                    AppAccountMapping.is_active_in_app == True
+                ).first()
+                if mapping:
+                    has_sap = True
+                    target_username = mapping.app_username or current_user.username
+
+            if not has_sap:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"ท่านไม่ได้รับสิทธิ์เข้าใช้งานเครื่องแม่ข่าย {server_host} เนื่องจากไม่มีบัญชีในระบบ SAP B1"
+                )
+        else:
+            target_username = current_user.username
+
+    # Build RDP config
+    username_line = f"username:s:WINDOWASIA\\{target_username}\n" if target_username else "username:s:WINDOWASIA\\\n"
+    rdp_content = (
+        f"full address:s:{server_host}\n"
+        f"prompt for credentials:i:1\n"
+        f"administrative session:i:0\n"
+        f"{username_line}"
+        f"screen mode id:i:2\n"
+        f"use multimon:i:1\n"
+        f"session bpp:i:32\n"
+        f"compression:i:1\n"
+        f"keyboardhook:i:2\n"
+        f"audiomode:i:0\n"
+        f"redirectprinters:i:1\n"
+        f"redirectcomports:i:0\n"
+        f"redirectsmartcards:i:1\n"
+        f"redirectclipboard:i:1\n"
+        f"redirectposdevices:i:0\n"
+        f"autoreconnection enabled:i:1\n"
+        f"authentication level:i:2\n"
+        f"enablecredsspsupport:i:1\n"
+    )
+
+    clean_filename = f"{server_host.lower()}.rdp"
+    return Response(
+        content=rdp_content,
+        media_type="application/x-rdp",
+        headers={
+            "Content-Disposition": f'attachment; filename="{clean_filename}"',
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+        }
+    )
+
 
 

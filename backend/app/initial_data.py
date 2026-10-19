@@ -247,6 +247,20 @@ def init_db():
                 "network_policy": "VPN_ONLY",
                 "health_status": "ONLINE",
                 "latency_ms": 15
+            },
+            {
+                "app_code": "wa_rdt2",
+                "app_name": "WA-RDT2 (SAP Remote Desktop)",
+                "connector_type": "RDP",
+                "base_url": "rdp://WA-RDT2",
+                "portal_launch_url": "/api/v1/oauth/portal/rdp/wa_rdt2.rdp",
+                "client_id": "wa-rdt2-spoke-client",
+                "client_secret": "sec_wa_rdt2_oauth_secret_2026",
+                "redirect_uris": "http://localhost:3000/portal/callback",
+                "sso_enabled": True,
+                "network_policy": "VPN_ONLY",
+                "health_status": "ONLINE",
+                "latency_ms": 5
             }
         ]
 
@@ -330,6 +344,17 @@ def init_db():
                     app.network_policy = "VPN_ONLY"
                     app.vpn_restriction_mode = "LOCK_WITH_BANNER"
                     logger.info("Ensured MTPulse portal_launch_url configured: %s, network_policy: VPN_ONLY, vpn_restriction_mode: LOCK_WITH_BANNER", app.portal_launch_url)
+                # Auto-upgrade WA-RDT2 Remote Desktop configuration
+                if item["app_code"] == "wa_rdt2":
+                    app.connector_type = "RDP"
+                    app.base_url = "rdp://WA-RDT2"
+                    app.portal_launch_url = "/api/v1/oauth/portal/rdp/wa_rdt2.rdp"
+                    app.sso_enabled = True
+                    app.network_policy = "VPN_ONLY"
+                    app.vpn_restriction_mode = "LOCK_WITH_BANNER"
+                    if not app.client_id:
+                        app.client_id = "wa-rdt2-spoke-client"
+                    logger.info("Ensured WA-RDT2 RDP Spoke configured: %s, network_policy: VPN_ONLY", app.portal_launch_url)
                 db.flush()
             app_objs[item["app_code"]] = app
 

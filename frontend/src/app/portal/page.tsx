@@ -29,6 +29,9 @@ import {
   X,
   AlertTriangle,
   Clock,
+  Monitor,
+  Download,
+  Terminal,
 } from "lucide-react";
 import { api, PortalAppItem, AdminUserOut } from "@/lib/api";
 import {
@@ -77,10 +80,15 @@ export default function PortalPage() {
     if (!targetUrl) return false;
     try {
       let cleanUrl = targetUrl.trim();
-      try {
-        const parsed = new URL(cleanUrl);
-        cleanUrl = `${parsed.protocol}//${parsed.host}`;
-      } catch {}
+      // For RDP protocol or relative download URLs, probe via relative check or backend
+      if (cleanUrl.startsWith("rdp://") || cleanUrl.startsWith("/")) {
+        cleanUrl = `${window.location.origin}/api/v1/auth/me`;
+      } else {
+        try {
+          const parsed = new URL(cleanUrl);
+          cleanUrl = `${parsed.protocol}//${parsed.host}`;
+        } catch {}
+      }
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -100,7 +108,10 @@ export default function PortalPage() {
   const checkVpnForApp = async (app: PortalAppItem) => {
     if (app.network_policy !== "VPN_ONLY") return;
     setVpnReachability((prev) => ({ ...prev, [app.app_code]: "checking" }));
-    const targetUrl = app.base_url || app.portal_launch_url || app.launch_url || "";
+    // For RDP apps, probe using the RDP download endpoint with HEAD/GET or server auth check
+    const targetUrl = app.connector_type === "RDP"
+      ? (app.portal_launch_url || "/api/v1/oauth/portal/rdp/wa_rdt2.rdp")
+      : (app.base_url || app.portal_launch_url || app.launch_url || "");
     const reachable = await probeAppVpn(targetUrl);
     setVpnReachability((prev) => ({
       ...prev,
@@ -122,7 +133,9 @@ export default function PortalPage() {
 
     await Promise.all(
       vpnApps.map(async (a) => {
-        const targetUrl = a.base_url || a.portal_launch_url || a.launch_url || "";
+        const targetUrl = a.connector_type === "RDP"
+          ? (a.portal_launch_url || "/api/v1/oauth/portal/rdp/wa_rdt2.rdp")
+          : (a.base_url || a.portal_launch_url || a.launch_url || "");
         const reachable = await probeAppVpn(targetUrl);
         setVpnReachability((prev) => ({
           ...prev,
@@ -264,6 +277,18 @@ export default function PortalPage() {
       const isVerified = app.network_policy === "VPN_ONLY" ? vpnReachability[app.app_code] === "connected" : true;
       const res = await api.launchPortalApp(app.client_id, undefined, undefined, isVerified);
       if (res && res.launch_url) {
+        if (app.connector_type === "RDP" || app.app_code === "wa_rdt2") {
+          // Trigger file download for RDP connection file without leaving the portal page
+          const link = document.createElement("a");
+          link.href = res.launch_url;
+          link.download = "wa-rdt2.rdp";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => setLaunchingAppCode(null), 1200);
+          return;
+        }
+
         // Pause SSO Portal 30-min Idle Timer while the user is working in the Spoke App Client
         markNavigatingToSpokeApp();
         // Navigate directly in the same tab to save RAM and avoid spawning duplicate browser tabs
@@ -316,6 +341,13 @@ export default function PortalPage() {
           iconContainer: "bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-md shadow-cyan-500/25",
           cardGlow: "hover:border-cyan-400/90 hover:shadow-cyan-500/10",
           btn: "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white shadow-sm shadow-cyan-500/25",
+        };
+      case "wa_rdt2":
+        return {
+          icon: <Monitor className="w-5.5 h-5.5 text-white" />,
+          iconContainer: "bg-gradient-to-tr from-blue-600 to-slate-800 shadow-md shadow-blue-500/25",
+          cardGlow: "hover:border-blue-500/90 hover:shadow-blue-500/15",
+          btn: "bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-800 hover:to-indigo-900 text-white shadow-sm shadow-blue-700/25",
         };
       case "worksync":
         return {
@@ -740,16 +772,28 @@ export default function PortalPage() {
                           <span>กำลังตรวจ VPN...</span>
                         </span>
                       ) : isVpnConnected ? (
-                        <>
-                          <span>เข้าใช้งานระบบ</span>
-                          <ArrowUpRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                        </>
+                        app.connector_type === "RDP" || app.app_code === "wa_rdt2" ? (
+                          <>
+                            <Download className="w-3.5 h-3.5 transition-transform group-hover:translate-y-0.5" />
+                            <span>เปิด Remote Desktop (.rdp)</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>เข้าใช้งานระบบ</span>
+                            <ArrowUpRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                          </>
+                        )
                       ) : isVpnLocked ? (
                         <span className="flex items-center justify-center gap-1 text-center">
                           <Lock className="w-3 h-3 text-slate-500 shrink-0" />
                           <span>ต่อ VPN แล้วตรวจใหม่</span>
                           <RefreshCw className="w-3 h-3 ml-0.5 text-slate-500 shrink-0" />
                         </span>
+                      ) : app.connector_type === "RDP" || app.app_code === "wa_rdt2" ? (
+                        <>
+                          <Download className="w-3.5 h-3.5 transition-transform group-hover:translate-y-0.5" />
+                          <span>เปิด Remote Desktop (.rdp)</span>
+                        </>
                       ) : (
                         <>
                           <span>เข้าใช้งานระบบ</span>
