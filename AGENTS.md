@@ -4,10 +4,10 @@
 
 ---
 
-## 1. กฎการเริ่มต้นบทสนทนา (Session Startup Protocol)
-เมื่อเริ่มต้นบทสนทนาใหม่หรือเริ่มงานใหม่ในแต่ละรอบ AI Agent **ต้องอ่านและทำความเข้าใจไฟล์บริบทต่อไปนี้โดยอัตโนมัติทันที** ก่อนเริ่มตอบคำถามหรือลงมือเขียนโค้ด โดยที่ผู้ใช้ไม่ต้องคอยทวงถาม:
-1. [MEMORY.md](file:///d:/Python/Central-IAM/MEMORY.md) — ฐานความรู้ระบบ พอร์ต คีย์เชื่อมต่อ นโยบายความปลอดภัย และข้อควรระวังสำคัญ
-2. [HANDOFF.md](file:///d:/Python/Central-IAM/HANDOFF.md) — สถานะความคืบหน้าล่าสุด Git commits และ Roadmap งานที่จะทำต่อ
+## 1. กฎการเริ่มต้นบทสนทนา (Session Startup Protocol — บังคับทุกครั้งเมื่อเริ่ม Session)
+เมื่อเริ่มต้นบทสนทนาใหม่, เริ่มงานใหม่, หรือผู้ใช้สลับ Project กลับมายังหน้านี้ AI Agent **ต้องใช้เครื่องมือเปิดอ่านและทำความเข้าใจไฟล์บริบทต่อไปนี้โดยอัตโนมัติทันที 100% ในข้อความแรก** ก่อนเริ่มตอบคำถามหรือลงมือเขียนโค้ด โดยที่ผู้ใช้ไม่ต้องคอยพิมพ์สั่งให้อ่าน:
+1. [HANDOFF.md](file:///d:/Python/Central-IAM/HANDOFF.md) — สถานะความคืบหน้าล่าสุด Git commits และ Roadmap งานที่จะทำต่อ
+2. [MEMORY.md](file:///d:/Python/Central-IAM/MEMORY.md) — ฐานความรู้ระบบ พอร์ต คีย์เชื่อมต่อ นโยบายความปลอดภัย และข้อควรระวังสำคัญ
 3. [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) — สเปกกลางการเชื่อมต่อ Mode A, Mode B, Mode C
 
 ---
