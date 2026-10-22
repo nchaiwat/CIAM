@@ -249,12 +249,13 @@ def list_users(
             or (len(u_clean) > 2 and u_clean[:2].isdigit() and "-ws" in u_clean)
         )
 
-        # Shop accounts are exclusively local branch VPN accounts, never AD accounts
-        if is_shop_acc:
+        # Shop accounts and explicitly designated local accounts are never AD accounts
+        is_local_acc = is_shop_acc or (identity.exception_type == "LOCAL_ACCOUNT") or (u_clean in ("pinyada.s", "winmonpan.p", "hermes.n"))
+        if is_local_acc:
             mappings = [m_pair for m_pair in mappings if m_pair[1].app_code.lower() != "ad"]
 
         # AD users have ad_guid, employee_id, AD login history, AD mapping, corporate email, or corporate AD department
-        has_ad_mapping = (not is_shop_acc) and any(app.app_code.lower() == "ad" for _, app in mappings)
+        has_ad_mapping = (not is_local_acc) and any(app.app_code.lower() == "ad" for _, app in mappings)
         dept_lower = (identity.department or "").strip().lower()
         corporate_keywords = ("it", "pu", "purchasing", "accounting", "hr", "executive", "management", "general", "qa", "warehouse", "m365", "administration", "ธุรการ")
         is_corp_dept = any(kw in dept_lower for kw in corporate_keywords) if dept_lower else False
@@ -262,7 +263,7 @@ def list_users(
         is_ad_username_fmt = len(u_clean.split(".")) == 2 and len(u_clean.split(".")[1]) <= 2
 
         is_ad = bool(
-            not is_shop_acc
+            not is_local_acc
             and (
                 identity.ad_guid 
                 or identity.employee_id 
@@ -271,7 +272,7 @@ def list_users(
                 or is_corp_dept
                 or (has_corp_email and not is_shop_acc)
             )
-            and (u_clean not in ("pinyada.s", "winmonpan.p"))
+            and (u_clean not in ("pinyada.s", "winmonpan.p", "hermes.n"))
         )
 
         # An identity is genuinely active in AD only if it is an AD identity, has AD presence, and identity.is_active_in_ad is True
@@ -393,14 +394,15 @@ def get_user_detail(
         or "shop_" in u_clean
         or (len(u_clean) > 2 and u_clean[:2].isdigit() and "-ws" in u_clean)
     )
-    if is_shop_acc:
+    is_local_acc = is_shop_acc or (identity.exception_type == "LOCAL_ACCOUNT") or (u_clean in ("pinyada.s", "winmonpan.p", "hermes.n"))
+    if is_local_acc:
         mappings = [m_pair for m_pair in mappings if m_pair[1].app_code.lower() != "ad"]
 
-    has_ad_mapping = (not is_shop_acc) and any(app.app_code.lower() == "ad" for _, app in mappings)
+    has_ad_mapping = (not is_local_acc) and any(app.app_code.lower() == "ad" for _, app in mappings)
     has_direct_ad = bool(has_ad_mapping or identity.ad_guid or identity.last_login_ad_at)
-    is_ad = bool((not is_shop_acc) and (identity.ad_guid or has_ad_mapping))
+    is_ad = bool((not is_local_acc) and (identity.ad_guid or has_ad_mapping))
     effective_ad_active = bool(is_ad and identity.is_active_in_ad and has_direct_ad)
-    if identity.is_active_in_ad and (not has_direct_ad or is_shop_acc) and not getattr(identity, "is_approved_exception", False):
+    if identity.is_active_in_ad and (not has_direct_ad or is_local_acc) and not getattr(identity, "is_approved_exception", False):
         identity.is_active_in_ad = False
         effective_ad_active = False
 

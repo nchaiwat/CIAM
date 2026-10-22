@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-10-22  
-**Version:** 2.9.1 (True 2-Way Bi-directional Status Sync & Spoke Spec v2.9.0)  
+**Version:** 2.9.2 (Hermes.N Local Account AD Isolation & Auto-Heal Fix)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  

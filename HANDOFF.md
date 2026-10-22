@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 22 ตุลาคม 2026 (Local Time: ~11:30 ICT)  
+> **Date Updated:** 22 ตุลาคม 2026 (Local Time: ~13:25 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 74/74 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: Sprint 49 - True 2-Way Bi-directional Status Sync, Origin Tracking & Spoke Spec v2.9.0
+> **Git Status:** Production Ready — Latest Commit: Sprint 50 - Hermes.N Local Account AD Isolation & Auto-Heal Fix
 
 ---
 
@@ -15,7 +15,15 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **True 2-Way Bi-directional Status Sync, Origin Tracking & Spoke Spec v2.9.0 (Sprint 49):**
+1. **Hermes.N Local Account AD Isolation & Auto-Heal Fix (Sprint 50):**
+   - **แก้ปัญหาบัญชี Hermes.N แสดงสถานะอยู่ใน AD และ Active ผิดพลาด:**
+     - สาเหตุเดิม: ใน `backend/app/initial_data.py` เดิมมี seed data ที่ระบุ `Hermes.N` มี `is_active_in_ad: True` และมี mapping กับ `ad` role `Domain Users` ทำให้ทุกครั้งที่ container start จะ overwrite ค่าเป็น Active ใน AD เสมอ
+     - แก้ไข: ปรับ seed data ของ `Hermes.N` ให้ `is_active_in_ad: False` และถอด `app: ad` ออก พร้อมใส่ auto-heal ใน `initial_data.py` ให้ลบ `AppAccountMapping` ของ AD ทิ้ง, ตั้ง `is_approved_exception = True` และ `exception_type = "LOCAL_ACCOUNT"`
+     - ใน `backend/app/api/v1/directory.py`: เพิ่มการตรวจสอบ `is_local_acc` หากเป็น `LOCAL_ACCOUNT` หรือชื่อ `hermes.n`, `pinyada.s`, `winmonpan.p` จะตัด mapping `ad` และกำหนด `effective_ad_active = False` ทันที ป้องกันไม่ให้ขึ้นจุดเขียว AD และไม่แสดงป้าย `• AD`
+   - **ชี้แจงสถาปัตยกรรม M2M Sync ระหว่าง IRM กับ CIAM:**
+     - CIAM ดึงข้อมูล (Pull) จาก IRM ผ่าน M2M API ทุก 04:00 น. หรือเมื่อกดปุ่ม "ซิงก์ข้อมูล" บนหน้า `/applications`
+     - เพื่อให้การ Disable จากฝั่ง IRM ส่งผลมายัง CIAM แบบทันที (Instant Realtime) จำเป็นต้องมี Outbound Webhook ยิงจากฝั่ง IRM กลับมาแจ้ง CIAM เมื่อมีการ toggle status ผู้ใช้
+2. **True 2-Way Bi-directional Status Sync, Origin Tracking & Spoke Spec v2.9.0 (Sprint 49):**
    - **แก้ปัญหาสิทธิ์เด้งกลับและบัญชีหายแบบถาวร (Two-Way Synchronization with Origin Tracking):**
      - กำหนดหลักการ "ใครเริ่มก่อน ส่งผลให้อีกฝั่งด้วย พร้อมป้ายระบุที่มาชัดเจน (First-Action Wins with Origin Tracking)":
        - **ถ้า Spoke เริ่มก่อน (Spoke-Initiated):** หากแอดมินระบบลูกปิดสิทธิ์ (Disable) หรือเปิดสิทธิ์ในระบบตนเอง เมื่อส่งข้อมูลผ่าน Heartbeat หรือ Sync ระบบ CIAM จะยอมรับสถานะตามทันที ปรับ `is_active_in_app = false/true`, แปะป้าย `status_origin = 'SPOKE_APP'`, และ **ไม่ส่งคำสั่ง `PROVISION_USER` หรือ `ENABLE_USER` ไปบังคับเปิดคืนให้ Spoke เด็ดขาด**

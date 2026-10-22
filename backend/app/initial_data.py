@@ -531,9 +531,8 @@ def init_db():
                 "full_name": "Hermess Nilawan",
                 "email": "hermes.n@windowasia.com",
                 "department": "Warehouse",
-                "is_active_in_ad": True,
+                "is_active_in_ad": False,
                 "mappings": [
-                    {"app": "ad", "role": "Domain Users", "active": True},
                     {"app": "irm", "role": "WH User", "active": True}
                 ]
             }
@@ -648,6 +647,20 @@ def init_db():
             if ad_app:
                 db.query(AppAccountMapping).filter(
                     AppAccountMapping.identity_id == worawut_ident.id,
+                    AppAccountMapping.application_id == ad_app.id
+                ).delete()
+
+        # Fix Hermes.N: Local non-AD IRM account (Warehouse)
+        hermes_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "hermes.n").first()
+        if hermes_ident:
+            hermes_ident.is_active_in_ad = False
+            hermes_ident.is_approved_exception = True
+            hermes_ident.exception_type = "LOCAL_ACCOUNT"
+            hermes_ident.exception_reason = "บัญชีเฉพาะระบบ IRM (Non-AD Local Account)"
+            ad_app = app_objs.get("ad")
+            if ad_app:
+                db.query(AppAccountMapping).filter(
+                    AppAccountMapping.identity_id == hermes_ident.id,
                     AppAccountMapping.application_id == ad_app.id
                 ).delete()
 
