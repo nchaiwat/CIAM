@@ -63,6 +63,12 @@ def init_db():
                 conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN exception_approved_at TIMESTAMP;"))
             if "exception_expires_at" not in mapping_columns:
                 conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN exception_expires_at TIMESTAMP;"))
+            if "status_origin" not in mapping_columns:
+                conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN status_origin VARCHAR(50) DEFAULT 'CIAM_ADMIN';"))
+            if "status_updated_at" not in mapping_columns:
+                conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN status_updated_at TIMESTAMP WITH TIME ZONE;"))
+            if "status_reason" not in mapping_columns:
+                conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN status_reason VARCHAR(255);"))
 
             # Safe auto-migration for connected_applications
             app_columns = [c["name"] for c in inspector.get_columns("connected_applications")]

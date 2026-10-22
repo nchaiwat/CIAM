@@ -21,6 +21,9 @@ class AppAccountSummary(BaseModel):
     exception_reason: Optional[str] = None
     exception_approved_by: Optional[str] = None
     exception_approved_at: Optional[datetime] = None
+    status_origin: Optional[str] = "CIAM_ADMIN" # 'CIAM_ADMIN', 'SPOKE_APP', 'AD_INHERITED'
+    status_updated_at: Optional[datetime] = None
+    status_reason: Optional[str] = None
 
 class UserListItem(BaseModel):
     id: int

@@ -1,7 +1,7 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Current Version:** 2.8.0 (Enterprise In-App AI Copilot Standard, MCP Tools Integration & Dynamic AI Settings)  
-**Effective Date:** 17 ตุลาคม 2026 (17/10/2026)  
+**Current Version:** 2.9.0 (True 2-Way Bi-directional Status Sync, Status Origin Tracking & Account Preservation Standard)  
+**Effective Date:** 22 ตุลาคม 2026 (22/10/2026)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
 **Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
 **Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636) / OAuth 2.0 Security BCP (RFC 9700) / Model Context Protocol (MCP)
@@ -14,7 +14,8 @@
 
 | เวอร์ชัน (Version) | วันที่มีผล (Date) | สถานะ (Status) | สรุปรายการปรับปรุงจากเวอร์ชันก่อนหน้า (Change Summary & Key Differences) |
 | :---: | :---: | :---: | :--- |
-| **v2.8.0** | 17/10/2026 | **Current Active** | • **หมวด E: ข้อกำหนดมาตรฐาน In-App AI Copilot & MCP Tools ประจำระบบลูก (Spoke AI Assistant & Dynamic Settings Standard):** กำหนดมาตรฐานสำหรับ Spoke Application ที่ต้องการมีหน้าต่างแชท AI ประจำระบบของตนเอง ให้จัดเก็บการตั้งค่าแบบไดนามิกลงในตาราง `system_settings` (`ai_copilot_enabled`, `ai_provider`, `ai_api_key`, `ai_model`, `ai_system_prompt`) และบังคับให้ปิดการแสดงผลหน้า Chat หรือ Floating Widget อัตโนมัติเมื่อ `ai_copilot_enabled: false` หรือยังไม่ได้ระบุ API Key เพื่อความปลอดภัยและประหยัดค่าใช้จ่าย<br/>• **Model Context Protocol (MCP) Integration:** กำหนดแนวทางให้ AI ประจำ Spoke สามารถเรียกใช้งาน Central IAM Core MCP Server (Remote SSE over HTTPS via Bearer token) เพื่อตรวจเช็คความปลอดภัยของบัญชีผู้ใช้ และอนุญาตให้ Spoke พัฒนา MCP Tools ประจำระบบของตนเองได้ |
+| **v2.9.0** | 22/10/2026 | **Current Active** | • **หมวด D.6: True 2-Way Bi-directional Status Sync & Origin Tracking (มาตรฐานการซิงก์สถานะสองทางแบบใครเริ่มก่อนมีผลทันที):** กำหนดให้การเปลี่ยนแปลงสถานะบัญชี (เปิดใช้งาน / ระงับสิทธิ์) ที่เริ่มต้นจากฝั่งใด (ไม่ว่าจะเริ่มที่หน้าเว็บ CIAM หรือเริ่มที่หลังบ้านของ App Client) ต้องส่งผลไปยังอีกฝั่งโดยตรง (First-Action Wins with Origin Tracking)<br/>• **Status Origin Tracking (`status_origin`, `status_updated_at`, `status_reason`):** ระบบ CIAM จะบันทึกที่มาของการเปลี่ยนสถานะอย่างโปร่งใส (`CIAM_ADMIN`, `SPOKE_APP`, `AD_INHERITED`) หากระบบลูกส่งสถานะ Inactive มา CIAM จะยอมรับสถานะและไม่ส่งคำสั่ง `PROVISION_USER` หรือ `ENABLE_USER` ไปบังคับเปิดคืนให้ Spoke โดยเด็ดขาด<br/>• **Account Preservation (No Blind Deletion):** ป้องกันปัญหาบัญชีหาย โดยกำหนดให้ CIAM ไม่ลบการผูกสิทธิ์ (`AppAccountMapping`) ที่สร้างจากระบบกลางทิ้งแบบเงียบๆ หาก Spoke ยังไม่ได้สร้างในระบบตนเอง ให้คงสถานะเป็น `PENDING_PROVISION` เพื่อรอการซิงก์<br/>• **SSO Callback Inactive Guard (หมวด B.3):** กำหนดให้ Spoke ตรวจสอบสถานะบัญชีในระบบตนเอง หากบัญชีถูกระงับสิทธิ์จากฝั่ง Spoke เอง หรือถูกระงับสิทธิ์จาก CIAM ต้องปฏิเสธการล็อกอิน และห้ามปลดล็อก Active คืนอัตโนมัติเด็ดขาด |
+| **v2.8.0** | 17/10/2026 | Superseded | • **หมวด E: ข้อกำหนดมาตรฐาน In-App AI Copilot & MCP Tools ประจำระบบลูก (Spoke AI Assistant & Dynamic Settings Standard):** กำหนดมาตรฐานสำหรับ Spoke Application ที่ต้องการมีหน้าต่างแชท AI ประจำระบบของตนเอง ให้จัดเก็บการตั้งค่าแบบไดนามิกลงในตาราง `system_settings` (`ai_copilot_enabled`, `ai_provider`, `ai_api_key`, `ai_model`, `ai_system_prompt`) และบังคับให้ปิดการแสดงผลหน้า Chat หรือ Floating Widget อัตโนมัติเมื่อ `ai_copilot_enabled: false` หรือยังไม่ได้ระบุ API Key เพื่อความปลอดภัยและประหยัดค่าใช้จ่าย<br/>• **Model Context Protocol (MCP) Integration:** กำหนดแนวทางให้ AI ประจำ Spoke สามารถเรียกใช้งาน Central IAM Core MCP Server (Remote SSE over HTTPS via Bearer token) เพื่อตรวจเช็คความปลอดภัยของบัญชีผู้ใช้ และอนุญาตให้ Spoke พัฒนา MCP Tools ประจำระบบของตนเองได้ |
 | **v2.7.0** | 08/10/2026 | Superseded | • **Mode C Two-Way Directory Reconciliation & Auto-Provisioning (หมวด D.2, D.4):** กำหนดให้การเชื่อมต่อ Mode C เป็นแบบ Two-Way Reconciliation อย่างแท้จริง โดยเมื่อ Spoke ส่ง Heartbeat / Full Sync ขึ้นมา CIAM จะเปรียบเทียบกับบัญชีที่ได้รับสิทธิ์ใน CIAM (`AppAccountMapping`). หาก CIAM มีบัญชีใหม่ที่ Spoke ยังไม่มี CIAM จะส่ง `assigned_accounts` และคำสั่ง `PROVISION_USER` กลับไปเพื่อให้ Spoke สร้างบัญชีใน Local Database ทันที (Role เริ่มต้นตาม `ciam_auto_provision_group`, `is_active: true`) และส่งคำสั่ง `DISABLE_USER` หากถูกระงับสิทธิ์ ทำให้จำนวนและสถานะตรงกัน 100% โดยไม่ต้องรอ User ล็อกอิน<br/>• **Mandatory Spoke Mode C Immediate Sync Button (หมวด D.4, 5.1):** ข้อบังคับสำหรับ Spoke Mode C ต้องมีปุ่ม **`[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]` (Immediate Account Sync)** บนหน้าจอ System Setting เพื่อให้ Admin สั่งแลกเปลี่ยนข้อมูลและปรับยอดจำนวนบัญชีรวมถึงสถานะ Active/Inactive ให้ตรงกันได้แบบเรียลไทม์โดยไม่ต้องรอรอบเวลา 120 วินาที<br/>• **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`) เพื่อให้ Spoke ผูก Client State & PKCE กับเบราว์เซอร์ได้สมบูรณ์ 100% ตามคำแนะนำ RFC 9700 |
 | **v2.6.0** | 07/10/2026 | Superseded | • **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`)<br/>• **Architecture Equivalence Principles (หมวด 1.4):** บรรจุหลักการยอมรับสถาปัตยกรรมภายในที่เทียบเท่า<br/>• **Mode C Full Sync Trigger Protocol (หมวด D.2):** เพิ่มคำสั่ง `REQUEST_FULL_SYNC` ใน Heartbeat Command Queue |
 | **v2.5.0** | 07/10/2026 | Superseded | • **Dual-Mode SSO & Portal Launch Support:** เพิ่มข้อกำหนดการรองรับการเปิดจาก Portal และข้อกำหนดความปลอดภัยของ Callback |
@@ -933,6 +934,36 @@ sudo systemctl start ciam-agent
 * Program/script: `python.exe` (หรือ `pythonw.exe` เพื่อซ่อนหน้าต่าง cmd)
 * Add arguments: `C:\inetpub\wwwroot\mtpulse\ciam_agent.py`
 * Trigger: `At startup` หรือ `Daily, repeat every 2 minutes indefinitely`
+
+---
+
+#### D.6 ข้อกำหนดมาตรฐานการซิงก์สถานะสองทาง (True 2-Way Bi-directional Status Sync & Origin Tracking Standard)
+
+เพื่อให้การจัดการสถานะบัญชี (เปิดใช้งาน / ระงับสิทธิ์) และการเพิ่ม/ลดสิทธิ์ระหว่าง Central IAM และระบบลูกทุกระบบ (Mode A, Mode B, Mode C) สอดคล้องตรงกัน 100% ตามหลักการ **"ใครเริ่มก่อน ส่งผลให้อีกฝั่งด้วย พร้อมป้ายระบุที่มาชัดเจน (First-Action Wins with Origin Tracking)"**:
+
+##### 1. กฎการเปลี่ยนแปลงสถานะที่เริ่มจากระบบลูก (Spoke-Initiated Status Changes)
+* หากผู้ดูแลระบบลูกทำการ **ปิดสิทธิ์ (Disable / Inactive)** หรือ **เปิดสิทธิ์ (Enable / Active)** บัญชีผู้ใช้ใดๆ ที่หลังบ้านของระบบตนเอง:
+  1. ระบบลูกต้องส่งสถานะจริงล่าสุด (`is_active: false` หรือ `true`) ผ่านก้อนข้อมูล `accounts: [...]` ในรอบ Heartbeat / Full Sync (Mode C) หรือ Inventory Webhook (Mode A)
+  2. เมื่อ Central IAM ได้รับข้อมูล:
+     - CIAM จะทำการอัปเดตสถานะของบัญชีนั้นในระบบกลางตามทันที (`mapping.is_active_in_app = false/true`)
+     - CIAM จะบันทึกที่มาของการเปลี่ยนสถานะเป็น **`status_origin = 'SPOKE_APP'`** พร้อมบันทึก `status_updated_at` และ `status_reason` เช่น *"ระงับสิทธิ์โดยระบบลูก (MTPulse)"*
+     - **กฎเหล็กเพื่อป้องกันการเด้งคืน (No Blind Re-activation):** เมื่อสถานะล่าสุดระบุว่าระบบลูกเป็นผู้สั่งปิดเอง (`status_origin == 'SPOKE_APP'`) ในรอบ Sync หรือ Heartbeat ถัดไป Central IAM จะ **ไม่ส่งคำสั่ง `PROVISION_USER` หรือ `ENABLE_USER` ไปบังคับเปิดคืนให้ Spoke โดยเด็ดขาด** จนกว่าผู้ดูแลระบบจะสั่งเปิดใช้งานใหม่จากหน้าจอ CIAM Console
+  3. **ข้อบังคับใน SSO Callback ของระบบลูก (SSO Callback Inactive Guard):**
+     - หากบัญชีในระบบลูกถูกระงับสิทธิ์อยู่ (`users.is_active == false` ใน DB ของระบบลูก) แม้ผู้ใช้คนนั้นจะได้รับ SSO Token ที่ถูกต้องจาก Central IAM ระบบลูก **ต้องปฏิเสธการล็อกอิน (HTTP 403 Forbidden หรือแสดงหน้าแจ้งเตือนบัญชีถูกระงับสิทธิ์)**
+     - ❌ **ห้ามสั่ง `user.is_active = True` คืนอัตโนมัติใน SSO Callback เด็ดขาด** หากบัญชีนั้นยังอยู่ในสถานะถูกระงับสิทธิ์จากฝั่งระบบลูก
+
+##### 2. กฎการเปลี่ยนแปลงสถานะที่เริ่มจาก Central IAM (CIAM-Initiated Status Changes)
+* หากผู้ดูแลระบบทำการ **ปิดสิทธิ์ (Disable)** หรือ **เปิดสิทธิ์ (Enable)** จากหน้าจอ Central IAM (`/directory`):
+  1. CIAM จะทำการส่งคำสั่ง `DISABLE_USER` หรือ `ENABLE_USER` ไปยังระบบลูกทันที (ผ่าน Inbound Webhook สำหรับ Mode A หรือใส่คิวคำสั่งสำหรับ Mode C)
+  2. CIAM บันทึกที่มาเป็น **`status_origin = 'CIAM_ADMIN'`**
+  3. เมื่อระบบลูกได้รับคำสั่ง ให้ทำการอัปเดตฐานข้อมูลภายในของตนเอง (`UPDATE users SET is_active = ...`) และส่งผลการประมวลผลกลับมา
+
+##### 3. กฎการรักษาสิทธิ์เพื่อป้องกันบัญชีหาย (Account Preservation & No Blind Deletion)
+* **ปัญหาเดิม:** เมื่อผู้ดูแลระบบมอบสิทธิ์ให้พนักงานใน CIAM แต่ระบบลูกยังไม่ได้สร้างบัญชีลงในฐานข้อมูลจริง (เช่น เป็น Mode B ที่รอ JIT หรือ Mode C ที่รอ Agent) เมื่อถึงรอบ Auto-Sync (04:00 น.) CIAM ดึงรายชื่อมาแล้วไม่พบ Username นั้น จึงสั่งลบการผูกสิทธิ์ (`AppAccountMapping`) ทิ้ง ทำให้สิทธิ์ที่เคยมอบไว้ "หายไป"
+* **มาตรฐานใหม่:**
+  1. Central IAM จะ **ไม่ลบการผูกสิทธิ์ทิ้งแบบเงียบๆ** หากบัญชีนั้นถูกสร้างหรือมอบหมายจากระบบกลาง (`status_origin == 'CIAM_ADMIN'`)
+  2. CIAM จะปรับสถานะการซิงก์เป็น **`PENDING_PROVISION`** (รอสร้างในระบบลูก) และคงการ์ดสิทธิ์ไว้บนหน้าจอ เพื่อรอให้ระบบลูกประมวลผลคำสั่งหรือพนักงานล็อกอิน SSO ครั้งแรกสำเร็จ
+  3. การลบการผูกสิทธิ์จะเกิดขึ้นต่อเมื่อผู้ดูแลระบบกดปุ่ม "ยกเลิกสิทธิ์ระบบนี้" (Unassign / Revoke) จากหน้าจอ CIAM เท่านั้น
 
 ---
 

@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
-**Last Updated:** 2026-10-17  
-**Version:** 2.9.0 (Core Model Context Protocol (MCP) Server for AI Agents, Spoke Data Bridge)  
+**Last Updated:** 2026-10-22  
+**Version:** 2.9.1 (True 2-Way Bi-directional Status Sync & Spoke Spec v2.9.0)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  

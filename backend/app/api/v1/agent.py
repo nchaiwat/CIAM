@@ -164,21 +164,45 @@ def handle_agent_heartbeat(
             ).first()
 
             if not mapping:
+                act_str = "เปิดใช้งาน" if (acc.is_active if acc.is_active is not None else True) else "ระงับสิทธิ์"
                 mapping = AppAccountMapping(
                     identity_id=ident.id,
                     application_id=app.id,
                     app_username=username_clean,
                     app_group_name=acc.role or "User",
                     is_active_in_app=acc.is_active if acc.is_active is not None else True,
+                    status_origin="SPOKE_APP",
+                    status_updated_at=now,
+                    status_reason=f"ตรวจพบบัญชีครั้งแรกจาก {app.app_name} ({act_str})",
                     last_sync_status="IN_SYNC"
                 )
                 db.add(mapping)
                 db.flush()
             else:
+                # Detect Spoke-Initiated Status Changes (Two-Way Bi-directional Sync)
+                if acc.is_active is not None and acc.is_active != mapping.is_active_in_app:
+                    old_status = mapping.is_active_in_app
+                    mapping.is_active_in_app = acc.is_active
+                    mapping.status_origin = "SPOKE_APP"
+                    mapping.status_updated_at = now
+                    act_str = "เปิดใช้งาน" if acc.is_active else "ระงับสิทธิ์"
+                    mapping.status_reason = f"{act_str}โดย {app.app_name} (Heartbeat Sync)"
+                    
+                    db.add(IamAuditLog(
+                        actor_username=f"AGENT:{app.app_code.upper()}",
+                        action_type="SPOKE_STATUS_CHANGED",
+                        target_username=username_clean,
+                        affected_app_code=app.app_code,
+                        previous_status="ACTIVE" if old_status else "DISABLED",
+                        new_status="ACTIVE" if acc.is_active else "DISABLED",
+                        execution_mode="OUTBOUND_AGENT",
+                        reason=f"ระบบลูก {app.app_name} ปรับสถานะเป็น {'เปิดใช้งาน' if acc.is_active else 'ระงับสิทธิ์'} ผ่าน Heartbeat",
+                        status="SUCCESS"
+                    ))
+
                 mapping.identity_id = ident.id
                 mapping.app_username = username_clean
                 mapping.app_group_name = acc.role or mapping.app_group_name
-                mapping.is_active_in_app = acc.is_active if acc.is_active is not None else mapping.is_active_in_app
                 mapping.last_sync_status = "IN_SYNC"
 
             # Prune any redundant duplicate mappings for this identity and application

@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 19 ตุลาคม 2026 (Local Time: ~12:45 ICT)  
+> **Date Updated:** 22 ตุลาคม 2026 (Local Time: ~11:30 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 73/73 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: Sprint 48 - Add Remote Desktop Spoke Application (WA-RDT2) with SAP B1 RBAC & Dynamic RDP Generation
+> **Test Integrity:** Backend Pytest: 74/74 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready — Latest Commit: Sprint 49 - True 2-Way Bi-directional Status Sync, Origin Tracking & Spoke Spec v2.9.0
 
 ---
 
@@ -15,7 +15,21 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Remote Desktop Spoke Application (WA-RDT2) with SAP B1 RBAC & Dynamic RDP Generation (Sprint 48):**
+1. **True 2-Way Bi-directional Status Sync, Origin Tracking & Spoke Spec v2.9.0 (Sprint 49):**
+   - **แก้ปัญหาสิทธิ์เด้งกลับและบัญชีหายแบบถาวร (Two-Way Synchronization with Origin Tracking):**
+     - กำหนดหลักการ "ใครเริ่มก่อน ส่งผลให้อีกฝั่งด้วย พร้อมป้ายระบุที่มาชัดเจน (First-Action Wins with Origin Tracking)":
+       - **ถ้า Spoke เริ่มก่อน (Spoke-Initiated):** หากแอดมินระบบลูกปิดสิทธิ์ (Disable) หรือเปิดสิทธิ์ในระบบตนเอง เมื่อส่งข้อมูลผ่าน Heartbeat หรือ Sync ระบบ CIAM จะยอมรับสถานะตามทันที ปรับ `is_active_in_app = false/true`, แปะป้าย `status_origin = 'SPOKE_APP'`, และ **ไม่ส่งคำสั่ง `PROVISION_USER` หรือ `ENABLE_USER` ไปบังคับเปิดคืนให้ Spoke เด็ดขาด**
+       - **ถ้า CIAM เริ่มก่อน (CIAM-Initiated):** เมื่อแอดมินปิด/เปิดสิทธิ์จาก CIAM Console จะส่งคำสั่งไปยัง Spoke ตามปกติ และบันทึก `status_origin = 'CIAM_ADMIN'`
+       - **ป้องกันบัญชีหาย (No Blind Deletion):** ปรับแก้ `scheduler.py` ยกเลิกการลบ `AppAccountMapping` ทิ้งแบบเงียบๆ หากเป็นสิทธิ์ที่มอบหมายจาก CIAM แต่ Spoke ยังไม่ได้สร้าง จะคงสถานะไว้เป็น `PENDING_PROVISION` เพื่อรอให้ระบบลูกสร้างหรือผู้ใช้ล็อกอินครั้งแรก
+   - **Database Model & Auto-Migration:**
+     - เพิ่มฟิลด์ `status_origin`, `status_updated_at`, `status_reason` ใน `app_account_mappings` พร้อม Auto-migration ใน `initial_data.py`
+   - **Frontend UI & Visualization:**
+     - ใน `/directory` หน้าตารางหลักและหน้าต่างรายละเอียดพนักงาน: แสดง Badge ระบุแหล่งที่มาของการเปลี่ยนสถานะ เช่น `🟡 ปิดจาก MTPulse`, `⚪ ปิดโดย CIAM Admin`, `⏳ รอสร้างในระบบลูก (Pending Provision)` พร้อม Tooltip บอกวันเวลาและเหตุผล
+     - ใน `/applications`: อัปเดตปุ่มดาวน์โหลดสเปกเป็น `v2.9.0` และเพิ่มบันทึก Revision Changelog ในคู่มือ Dev
+   - **Framework Specification v2.9.0:**
+     - อัปเดต [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) และ `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` เป็นเวอร์ชัน **2.9.0** เพิ่มหมวด D.6 กำหนดมาตรฐาน 2-Way และข้อบังคับ SSO Callback Inactive Guard สำหรับทีมผู้พัฒนาระบบลูกทุกระบบ
+   - **Test Suite 100%:** Pytest ผ่าน 74/74 tests (100%), Frontend TypeScript `npx tsc --noEmit` 0 errors (100%)
+2. **Remote Desktop Spoke Application (WA-RDT2) with SAP B1 RBAC & Dynamic RDP Generation (Sprint 48):**
    - **เพิ่ม Spoke App สำหรับ Windows Terminal / RDS Server `WA-RDT2`:**
      - เพิ่ม `wa_rdt2` ใน `backend/app/initial_data.py` (`connector_type: "RDP"`, `network_policy: "VPN_ONLY"`, `vpn_restriction_mode: "LOCK_WITH_BANNER"`, `portal_launch_url: "/api/v1/oauth/portal/rdp/wa_rdt2.rdp"`, `category: "การเงินและ ERP"`) พร้อมระบบ Auto-Heal อัตโนมัติเมื่อ Start Service
    - **ระบบคัดกรองสิทธิ์และ RBAC เฉพาะผู้ที่มีบัญชี SAP B1 (Strict SAP B1 Account Entitlement):**

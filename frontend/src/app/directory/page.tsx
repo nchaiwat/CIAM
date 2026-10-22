@@ -1308,21 +1308,32 @@ export default function DirectoryPage() {
                               ? (user.is_active_in_ad ?? app.is_active_in_app)
                               : app.is_active_in_app;
 
+                          const isSpokeDisabled = !isEffectiveActive && app.status_origin === "SPOKE_APP";
+                          const isPendingProvision = app.last_sync_status === "PENDING_PROVISION";
+
                           return (
                             <span
                               key={`${app.application_id}-${app.app_username}`}
                               title={
                                 app.is_approved_exception
                                   ? `ข้อยกเว้น: ${app.exception_type} (${app.exception_reason})`
+                                  : isPendingProvision
+                                  ? `${app.app_name}: มอบสิทธิ์แล้ว รอสร้างบนระบบลูก (Pending Provision)`
+                                  : isSpokeDisabled
+                                  ? `${app.app_name}: ปิดใช้งานโดยระบบลูก (${app.status_reason || "ระงับสิทธิ์จาก Spoke"})`
                                   : `${app.app_name} (${isSsoGroup ? "รองรับ SSO" : "Non-SSO / Direct"}): ${
                                       isEffectiveActive ? "Active" : "Inactive"
-                                    }`
+                                    }${app.status_origin ? ` [ต้นทาง: ${app.status_origin}]` : ""}`
                               }
                               className={`px-1.5 py-0.5 rounded text-[10px] font-bold inline-flex items-center space-x-1 border shadow-2xs ${
                                 app.is_approved_exception
                                   ? "bg-purple-50 text-purple-900 border-purple-200"
                                   : !user.is_active_in_ad && isEffectiveActive && app.app_code.toLowerCase() !== "ad"
                                   ? "bg-amber-100 text-amber-950 border-amber-300"
+                                  : isPendingProvision
+                                  ? "bg-sky-50 text-sky-900 border-sky-300"
+                                  : isSpokeDisabled
+                                  ? "bg-amber-50 text-amber-900 border-amber-300"
                                   : isSsoGroup
                                   ? isEffectiveActive
                                     ? "bg-sky-50 text-sky-900 border-sky-300"
@@ -1336,6 +1347,10 @@ export default function DirectoryPage() {
                                 className={`w-1.5 h-1.5 rounded-full ${
                                   app.is_approved_exception
                                     ? "bg-purple-600"
+                                    : isPendingProvision
+                                    ? "bg-sky-500 animate-pulse"
+                                    : isSpokeDisabled
+                                    ? "bg-amber-500"
                                     : isEffectiveActive
                                     ? isSsoGroup
                                       ? "bg-sky-500"
@@ -1344,6 +1359,16 @@ export default function DirectoryPage() {
                                 }`}
                               ></span>
                               <span className="uppercase">{app.app_code}</span>
+                              {isSpokeDisabled && (
+                                <span className="text-[8px] bg-amber-200 text-amber-950 px-0.5 rounded font-black">
+                                  SPOKE
+                                </span>
+                              )}
+                              {isPendingProvision && (
+                                <span className="text-[8px] bg-sky-200 text-sky-950 px-0.5 rounded font-black">
+                                  WAIT
+                                </span>
+                              )}
                             </span>
                           );
                         };
@@ -1868,15 +1893,47 @@ export default function DirectoryPage() {
                             </div>
 
                             <div className="flex flex-col items-end gap-1">
-                              <span
-                                className={`px-2 py-0.5 rounded text-xs font-bold ${
-                                  isEffectiveActive
-                                    ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                                    : "bg-rose-100 text-rose-900 border border-rose-300"
-                                }`}
-                              >
-                                {isEffectiveActive ? "เปิดใช้งาน" : "ถูกระงับ"}
-                              </span>
+                              {app.last_sync_status === "PENDING_PROVISION" ? (
+                                <span className="px-2 py-0.5 rounded text-xs font-bold bg-sky-100 text-sky-900 border border-sky-300">
+                                  ⏳ รอสร้างในระบบลูก
+                                </span>
+                              ) : isEffectiveActive ? (
+                                <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center space-x-1">
+                                  <span>เปิดใช้งาน</span>
+                                  {app.status_origin === "SPOKE_APP" && (
+                                    <span className="text-[10px] bg-emerald-200 text-emerald-950 px-1 rounded font-normal">
+                                      (จาก Spoke)
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span
+                                  className={`px-2 py-0.5 rounded text-xs font-bold flex items-center space-x-1 ${
+                                    app.status_origin === "SPOKE_APP"
+                                      ? "bg-amber-100 text-amber-950 border border-amber-300"
+                                      : "bg-rose-100 text-rose-900 border border-rose-300"
+                                  }`}
+                                  title={app.status_reason || undefined}
+                                >
+                                  <span>ถูกระงับ</span>
+                                  <span className="text-[10px] px-1 rounded font-normal bg-black/10">
+                                    {app.status_origin === "SPOKE_APP"
+                                      ? `โดย ${app.app_name}`
+                                      : app.status_origin === "AD_INHERITED"
+                                      ? "ตาม AD"
+                                      : "โดย CIAM"}
+                                  </span>
+                                </span>
+                              )}
+
+                              {app.status_reason && (
+                                <div
+                                  className="text-[10px] text-slate-500 max-w-[200px] text-right truncate"
+                                  title={app.status_reason}
+                                >
+                                  {app.status_reason}
+                                </div>
+                              )}
 
                               {app.is_approved_exception && (
                                 <span className="text-[10px] bg-purple-100 text-purple-900 border border-purple-300 font-bold px-1.5 py-0.5 rounded">

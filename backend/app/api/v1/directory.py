@@ -117,6 +117,9 @@ def _build_app_summaries(mappings: list, identity_is_active_in_ad: Optional[bool
                 exception_reason=getattr(m, "exception_reason", None),
                 exception_approved_by=getattr(m, "exception_approved_by", None),
                 exception_approved_at=getattr(m, "exception_approved_at", None),
+                status_origin=getattr(m, "status_origin", "CIAM_ADMIN") or "CIAM_ADMIN",
+                status_updated_at=getattr(m, "status_updated_at", None),
+                status_reason=getattr(m, "status_reason", None),
             )
         )
     # Sort alphabetically by app_code so everyone has consistent sequence
@@ -519,6 +522,9 @@ async def assign_spoke_app_to_user(
 
     if existing_mapping:
         existing_mapping.is_active_in_app = True
+        existing_mapping.status_origin = "CIAM_ADMIN"
+        existing_mapping.status_updated_at = now
+        existing_mapping.status_reason = f"มอบสิทธิ์ระบบ {app.app_name} โดย {current_admin.username}"
         existing_mapping.app_username = target_username
         existing_mapping.app_group_name = target_group
         existing_mapping.last_sync_status = "IN_SYNC" if identity.is_active_in_ad else "DISCREPANCY"
@@ -531,6 +537,9 @@ async def assign_spoke_app_to_user(
             app_username=target_username,
             app_group_name=target_group,
             is_active_in_app=True,
+            status_origin="CIAM_ADMIN",
+            status_updated_at=now,
+            status_reason=f"มอบสิทธิ์ระบบ {app.app_name} โดย {current_admin.username}",
             last_sync_status="IN_SYNC" if identity.is_active_in_ad else "DISCREPANCY",
             created_at=now,
             updated_at=now
@@ -813,8 +822,13 @@ async def update_account_status(
     app_code = app.app_code if app else "spoke"
     target_username = mapping.app_username
 
+    now = datetime.now(timezone.utc)
     prev_status = mapping.is_active_in_app
     mapping.is_active_in_app = payload.is_active
+    mapping.status_origin = "CIAM_ADMIN"
+    mapping.status_updated_at = now
+    action_label = "เปิดใช้งาน" if payload.is_active else "ระงับสิทธิ์"
+    mapping.status_reason = payload.reason or f"{action_label}โดย Admin ({current_admin.username}) จากหน้า CIAM Console"
 
     # If this is the Active Directory account, keep MasterIdentity.is_active_in_ad in sync!
     if app and app.app_code.lower() == "ad" and identity:

@@ -57,6 +57,9 @@ export interface AppAccountSummary {
   exception_reason?: string | null;
   exception_approved_by?: string | null;
   exception_approved_at?: string | null;
+  status_origin?: string | null;
+  status_updated_at?: string | null;
+  status_reason?: string | null;
 }
 
 export interface SpokeProvisionTarget {

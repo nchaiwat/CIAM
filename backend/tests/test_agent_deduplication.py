@@ -278,3 +278,119 @@ def test_ad_sync_marks_removed_ad_users_inactive():
         db.close()
 
 
+def test_two_way_status_sync_and_origin_tracking():
+    """Verify True 2-Way Synchronization, Status Origin Tracking, and Account Preservation."""
+    from sqlalchemy.orm import Session
+    from app.core.database import SessionLocal
+    from app.models.audit import IamAuditLog
+    from app.services.scheduler import persist_spoke_inventory
+
+    db: Session = SessionLocal()
+    test_user = "twoway.test"
+    try:
+        # 1. Setup Spoke App & Master Identity
+        spoke_app = db.query(ConnectedApplication).filter_by(app_code="twoway_spoke").first()
+        if not spoke_app:
+            spoke_app = ConnectedApplication(
+                app_code="twoway_spoke",
+                app_name="TwoWay Test Spoke",
+                connector_type="OUTBOUND_AGENT",
+                api_key="sec_twoway_123"
+            )
+            db.add(spoke_app)
+            db.commit()
+
+        ident = db.query(MasterIdentity).filter_by(username=test_user).first()
+        if not ident:
+            ident = MasterIdentity(
+                username=test_user,
+                full_name="TwoWay Tester",
+                is_active_in_ad=True
+            )
+            db.add(ident)
+            db.commit()
+
+        # Create mapping initially active by CIAM
+        mapping = db.query(AppAccountMapping).filter_by(
+            identity_id=ident.id,
+            application_id=spoke_app.id
+        ).first()
+        if not mapping:
+            mapping = AppAccountMapping(
+                identity_id=ident.id,
+                application_id=spoke_app.id,
+                app_username=test_user,
+                is_active_in_app=True,
+                status_origin="CIAM_ADMIN",
+                status_reason="Initially assigned from CIAM",
+                last_sync_status="IN_SYNC"
+            )
+            db.add(mapping)
+            db.commit()
+
+        # 2. Spoke sends heartbeat reporting is_active = False (Spoke-initiated disable)
+        heartbeat_payload = {
+            "app_code": "twoway_spoke",
+            "app_version": "1.0.0",
+            "sync_type": "HEARTBEAT",
+            "accounts": [
+                {
+                    "username": test_user,
+                    "full_name": "TwoWay Tester",
+                    "role": "User",
+                    "is_active": False  # Spoke disabled the user!
+                }
+            ]
+        }
+        res = client.post(
+            "/api/v1/agent/heartbeat",
+            json=heartbeat_payload,
+            headers={"X-Spoke-API-Key": "sec_twoway_123"}
+        )
+        assert res.status_code == 200
+        resp_data = res.json()
+
+        # CIAM must NOT issue PROVISION_USER for this disabled account
+        prov_cmds = [cmd for cmd in resp_data.get("pending_commands", []) if cmd["action"] == "PROVISION_USER" and cmd["username"].lower() == test_user.lower()]
+        assert len(prov_cmds) == 0
+
+        # Check DB mapping updated with SPOKE_APP origin
+        db.refresh(mapping)
+        assert mapping.is_active_in_app is False
+        assert mapping.status_origin == "SPOKE_APP"
+        assert "TwoWay Test Spoke" in mapping.status_reason
+
+        # Verify audit log
+        audit = db.query(IamAuditLog).filter_by(
+            target_username=test_user,
+            action_type="SPOKE_STATUS_CHANGED"
+        ).order_by(IamAuditLog.id.desc()).first()
+        assert audit is not None
+        assert "ระงับสิทธิ์" in audit.reason
+
+        # 3. Test Account Preservation (No Blind Deletion) via persist_spoke_inventory:
+        # Mark mapping as CIAM_ADMIN again, but spoke inventory does NOT have this user
+        mapping.is_active_in_app = True
+        mapping.status_origin = "CIAM_ADMIN"
+        db.commit()
+
+        # Spoke reports empty accounts or other accounts (excluding test_user)
+        persist_spoke_inventory(spoke_app, [{"username": "other.user", "is_active": True}], db)
+        db.commit()
+
+        # Mapping must NOT be deleted! Must be marked PENDING_PROVISION
+        db.refresh(mapping)
+        assert mapping is not None
+        assert mapping.last_sync_status == "PENDING_PROVISION"
+
+    finally:
+        db.query(AppAccountMapping).filter(AppAccountMapping.app_username.in_([test_user, "other.user"])).delete()
+        db.query(MasterIdentity).filter(MasterIdentity.username.in_([test_user, "other.user"])).delete()
+        sp = db.query(ConnectedApplication).filter_by(app_code="twoway_spoke").first()
+        if sp:
+            db.delete(sp)
+        db.commit()
+        db.close()
+
+
+

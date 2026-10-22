@@ -13,6 +13,9 @@ class AppAccountMapping(Base):
     app_user_id = Column(String(50), nullable=True)
     app_group_name = Column(String(100), nullable=True) # e.g. 'PU User', 'QA Inspector'
     is_active_in_app = Column(Boolean, default=True, nullable=False)
+    status_origin = Column(String(50), default="CIAM_ADMIN", nullable=True) # 'CIAM_ADMIN', 'SPOKE_APP', 'AD_INHERITED'
+    status_updated_at = Column(DateTime(timezone=True), nullable=True)
+    status_reason = Column(String(255), nullable=True)
     last_sync_status = Column(String(50), default="IN_SYNC", nullable=False) # 'IN_SYNC', 'DISCREPANCY'
     last_app_login_at = Column(DateTime(timezone=True), nullable=True)
     is_approved_exception = Column(Boolean, default=False, nullable=False)

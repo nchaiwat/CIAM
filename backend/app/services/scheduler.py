@@ -256,6 +256,7 @@ def persist_spoke_inventory(
                 pass
 
         if not mapping:
+            act_desc = "เปิดใช้งาน" if is_active else "ระงับสิทธิ์"
             mapping = AppAccountMapping(
                 identity_id=identity.id,
                 application_id=app.id,
@@ -263,17 +264,40 @@ def persist_spoke_inventory(
                 app_user_id=str(item.get("id")) if item.get("id") is not None else None,
                 app_group_name=item.get("group_name") or ("Shop VPN" if is_shop_acc else None),
                 is_active_in_app=is_active,
+                status_origin="AD_INHERITED" if is_ad_item else "SPOKE_APP",
+                status_updated_at=now,
+                status_reason=f"ตรวจพบบัญชีครั้งแรกจาก {app.app_name} ({act_desc})",
                 last_sync_status=sync_status,
                 last_app_login_at=last_login_dt,
                 created_at=now
             )
             db.add(mapping)
         else:
+            # Detect Spoke-Initiated Status Changes (Two-Way Bi-directional Sync)
+            if mapping.is_active_in_app != is_active:
+                old_status = mapping.is_active_in_app
+                mapping.is_active_in_app = is_active
+                mapping.status_origin = "AD_INHERITED" if is_ad_item else "SPOKE_APP"
+                mapping.status_updated_at = now
+                act_str = "เปิดใช้งาน" if is_active else "ระงับสิทธิ์"
+                mapping.status_reason = f"{act_str}โดย {app.app_name} (Inventory Sync)"
+                
+                db.add(IamAuditLog(
+                    actor_username=f"SYNC:{app.app_code.upper()}",
+                    action_type="SPOKE_STATUS_CHANGED",
+                    target_username=uname,
+                    affected_app_code=app.app_code,
+                    previous_status="ACTIVE" if old_status else "DISABLED",
+                    new_status="ACTIVE" if is_active else "DISABLED",
+                    execution_mode=app.connector_type,
+                    reason=f"ระบบลูก {app.app_name} ปรับสถานะเป็น {'เปิดใช้งาน' if is_active else 'ระงับสิทธิ์'} ผ่านการซิงก์ข้อมูล",
+                    status="SUCCESS"
+                ))
+
             mapping.identity_id = identity.id
             mapping.app_username = uname
             mapping.app_user_id = str(item.get("id")) if item.get("id") is not None else mapping.app_user_id
             mapping.app_group_name = item.get("group_name") or mapping.app_group_name
-            mapping.is_active_in_app = is_active
             mapping.last_sync_status = sync_status
             if last_login_dt:
                 mapping.last_app_login_at = last_login_dt
@@ -297,10 +321,21 @@ def persist_spoke_inventory(
             .all()
         )
         for stale in stale_mappings:
-            if is_ad_item and stale.identity:
-                logger.info("AD Sync: User '%s' removed from AD. Setting is_active_in_ad = False", stale.app_username)
-                stale.identity.is_active_in_ad = False
-            db.delete(stale)
+            if is_ad_item:
+                if stale.identity:
+                    logger.info("AD Sync: User '%s' removed from AD. Setting is_active_in_ad = False", stale.app_username)
+                    stale.identity.is_active_in_ad = False
+                db.delete(stale)
+            else:
+                # 🛡️ Protection against disappearing accounts:
+                # If an account was assigned or managed from CIAM, do NOT delete it blindly!
+                # Mark it as PENDING_PROVISION / UNSYNCED so it remains visible on CIAM.
+                if getattr(stale, "status_origin", None) == "CIAM_ADMIN" or stale.is_active_in_app:
+                    logger.info("Spoke Sync: User '%s' not present in %s inventory; retaining mapping with PENDING_PROVISION", stale.app_username, app.app_code)
+                    stale.last_sync_status = "PENDING_PROVISION"
+                    stale.status_reason = f"ยังไม่พบบัญชีใน {app.app_name} (รอการสร้างหรือเข้าใช้งานครั้งแรก)"
+                else:
+                    db.delete(stale)
 
         db.flush()
 
