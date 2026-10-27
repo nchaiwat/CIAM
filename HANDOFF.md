@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 22 ตุลาคม 2026 (Local Time: ~13:25 ICT)  
+> **Date Updated:** 27 ตุลาคม 2026 (Local Time: ~14:15 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
@@ -133,6 +133,8 @@
 
 ### 0.2 รายการ Git Commits ล่าสุดและแผนงานสำหรับการพัฒนาต่อในรอบหน้า (Next Session Roadmap)
 - **Git Commits ล่าสุดบน `origin/main`:**
+  - `86fb843`: `fix(directory): resolve Hermes.N AD status discrepancy and add local account auto-heal`
+  - `0a4b0c3`: `feat(sync): implement true 2-way status sync with origin tracking and update spoke spec to v2.9.0`
   - `e81f248`: `feat: add WA-RDT2 Remote Desktop spoke app with SAP B1 RBAC and dynamic RDP generation`
   - `5027f34`: `feat(ai-copilot): enforce Zero-Training, DLP privacy scrubber, and No-External-Data-Use governance across CIAM and Spoke Framework`
   - `a4688ff`: `feat(ai-copilot): enforce 100% read-only analytical parity, RBAC scoping, and Spoke Framework governance`
@@ -141,14 +143,22 @@
   - `b9a5ec0`: `feat(portal): pause SSO Portal 30-min idle timer while in Spoke App and return directly to /portal on App Client logout`
   - `a0d9fb1`: `feat(session): add proactive zero-action session auto-logoff watchdog and OIDC single logout return flow`
 - **แนวทางเมื่อกลับมาพัฒนาต่อรอบหน้า (Pending Issues & Next Session Roadmap):**
-  1. **[เรื่องค้างสำคัญ] การปรับปรุงช่องทางเข้าใช้งาน SAP B1 (WA-RDT2 Remote Desktop vs SAP B1 Web Client):**
+  1. **[เตรียมส่งมอบทีม Dev ระบบลูก] ส่งต่อ Spoke Specification v2.9.0 ให้แต่ละ App (MTPulse, IRM, QMS, QTOnline):**
+     - นำข้อกำหนดมาตรฐานใน `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` เวอร์ชัน **2.9.0** (หมวด D.6: True 2-Way Bi-directional Status Sync with Origin Tracking และหมวด B.3: SSO Callback Inactive Guard) ส่งต่อให้ Developer ของแต่ละระบบลูก
+     - ชี้แจงแนวปฏิบัติเรื่อง Inactive Guard: หากผู้ใช้ถูกระงับสิทธิ์ (Disable) ไม่ว่าจะเริ่มจากฝั่ง CIAM หรือเริ่มจาก Spoke เอง ระบบลูกต้องปฏิเสธการล็อกอิน และห้ามปลดล็อคคืนสถานะ Active เองโดยเด็ดขาด
+  2. **[พัฒนาระบบลูก - IRM Real-time Outbound Webhook Sync]:**
+     - ในระบบลูก เช่น IRM (`backend/app/routers/users.py`): ปัจจุบันเมื่อแอดมินปิด/เปิดสิทธิ์ จะอัปเดตเฉพาะฐานข้อมูล Local ของตนเอง ทำให้ CIAM ต้องรอรอบดึงข้อมูล (Reconciliation 04:00 น. หรือกดปุ่มซิงก์)
+     - รอบถัดไป: พิจารณาเพิ่มคำสั่งยิง Webhook ขาออกจาก IRM มายัง Endpoint ของ CIAM ทันทีที่มีการ toggle active status เพื่อให้สถานะฝั่ง CIAM อัปเดตเป็น Inactive/Active แบบทันที (Real-time Instant Sync)
+  3. **[ตรวจสอบ Production Deployment บน VPS]:**
+     - ดำเนินการรันคำสั่ง Deploy บน `/var/www/Ciam` (ทั้ง `web` และ `api`) เพื่อให้โค้ด Auto-heal ของ `Hermes.N` และ True 2-Way Sync v2.9.0 มีผลบน Production จริง
+  4. **[เรื่องค้างสำคัญ] การปรับปรุงช่องทางเข้าใช้งาน SAP B1 (WA-RDT2 Remote Desktop vs SAP B1 Web Client):**
      - **ปัญหาเดิม:** การกดปุ่มเข้าใช้งานแบบ RDP เดิมใช้วิธีดาวน์โหลดไฟล์ `wa-rdt2.rdp` ส่งผลให้เบราว์เซอร์สร้างไฟล์สะสมซ้ำๆ ในโฟลเดอร์ Downloads (`wa-rdt2 (1).rdp`, `wa-rdt2 (2).rdp`)
      - **แนวทางแก้ไขที่อยู่ระหว่างพิจารณาตัดสินใจ:**
        - **แนวทาง A (ตรวจสอบ SAP Business One 10.0 Web Client):** ตรวจสอบว่าเครื่องเซิร์ฟเวอร์ SAP B1 (`WA-RDT2` IP `192.168.12.18`) มีการเปิดใช้งาน **SAP B1 Web Client** (พอร์ต `443` หรือ `2443`) หรือไม่ ผ่านหน้า System Landscape Directory (SLD: `https://<IP>:40000/ControlCenter/` แท็บ Services) หากเปิดใช้งานอยู่แล้ว จะสามารถปรับ Spoke Application ให้เชื่อมต่อไปยัง Web Client ตรงๆ แบบเดียวกับ MTPulse (`https://...`) ได้ทันที 100% โดยไม่ต้องใช้ Remote Desktop และไม่มีการดาวน์โหลดไฟล์ใดๆ
        - **แนวทาง B (Apache Guacamole Clientless HTML5 Gateway):** เพิ่ม Container Guacamole ลงใน Docker Compose ของ CIAM เพื่อแปลงสัญญาณ RDP พอร์ต `3389` ของ `192.168.12.18` (ผ่าน AD Gateway `192.168.12.11` / `172.18.0.1`) ให้พนักงานเปิดหน้าต่าง Desktop ของ Windows SAP B1 รันบนแท็บเบราว์เซอร์ได้ทันที
        - **แนวทาง C (Windows URI Protocol Handler `rdp://`):** สั่งเปิดโปรแกรม Remote Desktop Connection (`mstsc.exe`) บนเครื่องพนักงานตรงๆ ผ่าน Protocol โดยไม่ต้องดาวน์โหลดไฟล์ `.rdp` ลงโฟลเดอร์ Downloads
-  2. ตรวจสอบการเชื่อมต่อ Spoke Applications ใหม่ๆ เพิ่มเติม (เช่น QMS Production Cutover หรือการขยาย In-App AI Copilot ไปยังระบบลูก IRM / MTPulse ตามมาตรฐานหมวด E ของ `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`)
-  3. ตรวจสอบผลการทำงานของระบบ Proactive Session Watchdog และ AI Copilot Read-Only / Zero-Training บน Production VPS (`https://ciam.windowasia.com`)
+  5. ตรวจสอบการเชื่อมต่อ Spoke Applications ใหม่ๆ เพิ่มเติม (เช่น QMS Production Cutover หรือการขยาย In-App AI Copilot ไปยังระบบลูก IRM / MTPulse ตามมาตรฐานหมวด E ของ `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`)
+  6. ตรวจสอบผลการทำงานของระบบ Proactive Session Watchdog และ AI Copilot Read-Only / Zero-Training บน Production VPS (`https://ciam.windowasia.com`)
 
 ---
 
