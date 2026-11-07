@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-11-07  
-**Version:** 2.9.5 (Daily Email Digest Recipient Sanitizer & Binary SMTP)  
+**Version:** 2.9.6 (Test Send Recipient Isolation & Admin Auto-Heal)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  

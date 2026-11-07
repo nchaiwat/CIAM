@@ -283,3 +283,23 @@ def test_send_daily_digest_strips_stray_thai_karant_and_non_ascii():
         em.encode("ascii")
 
 
+def test_test_send_does_not_append_admins():
+    """Verify that test send with custom recipients strictly sends only to specified recipients."""
+    db = SessionLocal()
+    try:
+        with patch("app.services.daily_digest_service._send_smtp_sync") as mock_smtp:
+            mock_smtp.return_value = (True, "Delivered")
+            res = asyncio.run(send_daily_digest_email(
+                db=db,
+                triggered_by="TEST_ADMIN",
+                custom_recipients=["chaiwat.n@windowasia.com", "itwa@windowasia.com"],
+                include_admins=False
+            ))
+            assert res["success"] is True
+            assert res["recipients"] == ["chaiwat.n@windowasia.com", "itwa@windowasia.com"]
+            assert res["recipients_count"] == 2
+    finally:
+        db.close()
+
+
+

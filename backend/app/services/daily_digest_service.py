@@ -736,7 +736,8 @@ def _record_digest_audit_and_setting(
 async def send_daily_digest_email(
     db: Session,
     triggered_by: str = "MANUAL_TEST",
-    custom_recipients: Optional[List[str]] = None
+    custom_recipients: Optional[List[str]] = None,
+    include_admins: Optional[bool] = None
 ) -> Dict[str, Any]:
     """
     Collect metrics, compose HTML email, and transmit via configured SMTP.
@@ -760,7 +761,12 @@ async def send_daily_digest_email(
         recipients: List[str] = _clean_recipient_list(raw_list)
 
         # Add AdminUsers with email if enabled
-        if config.get("notify_admins_enabled", True):
+        # When custom_recipients is provided (e.g. manual test send), default to sending ONLY to custom_recipients
+        should_include_admins = (
+            include_admins if include_admins is not None
+            else (config.get("notify_admins_enabled", True) if custom_recipients is None else False)
+        )
+        if should_include_admins:
             admins = db.query(AdminUser).filter(AdminUser.is_active == True, AdminUser.email != None).all()
             for a in admins:
                 clean_admin_em = sanitize_email_address(a.email)

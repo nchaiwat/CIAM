@@ -272,7 +272,8 @@ async def trigger_test_daily_digest(
     result = await send_daily_digest_email(
         db=db,
         triggered_by=f"MANUAL_TEST_{current_admin.username}",
-        custom_recipients=custom_rcpt
+        custom_recipients=custom_rcpt,
+        include_admins=False
     )
     return result
 

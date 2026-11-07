@@ -767,6 +767,15 @@ def init_db():
         if cleared_emails > 0 or cleared_depts > 0:
             logger.info("Cleaned up %d non-M365 emails and %d non-OU departments", cleared_emails, cleared_depts)
 
+        # Auto-heal: sanitize admin email addresses (strip any stray non-ascii or thai karants)
+        from app.services.daily_digest_service import sanitize_email_address
+        all_admins = db.query(AdminUser).filter(AdminUser.email != None).all()
+        for a in all_admins:
+            clean_em = sanitize_email_address(a.email)
+            if clean_em and clean_em != a.email:
+                logger.info("Auto-healed AdminUser %s email: %s -> %s", a.username, a.email, clean_em)
+                a.email = clean_em
+
         db.commit()
         logger.info("Database initialization and seeding complete with real data!")
     except Exception as e:

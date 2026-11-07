@@ -7,7 +7,7 @@
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 81/81 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: fix(reporting): sanitize email addresses and pass binary bytes to smtplib
+> **Git Status:** Production Ready — Latest Commit: fix(reporting): isolate test send recipients and add admin email auto-heal
 
 ---
 
@@ -16,6 +16,12 @@
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
 1. **Daily Security & Identity Email Digest Hotfix & SMTP Hardening (Sprint 51.1):**
+   - **จำกัดผู้รับในโหมดส่งทดสอบเฉพาะคนที่ระบุ & Auto-Heal อีเมล Admin ในฐานข้อมูล (Sprint 51.3):**
+     - **สาเหตุที่มีอีเมลคนอื่นติดไปด้วย:** บนหน้าจอมีตัวเลือกเปิดใช้งาน `[✓] ส่งสำเนาให้อีเมลของ Admin ทุกคนที่มีในระบบอัตโนมัติ (Notify All Active Admins)` ซึ่งระบบจะไปดึงอีเมลของ Admin ทุกคนในตาราง `central_iam_admins` มาต่อท้ายรายชื่อผู้รับเสมอ
+     - **การแก้ไข:**
+       1. ปรับปรุงโหมดทดสอบส่งทันที (`POST /daily-digest/test-send`): กำหนด `include_admins=False` อย่างเคร่งครัด เพื่อให้การกด "ส่งทดสอบ" จะส่งเฉพาะรายชื่อผู้รับที่ระบุไว้ในกล่องข้อความเท่านั้น (เช่น 2 คนที่ระบุ) ไม่รบกวน Admin คนอื่นๆ ในองค์กร
+       2. สำหรับรอบอัตโนมัติ 07:00 น.: ยังคงเคารพการตั้งค่า Checkbox หาก Admin ติ๊กเลือกไว้จึงจะรวมอีเมล Admin ทุกคน
+       3. เพิ่มกลไก Auto-Heal ใน `initial_data.py`: ทำการสแกนและล้างตัวอักษรหรือวรรณยุกต์แปลกปลอมในคอลัมน์ `AdminUser.email` บนฐานข้อมูล Production อัตโนมัติเมื่อสตาร์ท Service
    - **แก้ไขปัญหา Stray Thai Karant (\u0e4c) ใน Email และปรับปรุงการส่ง Binary Bytes ให้ SMTP Engine (Sprint 51.2):**
      - **สาเหตุข้อผิดพลาดล่าสุด:** ในรายชื่อผู้รับมีตัวอักษรภาษาไทยหรือการันต์ `์` (`\u0e4c`) ติดอยู่ข้างหน้าอีเมล `์nittaya.s@windowasia.com` ซึ่งเมื่อคำสั่ง SMTP รัน `rcpt to:<์nittaya.s...>` ตำแหน่งที่ 9 คือตัวอักษร `\u0e4c` และคำสั่ง `smtplib.sendmail()` พยายาม encode ข้อความด้วย `ascii` ทำให้เกิด Error `'ascii' codec can't encode character '\u0e4c' in position 9`
      - **การแก้ไข:** 
