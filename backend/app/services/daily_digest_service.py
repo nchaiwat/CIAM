@@ -1,11 +1,14 @@
 import asyncio
 import json
 import logging
+import re
 import smtplib
 import time
 from datetime import datetime, timezone, timedelta
+from email.header import Header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import parseaddr, formataddr
 from typing import Dict, Any, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -25,6 +28,40 @@ from app.connectors.ad_proxy import AdProxyConnector
 logger = logging.getLogger("ciam.daily_digest")
 
 BANGKOK_TZ = timezone(timedelta(hours=7))
+
+EMAIL_REGEX = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
+
+def sanitize_email_address(raw: Optional[str]) -> Optional[str]:
+    """
+    Extract a valid, pure ASCII email address, discarding leading/trailing
+    stray non-ASCII keystrokes (such as Thai vowels/karant like \u0e4c, zero-width spaces, punctuation).
+    """
+    if not raw:
+        return None
+    match = EMAIL_REGEX.search(str(raw))
+    if match:
+        clean = match.group(0).rstrip(".")
+        try:
+            clean.encode("ascii")
+            return clean.lower()
+        except UnicodeEncodeError:
+            return None
+    return None
+
+def _clean_recipient_list(raw_list: Any) -> List[str]:
+    """Extract and sanitize list of unique email addresses."""
+    if isinstance(raw_list, str):
+        raw_items = raw_list.replace(";", ",").split(",")
+    elif isinstance(raw_list, list):
+        raw_items = raw_list
+    else:
+        raw_items = []
+    clean_list: List[str] = []
+    for item in raw_items:
+        c = sanitize_email_address(item)
+        if c and c not in clean_list:
+            clean_list.append(c)
+    return clean_list
 
 DEFAULT_DIGEST_CONFIG: Dict[str, Any] = {
     "enabled": False,
@@ -127,13 +164,7 @@ def save_daily_digest_config(db: Session, update_data: Dict[str, Any]) -> Dict[s
         current_val["from_email"] = str(update_data["from_email"]).strip()
 
     if "recipients" in update_data and update_data["recipients"] is not None:
-        raw_recipients = update_data["recipients"]
-        if isinstance(raw_recipients, list):
-            current_val["recipients"] = [r.strip() for r in raw_recipients if r and "@" in r]
-        elif isinstance(raw_recipients, str):
-            current_val["recipients"] = [
-                r.strip() for r in raw_recipients.replace(";", ",").split(",") if r.strip() and "@" in r
-            ]
+        current_val["recipients"] = _clean_recipient_list(update_data["recipients"])
 
     if "notify_admins_enabled" in update_data and update_data["notify_admins_enabled"] is not None:
         current_val["notify_admins_enabled"] = bool(update_data["notify_admins_enabled"])
@@ -576,19 +607,18 @@ def _send_smtp_sync(
     """Synchronous SMTP worker function intended to be run in asyncio.to_thread."""
     server = None
     try:
-        from email.utils import parseaddr
+        # Sanitize and extract envelope return-path sender (RFC 5321)
+        realname, parsed_addr = parseaddr(from_email)
+        clean_from_addr = sanitize_email_address(parsed_addr)
+        clean_user = sanitize_email_address(smtp_user)
+        envelope_from = clean_from_addr or clean_user or "ciam-alert@windowasia.com"
 
-        # Extract pure email address for envelope sender (RFC 5321)
-        _, parsed_from = parseaddr(from_email)
-        envelope_from = parsed_from if parsed_from else (smtp_user if "@" in smtp_user else from_email)
-
-        # Sanitize recipient email addresses
+        # Sanitize recipient email addresses strictly to pure ASCII
         clean_recipients: List[str] = []
         for r in recipients:
-            _, p_to = parseaddr(r)
-            addr = p_to if p_to else r.strip()
-            if addr and addr not in clean_recipients:
-                clean_recipients.append(addr)
+            c = sanitize_email_address(r)
+            if c and c not in clean_recipients:
+                clean_recipients.append(c)
 
         if not clean_recipients:
             return False, "No valid recipient email address found"
@@ -598,8 +628,11 @@ def _send_smtp_sync(
             smtp_password = smtp_password.replace(" ", "")
 
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = from_email
+        msg["Subject"] = Header(subject, "utf-8")
+        if realname:
+            msg["From"] = formataddr((str(Header(realname, "utf-8")), envelope_from))
+        else:
+            msg["From"] = envelope_from
         msg["To"] = ", ".join(clean_recipients)
 
         part_text = MIMEText(text_content, "plain", "utf-8")
@@ -619,7 +652,8 @@ def _send_smtp_sync(
         if smtp_user and smtp_password:
             server.login(smtp_user, smtp_password)
 
-        server.sendmail(envelope_from, clean_recipients, msg.as_string())
+        # Send as bytes to avoid smtplib ascii encoding pitfalls with unicode strings
+        server.sendmail(envelope_from, clean_recipients, msg.as_bytes())
         return True, "Email sent successfully"
     except Exception as exc:
         err_msg = str(exc)
@@ -721,20 +755,17 @@ async def send_daily_digest_email(
         use_tls = bool(config.get("use_tls", True))
         from_email = config.get("from_email", "Window Asia Central IAM <ciam-alert@windowasia.com>").strip()
 
-        # Build recipients list
-        recipients: List[str] = []
-        if custom_recipients:
-            recipients = [r.strip() for r in custom_recipients if r and "@" in r]
-        else:
-            recipients = [r.strip() for r in config.get("recipients", []) if r and "@" in r]
+        # Build recipients list with strict ASCII email sanitization
+        raw_list = custom_recipients if custom_recipients is not None else config.get("recipients", [])
+        recipients: List[str] = _clean_recipient_list(raw_list)
 
         # Add AdminUsers with email if enabled
         if config.get("notify_admins_enabled", True):
             admins = db.query(AdminUser).filter(AdminUser.is_active == True, AdminUser.email != None).all()
             for a in admins:
-                em = (a.email or "").strip()
-                if em and "@" in em and em not in recipients:
-                    recipients.append(em)
+                clean_admin_em = sanitize_email_address(a.email)
+                if clean_admin_em and clean_admin_em not in recipients:
+                    recipients.append(clean_admin_em)
 
         # Prepare target_username display string (STRICTLY <= 95 chars for PostgreSQL VARCHAR(100))
         if not recipients:

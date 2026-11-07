@@ -233,15 +233,22 @@ export default function SettingsPage() {
     }
   };
 
+  const cleanRecipientInput = (raw: string): string[] => {
+    return raw
+      .split(",")
+      .map((r) => {
+        const m = r.match(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/);
+        return m ? m[0].replace(/\.+$/, "").toLowerCase() : "";
+      })
+      .filter((r) => r.length > 0 && r.includes("@"));
+  };
+
   const handleSaveDigestConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setDigestSaving(true);
       setDigestSaveMessage(null);
-      const recipientList = inputRecipients
-        .split(",")
-        .map((r) => r.trim())
-        .filter((r) => r && r.includes("@"));
+      const recipientList = cleanRecipientInput(inputRecipients);
 
       const res = await ciamApi.updateDailyDigestConfig({
         enabled: digestConfig.enabled,
@@ -275,10 +282,7 @@ export default function SettingsPage() {
     try {
       setDigestTestLoading(true);
       setDigestTestResult(null);
-      const recipientList = inputRecipients
-        .split(",")
-        .map((r) => r.trim())
-        .filter((r) => r && r.includes("@"));
+      const recipientList = cleanRecipientInput(inputRecipients);
 
       const res = await ciamApi.triggerTestDailyDigest(recipientList.length > 0 ? recipientList : undefined);
       setDigestTestResult(res);

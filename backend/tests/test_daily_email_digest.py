@@ -256,3 +256,30 @@ def test_send_smtp_sync_envelope_and_ssl_handling():
         assert args[0] == "ciam-alert@windowasia.com"
         assert args[1] == ["chaiwat.n@windowasia.com", "itwa@windowasia.com"]
 
+
+def test_send_daily_digest_strips_stray_thai_karant_and_non_ascii():
+    """Verify that stray Thai characters like \u0e4c before email are safely sanitized."""
+    from app.services.daily_digest_service import sanitize_email_address, _clean_recipient_list
+
+    # Test individual sanitization
+    assert sanitize_email_address("์nittaya.s@windowasia.com") == "nittaya.s@windowasia.com"
+    assert sanitize_email_address(" chaiwat.n@windowasia.com ") == "chaiwat.n@windowasia.com"
+    assert sanitize_email_address("Window Asia <itwa@windowasia.com>") == "itwa@windowasia.com"
+
+    # Test list sanitization
+    dirty_list = [
+        "chaiwat.n@windowasia.com",
+        "์nittaya.s@windowasia.com",
+        "Nakprat.P@windowasia.com",
+        "invalid-without-at",
+        "์admin.ciam@windowasia.com"
+    ]
+    cleaned = _clean_recipient_list(dirty_list)
+    assert "nittaya.s@windowasia.com" in cleaned
+    assert "admin.ciam@windowasia.com" in cleaned
+    assert "invalid-without-at" not in cleaned
+    for em in cleaned:
+        # All sanitized emails must strictly be valid ASCII
+        em.encode("ascii")
+
+

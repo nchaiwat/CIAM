@@ -7,7 +7,7 @@
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 81/81 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: fix(reporting): prevent audit log target_username overflow and sanitize SMTP envelope address
+> **Git Status:** Production Ready — Latest Commit: fix(reporting): sanitize email addresses and pass binary bytes to smtplib
 
 ---
 
@@ -16,7 +16,13 @@
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
 1. **Daily Security & Identity Email Digest Hotfix & SMTP Hardening (Sprint 51.1):**
-   - **แก้ไขปัญหา API Error [500] ในการทดสอบส่งเมล์ และบันทึกประวัติการส่งลง Audit Logs 100%:**
+   - **แก้ไขปัญหา Stray Thai Karant (\u0e4c) ใน Email และปรับปรุงการส่ง Binary Bytes ให้ SMTP Engine (Sprint 51.2):**
+     - **สาเหตุข้อผิดพลาดล่าสุด:** ในรายชื่อผู้รับมีตัวอักษรภาษาไทยหรือการันต์ `์` (`\u0e4c`) ติดอยู่ข้างหน้าอีเมล `์nittaya.s@windowasia.com` ซึ่งเมื่อคำสั่ง SMTP รัน `rcpt to:<์nittaya.s...>` ตำแหน่งที่ 9 คือตัวอักษร `\u0e4c` และคำสั่ง `smtplib.sendmail()` พยายาม encode ข้อความด้วย `ascii` ทำให้เกิด Error `'ascii' codec can't encode character '\u0e4c' in position 9`
+     - **การแก้ไข:** 
+       1. สร้างตัวกรอง `sanitize_email_address` และ `_clean_recipient_list` ด้วย Regex สกัดเฉพาะอีเมลที่เป็น ASCII มาตรฐาน ตัดตัวอักษรแปลกปลอมหรือวรรณยุกต์ภาษาไทยที่อาจพิมพ์พลาดทิ้ง 100% ทั้งใน Backend และ Frontend
+       2. เข้ารหัสหัวข้ออีเมลด้วย `email.header.Header(subject, "utf-8")` ตามมาตรฐาน RFC 2047
+       3. ส่งข้อมูลอีเมลแบบไบนารี `msg.as_bytes()` เข้า `server.sendmail()` แทน `msg.as_string()` เพื่อป้องกันไม่ให้ Python smtplib นำไปแปลงด้วย ASCII อีกต่อไป
+   - **แก้ไขปัญหา API Error [500] ในการทดสอบส่งเมล์ และบันทึกประวัติการส่งลง Audit Logs 100% (Sprint 51.1):**
      - **สาเหตุข้อที่ 1 (PostgreSQL StringDataRightTruncation):** คอลัมน์ `target_username` ในตาราง `iam_audit_logs` ถูกจำกัดไว้ที่ `VARCHAR(100)` เมื่อมีการเปิดตัวเลือก "ส่งสำเนาให้อีเมลของ Admin ทุกคนที่มีในระบบอัตโนมัติ" ทำให้รายชื่ออีเมลผู้รับที่นำมาต่อกันยาวเกิน 100 ตัวอักษร ส่งผลให้ PostgreSQL บน VPS ตัดทรานแซกชันทิ้งและเกิด HTTP 500
      - **การแก้ไข:** ปรับการจัดรูปแบบ `target_username` ให้จำกัดความยาวปลอดภัยไม่เกิน 95 ตัวอักษร เช่น `chaiwat.n@windowasia.com (+3 recipients)` และตัดข้อความส่วนเกินทิ้งอย่างปลอดภัย
      - **สาเหตุข้อที่ 2 (SMTP Sender Syntax):** การส่ง `from_email` แบบมี Display Name เช่น `"Window Asia Central IAM <ciam-alert@windowasia.com>"` เข้าไปยัง `server.sendmail()` โดยตรงทำให้ Mail Server (เช่น Gmail/Office365) ปฏิเสธด้วยข้อผิดพลาด 501 Syntax Error
