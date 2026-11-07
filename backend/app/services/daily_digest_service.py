@@ -574,34 +574,129 @@ def _send_smtp_sync(
     text_content: str
 ) -> Tuple[bool, str]:
     """Synchronous SMTP worker function intended to be run in asyncio.to_thread."""
+    server = None
     try:
+        from email.utils import parseaddr
+
+        # Extract pure email address for envelope sender (RFC 5321)
+        _, parsed_from = parseaddr(from_email)
+        envelope_from = parsed_from if parsed_from else (smtp_user if "@" in smtp_user else from_email)
+
+        # Sanitize recipient email addresses
+        clean_recipients: List[str] = []
+        for r in recipients:
+            _, p_to = parseaddr(r)
+            addr = p_to if p_to else r.strip()
+            if addr and addr not in clean_recipients:
+                clean_recipients.append(addr)
+
+        if not clean_recipients:
+            return False, "No valid recipient email address found"
+
+        # Sanitize Gmail 16-character app passwords that might have spaces
+        if "gmail.com" in smtp_host.lower() and len(smtp_password.replace(" ", "")) == 16:
+            smtp_password = smtp_password.replace(" ", "")
+
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = from_email
-        msg["To"] = ", ".join(recipients)
+        msg["To"] = ", ".join(clean_recipients)
 
         part_text = MIMEText(text_content, "plain", "utf-8")
         part_html = MIMEText(html_content, "html", "utf-8")
         msg.attach(part_text)
         msg.attach(part_html)
 
-        server = smtplib.SMTP(smtp_host, smtp_port, timeout=20)
-        server.ehlo()
-
-        if use_tls:
-            server.starttls()
+        if smtp_port == 465:
+            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20)
+        else:
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=20)
             server.ehlo()
+            if use_tls:
+                server.starttls()
+                server.ehlo()
 
         if smtp_user and smtp_password:
             server.login(smtp_user, smtp_password)
 
-        server.sendmail(from_email, recipients, msg.as_string())
-        server.quit()
+        server.sendmail(envelope_from, clean_recipients, msg.as_string())
         return True, "Email sent successfully"
     except Exception as exc:
         err_msg = str(exc)
         logger.error("SMTP transmission error: %s", err_msg)
         return False, err_msg
+    finally:
+        if server:
+            try:
+                server.quit()
+            except Exception:
+                try:
+                    server.close()
+                except Exception:
+                    pass
+
+
+def _record_digest_audit_and_setting(
+    db: Session,
+    actor: str,
+    target: str,
+    success: bool,
+    summary: str,
+    details: Dict[str, Any],
+    now_iso: str,
+    now_bkk: datetime,
+    error_msg: Optional[str] = None
+) -> None:
+    """Safely commit audit log and update schedule settings with rollback resilience."""
+    try:
+        # Slices to ensure VARCHAR bounds are never violated in PostgreSQL
+        safe_actor = (actor or "SYSTEM")[:95]
+        safe_target = (target or "GENERAL")[:95]
+        safe_reason = summary[:450] if summary else ""
+
+        # 1. Audit Log
+        audit_entry = IamAuditLog(
+            actor_username=safe_actor,
+            action_type="DAILY_EMAIL_DIGEST",
+            target_username=safe_target,
+            affected_app_code="CIAM_MAILER",
+            execution_mode="SCHEDULED_OR_MANUAL",
+            reason=safe_reason,
+            details=json.dumps(details, ensure_ascii=False),
+            status="SUCCESS" if success else "FAILED"
+        )
+        db.add(audit_entry)
+
+        # 2. SystemSetting
+        setting = db.query(SystemSetting).filter_by(setting_key="daily_email_digest_schedule").first()
+        if not setting:
+            val = DEFAULT_DIGEST_CONFIG.copy()
+            val["last_run_at"] = now_iso
+            val["last_status"] = "SUCCESS" if success else "FAILED"
+            val["last_summary"] = safe_reason
+            val["last_error"] = error_msg
+            val["last_run_date"] = now_bkk.strftime("%Y-%m-%d")
+            setting = SystemSetting(
+                setting_key="daily_email_digest_schedule",
+                setting_value=val,
+                description="Daily Security and Identity Digest Email Notification schedule and SMTP configuration"
+            )
+            db.add(setting)
+        else:
+            val = dict(setting.setting_value) if setting.setting_value else {}
+            val["last_run_at"] = now_iso
+            val["last_status"] = "SUCCESS" if success else "FAILED"
+            val["last_summary"] = safe_reason
+            val["last_error"] = error_msg
+            val["last_run_date"] = now_bkk.strftime("%Y-%m-%d")
+            setting.setting_value = val
+            flag_modified(setting, "setting_value")
+
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error("Failed to persist digest audit log or settings: %s", exc)
+        raise
 
 
 async def send_daily_digest_email(
@@ -613,128 +708,191 @@ async def send_daily_digest_email(
     Collect metrics, compose HTML email, and transmit via configured SMTP.
     Records comprehensive audit logs in IamAuditLog and updates SystemSetting status.
     """
-    config = get_daily_digest_config(db, mask_password=False)
-    smtp_host = config.get("smtp_host", "smtp.office365.com").strip()
-    smtp_port = int(config.get("smtp_port", 587))
-    smtp_user = config.get("smtp_user", "").strip()
-    smtp_password = config.get("smtp_password", "").strip()
-    use_tls = bool(config.get("use_tls", True))
-    from_email = config.get("from_email", "Window Asia Central IAM <ciam-alert@windowasia.com>").strip()
-
-    # Build recipients list
-    recipients: List[str] = []
-    if custom_recipients:
-        recipients = [r.strip() for r in custom_recipients if r and "@" in r]
-    else:
-        recipients = [r.strip() for r in config.get("recipients", []) if r and "@" in r]
-
-    # Add AdminUsers with email if enabled
-    if config.get("notify_admins_enabled", True):
-        admins = db.query(AdminUser).filter(AdminUser.is_active == True, AdminUser.email != None).all()
-        for a in admins:
-            em = (a.email or "").strip()
-            if em and "@" in em and em not in recipients:
-                recipients.append(em)
-
     now_bkk = get_bangkok_now()
     now_iso = now_bkk.isoformat()
+    clean_actor = str(triggered_by)[:95]
 
-    # Pre-validation
-    if not smtp_host:
+    try:
+        config = get_daily_digest_config(db, mask_password=False)
+        smtp_host = config.get("smtp_host", "smtp.office365.com").strip()
+        smtp_port = int(config.get("smtp_port", 587))
+        smtp_user = config.get("smtp_user", "").strip()
+        smtp_password = config.get("smtp_password", "").strip()
+        use_tls = bool(config.get("use_tls", True))
+        from_email = config.get("from_email", "Window Asia Central IAM <ciam-alert@windowasia.com>").strip()
+
+        # Build recipients list
+        recipients: List[str] = []
+        if custom_recipients:
+            recipients = [r.strip() for r in custom_recipients if r and "@" in r]
+        else:
+            recipients = [r.strip() for r in config.get("recipients", []) if r and "@" in r]
+
+        # Add AdminUsers with email if enabled
+        if config.get("notify_admins_enabled", True):
+            admins = db.query(AdminUser).filter(AdminUser.is_active == True, AdminUser.email != None).all()
+            for a in admins:
+                em = (a.email or "").strip()
+                if em and "@" in em and em not in recipients:
+                    recipients.append(em)
+
+        # Prepare target_username display string (STRICTLY <= 95 chars for PostgreSQL VARCHAR(100))
+        if not recipients:
+            target_display = "NO_RECIPIENT"
+        elif len(recipients) == 1:
+            target_display = recipients[0][:95]
+        else:
+            extra = len(recipients) - 1
+            target_display = f"{recipients[0]} (+{extra} recipients)"
+            if len(target_display) > 95:
+                target_display = target_display[:92] + "..."
+
+        # Pre-validation
+        if not smtp_host:
+            err_msg = "SMTP Host ยังไม่ได้กำหนด โปรดระบุในหน้าตั้งค่า"
+            try:
+                _record_digest_audit_and_setting(
+                    db=db,
+                    actor=clean_actor,
+                    target=target_display,
+                    success=False,
+                    summary=err_msg,
+                    details={"error": err_msg, "recipients": recipients, "triggered_by": clean_actor},
+                    now_iso=now_iso,
+                    now_bkk=now_bkk,
+                    error_msg=err_msg
+                )
+            except Exception:
+                pass
+            return {
+                "success": False,
+                "error": err_msg,
+                "recipients_count": len(recipients),
+                "timestamp": now_iso
+            }
+
+        if not recipients:
+            err_msg = "ไม่พบอีเมลผู้รับ โปรดระบุอีเมลผู้รับอย่างน้อย 1 รายการ"
+            try:
+                _record_digest_audit_and_setting(
+                    db=db,
+                    actor=clean_actor,
+                    target=target_display,
+                    success=False,
+                    summary=err_msg,
+                    details={"error": err_msg, "recipients": [], "triggered_by": clean_actor},
+                    now_iso=now_iso,
+                    now_bkk=now_bkk,
+                    error_msg=err_msg
+                )
+            except Exception:
+                pass
+            return {
+                "success": False,
+                "error": err_msg,
+                "recipients_count": 0,
+                "timestamp": now_iso
+            }
+
+        # Collect metrics & render HTML
+        metrics = await collect_daily_digest_metrics(db)
+        html_content = render_daily_digest_html(metrics)
+
+        risk_label = metrics["risk_level"]
+        ghost_count = metrics["kpi"]["ghost_accounts_count"]
+        subject = f"[{risk_label}] Central IAM Daily Security Digest • {metrics['report_date_thai']} (พบ {ghost_count} บัญชีผี)"
+
+        text_fallback = (
+            f"Central IAM Daily Security Digest - {metrics['report_date_thai']}\n"
+            f"สถานะ: {metrics['risk_label']}\n"
+            f"ตัวตนทั้งหมด: {metrics['kpi']['total_identities']} | Active AD: {metrics['kpi']['active_ad']} | บัญชีผี: {ghost_count}\n"
+            f"ระบบลูกออนไลน์: {metrics['kpi']['connected_apps_online']}/{metrics['kpi']['connected_apps_total']}\n"
+            f"เข้าใช้งานคอนโซล: https://ciam.windowasia.com\n"
+        )
+
+        # Transmit via thread pool
+        success, message = await asyncio.to_thread(
+            _send_smtp_sync,
+            smtp_host=smtp_host,
+            smtp_port=smtp_port,
+            smtp_user=smtp_user,
+            smtp_password=smtp_password,
+            use_tls=use_tls,
+            from_email=from_email,
+            recipients=recipients,
+            subject=subject,
+            html_content=html_content,
+            text_content=text_fallback
+        )
+
+        summary_text = (
+            f"ส่ง Daily Digest ไปยัง {len(recipients)} ผู้รับสำเร็จ"
+            if success else
+            f"ส่ง Daily Digest ล้มเหลว: {message}"
+        )
+        if len(summary_text) > 400:
+            summary_text = summary_text[:395] + "..."
+
+        _record_digest_audit_and_setting(
+            db=db,
+            actor=clean_actor,
+            target=target_display,
+            success=success,
+            summary=summary_text,
+            details={
+                "success": success,
+                "recipients_count": len(recipients),
+                "recipients": recipients,
+                "smtp_host": smtp_host,
+                "risk_level": metrics["risk_level"],
+                "ghost_count": ghost_count,
+                "message": message,
+                "triggered_by": clean_actor
+            },
+            now_iso=now_iso,
+            now_bkk=now_bkk,
+            error_msg=None if success else message
+        )
+
         return {
-            "success": False,
-            "error": "SMTP Host ยังไม่ได้กำหนด โปรดระบุในหน้าตั้งค่า",
-            "recipients_count": len(recipients),
-            "timestamp": now_iso
-        }
-
-    if not recipients:
-        return {
-            "success": False,
-            "error": "ไม่พบอีเมลผู้รับ โปรดระบุอีเมลผู้รับอย่างน้อย 1 รายการ",
-            "recipients_count": 0,
-            "timestamp": now_iso
-        }
-
-    # Collect metrics & render HTML
-    metrics = await collect_daily_digest_metrics(db)
-    html_content = render_daily_digest_html(metrics)
-
-    risk_label = metrics["risk_level"]
-    ghost_count = metrics["kpi"]["ghost_accounts_count"]
-    subject = f"[{risk_label}] Central IAM Daily Security Digest • {metrics['report_date_thai']} (พบ {ghost_count} บัญชีผี)"
-
-    text_fallback = (
-        f"Central IAM Daily Security Digest - {metrics['report_date_thai']}\n"
-        f"สถานะ: {metrics['risk_label']}\n"
-        f"ตัวตนทั้งหมด: {metrics['kpi']['total_identities']} | Active AD: {metrics['kpi']['active_ad']} | บัญชีผี: {ghost_count}\n"
-        f"ระบบลูกออนไลน์: {metrics['kpi']['connected_apps_online']}/{metrics['kpi']['connected_apps_total']}\n"
-        f"เข้าใช้งานคอนโซล: https://ciam.windowasia.com\n"
-    )
-
-    # Transmit via thread pool
-    success, message = await asyncio.to_thread(
-        _send_smtp_sync,
-        smtp_host=smtp_host,
-        smtp_port=smtp_port,
-        smtp_user=smtp_user,
-        smtp_password=smtp_password,
-        use_tls=use_tls,
-        from_email=from_email,
-        recipients=recipients,
-        subject=subject,
-        html_content=html_content,
-        text_content=text_fallback
-    )
-
-    summary_text = (
-        f"ส่ง Daily Digest ไปยัง {len(recipients)} ผู้รับสำเร็จ ({', '.join(recipients[:3])})"
-        if success else
-        f"ส่ง Daily Digest ล้มเหลว: {message}"
-    )
-
-    # 1. Immutable Audit Log for Admin visibility
-    db.add(IamAuditLog(
-        actor_username=triggered_by,
-        action_type="DAILY_EMAIL_DIGEST",
-        target_username=", ".join(recipients[:5]),
-        affected_app_code="CIAM_MAILER",
-        execution_mode="SCHEDULED_OR_MANUAL",
-        reason=summary_text,
-        details=json.dumps({
             "success": success,
+            "message": summary_text,
             "recipients_count": len(recipients),
             "recipients": recipients,
-            "smtp_host": smtp_host,
             "risk_level": metrics["risk_level"],
-            "ghost_count": ghost_count,
-            "message": message,
-            "triggered_by": triggered_by
-        }, ensure_ascii=False),
-        status="SUCCESS" if success else "FAILED"
-    ))
+            "ghost_accounts_count": ghost_count,
+            "timestamp": now_iso,
+            "error": None if success else message
+        }
 
-    # 2. Update SystemSetting status
-    setting = db.query(SystemSetting).filter_by(setting_key="daily_email_digest_schedule").first()
-    if setting:
-        val = dict(setting.setting_value)
-        val["last_run_at"] = now_iso
-        val["last_status"] = "SUCCESS" if success else "FAILED"
-        val["last_summary"] = summary_text
-        val["last_error"] = None if success else message
-        val["last_run_date"] = now_bkk.strftime("%Y-%m-%d")
-        setting.setting_value = val
-        flag_modified(setting, "setting_value")
+    except Exception as exc:
+        logger.exception("Unexpected error in send_daily_digest_email: %s", exc)
+        err_msg = f"เกิดข้อผิดพลาดในการประมวลผล Daily Digest: {str(exc)}"
+        try:
+            db.rollback()
+            _record_digest_audit_and_setting(
+                db=db,
+                actor=clean_actor,
+                target="SYSTEM_ERROR",
+                success=False,
+                summary=err_msg[:400],
+                details={"error": str(exc), "trace": "unexpected_exception"},
+                now_iso=now_iso,
+                now_bkk=now_bkk,
+                error_msg=str(exc)
+            )
+        except Exception as inner_e:
+            logger.error("Failed to write fallback audit log: %s", inner_e)
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
-    db.commit()
-
-    return {
-        "success": success,
-        "message": summary_text,
-        "recipients_count": len(recipients),
-        "recipients": recipients,
-        "risk_level": metrics["risk_level"],
-        "ghost_accounts_count": ghost_count,
-        "timestamp": now_iso,
-        "error": None if success else message
-    }
+        return {
+            "success": False,
+            "error": str(exc),
+            "message": err_msg,
+            "recipients_count": 0,
+            "recipients": [],
+            "timestamp": now_iso
+        }

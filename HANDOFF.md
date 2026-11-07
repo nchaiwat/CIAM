@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 7 พฤศจิกายน 2026 (Local Time: ~13:35 ICT)  
+> **Date Updated:** 7 พฤศจิกายน 2026 (Local Time: ~14:20 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 78/78 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: Sprint 51 - Daily Security & Identity Email Digest (07:00 AM)
+> **Test Integrity:** Backend Pytest: 81/81 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready — Latest Commit: fix(reporting): prevent audit log target_username overflow and sanitize SMTP envelope address
 
 ---
 
@@ -15,7 +15,16 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Daily Security & Identity Email Digest (07:00 AM) & SMTP Engine (Sprint 51):**
+1. **Daily Security & Identity Email Digest Hotfix & SMTP Hardening (Sprint 51.1):**
+   - **แก้ไขปัญหา API Error [500] ในการทดสอบส่งเมล์ และบันทึกประวัติการส่งลง Audit Logs 100%:**
+     - **สาเหตุข้อที่ 1 (PostgreSQL StringDataRightTruncation):** คอลัมน์ `target_username` ในตาราง `iam_audit_logs` ถูกจำกัดไว้ที่ `VARCHAR(100)` เมื่อมีการเปิดตัวเลือก "ส่งสำเนาให้อีเมลของ Admin ทุกคนที่มีในระบบอัตโนมัติ" ทำให้รายชื่ออีเมลผู้รับที่นำมาต่อกันยาวเกิน 100 ตัวอักษร ส่งผลให้ PostgreSQL บน VPS ตัดทรานแซกชันทิ้งและเกิด HTTP 500
+     - **การแก้ไข:** ปรับการจัดรูปแบบ `target_username` ให้จำกัดความยาวปลอดภัยไม่เกิน 95 ตัวอักษร เช่น `chaiwat.n@windowasia.com (+3 recipients)` และตัดข้อความส่วนเกินทิ้งอย่างปลอดภัย
+     - **สาเหตุข้อที่ 2 (SMTP Sender Syntax):** การส่ง `from_email` แบบมี Display Name เช่น `"Window Asia Central IAM <ciam-alert@windowasia.com>"` เข้าไปยัง `server.sendmail()` โดยตรงทำให้ Mail Server (เช่น Gmail/Office365) ปฏิเสธด้วยข้อผิดพลาด 501 Syntax Error
+     - **การแก้ไข:** ใช้ `email.utils.parseaddr` สกัด Envelope Address ที่สะอาดบริสุทธิ์ (`ciam-alert@windowasia.com`) ส่งเข้า `server.sendmail()` พร้อมรองรับการตัดช่องว่างใน 16-character App Password ของ Google Workspace
+     - **รองรับพอร์ต 465 (SSL) คู่กับ 587 (STARTTLS):** เพิ่มการสลับไปใช้ `smtplib.SMTP_SSL` อัตโนมัติเมื่อกำหนดพอร์ต 465
+     - **สถาปัตยกรรม Error Handling & Rollback Resilience:** ครอบฟังก์ชัน `send_daily_digest_email` ด้วย `try...except` ชั้นนอกสุด หากการส่งล้มเหลวหรือเกิด Exception ใดๆ จะทำ `db.rollback()` และบันทึกประวัติ `IamAuditLog` ด้วยสถานะ `FAILED` เสมอ ไม่มีวันเกิด Unhandled 500 Error หลุดไปยังหน้าเว็บอีกต่อไป
+     - **Unit Tests Coverage:** เพิ่มการทดสอบความยาวผู้รับ, การจำลอง SMTP ล้มเหลว, และการสกัด Envelope รวม 7/7 tests ผ่าน 100% (ชุดทดสอบทั้งระบบ 81/81 passed 100%)
+2. **Daily Security & Identity Email Digest (07:00 AM) & SMTP Engine (Sprint 51):**
    - **ระบบรายงานสรุปความเสี่ยงและสถานะประจำวันทางอีเมล (Executive Morning Digest):**
      - กำหนดเวลาส่งอัตโนมัติรอบเช้า **07:00 น.** (Asia/Bangkok) หลังรอบ Auto-Sync 04:00 น. เพื่อให้ผู้บริหาร IT และ Admin ได้รับรายงานสรุปก่อนเริ่มงาน
      - สร้าง Backend Engine `backend/app/services/daily_digest_service.py`:

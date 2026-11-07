@@ -165,3 +165,94 @@ def test_api_daily_digest_endpoints():
         send_data = send_res.json()
         assert send_data["success"] is True
         assert "test-lead@windowasia.com" in send_data["recipients"]
+
+
+def test_send_daily_digest_many_recipients_target_length():
+    """Verify that multiple recipients do not overflow the 100-character target_username limit in audit logs."""
+    db = SessionLocal()
+    try:
+        many_recipients = [
+            f"user{i}_very_long_department_staff_member@windowasia.com"
+            for i in range(10)
+        ]
+        with patch("app.services.daily_digest_service._send_smtp_sync") as mock_smtp:
+            mock_smtp.return_value = (True, "Delivered to all")
+
+            res = asyncio.run(send_daily_digest_email(
+                db=db,
+                triggered_by="TEST_ADMIN_STRESS",
+                custom_recipients=many_recipients
+            ))
+            assert res["success"] is True
+
+            audit = (
+                db.query(IamAuditLog)
+                .filter(IamAuditLog.actor_username == "TEST_ADMIN_STRESS")
+                .order_by(IamAuditLog.created_at.desc())
+                .first()
+            )
+            assert audit is not None
+            # Target username must strictly be <= 95 characters
+            assert len(audit.target_username) <= 95
+            assert "recipients" in audit.target_username
+            assert audit.status == "SUCCESS"
+    finally:
+        db.close()
+
+
+def test_send_daily_digest_smtp_failure_creates_failed_audit_log():
+    """Verify that SMTP failure returns clean error response and logs FAILED audit log without 500 error."""
+    db = SessionLocal()
+    try:
+        with patch("app.services.daily_digest_service._send_smtp_sync") as mock_smtp:
+            mock_smtp.return_value = (False, "Authentication failed: 535 5.7.8 Username and Password not accepted")
+
+            res = asyncio.run(send_daily_digest_email(
+                db=db,
+                triggered_by="TEST_FAIL_ADMIN",
+                custom_recipients=["test-fail@windowasia.com"]
+            ))
+            assert res["success"] is False
+            assert "Authentication failed" in res["error"]
+
+            audit = (
+                db.query(IamAuditLog)
+                .filter(IamAuditLog.actor_username == "TEST_FAIL_ADMIN")
+                .order_by(IamAuditLog.created_at.desc())
+                .first()
+            )
+            assert audit is not None
+            assert audit.status == "FAILED"
+            assert "ล้มเหลว" in audit.reason
+    finally:
+        db.close()
+
+
+def test_send_smtp_sync_envelope_and_ssl_handling():
+    """Verify that _send_smtp_sync extracts envelope address and handles port 465 SSL."""
+    from app.services.daily_digest_service import _send_smtp_sync
+
+    with patch("smtplib.SMTP_SSL") as mock_ssl:
+        instance = MagicMock()
+        mock_ssl.return_value = instance
+
+        success, msg = _send_smtp_sync(
+            smtp_host="smtp.gmail.com",
+            smtp_port=465,
+            smtp_user="itwindowasia@gmail.com",
+            smtp_password="abcd efgh ijkl mnop",
+            use_tls=True,
+            from_email="Window Asia Central IAM <ciam-alert@windowasia.com>",
+            recipients=["chaiwat.n@windowasia.com", "itwa@windowasia.com"],
+            subject="Test Subject",
+            html_content="<p>Hello</p>",
+            text_content="Hello"
+        )
+
+        assert success is True
+        mock_ssl.assert_called_once_with("smtp.gmail.com", 465, timeout=20)
+        instance.sendmail.assert_called_once()
+        args, _ = instance.sendmail.call_args
+        assert args[0] == "ciam-alert@windowasia.com"
+        assert args[1] == ["chaiwat.n@windowasia.com", "itwa@windowasia.com"]
+
