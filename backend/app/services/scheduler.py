@@ -532,6 +532,19 @@ async def run_scheduler_worker():
                 except Exception as health_err:
                     logger.warning("Error running scheduled health monitor: %s", health_err)
 
+                # Daily Security & Identity Email Digest Check (e.g. 07:00 AM)
+                try:
+                    from app.services.daily_digest_service import get_daily_digest_config, send_daily_digest_email
+                    digest_cfg = get_daily_digest_config(db, mask_password=False)
+                    if digest_cfg.get("enabled", False):
+                        target_digest_time = digest_cfg.get("send_time", "07:00")
+                        last_digest_date = digest_cfg.get("last_run_date")
+                        if current_hm == target_digest_time and last_digest_date != today_str:
+                            logger.info("Executing scheduled Daily Email Digest at %s (Asia/Bangkok)", current_hm)
+                            await send_daily_digest_email(db, triggered_by=f"AUTO_SCHEDULED_{current_hm}")
+                except Exception as digest_err:
+                    logger.warning("Error running scheduled daily email digest: %s", digest_err)
+
                 # Real-Time AD Sync Agent Status Monitoring & Hourly Alert Loop
                 try:
                     from app.services.telegram_service import check_and_notify_ad_status

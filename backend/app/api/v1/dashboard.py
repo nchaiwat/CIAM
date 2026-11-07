@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from app.core.database import get_db
@@ -201,4 +202,89 @@ async def force_check_ad_status(
 ):
     """Run an immediate AD status probe and notify if status is OFF or RECOVERED."""
     return await check_and_notify_ad_status(db, force_check=True)
+
+
+# ---------------------------------------------------------
+# Daily Security & Identity Digest Email Endpoints
+# ---------------------------------------------------------
+from typing import List
+from app.services.daily_digest_service import (
+    get_daily_digest_config,
+    save_daily_digest_config,
+    collect_daily_digest_metrics,
+    render_daily_digest_html,
+    send_daily_digest_email,
+)
+
+class DailyDigestUpdateRequest(BaseModel):
+    enabled: Optional[bool] = None
+    send_time: Optional[str] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    use_tls: Optional[bool] = None
+    from_email: Optional[str] = None
+    recipients: Optional[List[str]] = None
+    notify_admins_enabled: Optional[bool] = None
+
+class DailyDigestTestRequest(BaseModel):
+    custom_recipients: Optional[List[str]] = None
+
+
+@router.get("/daily-digest")
+async def get_daily_digest_status(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Retrieve Daily Digest email configuration and preview metrics."""
+    config = get_daily_digest_config(db, mask_password=True)
+    metrics = await collect_daily_digest_metrics(db)
+    return {
+        "config": config,
+        "preview_metrics": metrics
+    }
+
+
+@router.put("/daily-digest")
+def update_daily_digest_settings(
+    payload: DailyDigestUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Update Daily Digest email schedule, SMTP settings, and recipient list."""
+    updated = save_daily_digest_config(db, payload.model_dump(exclude_unset=True))
+    return {
+        "status": "success",
+        "message": "บันทึกการตั้งค่ารายงานทางอีเมลประจำวันสำเร็จ",
+        "config": updated
+    }
+
+
+@router.post("/daily-digest/test-send")
+async def trigger_test_daily_digest(
+    payload: Optional[DailyDigestTestRequest] = None,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Trigger an immediate Daily Digest email test to configured or custom recipients."""
+    custom_rcpt = payload.custom_recipients if payload and payload.custom_recipients else None
+    result = await send_daily_digest_email(
+        db=db,
+        triggered_by=f"MANUAL_TEST_{current_admin.username}",
+        custom_recipients=custom_rcpt
+    )
+    return result
+
+
+@router.get("/daily-digest/preview-html")
+async def preview_daily_digest_html(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Return raw HTML representation of the Daily Digest for preview in admin browser."""
+    metrics = await collect_daily_digest_metrics(db)
+    html = render_daily_digest_html(metrics)
+    return HTMLResponse(content=html, status_code=200)
+
 

@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 27 ตุลาคม 2026 (Local Time: ~14:15 ICT)  
+> **Date Updated:** 7 พฤศจิกายน 2026 (Local Time: ~13:35 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 74/74 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: Sprint 50 - Hermes.N Local Account AD Isolation & Auto-Heal Fix
+> **Test Integrity:** Backend Pytest: 78/78 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready — Latest Commit: Sprint 51 - Daily Security & Identity Email Digest (07:00 AM)
 
 ---
 
@@ -15,7 +15,34 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Hermes.N Local Account AD Isolation & Auto-Heal Fix (Sprint 50):**
+1. **Daily Security & Identity Email Digest (07:00 AM) & SMTP Engine (Sprint 51):**
+   - **ระบบรายงานสรุปความเสี่ยงและสถานะประจำวันทางอีเมล (Executive Morning Digest):**
+     - กำหนดเวลาส่งอัตโนมัติรอบเช้า **07:00 น.** (Asia/Bangkok) หลังรอบ Auto-Sync 04:00 น. เพื่อให้ผู้บริหาร IT และ Admin ได้รับรายงานสรุปก่อนเริ่มงาน
+     - สร้าง Backend Engine `backend/app/services/daily_digest_service.py`:
+       - ใช้มาตรฐาน `smtplib` ของ Python ผ่าน `asyncio.to_thread` รวดเร็ว ไม่บล็อก Event Loop รองรับ STARTTLS และการตั้งค่าพอร์ต 587/465
+       - ระบบ Masking รหัสผ่าน SMTP ไม่เปิดเผยรหัสผ่าน และเก็บข้อมูลใน `system_settings` (`daily_email_digest_schedule`)
+       - บันทึกประวัติการส่งลงใน `IamAuditLog` (`action_type: "DAILY_EMAIL_DIGEST"`, status: `SUCCESS`/`FAILED`) ตรวจสอบย้อนกลับได้เสมอ
+     - **Executive HTML Email Template สไตล์ Window Asia (Deep Navy `#0b1329` & Clean Slate):**
+       - แถบสถานะความเสี่ยงภาพรวม (Risk Posture Banner): 🟢 LOW / 🟡 MEDIUM / 🔴 HIGH
+       - การ์ดสรุป KPI 4 มิติ: ตัวตนทั้งหมด, ใช้งานใน AD, บัญชีผีตกค้าง (Ghost Accounts), ระบบลูกออนไลน์
+       - ตารางบัญชีผีตกค้าง (Ghost Accounts / Discrepancies) ระบุชื่อ Username แผนก และระบบที่ยังค้างสิทธิ์
+       - ตารางความพร้อมระบบลูก (Spoke Apps Online/Offline) และผลการซิงก์รอบ 04:00 น.
+       - สรุปการตัดสิทธิ์พนักงาน (Offboardings) และการแก้ไขสิทธิ์ Admin ในรอบ 24 ชั่วโมง
+       - ปุ่ม Call to Action (CTA) ลิงก์ตรงสู่ Central IAM Console
+     - **Background Scheduler Integration (`backend/app/services/scheduler.py`):**
+       - ตรวจสอบเวลาส่งประจำวัน (Default `07:00`) และส่งอีเมลอัตโนมัติพร้อมป้องกันการส่งซ้ำในวันเดียวกัน (`last_run_date`)
+     - **REST API Endpoints (`backend/app/api/v1/dashboard.py`):**
+       - `GET /api/v1/dashboard/daily-digest`: ดึงค่าคอนฟิกและพรีวิวตัวเลข KPI
+       - `PUT /api/v1/dashboard/daily-digest`: อัปเดตการตั้งค่ากำหนดเวลา SMTP และผู้รับ
+       - `POST /api/v1/dashboard/daily-digest/test-send`: ส่งอีเมลทดสอบทันที
+       - `GET /api/v1/dashboard/daily-digest/preview-html`: แสดงผล HTML Email Preview ในเบราว์เซอร์
+     - **Admin UI Settings & Dynamic Preview Modal (`frontend/src/app/settings/page.tsx`):**
+       - เพิ่มการ์ดตั้งค่า Daily Morning Digest พร้อมตัวเลือกเปิด/ปิด, ตั้งเวลา, จัดการ SMTP Server, ช่องกรอกอีเมลผู้รับ
+       - ตัวเลือก "ส่งสำเนาให้อีเมลของ Admin ทุกคนที่มีในระบบอัตโนมัติ"
+       - ปุ่ม **[ 👁️ ดูตัวอย่างอีเมล (Preview) ]** เปิด Modal แสดงเทมเพลตอีเมลจริงผ่าน iframe
+       - ปุ่ม **[ ⚡ ส่งทดสอบทันที ]** พร้อมแสดงผลลัพธ์การส่งและประเมินระดับความเสี่ยง
+     - **Unit Tests Coverage:** เพิ่ม `backend/tests/test_daily_email_digest.py` ครอบคลุมการตั้งค่า, การคำนวณ KPI, การเรนเดอร์ HTML, API endpoints และการส่งเมลแบบ Mock (ผ่าน 4/4 tests 100%)
+2. **Hermes.N Local Account AD Isolation & Auto-Heal Fix (Sprint 50):**
    - **แก้ปัญหาบัญชี Hermes.N แสดงสถานะอยู่ใน AD และ Active ผิดพลาด:**
      - สาเหตุเดิม: ใน `backend/app/initial_data.py` เดิมมี seed data ที่ระบุ `Hermes.N` มี `is_active_in_ad: True` และมี mapping กับ `ad` role `Domain Users` ทำให้ทุกครั้งที่ container start จะ overwrite ค่าเป็น Active ใน AD เสมอ
      - แก้ไข: ปรับ seed data ของ `Hermes.N` ให้ `is_active_in_ad: False` และถอด `app: ad` ออก พร้อมใส่ auto-heal ใน `initial_data.py` ให้ลบ `AppAccountMapping` ของ AD ทิ้ง, ตั้ง `is_approved_exception = True` และ `exception_type = "LOCAL_ACCOUNT"`

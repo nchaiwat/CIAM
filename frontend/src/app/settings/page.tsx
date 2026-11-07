@@ -27,6 +27,10 @@ import {
   Bot,
   Wrench,
   Key,
+  Mail,
+  FileText,
+  Check,
+  X,
 } from "lucide-react";
 import {
   ciamApi,
@@ -36,6 +40,8 @@ import {
   SyncAllResult,
   AdMonitorState,
   AICopilotSettings,
+  DailyDigestConfig,
+  DailyDigestTestResult,
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
 
@@ -114,13 +120,38 @@ export default function SettingsPage() {
     available_models?: string[] | null;
   } | null>(null);
 
+  // Daily Email Digest State
+  const [digestConfig, setDigestConfig] = useState<DailyDigestConfig>({
+    enabled: false,
+    send_time: "07:00",
+    smtp_host: "smtp.office365.com",
+    smtp_port: 587,
+    smtp_user: "",
+    smtp_password: "",
+    smtp_password_masked: "",
+    has_password: false,
+    use_tls: true,
+    from_email: "Window Asia Central IAM <ciam-alert@windowasia.com>",
+    recipients: [],
+    notify_admins_enabled: true,
+  });
+  const [inputSmtpPassword, setInputSmtpPassword] = useState("");
+  const [inputRecipients, setInputRecipients] = useState("");
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [digestSaving, setDigestSaving] = useState(false);
+  const [digestSaveMessage, setDigestSaveMessage] = useState<string | null>(null);
+  const [digestTestLoading, setDigestTestLoading] = useState(false);
+  const [digestTestResult, setDigestTestResult] = useState<DailyDigestTestResult | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const [healthData, scheduleData, aiData] = await Promise.all([
+      const [healthData, scheduleData, aiData, digestData] = await Promise.all([
         ciamApi.getHealthMonitorStatus().catch(() => null),
         ciamApi.getSyncSchedule().catch(() => null),
         ciamApi.getAICopilotSettings().catch(() => null),
+        ciamApi.getDailyDigestStatus().catch(() => null),
       ]);
 
       if (healthData) {
@@ -138,6 +169,10 @@ export default function SettingsPage() {
       }
       if (aiData) {
         setAiSettings(aiData);
+      }
+      if (digestData && digestData.config) {
+        setDigestConfig(digestData.config);
+        setInputRecipients((digestData.config.recipients || []).join(", "));
       }
     } catch (err) {
       console.error("Error loading system settings:", err);
@@ -195,6 +230,73 @@ export default function SettingsPage() {
       });
     } finally {
       setAiTesting(false);
+    }
+  };
+
+  const handleSaveDigestConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setDigestSaving(true);
+      setDigestSaveMessage(null);
+      const recipientList = inputRecipients
+        .split(",")
+        .map((r) => r.trim())
+        .filter((r) => r && r.includes("@"));
+
+      const res = await ciamApi.updateDailyDigestConfig({
+        enabled: digestConfig.enabled,
+        send_time: digestConfig.send_time,
+        smtp_host: digestConfig.smtp_host,
+        smtp_port: Number(digestConfig.smtp_port) || 587,
+        smtp_user: digestConfig.smtp_user,
+        smtp_password: inputSmtpPassword.trim() ? inputSmtpPassword.trim() : undefined,
+        use_tls: digestConfig.use_tls,
+        from_email: digestConfig.from_email,
+        recipients: recipientList,
+        notify_admins_enabled: digestConfig.notify_admins_enabled,
+      });
+
+      if (res && res.config) {
+        setDigestConfig(res.config);
+        setInputRecipients((res.config.recipients || []).join(", "));
+        setInputSmtpPassword("");
+        setDigestSaveMessage("บันทึกการตั้งค่ารายงานทางอีเมลประจำวันเรียบร้อย");
+        setTimeout(() => setDigestSaveMessage(null), 5000);
+      }
+    } catch (err: any) {
+      console.error("Save daily digest failed:", err);
+      setDigestSaveMessage("เกิดข้อผิดพลาดในการบันทึก: " + (err.message || String(err)));
+    } finally {
+      setDigestSaving(false);
+    }
+  };
+
+  const handleTestSendDigest = async () => {
+    try {
+      setDigestTestLoading(true);
+      setDigestTestResult(null);
+      const recipientList = inputRecipients
+        .split(",")
+        .map((r) => r.trim())
+        .filter((r) => r && r.includes("@"));
+
+      const res = await ciamApi.triggerTestDailyDigest(recipientList.length > 0 ? recipientList : undefined);
+      setDigestTestResult(res);
+      const fresh = await ciamApi.getDailyDigestStatus().catch(() => null);
+      if (fresh && fresh.config) {
+        setDigestConfig(fresh.config);
+      }
+    } catch (err: any) {
+      setDigestTestResult({
+        success: false,
+        message: "เกิดข้อผิดพลาดในการทดสอบส่ง: " + (err.message || String(err)),
+        recipients_count: 0,
+        recipients: [],
+        timestamp: new Date().toISOString(),
+        error: err.message || String(err),
+      });
+    } finally {
+      setDigestTestLoading(false);
     }
   };
 
@@ -1103,6 +1205,410 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        {/* CARD: Daily Security & Identity Email Digest (Morning 07:00 AM) */}
+        <div className="bg-white rounded-xl border border-slate-300 shadow-sm overflow-hidden flex flex-col md:col-span-2">
+          <div className="px-5 py-4 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-400/30">
+                <Mail className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h2 className="font-bold text-sm tracking-tight">
+                    รายงานสรุปความเสี่ยงและสถานะประจำวันทางอีเมล (Daily Morning Digest 07:00 น.)
+                  </h2>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-black border ${
+                      digestConfig.enabled
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                        : "bg-slate-700 text-slate-300 border-slate-600"
+                    }`}
+                  >
+                    {digestConfig.enabled ? "เปิดส่งรายงานอัตโนมัติ" : "ปิดการส่งชั่วคราว"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 mt-0.5">
+                  สรุปความเสี่ยง บัญชีผีตกค้างในระบบลูก (Ghost Accounts) และสถานะความพร้อมส่งตรงเข้าอีเมลผู้ดูแลระบบทุกเช้า
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => setShowPreviewModal(true)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>ดูตัวอย่างอีเมล (Preview)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTestSendDigest}
+                disabled={digestTestLoading}
+                className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                {digestTestLoading ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                <span>{digestTestLoading ? "กำลังส่ง..." : "⚡ ส่งทดสอบทันที"}</span>
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveDigestConfig} className="p-5 space-y-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column: Schedule & Recipients */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-lg">
+                  <div>
+                    <label className="text-xs font-bold text-slate-900 block">
+                      เปิดใช้งานการส่งรายงานประจำวัน (Daily Email Digest)
+                    </label>
+                    <span className="text-[11px] text-slate-500 block">
+                      ส่งสรุปสถานะความเสี่ยงอัตโนมัติตามเวลาที่กำหนดทุกวัน
+                    </span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={digestConfig.enabled}
+                      onChange={(e) =>
+                        setDigestConfig((prev) => ({ ...prev, enabled: e.target.checked }))
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    เวลาที่ส่งรายงานประจำวัน (Bangkok Time UTC+7) <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={digestConfig.send_time}
+                      onChange={(e) =>
+                        setDigestConfig((prev) => ({ ...prev, send_time: e.target.value }))
+                      }
+                      placeholder="07:00"
+                      pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-sky-500 focus:bg-white transition"
+                    />
+                    <Clock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    แนะนำเวลา <strong className="text-slate-700">07:00 น.</strong> เพื่อให้สรุปผลหลังจากการกวาดข้อมูลรอบ 04:00 น. เสร็จสิ้นเรียบร้อย
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    อีเมลผู้รับรายงาน (Recipients) <span className="text-rose-500">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={inputRecipients}
+                    onChange={(e) => setInputRecipients(e.target.value)}
+                    placeholder="it-security@windowasia.com, chaiwat.n@windowasia.com"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-sky-500 focus:bg-white transition"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    คั่นแต่ละอีเมลด้วยเครื่องหมายจุลภาค (comma <code className="text-slate-700">,</code>)
+                  </p>
+                </div>
+
+                <div className="flex items-center space-x-2 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="notify_admins_enabled"
+                    checked={digestConfig.notify_admins_enabled}
+                    onChange={(e) =>
+                      setDigestConfig((prev) => ({
+                        ...prev,
+                        notify_admins_enabled: e.target.checked,
+                      }))
+                    }
+                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-500 h-4 w-4"
+                  />
+                  <label htmlFor="notify_admins_enabled" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                    ส่งสำเนาให้อีเมลของ Admin ทุกคนที่มีในระบบอัตโนมัติ (Notify All Active Admins)
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    ชื่อและอีเมลผู้ส่ง (From Address)
+                  </label>
+                  <input
+                    type="text"
+                    value={digestConfig.from_email}
+                    onChange={(e) =>
+                      setDigestConfig((prev) => ({ ...prev, from_email: e.target.value }))
+                    }
+                    placeholder="Window Asia Central IAM <ciam-alert@windowasia.com>"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-sky-500 focus:bg-white transition"
+                  />
+                </div>
+              </div>
+
+              {/* Right Column: SMTP Server & Credentials */}
+              <div className="space-y-4">
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3.5">
+                  <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
+                    <Server className="w-4 h-4 text-sky-600" />
+                    <h3 className="font-bold text-xs text-slate-800">
+                      การตั้งค่า SMTP Mail Server &amp; การเชื่อมต่อ
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        SMTP Host <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={digestConfig.smtp_host}
+                        onChange={(e) =>
+                          setDigestConfig((prev) => ({ ...prev, smtp_host: e.target.value }))
+                        }
+                        placeholder="smtp.office365.com"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-sky-500 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Port <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={digestConfig.smtp_port}
+                        onChange={(e) =>
+                          setDigestConfig((prev) => ({
+                            ...prev,
+                            smtp_port: parseInt(e.target.value) || 587,
+                          }))
+                        }
+                        placeholder="587"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-sky-500 transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="smtp_use_tls"
+                      checked={digestConfig.use_tls}
+                      onChange={(e) =>
+                        setDigestConfig((prev) => ({ ...prev, use_tls: e.target.checked }))
+                      }
+                      className="rounded border-slate-300 text-sky-600 focus:ring-sky-500 h-4 w-4"
+                    />
+                    <label htmlFor="smtp_use_tls" className="text-xs font-medium text-slate-700 cursor-pointer">
+                      เปิดใช้งานการเข้ารหัสความปลอดภัย TLS / STARTTLS (Port 587)
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      SMTP Username / บัญชีส่งเมล
+                    </label>
+                    <input
+                      type="text"
+                      value={digestConfig.smtp_user}
+                      onChange={(e) =>
+                        setDigestConfig((prev) => ({ ...prev, smtp_user: e.target.value }))
+                      }
+                      placeholder="ciam-alert@windowasia.com"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-sky-500 transition"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        SMTP Password / App Password
+                      </label>
+                      {digestConfig.has_password && (
+                        <span className="text-[10px] text-emerald-600 font-semibold flex items-center space-x-1">
+                          <Check className="w-3 h-3" />
+                          <span>บันทึกรหัสผ่านไว้แล้ว</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showSmtpPassword ? "text" : "password"}
+                        value={inputSmtpPassword}
+                        onChange={(e) => setInputSmtpPassword(e.target.value)}
+                        placeholder={digestConfig.has_password ? "•••••••• (เว้นว่างหากไม่เปลี่ยน)" : "ใส่รหัสผ่าน SMTP หรือ App Password"}
+                        className="w-full pl-3 pr-10 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:ring-2 focus:ring-sky-500 transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSmtpPassword(!showSmtpPassword)}
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showSmtpPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      สำหรับ Microsoft 365 หรือ Google Workspace แนะนำให้ใช้ App Password เพื่อความปลอดภัย
+                    </p>
+                  </div>
+                </div>
+
+                {/* Status Box */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">สถานะการส่งรอบล่าสุด:</span>
+                    <span
+                      className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                        digestConfig.last_status === "SUCCESS"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : digestConfig.last_status === "FAILED"
+                          ? "bg-rose-100 text-rose-800"
+                          : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {digestConfig.last_status || "ยังไม่มีข้อมูล"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500">เวลาที่ส่งรอบล่าสุด:</span>
+                    <span className="font-mono text-slate-700">
+                      {digestConfig.last_run_at
+                        ? formatDateTime(digestConfig.last_run_at)
+                        : "-"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500">กำหนดการส่งรอบถัดไป:</span>
+                    <span className="font-mono text-slate-700 font-bold">
+                      {digestConfig.next_run_at
+                        ? formatDateTime(digestConfig.next_run_at)
+                        : "-"}
+                    </span>
+                  </div>
+                  {digestConfig.last_summary && (
+                    <div className="text-[11px] text-slate-600 pt-1 border-t border-slate-200 font-mono">
+                      {digestConfig.last_summary}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Save Feedback */}
+            {digestSaveMessage && (
+              <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{digestSaveMessage}</span>
+              </div>
+            )}
+
+            {/* Test Send Result */}
+            {digestTestResult && (
+              <div
+                className={`p-3.5 rounded-lg border text-xs flex items-start space-x-2.5 ${
+                  digestTestResult.success
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-900"
+                    : "bg-rose-50 border-rose-300 text-rose-900"
+                }`}
+              >
+                {digestTestResult.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 space-y-1">
+                  <div className="font-bold">{digestTestResult.message}</div>
+                  {digestTestResult.recipients && digestTestResult.recipients.length > 0 && (
+                    <div className="text-[11px] opacity-85">
+                      ผู้รับ: {digestTestResult.recipients.join(", ")}
+                    </div>
+                  )}
+                  {digestTestResult.risk_level && (
+                    <div className="text-[11px] font-mono">
+                      ประเมินความเสี่ยง: <strong className="uppercase">{digestTestResult.risk_level}</strong> (พบบัญชีผี {digestTestResult.ghost_accounts_count || 0} บัญชี)
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-end gap-3 border-t border-slate-200">
+              <button
+                type="submit"
+                disabled={digestSaving}
+                className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition flex items-center justify-center space-x-1.5"
+              >
+                {digestSaving ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                <span>{digestSaving ? "กำลังบันทึก..." : "💾 บันทึกการตั้งค่ารายงานทางอีเมล"}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Modal: Preview Daily Digest HTML */}
+        {showPreviewModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+              <div className="px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Mail className="w-4 h-4 text-sky-400" />
+                  <h3 className="font-bold text-sm">
+                    ตัวอย่างรายงาน Daily Security &amp; Identity Digest (HTML Email Preview)
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPreviewModal(false)}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 bg-slate-100 p-2 overflow-hidden">
+                <iframe
+                  src={ciamApi.getDailyDigestPreviewHtmlUrl()}
+                  title="Daily Digest Email Preview"
+                  className="w-full h-[70vh] rounded-lg border border-slate-200 bg-white"
+                />
+              </div>
+
+              <div className="px-5 py-3 bg-white border-t border-slate-200 flex items-center justify-between text-xs">
+                <span className="text-slate-500">
+                  เทมเพลตนี้ถูกสร้างขึ้นแบบไดนามิกตามข้อมูลความปลอดภัยและบัญชีผีจริงในฐานข้อมูลขณะนี้
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowPreviewModal(false)}
+                  className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold transition cursor-pointer"
+                >
+                  ปิดหน้าต่าง
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* AI Copilot & Intelligence Engine Card */}
         <div className="bg-white rounded-xl border border-slate-300 shadow-sm p-5 space-y-4 md:col-span-2">

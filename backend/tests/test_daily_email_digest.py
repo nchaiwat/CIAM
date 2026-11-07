@@ -1,0 +1,167 @@
+import asyncio
+import pytest
+from unittest.mock import patch, MagicMock
+from fastapi.testclient import TestClient
+
+from app.main import app
+from app.core.database import SessionLocal
+from app.models.setting import SystemSetting
+from app.models.audit import IamAuditLog
+from app.services.daily_digest_service import (
+    get_daily_digest_config,
+    save_daily_digest_config,
+    collect_daily_digest_metrics,
+    render_daily_digest_html,
+    send_daily_digest_email,
+)
+
+client = TestClient(app)
+
+
+def test_daily_digest_config_management():
+    db = SessionLocal()
+    try:
+        # 1. Clean existing setting
+        db.query(SystemSetting).filter_by(setting_key="daily_email_digest_schedule").delete()
+        db.commit()
+
+        # 2. Get default config
+        cfg = get_daily_digest_config(db, mask_password=True)
+        assert cfg["enabled"] is False
+        assert cfg["send_time"] == "07:00"
+        assert cfg["smtp_host"] == "smtp.office365.com"
+        assert cfg["has_password"] is False
+        assert cfg["smtp_password_masked"] == ""
+
+        # 3. Save new config with password
+        saved = save_daily_digest_config(db, {
+            "enabled": True,
+            "send_time": "07:30",
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 587,
+            "smtp_user": "it-security@windowasia.com",
+            "smtp_password": "super_secret_smtp_password",
+            "from_email": "Window Asia Security <it-security@windowasia.com>",
+            "recipients": ["admin1@windowasia.com", "admin2@windowasia.com"],
+            "notify_admins_enabled": True
+        })
+        assert saved["enabled"] is True
+        assert saved["send_time"] == "07:30"
+        assert saved["smtp_host"] == "smtp.gmail.com"
+        assert saved["has_password"] is True
+        assert saved["smtp_password_masked"] == "******"
+        assert len(saved["recipients"]) == 2
+
+        # 4. Save without changing password (masked string)
+        updated = save_daily_digest_config(db, {
+            "send_time": "07:00",
+            "smtp_password": "******"
+        })
+        assert updated["send_time"] == "07:00"
+        # Verify in DB that raw password is still preserved
+        raw_setting = db.query(SystemSetting).filter_by(setting_key="daily_email_digest_schedule").first()
+        assert raw_setting.setting_value["smtp_password"] == "super_secret_smtp_password"
+    finally:
+        db.close()
+
+
+def test_collect_metrics_and_render_html():
+    db = SessionLocal()
+    try:
+        metrics = asyncio.run(collect_daily_digest_metrics(db))
+        assert "kpi" in metrics
+        assert "total_identities" in metrics["kpi"]
+        assert "active_ad" in metrics["kpi"]
+        assert "risk_level" in metrics
+        assert metrics["risk_level"] in ["LOW", "MEDIUM", "HIGH"]
+        assert "connected_apps" in metrics
+        assert "ghost_accounts" in metrics
+
+        html = render_daily_digest_html(metrics)
+        assert "WINDOW ASIA PUBLIC COMPANY LIMITED" in html
+        assert "Central IAM • Daily Security & Identity Digest" in html
+        assert "ตัวตนทั้งหมด" in html
+        assert "https://ciam.windowasia.com" in html
+    finally:
+        db.close()
+
+
+def test_send_daily_digest_email_success():
+    db = SessionLocal()
+    try:
+        # Mock smtplib to simulate successful delivery
+        with patch("app.services.daily_digest_service._send_smtp_sync") as mock_smtp:
+            mock_smtp.return_value = (True, "Delivered")
+
+            res = asyncio.run(send_daily_digest_email(
+                db=db,
+                triggered_by="TEST_ADMIN",
+                custom_recipients=["security@windowasia.com"]
+            ))
+            assert res["success"] is True
+            assert res["recipients_count"] >= 1
+            assert "security@windowasia.com" in res["recipients"]
+
+            # Verify IamAuditLog was written
+            audit = (
+                db.query(IamAuditLog)
+                .filter(IamAuditLog.action_type == "DAILY_EMAIL_DIGEST")
+                .order_by(IamAuditLog.created_at.desc())
+                .first()
+            )
+            assert audit is not None
+            assert audit.actor_username == "TEST_ADMIN"
+            assert audit.status == "SUCCESS"
+            assert "DAILY_EMAIL_DIGEST" in audit.action_type
+    finally:
+        db.close()
+
+
+def test_api_daily_digest_endpoints():
+    login_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. GET /api/v1/dashboard/daily-digest
+    get_res = client.get("/api/v1/dashboard/daily-digest", headers=headers)
+    assert get_res.status_code == 200
+    data = get_res.json()
+    assert "config" in data
+    assert "preview_metrics" in data
+
+    # 2. PUT /api/v1/dashboard/daily-digest
+    put_res = client.put(
+        "/api/v1/dashboard/daily-digest",
+        json={
+            "enabled": True,
+            "send_time": "07:00",
+            "smtp_host": "smtp.office365.com",
+            "smtp_port": 587,
+            "smtp_user": "alert@windowasia.com",
+            "recipients": ["lead-admin@windowasia.com"]
+        },
+        headers=headers
+    )
+    assert put_res.status_code == 200
+    put_data = put_res.json()
+    assert put_data["status"] == "success"
+    assert put_data["config"]["send_time"] == "07:00"
+
+    # 3. GET /api/v1/dashboard/daily-digest/preview-html
+    preview_res = client.get("/api/v1/dashboard/daily-digest/preview-html", headers=headers)
+    assert preview_res.status_code == 200
+    assert "text/html" in preview_res.headers["content-type"]
+    assert "Central IAM • Daily Security & Identity Digest" in preview_res.text
+
+    # 4. POST /api/v1/dashboard/daily-digest/test-send with mock
+    with patch("app.services.daily_digest_service._send_smtp_sync") as mock_smtp:
+        mock_smtp.return_value = (True, "Delivered")
+        send_res = client.post(
+            "/api/v1/dashboard/daily-digest/test-send",
+            json={"custom_recipients": ["test-lead@windowasia.com"]},
+            headers=headers
+        )
+        assert send_res.status_code == 200
+        send_data = send_res.json()
+        assert send_data["success"] is True
+        assert "test-lead@windowasia.com" in send_data["recipients"]

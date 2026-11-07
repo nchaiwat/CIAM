@@ -761,6 +761,24 @@ export const ciamApi = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  // Daily Security & Identity Email Digest
+  getDailyDigestStatus: () => fetchApi<DailyDigestStatusResponse>("/dashboard/daily-digest"),
+  updateDailyDigestConfig: (payload: Partial<DailyDigestConfig>) =>
+    fetchApi<{
+      status: string;
+      message: string;
+      config: DailyDigestConfig;
+    }>("/dashboard/daily-digest", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  triggerTestDailyDigest: (customRecipients?: string[]) =>
+    fetchApi<DailyDigestTestResult>("/dashboard/daily-digest/test-send", {
+      method: "POST",
+      body: JSON.stringify({ custom_recipients: customRecipients }),
+    }),
+  getDailyDigestPreviewHtmlUrl: () => `${API_BASE_URL}/dashboard/daily-digest/preview-html`,
 };
 
 export const api = ciamApi;
@@ -983,6 +1001,43 @@ export interface AITestResponse {
   suggested_model?: string | null;
   available_models?: string[] | null;
 }
+
+export interface DailyDigestConfig {
+  enabled: boolean;
+  send_time: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password?: string;
+  smtp_password_masked?: string;
+  has_password?: boolean;
+  use_tls: boolean;
+  from_email: string;
+  recipients: string[];
+  notify_admins_enabled: boolean;
+  last_run_at?: string | null;
+  last_status?: string | null;
+  last_summary?: string | null;
+  last_error?: string | null;
+  next_run_at?: string | null;
+}
+
+export interface DailyDigestStatusResponse {
+  config: DailyDigestConfig;
+  preview_metrics: any;
+}
+
+export interface DailyDigestTestResult {
+  success: boolean;
+  message: string;
+  recipients_count: number;
+  recipients: string[];
+  risk_level?: string;
+  ghost_accounts_count?: number;
+  timestamp: string;
+  error?: string | null;
+}
+
 
 
 
