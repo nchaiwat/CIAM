@@ -1,7 +1,7 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Current Version:** 2.9.0 (True 2-Way Bi-directional Status Sync, Status Origin Tracking & Account Preservation Standard)  
-**Effective Date:** 22 ตุลาคม 2026 (22/10/2026)  
+**Current Version:** 2.10.0 (Enterprise In-App Bot Defense & Anti-Brute-Force Framework Standard)  
+**Effective Date:** 9 พฤศจิกายน 2026 (09/11/2026)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
 **Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
 **Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636) / OAuth 2.0 Security BCP (RFC 9700) / Model Context Protocol (MCP)
@@ -14,7 +14,8 @@
 
 | เวอร์ชัน (Version) | วันที่มีผล (Date) | สถานะ (Status) | สรุปรายการปรับปรุงจากเวอร์ชันก่อนหน้า (Change Summary & Key Differences) |
 | :---: | :---: | :---: | :--- |
-| **v2.9.0** | 22/10/2026 | **Current Active** | • **หมวด D.6: True 2-Way Bi-directional Status Sync & Origin Tracking (มาตรฐานการซิงก์สถานะสองทางแบบใครเริ่มก่อนมีผลทันที):** กำหนดให้การเปลี่ยนแปลงสถานะบัญชี (เปิดใช้งาน / ระงับสิทธิ์) ที่เริ่มต้นจากฝั่งใด (ไม่ว่าจะเริ่มที่หน้าเว็บ CIAM หรือเริ่มที่หลังบ้านของ App Client) ต้องส่งผลไปยังอีกฝั่งโดยตรง (First-Action Wins with Origin Tracking)<br/>• **Status Origin Tracking (`status_origin`, `status_updated_at`, `status_reason`):** ระบบ CIAM จะบันทึกที่มาของการเปลี่ยนสถานะอย่างโปร่งใส (`CIAM_ADMIN`, `SPOKE_APP`, `AD_INHERITED`) หากระบบลูกส่งสถานะ Inactive มา CIAM จะยอมรับสถานะและไม่ส่งคำสั่ง `PROVISION_USER` หรือ `ENABLE_USER` ไปบังคับเปิดคืนให้ Spoke โดยเด็ดขาด<br/>• **Account Preservation (No Blind Deletion):** ป้องกันปัญหาบัญชีหาย โดยกำหนดให้ CIAM ไม่ลบการผูกสิทธิ์ (`AppAccountMapping`) ที่สร้างจากระบบกลางทิ้งแบบเงียบๆ หาก Spoke ยังไม่ได้สร้างในระบบตนเอง ให้คงสถานะเป็น `PENDING_PROVISION` เพื่อรอการซิงก์<br/>• **SSO Callback Inactive Guard (หมวด B.3):** กำหนดให้ Spoke ตรวจสอบสถานะบัญชีในระบบตนเอง หากบัญชีถูกระงับสิทธิ์จากฝั่ง Spoke เอง หรือถูกระงับสิทธิ์จาก CIAM ต้องปฏิเสธการล็อกอิน และห้ามปลดล็อก Active คืนอัตโนมัติเด็ดขาด |
+| **v2.10.0** | 09/11/2026 | **Current Active** | • **หมวด F: Enterprise In-App Bot Defense & Anti-Brute-Force Framework Standard:** กำหนดมาตรฐานการป้องกันบอทและ Brute-Force ภายในแอปพลิเคชัน 3 ชั้น (3-Layer Defense) สำหรับ Spoke ทุกระบบ ได้แก่ 1) Sliding-Window IP Rate Limiting 10 req/min, 2) Decoy Honeypot Trap ฟิลด์หลอก `corporate_fax` / `security_honey`, 3) Form Submission Velocity & Timing Guard (< 400ms rejection) เพื่อความปลอดภัยสูงสุดโดยไม่ต้องพึ่งพาบริการภายนอกหรือย้าย DNS |
+| **v2.9.0** | 22/10/2026 | Superseded | • **หมวด D.6: True 2-Way Bi-directional Status Sync & Origin Tracking (มาตรฐานการซิงก์สถานะสองทางแบบใครเริ่มก่อนมีผลทันที):** กำหนดให้การเปลี่ยนแปลงสถานะบัญชี (เปิดใช้งาน / ระงับสิทธิ์) ที่เริ่มต้นจากฝั่งใด (ไม่ว่าจะเริ่มที่หน้าเว็บ CIAM หรือเริ่มที่หลังบ้านของ App Client) ต้องส่งผลไปยังอีกฝั่งโดยตรง (First-Action Wins with Origin Tracking)<br/>• **Status Origin Tracking (`status_origin`, `status_updated_at`, `status_reason`):** ระบบ CIAM จะบันทึกที่มาของการเปลี่ยนสถานะอย่างโปร่งใส (`CIAM_ADMIN`, `SPOKE_APP`, `AD_INHERITED`) หากระบบลูกส่งสถานะ Inactive มา CIAM จะยอมรับสถานะและไม่ส่งคำสั่ง `PROVISION_USER` หรือ `ENABLE_USER` ไปบังคับเปิดคืนให้ Spoke โดยเด็ดขาด<br/>• **Account Preservation (No Blind Deletion):** ป้องกันปัญหาบัญชีหาย โดยกำหนดให้ CIAM ไม่ลบการผูกสิทธิ์ (`AppAccountMapping`) ที่สร้างจากระบบกลางทิ้งแบบเงียบๆ หาก Spoke ยังไม่ได้สร้างในระบบตนเอง ให้คงสถานะเป็น `PENDING_PROVISION` เพื่อรอการซิงก์<br/>• **SSO Callback Inactive Guard (หมวด B.3):** กำหนดให้ Spoke ตรวจสอบสถานะบัญชีในระบบตนเอง หากบัญชีถูกระงับสิทธิ์จากฝั่ง Spoke เอง หรือถูกระงับสิทธิ์จาก CIAM ต้องปฏิเสธการล็อกอิน และห้ามปลดล็อก Active คืนอัตโนมัติเด็ดขาด |
 | **v2.8.0** | 17/10/2026 | Superseded | • **หมวด E: ข้อกำหนดมาตรฐาน In-App AI Copilot & MCP Tools ประจำระบบลูก (Spoke AI Assistant & Dynamic Settings Standard):** กำหนดมาตรฐานสำหรับ Spoke Application ที่ต้องการมีหน้าต่างแชท AI ประจำระบบของตนเอง ให้จัดเก็บการตั้งค่าแบบไดนามิกลงในตาราง `system_settings` (`ai_copilot_enabled`, `ai_provider`, `ai_api_key`, `ai_model`, `ai_system_prompt`) และบังคับให้ปิดการแสดงผลหน้า Chat หรือ Floating Widget อัตโนมัติเมื่อ `ai_copilot_enabled: false` หรือยังไม่ได้ระบุ API Key เพื่อความปลอดภัยและประหยัดค่าใช้จ่าย<br/>• **Model Context Protocol (MCP) Integration:** กำหนดแนวทางให้ AI ประจำ Spoke สามารถเรียกใช้งาน Central IAM Core MCP Server (Remote SSE over HTTPS via Bearer token) เพื่อตรวจเช็คความปลอดภัยของบัญชีผู้ใช้ และอนุญาตให้ Spoke พัฒนา MCP Tools ประจำระบบของตนเองได้ |
 | **v2.7.0** | 08/10/2026 | Superseded | • **Mode C Two-Way Directory Reconciliation & Auto-Provisioning (หมวด D.2, D.4):** กำหนดให้การเชื่อมต่อ Mode C เป็นแบบ Two-Way Reconciliation อย่างแท้จริง โดยเมื่อ Spoke ส่ง Heartbeat / Full Sync ขึ้นมา CIAM จะเปรียบเทียบกับบัญชีที่ได้รับสิทธิ์ใน CIAM (`AppAccountMapping`). หาก CIAM มีบัญชีใหม่ที่ Spoke ยังไม่มี CIAM จะส่ง `assigned_accounts` และคำสั่ง `PROVISION_USER` กลับไปเพื่อให้ Spoke สร้างบัญชีใน Local Database ทันที (Role เริ่มต้นตาม `ciam_auto_provision_group`, `is_active: true`) และส่งคำสั่ง `DISABLE_USER` หากถูกระงับสิทธิ์ ทำให้จำนวนและสถานะตรงกัน 100% โดยไม่ต้องรอ User ล็อกอิน<br/>• **Mandatory Spoke Mode C Immediate Sync Button (หมวด D.4, 5.1):** ข้อบังคับสำหรับ Spoke Mode C ต้องมีปุ่ม **`[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]` (Immediate Account Sync)** บนหน้าจอ System Setting เพื่อให้ Admin สั่งแลกเปลี่ยนข้อมูลและปรับยอดจำนวนบัญชีรวมถึงสถานะ Active/Inactive ให้ตรงกันได้แบบเรียลไทม์โดยไม่ต้องรอรอบเวลา 120 วินาที<br/>• **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`) เพื่อให้ Spoke ผูก Client State & PKCE กับเบราว์เซอร์ได้สมบูรณ์ 100% ตามคำแนะนำ RFC 9700 |
 | **v2.6.0** | 07/10/2026 | Superseded | • **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`)<br/>• **Architecture Equivalence Principles (หมวด 1.4):** บรรจุหลักการยอมรับสถาปัตยกรรมภายในที่เทียบเท่า<br/>• **Mode C Full Sync Trigger Protocol (หมวด D.2):** เพิ่มคำสั่ง `REQUEST_FULL_SYNC` ใน Heartbeat Command Queue |
@@ -2114,6 +2115,291 @@ export default function SpokeCopilotWidget() {
         </div>
       )}
     </>
+  );
+}
+```
+
+---
+
+## 12. หมวด F: ข้อกำหนดมาตรฐานการป้องกันบอทและการโจมตีแบบ Brute-Force ภายในแอปพลิเคชัน (Enterprise In-App Bot Defense & Anti-Brute-Force Framework Standard)
+
+> [!IMPORTANT]
+> **วัตถุประสงค์และข้อบังคับ (Mandatory Compliance):**  
+> เพื่อให้ทุกระบบงานในเครือบริษัท วินโดว์ เอเชีย จำกัด (มหาชน) มีความมั่นคงปลอดภัยตามมาตรฐาน **ISO 27001 (Control A.9.4.2 Secure Log-on Procedures & A.12.4.1 Event Logging)** โดยไม่ต้องพึ่งพาบริการภายนอก (Third-Party CDN/WAF) หรือไม่ต้องย้าย DNS ผู้พัฒนาระบบลูกทุกระบบ (Spoke Applications เช่น IRM, QMS, MTPulse, WMS, PettyCash) **ต้องปฏิบัติตามมาตรฐานการป้องกัน 3 ชั้น (3-Layer In-App Bot Defense)** ดังนี้:
+
+### F.1 สถาปัตยกรรมการป้องกัน 3 ชั้น (3-Layer Defense Architecture)
+
+```
+                    [ Inbound Client Request (Browser / Bot) ]
+                                      │
+                                      ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ Layer 1: Sliding-Window IP Rate Limiter                        │
+    │ • จำกัด 10 requests / 60 วินาที ต่อ Client IP                    │
+    │ • เช็ค IP Whitelist (Internal LAN, Docker Bridge, CIAM Server)   │
+    │ • เกินกำหนด: ส่ง HTTP 429 Too Many Requests + Retry-After Header │
+    └────────────────────────────────┬────────────────────────────────┘
+                                     │ (ผ่าน)
+                                     ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ Layer 2: Decoy Honeypot Trap Evaluation                        │
+    │ • ฟิลด์ดักบอทซ่อนสายตา: `corporate_fax` และ `security_honey`    │
+    │ • มนุษย์จะไม่เห็นและไม่กรอกเด็ดขาด (hidden via CSS + aria-hidden) │
+    │ • หากมีค่า: สั่ง Reject ทันทีด้วย HTTP 401 + บันทึก Audit Log    │
+    └────────────────────────────────┬────────────────────────────────┘
+                                     │ (ผ่าน)
+                                     ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ Layer 3: Submission Velocity & Timing Guard                     │
+    │ • ตรวจสอบระยะเวลากรอกฟอร์ม: `now_ms - form_render_ts`           │
+    │ • หากส่งเร็วกว่า 400ms (< 0.4 วินาที): ถือเป็น Automated Script  │
+    │ • หากผิดปกติ: ปฏิเสธด้วย HTTP 400 Bad Request + บันทึก Audit Log │
+    └────────────────────────────────┬────────────────────────────────┘
+                                     │ (ผ่าน)
+                                     ▼
+                      [ ดำเนินการ Authenticate ตามปกติ ]
+```
+
+---
+
+### F.2 ข้อกำหนดมาตรฐาน Layer 1: IP Rate Limiting
+
+1. **ขอบเขตการใช้งาน (Enforcement Scope):**
+   - บังคับใช้กับทุก Endpoint ที่รับข้อมูลยืนยันตัวตน เช่น `/login`, `/auth/token`, `/api/v1/auth/login`, `/auth/callback`
+2. **ขีดจำกัดความถี่ (Rate Limit Threshold):**
+   - อัตรามาตรฐาน: **ไม่เกิน 10 requests ต่อ 60 วินาที ต่อ 1 Client IP Address**
+3. **การอ่าน IP ปลายทาง (Client IP Resolution):**
+   - ต้องตรวจสอบ Headers ตามลำดับ: `CF-Connecting-IP` → `X-Forwarded-For` (สกัด IP แรกสุดก่อนเครื่องหมายจุลภาค) → `X-Real-IP` → `Remote Address`
+4. **Corporate IP Whitelist:**
+   - ต้องยกเว้น Rate Limiting ให้กับ IP ภายในองค์กรและเซิร์ฟเวอร์หลัก ได้แก่:
+     - `127.0.0.1`, `localhost`, `::1`
+     - `172.18.0.1` (Docker Bridge Host)
+     - `157.173.219.153` (Central IAM Production VPS)
+     - `49.231.185.245` (Window Asia HQ Gateway WAN)
+     - `58.8.190.63` (สำนักงานสาขา)
+5. **การตอบสนองเมื่อเกินขีดจำกัด (Rate Limit Exceeded Response):**
+   - **HTTP Status:** `429 Too Many Requests`
+   - **Header บังคับ:** `Retry-After: {จำนวนวินาทีที่ต้องรอ}`
+   - **JSON Body:**
+     ```json
+     {
+       "detail": "คำขอเข้าสู่ระบบถี่เกินกำหนด กรุณารอ {retry_after} วินาที แล้วลองใหม่อีกครั้ง"
+     }
+     ```
+   - **Audit Log:** ต้องบันทึก Action Type `IP_RATE_LIMITED` ลงตาราง Log ของระบบตนเองเสมอ
+
+---
+
+### F.3 ข้อกำหนดมาตรฐาน Layer 2: Decoy Honeypot Trap
+
+1. **ชื่อฟิลด์มาตรฐานกลาง (Standard Decoy Field Names):**
+   - ฟิลด์ที่ 1: `corporate_fax`
+   - ฟิลด์ที่ 2: `security_honey`
+2. **เทคนิคการซ่อนบนหน้าเว็บ (CSS & Accessibility Guidelines):**
+   - **ต้องใช้:** `position: absolute; left: -9999px; opacity: 0; height: 0; width: 0; overflow: hidden; pointer-events: none;`
+   - **ต้องระบุ:** `tabIndex={-1}`, `aria-hidden="true"`, และ `autoComplete="off"` เพื่อไม่ให้ Screen Reader หรือระบบช่วยเหลือผู้พิการอ่านฟิลด์นี้
+   - **ห้ามใช้:** `display: none;` หรือ `visibility: hidden;` แบบตรงๆ เพราะบอทรุ่นใหม่อาจตรวจพบ CSS เหล่านี้และข้ามฟิลด์
+3. **การปฏิเสธคำขอ (Silent Rejection):**
+   - หากมีค่าใดค่าหนึ่งในฟิลด์ Honeypot: ให้ปฏิเสธด้วย `HTTP 401 Unauthorized` พร้อมข้อความทั่วไป เช่น *"ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"* ห้ามบอกว่าติด Honeypot เพื่อไม่ให้ผู้โจมตีปรับปรุงสคริปต์
+   - บันทึก Action Type `BOT_HONEYPOT_DETECTED` ลงใน Audit Log
+
+---
+
+### F.4 ข้อกำหนดมาตรฐาน Layer 3: Submission Velocity & Timing Guard
+
+1. **หลักการตรวจจับความเร็ว (Velocity Verification):**
+   - มนุษย์ทั่วไปต้องใช้เวลาอ่านหน้าจอ กรอกข้อมูล และกดปุ่มส่ง อย่างน้อย **0.8 - 2.0 วินาที** (หรือ 0.4 วินาทีในกรณีเบราว์เซอร์ช่วยกรอก)
+   - สคริปต์บอทและโปรแกรมโจมตี (cURL, Python Requests, Puppeteer) มักยิงข้อมูลทันทีภายใน **0 - 200 มิลลิวินาที**
+2. **การทำงาน:**
+   - เมื่อหน้าจอ Login Render สำเร็จบนเบราว์เซอร์ ให้เก็บค่าเวลา `form_render_ts = Date.now()` (Epoch Milliseconds)
+   - เมื่อผู้ใช้กด Submit ให้ส่งค่า `form_render_ts` แนบไปกับ Payload
+   - Backend ทำการคำนวณ: `delta_ms = now_ms - form_render_ts`
+   - หาก `delta_ms < 400` (น้อยกว่า 400 มิลลิวินาที) หรือ `delta_ms < -10000` (ค่ามาจากอนาคตเกิดจากการแฮ็ก):
+     - ปฏิเสธด้วย `HTTP 400 Bad Request`
+     - บันทึก Action Type `BOT_TIMING_VIOLATION` ลงใน Audit Log
+
+---
+
+### F.5 โค้ดตัวอย่างมาตรฐานสำหรับทีมพัฒนา (Reference Implementations)
+
+#### 1. ตัวอย่างโค้ดสำหรับ Python / FastAPI (เช่น IRM, QMS Backend):
+```python
+import time
+import threading
+from typing import Dict, List, Tuple, Optional
+from fastapi import Request, HTTPException, status
+
+class SpokeRateLimiter:
+    def __init__(self, limit: int = 10, window: int = 60):
+        self.limit = limit
+        self.window = window
+        self.records: Dict[str, List[float]] = {}
+        self.lock = threading.Lock()
+        self.whitelist = {"127.0.0.1", "localhost", "172.18.0.1", "157.173.219.153", "49.231.185.245"}
+
+    def is_allowed(self, ip: str) -> Tuple[bool, int]:
+        if ip in self.whitelist:
+            return True, 0
+        now = time.time()
+        with self.lock:
+            timestamps = [t for t in self.records.get(ip, []) if t > (now - self.window)]
+            if len(timestamps) >= self.limit:
+                retry_after = max(1, int(timestamps[0] + self.window - now))
+                self.records[ip] = timestamps
+                return False, retry_after
+            timestamps.append(now)
+            self.records[ip] = timestamps
+            return True, 0
+
+spoke_rate_limiter = SpokeRateLimiter(limit=10, window=60)
+
+def extract_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
+
+# การใช้งานใน Login Route
+@app.post("/auth/login")
+def login(req: LoginRequest, request: Request):
+    client_ip = extract_ip(request)
+
+    # 1. Rate Limiting Guard
+    allowed, retry_after = spoke_rate_limiter.is_allowed(client_ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"คำขอเข้าสู่ระบบถี่เกินกำหนด กรุณารอ {retry_after} วินาที",
+            headers={"Retry-After": str(retry_after)}
+        )
+
+    # 2. Honeypot Guard
+    if getattr(req, "corporate_fax", None) or getattr(req, "security_honey", None):
+        # บันทึก Audit Log: BOT_HONEYPOT_DETECTED
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+
+    # 3. Timing Velocity Guard
+    if getattr(req, "form_render_ts", None):
+        delta_ms = int(time.time() * 1000) - req.form_render_ts
+        if delta_ms < 400:
+            # บันทึก Audit Log: BOT_TIMING_VIOLATION
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ตรวจพบความเร็วการส่งข้อมูลผิดปกติ")
+
+    # ดำเนินการตรวจสอบรหัสผ่าน...
+```
+
+#### 2. ตัวอย่างโค้ดสำหรับ Node.js / Express / Next.js API Routes:
+```javascript
+// rateLimiter.js
+const records = new Map();
+const WHITELIST = new Set(["127.0.0.1", "localhost", "172.18.0.1", "157.173.219.153", "49.231.185.245"]);
+
+export function checkBotDefense(req) {
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "127.0.0.1").split(",")[0].trim();
+  const now = Date.now();
+
+  // 1. Rate Limit (10 req / 60s)
+  if (!WHITELIST.has(ip)) {
+    const timestamps = (records.get(ip) || []).filter(t => t > now - 60000);
+    if (timestamps.length >= 10) {
+      const retryAfter = Math.ceil((timestamps[0] + 60000 - now) / 1000);
+      records.set(ip, timestamps);
+      return { status: 429, error: `คำขอถี่เกินกำหนด กรุณารอ ${retryAfter} วินาที`, retryAfter };
+    }
+    timestamps.push(now);
+    records.set(ip, timestamps);
+  }
+
+  // 2. Honeypot Trap
+  const body = req.body || {};
+  if (body.corporate_fax || body.security_honey) {
+    return { status: 401, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
+  }
+
+  // 3. Timing Guard
+  if (body.form_render_ts) {
+    const elapsed = now - Number(body.form_render_ts);
+    if (elapsed < 400) {
+      return { status: 400, error: "ตรวจพบความเร็วการส่งข้อมูลผิดปกติของมนุษย์" };
+    }
+  }
+
+  return { status: 200 };
+}
+```
+
+#### 3. ตัวอย่างโค้ดฝั่ง Frontend Form (React / Next.js / HTML):
+```tsx
+import React, { useState, useEffect } from "react";
+
+export function LoginForm() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [corporateFax, setCorporateFax] = useState("");
+  const [securityHoney, setSecurityHoney] = useState("");
+  const [renderTs, setRenderTs] = useState(0);
+
+  useEffect(() => {
+    setRenderTs(Date.now());
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username,
+        password,
+        corporate_fax: corporateFax || undefined,
+        security_honey: securityHoney || undefined,
+        form_render_ts: renderTs || undefined,
+      }),
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="relative space-y-4">
+      {/* Invisible Anti-Bot Honeypot Decoy Fields */}
+      <div
+        className="absolute -left-[9999px] top-0 opacity-0 h-0 w-0 overflow-hidden pointer-events-none select-none"
+        aria-hidden="true"
+        tabIndex={-1}
+      >
+        <label htmlFor="corporate_fax">Corporate Fax</label>
+        <input
+          id="corporate_fax"
+          type="text"
+          name="corporate_fax"
+          value={corporateFax}
+          onChange={(e) => setCorporateFax(e.target.value)}
+          tabIndex={-1}
+          autoComplete="off"
+        />
+        <label htmlFor="security_honey">Security Code</label>
+        <input
+          id="security_honey"
+          type="text"
+          name="security_honey"
+          value={securityHoney}
+          onChange={(e) => setSecurityHoney(e.target.value)}
+          tabIndex={-1}
+          autoComplete="off"
+        />
+      </div>
+
+      <div>
+        <label>ชื่อผู้ใช้งาน</label>
+        <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required />
+      </div>
+
+      <div>
+        <label>รหัสผ่าน</label>
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+      </div>
+
+      <button type="submit">เข้าสู่ระบบ</button>
+    </form>
   );
 }
 ```

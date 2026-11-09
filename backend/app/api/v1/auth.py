@@ -11,6 +11,7 @@ from app.models.audit import IamAuditLog
 from app.schemas.auth import LoginRequest, TokenResponse, AdminUserOut, AdminRoleUpdateRequest, AdminProfileUpdateRequest
 from app.api.deps import get_current_admin, get_current_user
 from app.models.identity import MasterIdentity
+from app.core.bot_defense import auth_rate_limiter, extract_client_ip, verify_submission_timing
 from sqlalchemy import func
 
 logger = logging.getLogger("ciam.auth")
@@ -42,13 +43,31 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
     Compliant with ISO 27001 A.9.4.2 (Secure log-on) & A.12.4.1 (Event logging).
     Features Honeypot bot protection and Brute-force account lockout.
     """
-    # Extract client IP
-    client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
-    if "," in client_ip:
-        client_ip = client_ip.split(",")[0].strip()
+    # Extract client IP via bot defense resolver (honors CF-Connecting-IP, X-Forwarded-For, X-Real-IP)
+    client_ip = extract_client_ip(request)
     user_agent = request.headers.get("user-agent", "unknown")[:250]
 
-    # 1. Honeypot Decoy Trap Evaluation
+    # 1. Sliding Window IP Rate Limiting (Anti-DDoS & Brute-Force Bot Spraying)
+    is_allowed, remaining, retry_after = auth_rate_limiter.is_allowed(client_ip, limit=10, window_seconds=60)
+    if not is_allowed:
+        db.add(IamAuditLog(
+            actor_username=f"rate-limit:{client_ip}",
+            action_type="IP_RATE_LIMITED",
+            target_username=login_req.username[:100] if login_req.username else "UNKNOWN",
+            execution_mode="BOT_DEFENSE",
+            ip_address=client_ip,
+            status="FAILED",
+            reason=f"Exceeded 10 requests within 60s sliding window (Retry after {retry_after}s)",
+            details=f"User-Agent: {user_agent}"
+        ))
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"คุณพยายามเข้าสู่ระบบถี่เกินกำหนด กรุณารอ {retry_after} วินาที แล้วลองใหม่อีกครั้ง",
+            headers={"Retry-After": str(retry_after)}
+        )
+
+    # 2. Honeypot Decoy Trap Evaluation
     # Legitimate users never see or populate corporate_fax or security_honey.
     if login_req.corporate_fax or login_req.security_honey:
         honeypot_val = login_req.corporate_fax or login_req.security_honey
@@ -67,6 +86,25 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"
+        )
+
+    # 3. Submission Velocity & Timing Guard (Human vs Script Velocity)
+    is_timing_valid, elapsed_ms = verify_submission_timing(login_req.form_render_ts, min_elapsed_ms=400)
+    if not is_timing_valid:
+        db.add(IamAuditLog(
+            actor_username=f"bot:{client_ip}",
+            action_type="BOT_TIMING_VIOLATION",
+            target_username=login_req.username[:100] if login_req.username else "UNKNOWN",
+            execution_mode="BOT_DEFENSE",
+            ip_address=client_ip,
+            status="FAILED",
+            reason=f"Suspicious submission velocity detected (Elapsed: {elapsed_ms}ms, Threshold: 400ms)",
+            details=f"Form render ts: {login_req.form_render_ts}, User-Agent: {user_agent}"
+        ))
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="ตรวจพบความเร็วการส่งข้อมูลผิดปกติของมนุษย์ กรุณาลองใหม่อีกครั้ง"
         )
 
     now = datetime.now(timezone.utc)

@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-11-09  
-**Version:** 2.9.8 (SAP B1 Real-Time Monitor & Configurable 5m Interval Alerts)  
+**Version:** 2.10.0 (Enterprise In-App 3-Layer Bot Defense & Spoke Framework Specification)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  

@@ -39,7 +39,13 @@ export default function EmployeeLoginPage() {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
 
+  // Anti-Bot Decoy Honeypot Trap & Velocity Timing Guard
+  const [corporateFax, setCorporateFax] = useState("");
+  const [securityHoney, setSecurityHoney] = useState("");
+  const [formRenderTs, setFormRenderTs] = useState<number>(0);
+
   useEffect(() => {
+    setFormRenderTs(Date.now());
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const redir = params.get("redirect");
@@ -120,6 +126,9 @@ export default function EmployeeLoginPage() {
       const res = await ciamApi.loginAdmin({
         username: username.trim(),
         password,
+        corporate_fax: corporateFax || undefined,
+        security_honey: securityHoney || undefined,
+        form_render_ts: formRenderTs || undefined,
       });
 
       // Save token, user metadata & initial activity timestamp in browser storage
@@ -280,7 +289,34 @@ export default function EmployeeLoginPage() {
           )}
 
           {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 relative">
+            {/* Anti-Bot Decoy Trap (Visually offscreen & hidden from screen-readers, traps automated script bots) */}
+            <div
+              className="absolute -left-[9999px] top-0 opacity-0 h-0 w-0 overflow-hidden pointer-events-none select-none"
+              aria-hidden="true"
+              tabIndex={-1}
+            >
+              <label htmlFor="corporate_fax">Corporate Fax</label>
+              <input
+                id="corporate_fax"
+                type="text"
+                name="corporate_fax"
+                value={corporateFax}
+                onChange={(e) => setCorporateFax(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+              />
+              <label htmlFor="security_honey">Security Code</label>
+              <input
+                id="security_honey"
+                type="text"
+                name="security_honey"
+                value={securityHoney}
+                onChange={(e) => setSecurityHoney(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+              />
+            </div>
             {/* Username Input */}
             <div className="space-y-1.5 text-left">
               <label className="text-xs font-bold text-slate-700">

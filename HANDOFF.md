@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 9 พฤศจิกายน 2026 (Local Time: ~15:53 ICT)  
+> **Date Updated:** 9 พฤศจิกายน 2026 (Local Time: ~20:00 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 83/83 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: feat(sap-monitor): real-time sap b1 downtime monitoring with configurable 5m interval and telegram alerts
+> **Test Integrity:** Backend Pytest: 92/92 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready — Latest Commit: feat(bot-defense): enterprise in-app 3-layer bot defense and spoke framework specification v2.10.0
 
 ---
 
@@ -15,7 +15,16 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Daily Security & Identity Email Digest Hotfix & SMTP Hardening (Sprint 51.1):**
+1. **Enterprise In-App 3-Layer Bot Defense & Spoke Framework Specification v2.10.0 (Sprint 53):**
+   - **สถาปัตยกรรมป้องกันบอทในแอปพลิเคชัน 3 ชั้น (Zero External Dependency / Zero DNS Migration):**
+     - **Layer 1 (Sliding-Window IP Rate Limiter):** ดักจับและจำกัดความถี่ 10 คำขอ / 60 วินาที ต่อ Client IP Address สำหรับ Endpoint ยืนยันตัวตน (`/api/v1/auth/login`) พร้อม Header `Retry-After: {seconds}` ตามมาตรฐาน RFC 6585 และยกเว้น IP ภายในองค์กร (Whitelist: Localhost, Docker Bridge `172.18.0.1`, VPS `157.173.219.153`, HQ WAN `49.231.185.245`)
+     - **Layer 2 (Decoy Honeypot Trap):** วางกับดักฟิลด์หลอก `corporate_fax` และ `security_honey` ซ่อนอยู่นอกจอ (`position: absolute; left: -9999px; opacity: 0; pointer-events: none;` พร้อม `tabIndex={-1}`, `aria-hidden="true"`, `autoComplete="off"`) หากบอทหรือสคริปต์กรอกค่าเข้ามา ระบบจะบันทึก Audit Log `BOT_HONEYPOT_DETECTED` และ Reject ทันทีด้วย HTTP 401
+     - **Layer 3 (Submission Velocity & Timing Guard):** ตรวจจับความเร็วการส่งฟอร์มผ่าน `form_render_ts` หากส่งเร็วกว่า 400 มิลลิวินาที (< 0.4s) หรือเวลามาจากอนาคต ถือเป็น Script Automation จะถูก Reject ด้วย HTTP 400 และบันทึก Audit Log `BOT_TIMING_VIOLATION`
+   - **ประกาศมาตรฐานกลางระบบลูก Spoke Integration Specification v2.10.0 (หมวด F):**
+     - เพิ่ม **หมวด 12 (หมวด F): ข้อกำหนดมาตรฐานการป้องกันบอทและการโจมตีแบบ Brute-Force ภายในแอปพลิเคชัน** ใน `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` พร้อมโค้ดตัวอย่างพร้อมใช้สำหรับ Python (FastAPI), Node.js (Express / Next.js) และ React / HTML Frontend Form
+     - อัปเดตลิงก์ดาวน์โหลดสเปกบนหน้า `/applications` เป็น `v2.10.0` พร้อมเพิ่มประวัติใน Modal Changelog
+   - **ชุดทดสอบความปลอดภัย 100%:** เพิ่ม `backend/tests/test_bot_defense.py` ครอบคลุม Rate Limiting, Honeypot, Timing Guard และ Whitelist รวม 5/5 tests (ทั้งระบบ 92/92 tests ผ่าน 100%) และ Frontend TypeScript `npx tsc --noEmit` 0 errors
+2. **SAP B1 Real-Time Monitor & Configurable Interval Alerts (Sprint 52):**
    - **จำกัดผู้รับในโหมดส่งทดสอบเฉพาะคนที่ระบุ & Auto-Heal อีเมล Admin ในฐานข้อมูล (Sprint 51.3):**
      - **สาเหตุที่มีอีเมลคนอื่นติดไปด้วย:** บนหน้าจอมีตัวเลือกเปิดใช้งาน `[✓] ส่งสำเนาให้อีเมลของ Admin ทุกคนที่มีในระบบอัตโนมัติ (Notify All Active Admins)` ซึ่งระบบจะไปดึงอีเมลของ Admin ทุกคนในตาราง `central_iam_admins` มาต่อท้ายรายชื่อผู้รับเสมอ
      - **การแก้ไข:**

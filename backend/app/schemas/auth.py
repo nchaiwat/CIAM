@@ -7,6 +7,8 @@ class LoginRequest(BaseModel):
     # Honeypot decoy fields (invisible in real browser, traps automated bot scripts)
     corporate_fax: Optional[str] = None
     security_honey: Optional[str] = None
+    # Velocity & Timing analysis (epoch ms when form rendered on client)
+    form_render_ts: Optional[int] = None
 
 class TokenResponse(BaseModel):
     access_token: str
