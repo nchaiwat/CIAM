@@ -552,6 +552,13 @@ async def run_scheduler_worker():
                     await check_and_notify_ad_status(db)
                 except Exception as ad_mon_err:
                     logger.warning("Error running real-time AD health monitor: %s", ad_mon_err)
+
+                # 5. Real-Time SAP Business One (ERP) Status Monitoring & Hourly Alert Loop (Default: Every 5 minutes / Configurable)
+                try:
+                    from app.services.telegram_service import check_and_notify_sap_status
+                    await check_and_notify_sap_status(db)
+                except Exception as sap_mon_err:
+                    logger.warning("Error running real-time SAP B1 health monitor: %s", sap_mon_err)
             finally:
                 db.close()
         except asyncio.CancelledError:

@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-11-09  
-**Version:** 2.9.7 (Daily Email Digest Scheduled Isolation & Activity Log Integration)  
+**Version:** 2.9.8 (SAP B1 Real-Time Monitor & Configurable 5m Interval Alerts)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -353,6 +353,17 @@ FRONTEND_URL=http://localhost:3000
   2. Clicking "🔔 แจ้งเตือน Telegram & AD Agent" in the main Dashboard action bar (`app/page.tsx`).
 
 ---
+
+
+### 8.3 SAP Business One (ERP) Real-Time Status Monitor & Downtime Alerts
+* **Monitored Service:** SAP B1 Service Layer (`https://sapb1.waapps.net/b1s/v2`)
+* **Default Probe Interval:** Every 5 minutes (`check_interval_seconds: 300`), customizable by Admin via `/settings` UI or API (`1m`, `2m`, `3m`, `5m`, `10m`, `15m`, `30m`, `1h`).
+* **Anti-Flapping:** Instant 2.5s retry on initial failure before declaring OFFLINE.
+* **Alert Lifecycle:**
+  1. `OFFLINE_IMMEDIATE`: Immediate alert to Telegram upon confirmed failure.
+  2. `OFFLINE_REMINDER`: Hourly reminder every 3,600s while remaining down.
+  3. `ONLINE_RECOVERED`: Instant recovery notification with total downtime duration.
+* **State Persistence:** Stored in `SystemSetting: sap_status_monitor`.
 
 ## 9. Zero-Trust Network Policy & VPN Access Restriction (Version 1.9.5)
 

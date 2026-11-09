@@ -39,6 +39,7 @@ import {
   SyncSchedule,
   SyncAllResult,
   AdMonitorState,
+  SapMonitorState,
   AICopilotSettings,
   DailyDigestConfig,
   DailyDigestTestResult,
@@ -77,6 +78,18 @@ export default function SettingsPage() {
     message: string;
   } | null>(null);
   const [adChecking, setAdChecking] = useState(false);
+
+  // Real-Time SAP B1 Monitor State
+  const [sapMonitor, setSapMonitor] = useState<SapMonitorState | null>(null);
+  const [selectedSapInterval, setSelectedSapInterval] = useState<number>(300);
+  const [sapIntervalSaving, setSapIntervalSaving] = useState(false);
+  const [sapIntervalSaveMessage, setSapIntervalSaveMessage] = useState<string | null>(null);
+  const [sapTestLoading, setSapTestLoading] = useState(false);
+  const [sapTestResult, setSapTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [sapChecking, setSapChecking] = useState(false);
 
   // Sync Schedule State
   const [syncSchedule, setSyncSchedule] = useState<SyncSchedule>({
@@ -161,6 +174,12 @@ export default function SettingsPage() {
           setAdMonitor(healthData.ad_monitor);
           if (healthData.ad_monitor.check_interval_seconds) {
             setSelectedInterval(healthData.ad_monitor.check_interval_seconds);
+          }
+        }
+        if (healthData.sap_monitor) {
+          setSapMonitor(healthData.sap_monitor);
+          if (healthData.sap_monitor.check_interval_seconds) {
+            setSelectedSapInterval(healthData.sap_monitor.check_interval_seconds);
           }
         }
       }
@@ -415,6 +434,75 @@ export default function SettingsPage() {
       alert(`บันทึกความถี่ล้มเหลว: ${err.message || err}`);
     } finally {
       setAdIntervalSaving(false);
+    }
+  };
+
+  const handleTestSapAlert = async (alertType: string = "OFFLINE_IMMEDIATE") => {
+    try {
+      setSapTestLoading(true);
+      setSapTestResult(null);
+      const res = await ciamApi.triggerTestSapAlert({
+        alert_type: alertType,
+        bot_token: telegramConfig.bot_token,
+        chat_id: telegramConfig.chat_id,
+      });
+      setSapTestResult({
+        success: res.success,
+        message: res.message || `ส่งสัญญาณทดสอบ ${alertType} ถึง ${res.recipients_delivered} ช่องทางเรียบร้อย`,
+      });
+    } catch (err: any) {
+      setSapTestResult({
+        success: false,
+        message: `ส่งสัญญาณทดสอบล้มเหลว: ${err.message || err}`,
+      });
+    } finally {
+      setSapTestLoading(false);
+    }
+  };
+
+  const handleCheckSapNow = async () => {
+    try {
+      setSapChecking(true);
+      const res = await ciamApi.checkSapNow();
+      if (res.state) {
+        setSapMonitor(res.state);
+      }
+      await fetchSettings();
+      alert(`ตรวจวัดสถานะ SAP Business One สำเร็จ: สถานะ ${res.status} (${res.is_online ? "ONLINE ปกติ" : "OFFLINE หลุดการเชื่อมต่อ"})`);
+    } catch (err: any) {
+      alert(`ไม่สามารถตรวจสอบ SAP B1 ได้: ${err.message || err}`);
+    } finally {
+      setSapChecking(false);
+    }
+  };
+
+  const handleSaveSapInterval = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    try {
+      setSapIntervalSaving(true);
+      setSapIntervalSaveMessage(null);
+      const res = await ciamApi.updateSapInterval(selectedSapInterval, sapMonitor?.enabled ?? true);
+      if (res.sap_monitor) {
+        setSapMonitor(res.sap_monitor);
+        setSelectedSapInterval(res.sap_monitor.check_interval_seconds);
+      }
+      setSapIntervalSaveMessage(res.message || "บันทึกความถี่การตรวจสอบ SAP B1 สำเร็จ");
+      setTimeout(() => setSapIntervalSaveMessage(null), 4000);
+    } catch (err: any) {
+      alert(`บันทึกความถี่ SAP B1 ล้มเหลว: ${err.message || err}`);
+    } finally {
+      setSapIntervalSaving(false);
+    }
+  };
+
+  const handleToggleSapMonitor = async (enabled: boolean) => {
+    try {
+      const res = await ciamApi.updateSapInterval(selectedSapInterval, enabled);
+      if (res.sap_monitor) {
+        setSapMonitor(res.sap_monitor);
+      }
+    } catch (err: any) {
+      alert(`เปลี่ยนสถานะระบบตรวจสอบ SAP B1 ล้มเหลว: ${err.message || err}`);
     }
   };
 
@@ -1056,6 +1144,227 @@ export default function SettingsPage() {
                   <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                 )}
                 <span>{adTestResult.message}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* SAP Business One Real-Time Status Monitor & Downtime Alert Card */}
+      <div className="bg-white rounded-xl border border-slate-300 shadow-sm overflow-hidden">
+        <div className="p-4 bg-[#0b1329] text-white flex items-center justify-between border-b border-slate-800">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-7 h-7 rounded bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-400/30">
+              <Database className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="font-bold text-sm tracking-tight flex items-center gap-2">
+                <span>ระบบตรวจสอบสถานะ SAP Business One (ERP) Real-Time & แจ้งเตือน Downtime</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-300 border border-amber-400/30">
+                  SAP_B1
+                </span>
+              </h2>
+              <p className="text-[11px] text-slate-300">
+                ตรวจสอบความพร้อมของ Service Layer และแจ้งเตือนทีม IT/ERP ผ่าน Telegram ทันทีเมื่อระบบขัดข้องหรือกู้คืน
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`px-2.5 py-1 rounded-md text-xs font-bold border flex items-center space-x-1.5 shadow-2xs ${
+                (sapMonitor?.is_online ?? true)
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                  : "bg-rose-500/20 text-rose-300 border-rose-400/30"
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${(sapMonitor?.is_online ?? true) ? "bg-emerald-400 animate-ping" : "bg-rose-400"}`}></span>
+              <span>{(sapMonitor?.is_online ?? true) ? "🟢 ONLINE ปกติ" : "🔴 OFFLINE ขัดข้อง"}</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* 3-Phase Alert Rules Info */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="p-3 bg-rose-50/80 rounded-xl border border-rose-200 text-xs">
+              <div className="font-extrabold text-rose-900 flex items-center space-x-1.5 mb-1">
+                <span>🚨 กฎที่ 1: ตรวจพบขัดข้อง เตือนด่วนทันที</span>
+              </div>
+              <p className="text-[11px] text-slate-700 leading-relaxed">
+                เมื่อตรวจพบ HTTP 502/Timeout ระบบจะรีไทรย์ยืนยัน (Anti-Flapping) และส่ง Telegram Alert เข้ากลุ่ม IT ทันที
+              </p>
+            </div>
+
+            <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 text-xs">
+              <div className="font-extrabold text-amber-900 flex items-center space-x-1.5 mb-1">
+                <span>⏱️ กฎที่ 2: เตือนซ้ำทุกๆ 1 ชั่วโมง</span>
+              </div>
+              <p className="text-[11px] text-slate-700 leading-relaxed">
+                ตราบใดที่ยังไม่สามารถติดต่อ SAP Service Layer ได้ ระบบจะส่งแจ้งเตือนเตือนซ้ำต่อเนื่อง<b>ทุกๆ 1 ชั่วโมง</b>
+              </p>
+            </div>
+
+            <div className="p-3 bg-emerald-50/80 rounded-xl border border-emerald-200 text-xs">
+              <div className="font-extrabold text-emerald-900 flex items-center space-x-1.5 mb-1">
+                <span>✅ กฎที่ 3: สรุปเมื่อกลับมาเป็น Online</span>
+              </div>
+              <p className="text-[11px] text-slate-700 leading-relaxed">
+                เมื่อ SAP B1 กลับมา <b>ONLINE</b> ระบบจะส่งข้อความแจ้งกู้คืนสำเร็จทันที พร้อมคำนวณเวลารวมที่ขัดข้อง (Downtime)
+              </p>
+            </div>
+          </div>
+
+          {/* Configurable Probe Interval Box */}
+          <form
+            onSubmit={handleSaveSapInterval}
+            className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+          >
+            <div className="space-y-0.5">
+              <div className="font-extrabold text-amber-950 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-amber-600" />
+                <span>ความถี่ในการตรวจสอบสถานะ SAP B1 (Probe Interval):</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-200 text-amber-900 font-black">
+                  กำหนดค่าได้โดย Admin
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-800">
+                กำหนดระยะเวลาที่ระบบจะวนรอบตรวจสอบความพร้อมของ SAP B1 Service Layer อัตโนมัติ (ค่าเริ่มต้น: ทุก 5 นาที)
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <select
+                value={selectedSapInterval}
+                onChange={(e) => setSelectedSapInterval(parseInt(e.target.value, 10))}
+                className="px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500 shadow-2xs"
+              >
+                <option value={60}>ทุกๆ 1 นาที (60 วินาที)</option>
+                <option value={120}>ทุกๆ 2 นาที (120 วินาที)</option>
+                <option value={180}>ทุกๆ 3 นาที (180 วินาที)</option>
+                <option value={300}>ทุกๆ 5 นาที (300 วินาที - แนะนำ)</option>
+                <option value={600}>ทุกๆ 10 นาที (600 วินาที)</option>
+                <option value={900}>ทุกๆ 15 นาที (900 วินาที)</option>
+                <option value={1800}>ทุกๆ 30 นาที (1800 วินาที)</option>
+                <option value={3600}>ทุกๆ 1 ชั่วโมง (3600 วินาที)</option>
+              </select>
+
+              <button
+                type="submit"
+                disabled={sapIntervalSaving}
+                className="flex items-center space-x-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                {sapIntervalSaving ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                <span>บันทึกความถี่</span>
+              </button>
+            </div>
+          </form>
+
+          {sapIntervalSaveMessage && (
+            <div className="p-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold flex items-center space-x-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{sapIntervalSaveMessage}</span>
+            </div>
+          )}
+
+          {/* Status Metrics Box */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+              <div className="text-slate-500 font-medium text-[11px]">สถานะปัจจุบัน:</div>
+              <div className="font-mono font-bold text-slate-900 mt-0.5">
+                {(sapMonitor?.is_online ?? true) ? "ONLINE (พร้อมใช้งาน)" : "OFFLINE (ตัดการเชื่อมต่อ)"}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-slate-500 font-medium text-[11px]">ตรวจวัดล่าสุด:</div>
+              <div className="font-mono text-slate-700 mt-0.5">
+                {sapMonitor?.last_check_at ? formatDateTime(sapMonitor.last_check_at) : "กำลังตรวจวัด"}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-slate-500 font-medium text-[11px]">Response Latency:</div>
+              <div className="font-mono text-slate-700 mt-0.5">
+                {sapMonitor?.last_latency_ms ?? 0} ms
+              </div>
+            </div>
+
+            <div>
+              <div className="text-slate-500 font-medium text-[11px]">ความถี่ที่ตั้งไว้:</div>
+              <div className="font-mono text-slate-700 mt-0.5 font-bold text-amber-700">
+                ทุกๆ {(sapMonitor?.check_interval_seconds ?? selectedSapInterval) >= 60 ? `${(sapMonitor?.check_interval_seconds ?? selectedSapInterval) / 60} นาที` : `${sapMonitor?.check_interval_seconds ?? selectedSapInterval} วินาที`}
+              </div>
+            </div>
+          </div>
+
+          {/* Diagnostic & Testing Buttons */}
+          <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70">
+            <div className="text-xs font-bold text-slate-700 mb-2.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Bell className="w-3.5 h-3.5 text-slate-600" />
+                <span>เครื่องมือตรวจสอบสดและทดสอบสัญญาณแจ้งเตือน SAP B1 (Admin Diagnostic):</span>
+              </span>
+              <button
+                type="button"
+                onClick={handleCheckSapNow}
+                disabled={sapChecking}
+                className="flex items-center space-x-1.5 px-3 py-1 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${sapChecking ? "animate-spin text-amber-600" : "text-slate-600"}`} />
+                <span>{sapChecking ? "กำลังตรวจสอบ..." : "ตรวจสอบสถานะทันที (Force Check)"}</span>
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => handleTestSapAlert("OFFLINE_IMMEDIATE")}
+                disabled={sapTestLoading}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                <span>🚨 ทดสอบจำลอง: ขัดข้องทันที (OFFLINE Alert)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTestSapAlert("OFFLINE_REMINDER")}
+                disabled={sapTestLoading}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>⚠️ ทดสอบจำลอง: เตือนซ้ำทุก 1 ชม. (Hourly Reminder)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTestSapAlert("ONLINE_RECOVERED")}
+                disabled={sapTestLoading}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>✅ ทดสอบจำลอง: กู้คืนสำเร็จ (ONLINE Recovery)</span>
+              </button>
+            </div>
+
+            {sapTestResult && (
+              <div
+                className={`mt-3 p-2.5 border rounded-lg text-xs font-bold flex items-start space-x-1.5 ${
+                  sapTestResult.success
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                    : "bg-rose-50 border-rose-300 text-rose-800"
+                }`}
+              >
+                {sapTestResult.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <span>{sapTestResult.message}</span>
               </div>
             )}
           </div>

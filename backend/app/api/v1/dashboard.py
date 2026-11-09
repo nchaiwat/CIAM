@@ -84,7 +84,11 @@ from app.services.telegram_service import (
     get_ad_monitor_status,
     save_ad_monitor_config,
     check_and_notify_ad_status,
-    trigger_test_ad_alert
+    trigger_test_ad_alert,
+    get_sap_monitor_status,
+    save_sap_monitor_config,
+    check_and_notify_sap_status,
+    trigger_test_sap_alert
 )
 
 class HealthMonitorUpdateRequest(BaseModel):
@@ -95,9 +99,15 @@ class HealthMonitorUpdateRequest(BaseModel):
     chat_id: Optional[str] = None
     notify_admins_enabled: Optional[bool] = None
     ad_check_interval_seconds: Optional[int] = None
+    sap_check_interval_seconds: Optional[int] = None
+    sap_monitor_enabled: Optional[bool] = None
 
 class AdIntervalUpdateRequest(BaseModel):
     check_interval_seconds: int = 60
+
+class SapIntervalUpdateRequest(BaseModel):
+    check_interval_seconds: int = 300
+    enabled: Optional[bool] = None
 
 class HealthMonitorTestRequest(BaseModel):
     bot_token: Optional[str] = None
@@ -108,20 +118,27 @@ class AdAlertTestRequest(BaseModel):
     bot_token: Optional[str] = None
     chat_id: Optional[str] = None
 
+class SapAlertTestRequest(BaseModel):
+    alert_type: str = "OFFLINE_IMMEDIATE"  # OFFLINE_IMMEDIATE, OFFLINE_REMINDER, ONLINE_RECOVERED
+    bot_token: Optional[str] = None
+    chat_id: Optional[str] = None
+
 
 @router.get("/health-monitor")
 async def get_health_monitor_status(
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
-    """Retrieve Telegram Health Monitor configuration, live system health, and real-time AD monitor state."""
+    """Retrieve Telegram Health Monitor configuration, live system health, AD monitor state, and SAP B1 monitor state."""
     config = get_health_monitor_config(db)
     health = await check_full_system_health(db)
     ad_monitor = get_ad_monitor_status(db)
+    sap_monitor = get_sap_monitor_status(db)
     return {
         "config": config,
         "live_health": health,
-        "ad_monitor": ad_monitor
+        "ad_monitor": ad_monitor,
+        "sap_monitor": sap_monitor
     }
 
 
@@ -131,16 +148,26 @@ def update_health_monitor(
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
-    """Update Telegram Health Monitor schedule, credentials, and AD check interval."""
+    """Update Telegram Health Monitor schedule, credentials, AD check interval, and SAP check interval."""
     updated = save_health_monitor_config(db, payload.model_dump(exclude_unset=True))
     if payload.ad_check_interval_seconds is not None:
         save_ad_monitor_config(db, {"check_interval_seconds": payload.ad_check_interval_seconds})
+    sap_updates = {}
+    if payload.sap_check_interval_seconds is not None:
+        sap_updates["check_interval_seconds"] = payload.sap_check_interval_seconds
+    if payload.sap_monitor_enabled is not None:
+        sap_updates["enabled"] = payload.sap_monitor_enabled
+    if sap_updates:
+        save_sap_monitor_config(db, sap_updates)
+
     ad_mon = get_ad_monitor_status(db)
+    sap_mon = get_sap_monitor_status(db)
     return {
         "status": "success",
         "message": "บันทึกการตั้งค่าการแจ้งเตือน Telegram สำเร็จ",
         "config": updated,
-        "ad_monitor": ad_mon
+        "ad_monitor": ad_mon,
+        "sap_monitor": sap_mon
     }
 
 
@@ -156,6 +183,26 @@ def update_ad_check_interval(
         "status": "success",
         "message": f"บันทึกความถี่ในการตรวจสอบ AD สำเร็จ ({payload.check_interval_seconds} วินาที)",
         "ad_monitor": updated
+    }
+
+
+@router.put("/health-monitor/sap-interval")
+def update_sap_check_interval(
+    payload: SapIntervalUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Update probe interval frequency and enabled state for SAP Business One."""
+    update_data = {"check_interval_seconds": payload.check_interval_seconds}
+    if payload.enabled is not None:
+        update_data["enabled"] = payload.enabled
+    updated = save_sap_monitor_config(db, update_data)
+    interval_mins = payload.check_interval_seconds // 60 if payload.check_interval_seconds >= 60 else payload.check_interval_seconds
+    unit = "นาที" if payload.check_interval_seconds >= 60 else "วินาที"
+    return {
+        "status": "success",
+        "message": f"บันทึกความถี่ในการตรวจสอบ SAP B1 สำเร็จ (ทุกๆ {interval_mins} {unit})",
+        "sap_monitor": updated
     }
 
 
@@ -202,6 +249,33 @@ async def force_check_ad_status(
 ):
     """Run an immediate AD status probe and notify if status is OFF or RECOVERED."""
     return await check_and_notify_ad_status(db, force_check=True)
+
+
+@router.post("/health-monitor/test-sap-alert")
+async def trigger_test_sap_status_alert(
+    payload: Optional[SapAlertTestRequest] = None,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Trigger a simulated SAP B1 status alert to Telegram (OFFLINE_IMMEDIATE, OFFLINE_REMINDER, or ONLINE_RECOVERED)."""
+    alert_t = payload.alert_type if payload and payload.alert_type else "OFFLINE_IMMEDIATE"
+    b_token = payload.bot_token if payload and payload.bot_token else None
+    c_id = payload.chat_id if payload and payload.chat_id else None
+    return await trigger_test_sap_alert(
+        db=db,
+        alert_type=alert_t,
+        custom_bot_token=b_token,
+        custom_chat_id=c_id
+    )
+
+
+@router.post("/health-monitor/check-sap-now")
+async def force_check_sap_status(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Run an immediate SAP B1 status probe and notify if status is OFF or RECOVERED."""
+    return await check_and_notify_sap_status(db, force_check=True)
 
 
 # ---------------------------------------------------------

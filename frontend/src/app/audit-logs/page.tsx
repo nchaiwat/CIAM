@@ -143,6 +143,7 @@ export default function AuditLogsPage() {
               <option value="PROVISION_USER">แจกจ่ายสิทธิ์ (PROVISION_USER)</option>
               <option value="SYNC">ซิงก์ข้อมูล (SYNC)</option>
               <option value="DAILY_EMAIL_DIGEST">รายงานความปลอดภัยทางอีเมล (DAILY_EMAIL_DIGEST)</option>
+              <option value="TELEGRAM_SAP_OFFLINE_IMMEDIATE">แจ้งเตือน SAP B1 ขัดข้อง (TELEGRAM_SAP)</option>
             </select>
 
             <select
@@ -221,10 +222,13 @@ export default function AuditLogsPage() {
                             ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
                             : log.action_type === "DAILY_EMAIL_DIGEST"
                             ? "bg-indigo-100 text-indigo-900 border border-indigo-300 flex items-center gap-1.5 w-fit"
+                            : log.action_type.startsWith("TELEGRAM_SAP_")
+                            ? "bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 w-fit"
                             : "bg-blue-100 text-blue-900 border border-blue-300"
                         }`}
                       >
                         {log.action_type === "DAILY_EMAIL_DIGEST" && <Mail className="w-3 h-3 text-indigo-600 inline" />}
+                        {log.action_type.startsWith("TELEGRAM_SAP_") && <AlertTriangle className="w-3 h-3 text-amber-600 inline" />}
                         {log.action_type}
                       </span>
                     </td>

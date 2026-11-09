@@ -685,13 +685,16 @@ export const ciamApi = {
       config: HealthMonitorConfig;
       live_health: LiveHealthSnapshot;
       ad_monitor: AdMonitorState;
+      sap_monitor?: SapMonitorState;
     }>("/dashboard/health-monitor"),
 
-  updateHealthMonitor: (payload: Partial<HealthMonitorConfig>) =>
+  updateHealthMonitor: (payload: Partial<HealthMonitorConfig> & { sap_check_interval_seconds?: number; sap_monitor_enabled?: boolean }) =>
     fetchApi<{
       status: string;
       message: string;
       config: HealthMonitorConfig;
+      ad_monitor?: AdMonitorState;
+      sap_monitor?: SapMonitorState;
     }>("/dashboard/health-monitor", {
       method: "PUT",
       body: JSON.stringify(payload),
@@ -742,6 +745,38 @@ export const ciamApi = {
     }>("/dashboard/health-monitor/ad-interval", {
       method: "PUT",
       body: JSON.stringify({ check_interval_seconds }),
+    }),
+
+  triggerTestSapAlert: (payload?: { alert_type?: string; bot_token?: string; chat_id?: string }) =>
+    fetchApi<{
+      success: boolean;
+      message: string;
+      recipients_delivered: number;
+      alert_type: string;
+    }>("/dashboard/health-monitor/test-sap-alert", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    }),
+
+  checkSapNow: () =>
+    fetchApi<{
+      status: string;
+      is_online: boolean;
+      alert_sent: boolean;
+      alert_type: string | null;
+      state: SapMonitorState;
+    }>("/dashboard/health-monitor/check-sap-now", {
+      method: "POST",
+    }),
+
+  updateSapInterval: (check_interval_seconds: number, enabled?: boolean) =>
+    fetchApi<{
+      status: string;
+      message: string;
+      sap_monitor: SapMonitorState;
+    }>("/dashboard/health-monitor/sap-interval", {
+      method: "PUT",
+      body: JSON.stringify({ check_interval_seconds, enabled }),
     }),
 
   // AI Copilot & Intelligence Engine
@@ -936,6 +971,19 @@ export interface LiveHealthSnapshot {
 }
 
 export interface AdMonitorState {
+  current_status: "ONLINE" | "OFFLINE";
+  is_online: boolean;
+  offline_since: string | null;
+  last_notified_at: string | null;
+  total_offline_alerts_sent: number;
+  last_check_at: string | null;
+  last_latency_ms: number;
+  last_message: string;
+  check_interval_seconds: number;
+}
+
+export interface SapMonitorState {
+  enabled: boolean;
   current_status: "ONLINE" | "OFFLINE";
   is_online: boolean;
   offline_since: string | null;

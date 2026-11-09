@@ -1,4 +1,5 @@
 import time
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Tuple, Optional
@@ -669,6 +670,412 @@ async def trigger_test_ad_alert(
         ad_base_url=connector.base_url,
         latency_ms=12,
         downtime_str="1 ชั่วโมง 0 นาที",
+        total_alerts_sent=1,
+        custom_bot_token=custom_bot_token,
+        custom_chat_id=custom_chat_id
+    )
+    return {
+        "success": ok,
+        "message": msg,
+        "recipients_delivered": count,
+        "alert_type": alert_type
+    }
+
+
+# =========================================================
+# Real-Time SAP Business One Status Monitoring & Alerts
+# =========================================================
+
+DEFAULT_SAP_MONITOR: Dict[str, Any] = {
+    "enabled": True,
+    "current_status": "ONLINE",
+    "is_online": True,
+    "offline_since": None,
+    "last_notified_at": None,
+    "total_offline_alerts_sent": 0,
+    "last_check_at": None,
+    "last_latency_ms": 0,
+    "last_message": "พร้อมใช้งาน",
+    "check_interval_seconds": 300,  # ค่าเริ่มต้น 5 นาที (300 วินาที) ปรับแต่งได้ตามต้องการ
+}
+
+
+def get_sap_monitor_status(db: Session) -> Dict[str, Any]:
+    """Retrieve current SAP Business One monitor state."""
+    setting = db.query(SystemSetting).filter_by(setting_key="sap_status_monitor").first()
+    if not setting or not setting.setting_value:
+        return DEFAULT_SAP_MONITOR.copy()
+    return {**DEFAULT_SAP_MONITOR, **setting.setting_value}
+
+
+def save_sap_monitor_config(db: Session, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Save configurable SAP Monitor settings (enabled, check_interval_seconds)."""
+    from sqlalchemy.orm.attributes import flag_modified
+    setting = db.query(SystemSetting).filter_by(setting_key="sap_status_monitor").first()
+    if not setting:
+        state = DEFAULT_SAP_MONITOR.copy()
+        setting = SystemSetting(
+            setting_key="sap_status_monitor",
+            setting_value=state,
+            description="Real-time SAP Business One Service Layer status monitor and alerts"
+        )
+        db.add(setting)
+    else:
+        state = {**DEFAULT_SAP_MONITOR, **(setting.setting_value or {})}
+
+    if "enabled" in update_data and update_data["enabled"] is not None:
+        state["enabled"] = bool(update_data["enabled"])
+
+    if "check_interval_seconds" in update_data and update_data["check_interval_seconds"] is not None:
+        try:
+            val = int(update_data["check_interval_seconds"])
+            # Allow 15s to 3600s (e.g. 60s=1m, 300s=5m, 600s=10m, etc.)
+            if 15 <= val <= 3600:
+                state["check_interval_seconds"] = val
+        except (ValueError, TypeError):
+            pass
+
+    setting.setting_value = dict(state)
+    flag_modified(setting, "setting_value")
+    db.commit()
+    db.refresh(setting)
+    return get_sap_monitor_status(db)
+
+
+async def send_sap_status_alert(
+    db: Session,
+    alert_type: str,  # "OFFLINE_IMMEDIATE", "OFFLINE_REMINDER", "ONLINE_RECOVERED"
+    sap_health_message: str = "",
+    sap_base_url: str = "https://sapb1.waapps.net",
+    latency_ms: int = 0,
+    downtime_str: str = "",
+    total_alerts_sent: int = 1,
+    custom_bot_token: Optional[str] = None,
+    custom_chat_id: Optional[str] = None
+) -> Tuple[bool, str, int]:
+    """Send dedicated Telegram alert for SAP B1 Service Layer status changes and hourly reminders."""
+    config = get_health_monitor_config(db)
+    bot_token = (custom_bot_token or config.get("bot_token") or getattr(settings, "TELEGRAM_BOT_TOKEN", "")).strip()
+    primary_chat_id = (custom_chat_id or config.get("chat_id") or getattr(settings, "TELEGRAM_CHAT_ID", "")).strip()
+
+    recipients = []
+    if primary_chat_id:
+        recipients.append(primary_chat_id)
+
+    if config.get("notify_admins_enabled", True):
+        admins = db.query(AdminUser).filter(AdminUser.is_active == True, AdminUser.telegram_id != None).all()
+        for a in admins:
+            tid = a.telegram_id.strip()
+            if tid and tid not in recipients:
+                recipients.append(tid)
+
+    if not bot_token:
+        return False, "Bot token missing", 0
+    if not recipients:
+        return False, "No recipient chat IDs configured", 0
+
+    now_str = get_bangkok_now().strftime("%d/%m/%Y %H:%M:%S")
+
+    if alert_type == "OFFLINE_IMMEDIATE":
+        title = "🚨 <b>[CIAM CRITICAL] SAP Business One (ERP) ขัดข้อง (OFFLINE)</b>"
+        body = (
+            f"{title}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 <b>องค์กร:</b> Window Asia Public Company Limited\n"
+            f"⏰ <b>เวลาตรวจพบ:</b> {now_str} (Asia/Bangkok)\n"
+            f"🔌 <b>สถานะ:</b> 🔴 <b>OFFLINE (ตรวจพบการขัดข้อง)</b>\n"
+            f"🌐 <b>Service Layer:</b> <code>{sap_base_url}</code>\n"
+            f"⚡ <b>Latency:</b> <b>{latency_ms} ms</b>\n"
+            f"⚠️ <b>สาเหตุ/ข้อผิดพลาด:</b> <i>{sap_health_message or 'ไม่สามารถเชื่อมต่อ Service Layer ได้'}</i>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 <b>คำแนะนำสำหรับทีม IT/ERP:</b>\n"
+            f"1. ตรวจสอบสถานะ Service Layer บนเซิร์ฟเวอร์ SAP (<code>systemctl status b1s</code>)\n"
+            f"2. ตรวจสอบสถานะ Cloudflare Tunnel (<code>sapb1.waapps.net</code>)\n"
+            f"3. ตรวจสอบการเชื่อมต่อเครือข่ายและพอร์ต 50000 / HTTPS\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📢 <b>หมายเหตุระบบ:</b> Central IAM จะส่งการแจ้งเตือนเตือนซ้ำทุกๆ 1 ชั่วโมง จนกว่า SAP B1 จะกลับมา ONLINE"
+        )
+    elif alert_type == "OFFLINE_REMINDER":
+        title = f"⚠️ <b>[CIAM REMINDER] SAP Business One (ERP) ยังคง OFFLINE (เตือนรอบที่ {total_alerts_sent})</b>"
+        body = (
+            f"{title}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 <b>องค์กร:</b> Window Asia Public Company Limited\n"
+            f"⏰ <b>เวลาแจ้งเตือน:</b> {now_str} (Asia/Bangkok)\n"
+            f"⏱️ <b>ขัดข้องต่อเนื่องแล้ว:</b> <b>{downtime_str}</b>\n"
+            f"🔌 <b>สถานะ:</b> 🔴 <b>OFFLINE (ยังไม่สามารถติดต่อได้)</b>\n"
+            f"🌐 <b>Service Layer:</b> <code>{sap_base_url}</code>\n"
+            f"⚠️ <b>ข้อความล่าสุด:</b> <i>{sap_health_message or 'Unreachable'}</i>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📢 <i>ระบบจะยังคงแจ้งเตือนทุก 1 ชั่วโมง จนกว่า SAP B1 จะกลับมาเชื่อมต่อได้ตามปกติ</i>"
+        )
+    elif alert_type == "ONLINE_RECOVERED":
+        title = "✅ <b>[CIAM RECOVERY] SAP Business One (ERP) กลับมา ONLINE ปกติแล้ว</b>"
+        body = (
+            f"{title}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 <b>องค์กร:</b> Window Asia Public Company Limited\n"
+            f"⏰ <b>เวลากู้คืนสำเร็จ:</b> {now_str} (Asia/Bangkok)\n"
+            f"⏱️ <b>รวมระยะเวลาที่ขัดข้อง:</b> <b>{downtime_str}</b>\n"
+            f"🔌 <b>สถานะปัจจุบัน:</b> 🟢 <b>ONLINE (เชื่อมต่อสำเร็จ)</b>\n"
+            f"⚡ <b>Latency:</b> <b>{latency_ms} ms</b>\n"
+            f"🌐 <b>Service Layer:</b> <code>{sap_base_url}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👍 <i>ระบบกลับสู่สภาวะปกติ เซอร์วิส SAP B1 และการซิงก์ข้อมูลพร้อมใช้งานแล้ว</i>"
+        )
+    else:
+        title = f"ℹ️ <b>[CIAM] การทดสอบระบบแจ้งเตือน SAP B1 ({alert_type})</b>"
+        body = f"{title}\n⏰ <b>เวลา:</b> {now_str}\n<i>ทดสอบการส่งสัญญาณแจ้งเตือนระบบ SAP Business One สำเร็จ</i>"
+
+    success_deliveries = 0
+    for r_id in recipients:
+        ok, _ = await send_telegram_message(bot_token, r_id, body, parse_mode="HTML")
+        if ok:
+            success_deliveries += 1
+
+    # Record Audit Log
+    db.add(IamAuditLog(
+        actor_username="System-SapMonitor",
+        action_type=f"TELEGRAM_SAP_{alert_type}",
+        target_username="TELEGRAM_ADMINS",
+        affected_app_code="sap_b1",
+        execution_mode="REALTIME_MONITOR",
+        reason=f"ส่งแจ้งเตือนสถานะ SAP B1 ({alert_type}) สำเร็จ {success_deliveries}/{len(recipients)} ช่องทาง",
+        status="SUCCESS" if success_deliveries > 0 else "FAILED"
+    ))
+    db.commit()
+
+    return success_deliveries > 0, f"Delivered to {success_deliveries}/{len(recipients)}", success_deliveries
+
+
+async def check_and_notify_sap_status(db: Session, force_check: bool = False) -> Dict[str, Any]:
+    """
+    Core Real-Time SAP Business One Monitor Engine:
+    - Probes SAP B1 Service Layer health via configured SapB1Connector
+    - Anti-flapping: immediately retries once on failure before triggering OFFLINE alert
+    - If status changes to OFF -> Immediately notify Telegram
+    - If status remains OFF -> Remind every 1 hour (3600 seconds)
+    - If status recovers to ON -> Immediately notify recovery with downtime summary
+    - Configurable probe interval (default 300s = 5 minutes)
+    - Persists state in SystemSetting: 'sap_status_monitor'
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.connectors.sap_b1 import SapB1Connector
+    from app.models.application import ConnectedApplication
+
+    now_bkk = get_bangkok_now()
+    now_iso = now_bkk.isoformat()
+
+    setting = db.query(SystemSetting).filter_by(setting_key="sap_status_monitor").first()
+    if not setting:
+        state = DEFAULT_SAP_MONITOR.copy()
+        setting = SystemSetting(
+            setting_key="sap_status_monitor",
+            setting_value=state,
+            description="Real-time SAP Business One Service Layer status monitor and alerts"
+        )
+        db.add(setting)
+        db.commit()
+        db.refresh(setting)
+    else:
+        state = {**DEFAULT_SAP_MONITOR, **(setting.setting_value or {})}
+
+    # Check if monitor is enabled
+    if not state.get("enabled", True):
+        return {
+            "status": state.get("current_status", "ONLINE"),
+            "is_online": state.get("is_online", True),
+            "alert_sent": False,
+            "alert_type": None,
+            "skipped": True,
+            "reason": "Monitor is disabled",
+            "state": state
+        }
+
+    # Check if configured interval has elapsed (unless forced check)
+    check_interval = int(state.get("check_interval_seconds", 300))
+    last_check_iso = state.get("last_check_at")
+    if not force_check and last_check_iso:
+        try:
+            last_check_dt = datetime.fromisoformat(last_check_iso).astimezone(BANGKOK_TZ)
+            elapsed_since_last_check = (now_bkk - last_check_dt).total_seconds()
+            if elapsed_since_last_check < (check_interval - 2):
+                return {
+                    "status": state.get("current_status", "ONLINE"),
+                    "is_online": state.get("is_online", True),
+                    "alert_sent": False,
+                    "alert_type": None,
+                    "skipped": True,
+                    "state": state
+                }
+        except Exception:
+            pass
+
+    # Instantiate connector from ConnectedApplication or default
+    app_record = db.query(ConnectedApplication).filter_by(app_code="sap_b1").first()
+    if app_record:
+        sap_connector = SapB1Connector(
+            base_url=app_record.base_url or "https://sapb1.waapps.net",
+            api_key=app_record.api_key or "",
+            company_db=app_record.sap_company_db or "",
+            sap_username=app_record.sap_username or "",
+            sap_password=app_record.sap_password or "",
+            app_code=app_record.app_code
+        )
+    else:
+        sap_connector = SapB1Connector(
+            base_url="https://sapb1.waapps.net",
+            app_code="sap_b1"
+        )
+
+    sap_health = await sap_connector.health_check()
+    is_online = bool(sap_health.is_online)
+
+    prev_status = state.get("current_status", "ONLINE")
+    prev_offline_since = state.get("offline_since")
+    prev_last_notified = state.get("last_notified_at")
+    total_alerts = int(state.get("total_offline_alerts_sent", 0))
+
+    # Anti-Flapping check: If failed and transitioning from ONLINE, do an immediate retry after 2.5s
+    if not is_online and prev_status != "OFFLINE":
+        await asyncio.sleep(2.5)
+        retry_health = await sap_connector.health_check()
+        if retry_health.is_online:
+            is_online = True
+            sap_health = retry_health
+            logger.info("SAP B1 initial probe failed but immediate retry succeeded (anti-flapping absorbed transient glitch)")
+
+    alert_sent = False
+    alert_type = None
+
+    if not is_online:
+        # Case 1: Just transitioned to OFFLINE
+        if prev_status != "OFFLINE":
+            state["current_status"] = "OFFLINE"
+            state["is_online"] = False
+            state["offline_since"] = now_iso
+            state["last_notified_at"] = now_iso
+            state["total_offline_alerts_sent"] = 1
+            alert_type = "OFFLINE_IMMEDIATE"
+
+            logger.warning("SAP B1 Service Layer transitioned to OFFLINE! Sending immediate Telegram alert...")
+            await send_sap_status_alert(
+                db=db,
+                alert_type="OFFLINE_IMMEDIATE",
+                sap_health_message=sap_health.message,
+                sap_base_url=sap_connector.base_url,
+                latency_ms=sap_health.latency_ms,
+                downtime_str="เพิ่งเริ่มขัดข้อง",
+                total_alerts_sent=1
+            )
+            alert_sent = True
+        else:
+            # Case 2: Still OFFLINE - check 1-hour interval (3,600s)
+            should_remind = False
+            if prev_last_notified:
+                try:
+                    last_notified_dt = datetime.fromisoformat(prev_last_notified).astimezone(BANGKOK_TZ)
+                    elapsed_secs = (now_bkk - last_notified_dt).total_seconds()
+                    if elapsed_secs >= 3600:
+                        should_remind = True
+                except Exception:
+                    should_remind = True
+            else:
+                should_remind = True
+
+            if should_remind:
+                total_alerts += 1
+                state["last_notified_at"] = now_iso
+                state["total_offline_alerts_sent"] = total_alerts
+                alert_type = "OFFLINE_REMINDER"
+
+                # Calculate cumulative downtime
+                downtime_secs = 0
+                if prev_offline_since:
+                    try:
+                        off_dt = datetime.fromisoformat(prev_offline_since).astimezone(BANGKOK_TZ)
+                        downtime_secs = (now_bkk - off_dt).total_seconds()
+                    except Exception:
+                        pass
+                downtime_str = format_duration(downtime_secs) if downtime_secs > 0 else "1 ชั่วโมง"
+
+                logger.warning("SAP B1 Service Layer remains OFFLINE (Round %d). Sending hourly reminder...", total_alerts)
+                await send_sap_status_alert(
+                    db=db,
+                    alert_type="OFFLINE_REMINDER",
+                    sap_health_message=sap_health.message,
+                    sap_base_url=sap_connector.base_url,
+                    latency_ms=sap_health.latency_ms,
+                    downtime_str=downtime_str,
+                    total_alerts_sent=total_alerts
+                )
+                alert_sent = True
+
+    else:
+        # Case 3: Transitioned back to ONLINE from OFFLINE
+        if prev_status == "OFFLINE":
+            downtime_secs = 0
+            if prev_offline_since:
+                try:
+                    off_dt = datetime.fromisoformat(prev_offline_since).astimezone(BANGKOK_TZ)
+                    downtime_secs = (now_bkk - off_dt).total_seconds()
+                except Exception:
+                    pass
+            downtime_str = format_duration(downtime_secs) if downtime_secs > 0 else "ไม่เกิน 1 นาที"
+
+            state["current_status"] = "ONLINE"
+            state["is_online"] = True
+            state["offline_since"] = None
+            state["last_notified_at"] = now_iso
+            state["total_offline_alerts_sent"] = 0
+            alert_type = "ONLINE_RECOVERED"
+
+            logger.info("SAP B1 Service Layer RECOVERED to ONLINE! Downtime: %s. Sending recovery notification...", downtime_str)
+            await send_sap_status_alert(
+                db=db,
+                alert_type="ONLINE_RECOVERED",
+                sap_health_message=sap_health.message,
+                sap_base_url=sap_connector.base_url,
+                latency_ms=sap_health.latency_ms,
+                downtime_str=downtime_str,
+                total_alerts_sent=0
+            )
+            alert_sent = True
+        else:
+            state["current_status"] = "ONLINE"
+            state["is_online"] = True
+
+    state["last_check_at"] = now_iso
+    state["last_latency_ms"] = sap_health.latency_ms
+    state["last_message"] = sap_health.message
+
+    setting.setting_value = dict(state)
+    flag_modified(setting, "setting_value")
+    db.commit()
+
+    return {
+        "status": state["current_status"],
+        "is_online": is_online,
+        "alert_sent": alert_sent,
+        "alert_type": alert_type,
+        "state": state
+    }
+
+
+async def trigger_test_sap_alert(
+    db: Session,
+    alert_type: str = "OFFLINE_IMMEDIATE",
+    custom_bot_token: Optional[str] = None,
+    custom_chat_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Manually test SAP B1 status alert format and delivery to Telegram."""
+    ok, msg, count = await send_sap_status_alert(
+        db=db,
+        alert_type=alert_type,
+        sap_health_message="[ทดสอบ] การจำลองสถานะการขัดข้อง SAP Business One Service Layer (HTTP 502 Bad Gateway)",
+        sap_base_url="https://sapb1.waapps.net",
+        latency_ms=2500,
+        downtime_str="45 นาที",
         total_alerts_sent=1,
         custom_bot_token=custom_bot_token,
         custom_chat_id=custom_chat_id
