@@ -302,4 +302,37 @@ def test_test_send_does_not_append_admins():
         db.close()
 
 
+def test_manual_test_send_does_not_pollute_scheduled_date():
+    """Verify that manual test send does NOT set last_scheduled_date, but auto scheduled run does."""
+    db = SessionLocal()
+    try:
+        with patch("app.services.daily_digest_service._send_smtp_sync") as mock_smtp:
+            mock_smtp.return_value = (True, "Delivered")
+
+            # 1. Manual test send
+            res_manual = asyncio.run(send_daily_digest_email(
+                db=db,
+                triggered_by="MANUAL_TEST_admin",
+                custom_recipients=["admin@windowasia.com"]
+            ))
+            assert res_manual["success"] is True
+
+            cfg = get_daily_digest_config(db, mask_password=False)
+            assert cfg.get("last_scheduled_date") is None
+
+            # 2. Automated scheduled run
+            res_auto = asyncio.run(send_daily_digest_email(
+                db=db,
+                triggered_by="AUTO_SCHEDULED_07:00",
+                custom_recipients=["admin@windowasia.com"]
+            ))
+            assert res_auto["success"] is True
+
+            cfg_after = get_daily_digest_config(db, mask_password=False)
+            assert cfg_after.get("last_scheduled_date") is not None
+    finally:
+        db.close()
+
+
+
 

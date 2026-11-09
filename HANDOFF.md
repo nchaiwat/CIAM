@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 7 พฤศจิกายน 2026 (Local Time: ~20:42 ICT)  
+> **Date Updated:** 9 พฤศจิกายน 2026 (Local Time: ~12:57 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 83/83 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: fix(reporting): isolate test send recipients and add admin email auto-heal
+> **Git Status:** Production Ready — Latest Commit: fix(daily-digest): isolate scheduled date, decouple scheduler worker and add activity log filter
 
 ---
 

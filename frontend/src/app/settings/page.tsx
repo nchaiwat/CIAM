@@ -1491,6 +1491,12 @@ export default function SettingsPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500">ความถี่ในการส่ง:</span>
+                    <span className="font-mono text-slate-800 font-bold">
+                      ทุกวัน (Daily) เวลา {digestConfig.send_time} น.
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
                     <span className="text-slate-500">เวลาที่ส่งรอบล่าสุด:</span>
                     <span className="font-mono text-slate-700">
                       {digestConfig.last_run_at
@@ -1499,8 +1505,8 @@ export default function SettingsPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500">กำหนดการส่งรอบถัดไป:</span>
-                    <span className="font-mono text-slate-700 font-bold">
+                    <span className="text-slate-500">กำหนดการส่งรอบถัดไป (Next Run):</span>
+                    <span className="font-mono text-blue-700 font-bold">
                       {digestConfig.next_run_at
                         ? formatDateTime(digestConfig.next_run_at)
                         : "-"}
@@ -1511,6 +1517,9 @@ export default function SettingsPage() {
                       {digestConfig.last_summary}
                     </div>
                   )}
+                  <p className="text-[10.5px] text-slate-500 italic pt-1 border-t border-slate-200 leading-relaxed">
+                    💡 ระบบทำงานเป็นรอบประจำวัน (Daily) ทุกวัน — หากรอบเวลาของวันนี้ได้ส่งเสร็จสิ้นหรือผ่านไปแล้ว ระบบจะแสดงกำหนดเวลาของรอบถัดไปในวันพรุ่งนี้โดยอัตโนมัติ
+                  </p>
                 </div>
               </div>
             </div>

@@ -75,6 +75,7 @@ DEFAULT_DIGEST_CONFIG: Dict[str, Any] = {
     "recipients": [],
     "notify_admins_enabled": True,
     "last_run_at": None,
+    "last_scheduled_date": None,
     "last_status": "IDLE",
     "last_summary": None,
     "last_error": None,
@@ -702,6 +703,7 @@ def _record_digest_audit_and_setting(
         db.add(audit_entry)
 
         # 2. SystemSetting
+        is_scheduled_run = (actor or "").startswith("AUTO_SCHEDULED") or "Auto-Scheduler" in (actor or "")
         setting = db.query(SystemSetting).filter_by(setting_key="daily_email_digest_schedule").first()
         if not setting:
             val = DEFAULT_DIGEST_CONFIG.copy()
@@ -710,6 +712,8 @@ def _record_digest_audit_and_setting(
             val["last_summary"] = safe_reason
             val["last_error"] = error_msg
             val["last_run_date"] = now_bkk.strftime("%Y-%m-%d")
+            if is_scheduled_run:
+                val["last_scheduled_date"] = now_bkk.strftime("%Y-%m-%d")
             setting = SystemSetting(
                 setting_key="daily_email_digest_schedule",
                 setting_value=val,
@@ -723,6 +727,8 @@ def _record_digest_audit_and_setting(
             val["last_summary"] = safe_reason
             val["last_error"] = error_msg
             val["last_run_date"] = now_bkk.strftime("%Y-%m-%d")
+            if is_scheduled_run:
+                val["last_scheduled_date"] = now_bkk.strftime("%Y-%m-%d")
             setting.setting_value = val
             flag_modified(setting, "setting_value")
 

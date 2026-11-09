@@ -490,19 +490,19 @@ async def run_scheduler_worker():
 
             db = SessionLocal()
             try:
-                schedule = get_sync_schedule(db)
-                if not schedule.get("enabled", True):
-                    continue
+                # 1. Spoke Directory Inventory Sync Check (e.g. 04:00 AM)
+                try:
+                    schedule = get_sync_schedule(db)
+                    if schedule.get("enabled", True):
+                        target_time = schedule.get("time", "04:00")
+                        last_run_date = schedule.get("last_run_date")
+                        if current_hm == target_time and last_run_date != today_str:
+                            logger.info("Executing scheduled sync at %s (Asia/Bangkok)", current_hm)
+                            await execute_sync_all(db, actor_username="Auto-Scheduler-04:00")
+                except Exception as sync_err:
+                    logger.warning("Error running scheduled inventory sync: %s", sync_err)
 
-                target_time = schedule.get("time", "04:00")
-                last_run_date = schedule.get("last_run_date")
-
-                # If current time matches target HH:MM and hasn't run yet today
-                if current_hm == target_time and last_run_date != today_str:
-                    logger.info("Executing scheduled sync at %s (Asia/Bangkok)", current_hm)
-                    await execute_sync_all(db, actor_username="Auto-Scheduler-04:00")
-
-                # Telegram System & AD Sync Agent Health Monitor Check
+                # 2. Telegram System & AD Sync Agent Health Monitor Check
                 try:
                     from app.services.telegram_service import get_health_monitor_config, send_health_report
                     health_cfg = get_health_monitor_config(db)
@@ -532,20 +532,21 @@ async def run_scheduler_worker():
                 except Exception as health_err:
                     logger.warning("Error running scheduled health monitor: %s", health_err)
 
-                # Daily Security & Identity Email Digest Check (e.g. 07:00 AM)
+                # 3. Daily Security & Identity Email Digest Check (e.g. 07:00 AM)
                 try:
                     from app.services.daily_digest_service import get_daily_digest_config, send_daily_digest_email
                     digest_cfg = get_daily_digest_config(db, mask_password=False)
                     if digest_cfg.get("enabled", False):
                         target_digest_time = digest_cfg.get("send_time", "07:00")
-                        last_digest_date = digest_cfg.get("last_run_date")
-                        if current_hm == target_digest_time and last_digest_date != today_str:
+                        # Use last_scheduled_date to isolate daily scheduler from manual test sends
+                        last_scheduled_date = digest_cfg.get("last_scheduled_date")
+                        if current_hm == target_digest_time and last_scheduled_date != today_str:
                             logger.info("Executing scheduled Daily Email Digest at %s (Asia/Bangkok)", current_hm)
                             await send_daily_digest_email(db, triggered_by=f"AUTO_SCHEDULED_{current_hm}")
                 except Exception as digest_err:
                     logger.warning("Error running scheduled daily email digest: %s", digest_err)
 
-                # Real-Time AD Sync Agent Status Monitoring & Hourly Alert Loop
+                # 4. Real-Time AD Sync Agent Status Monitoring & Hourly Alert Loop
                 try:
                     from app.services.telegram_service import check_and_notify_ad_status
                     await check_and_notify_ad_status(db)

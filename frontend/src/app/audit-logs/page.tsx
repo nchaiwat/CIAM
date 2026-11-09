@@ -17,7 +17,8 @@ import {
   Server,
   ShieldCheck,
   Info,
-  AlertTriangle
+  AlertTriangle,
+  Mail
 } from "lucide-react";
 import { ciamApi, AuditLogItem } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
@@ -141,6 +142,7 @@ export default function AuditLogsPage() {
               <option value="CREATE_USER">สร้างผู้ใช้ (CREATE_USER)</option>
               <option value="PROVISION_USER">แจกจ่ายสิทธิ์ (PROVISION_USER)</option>
               <option value="SYNC">ซิงก์ข้อมูล (SYNC)</option>
+              <option value="DAILY_EMAIL_DIGEST">รายงานความปลอดภัยทางอีเมล (DAILY_EMAIL_DIGEST)</option>
             </select>
 
             <select
@@ -217,9 +219,12 @@ export default function AuditLogsPage() {
                             ? "bg-rose-100 text-rose-900 border border-rose-300"
                             : log.action_type === "ENABLE_USER" || log.action_type === "ADMIN_LOGIN_SUCCESS"
                             ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                            : log.action_type === "DAILY_EMAIL_DIGEST"
+                            ? "bg-indigo-100 text-indigo-900 border border-indigo-300 flex items-center gap-1.5 w-fit"
                             : "bg-blue-100 text-blue-900 border border-blue-300"
                         }`}
                       >
+                        {log.action_type === "DAILY_EMAIL_DIGEST" && <Mail className="w-3 h-3 text-indigo-600 inline" />}
                         {log.action_type}
                       </span>
                     </td>
@@ -407,6 +412,80 @@ export default function AuditLogsPage() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Special Section: Daily Email Digest Breakdown */}
+              {(() => {
+                if (selectedLog.action_type === "DAILY_EMAIL_DIGEST" || selectedLog.affected_app_code === "CIAM_MAILER") {
+                  const parsedDetails = parseLogDetails(selectedLog.details);
+                  const recipients = parsedDetails?.recipients || [];
+                  const riskLevel = parsedDetails?.risk_level || "UNKNOWN";
+                  const ghostCount = parsedDetails?.ghost_count ?? 0;
+                  const smtpHost = parsedDetails?.smtp_host || "-";
+                  const statusMsg = parsedDetails?.message || "-";
+
+                  return (
+                    <div className="bg-indigo-50/60 rounded-xl border-2 border-indigo-200 shadow-sm overflow-hidden space-y-0">
+                      <div className="px-4 py-3 bg-indigo-100/80 border-b border-indigo-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-5 h-5 text-indigo-700 shrink-0" />
+                          <h4 className="text-xs sm:text-sm font-extrabold text-indigo-950">
+                            รายละเอียดการจัดส่งรายงานความปลอดภัยทางอีเมล (Daily Security Digest)
+                          </h4>
+                        </div>
+                        <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${
+                          selectedLog.status === "SUCCESS"
+                            ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                            : "bg-rose-100 text-rose-900 border-rose-300"
+                        }`}>
+                          {selectedLog.status === "SUCCESS" ? "DELIVERED" : "DELIVERY_FAILED"}
+                        </span>
+                      </div>
+
+                      <div className="p-4 space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                          <div className="bg-white p-2.5 rounded-lg border border-indigo-100 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">SMTP Server</span>
+                            <span className="font-mono font-bold text-slate-800 break-words">{smtpHost}</span>
+                          </div>
+                          <div className="bg-white p-2.5 rounded-lg border border-indigo-100 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">ผู้รับทั้งหมด</span>
+                            <span className="font-mono font-bold text-indigo-700">{recipients.length || parsedDetails?.recipients_count || 0} อีเมล</span>
+                          </div>
+                          <div className="bg-white p-2.5 rounded-lg border border-indigo-100 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">ระดับความเสี่ยง (Risk)</span>
+                            <span className={`font-mono font-bold ${
+                              riskLevel === "LOW" ? "text-emerald-700" : riskLevel === "MEDIUM" ? "text-amber-700" : "text-rose-700"
+                            }`}>{riskLevel}</span>
+                          </div>
+                          <div className="bg-white p-2.5 rounded-lg border border-indigo-100 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">บัญชีผีที่ตรวจพบ</span>
+                            <span className="font-mono font-bold text-rose-700">{ghostCount} บัญชี</span>
+                          </div>
+                        </div>
+
+                        {recipients.length > 0 && (
+                          <div className="bg-white p-3 rounded-lg border border-indigo-100 space-y-1.5 shadow-2xs">
+                            <span className="text-[11px] font-bold text-slate-700 block">รายชื่ออีเมลที่ได้รับรายงาน:</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {recipients.map((rcpt: string, idx: number) => (
+                                <span key={idx} className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-900 border border-indigo-200">
+                                  {rcpt}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="bg-white p-2.5 rounded-lg border border-indigo-100 text-xs text-slate-700 font-mono">
+                          <span className="text-slate-500 font-bold block mb-0.5">การตอบกลับจากระบบส่งเมล์ (SMTP Response):</span>
+                          <span className="break-words">{statusMsg}</span>
+                        </div>
                       </div>
                     </div>
                   );
