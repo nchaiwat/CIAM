@@ -33,6 +33,8 @@ import {
   ArrowUp,
   ArrowDown,
   Settings,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import {
   ciamApi,
@@ -690,6 +692,47 @@ export default function DirectoryPage() {
   };
 
   const [togglingMappingId, setTogglingMappingId] = useState<number | null>(null);
+  const [lockingMappingId, setLockingMappingId] = useState<number | null>(null);
+
+  const handleToggleAppLock = async (user: UserListItem, app: AppAccountSummary) => {
+    if (!app.mapping_id) return;
+    const newLockStatus = !app.is_status_locked;
+    const actionName = newLockStatus ? "ล็อคสิทธิ์เด็ดขาด (ห้าม Spoke แก้ไขกลับ)" : "ปลดล็อคสิทธิ์";
+    const confirmMsg = `ยืนยัน${actionName} ของระบบ "${app.app_name} (${app.app_code.toUpperCase()})" ให้กับ ${user.full_name} หรือไม่?`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      setLockingMappingId(app.mapping_id);
+      const res = await ciamApi.toggleAccountLock(app.mapping_id, {
+        is_status_locked: newLockStatus,
+        reason: `สั่ง${actionName}ผ่านหน้าเว็บ CIAM Console`,
+      });
+
+      setSelectedUser((prev) => {
+        if (!prev) return null;
+        const updatedApps = prev.connected_apps.map((a) =>
+          a.mapping_id === app.mapping_id ? { ...a, is_status_locked: newLockStatus } : a
+        );
+        return { ...prev, connected_apps: updatedApps };
+      });
+
+      setUsers((prev) =>
+        prev.map((u) => {
+          if (u.id !== user.id) return u;
+          const updatedApps = u.connected_apps.map((a) =>
+            a.mapping_id === app.mapping_id ? { ...a, is_status_locked: newLockStatus } : a
+          );
+          return { ...u, connected_apps: updatedApps };
+        })
+      );
+
+      alert(res.message || `${actionName}สำเร็จเรียบร้อย`);
+    } catch (err: any) {
+      alert(`ไม่สามารถ${actionName}ได้: ${err.message || err}`);
+    } finally {
+      setLockingMappingId(null);
+    }
+  };
 
   const handleToggleAppStatus = async (user: UserListItem, app: AppAccountSummary) => {
     if (!app.mapping_id) return;
@@ -1309,7 +1352,8 @@ export default function DirectoryPage() {
                               : app.is_active_in_app;
 
                           const isSpokeDisabled = !isEffectiveActive && app.status_origin === "SPOKE_APP";
-                          const isPendingProvision = app.last_sync_status === "PENDING_PROVISION";
+                          const isPendingProvision = app.last_sync_status === "PENDING_PROVISION" && isSsoGroup;
+                          const isLocked = Boolean(app.is_status_locked);
 
                           return (
                             <span
@@ -1317,6 +1361,8 @@ export default function DirectoryPage() {
                               title={
                                 app.is_approved_exception
                                   ? `ข้อยกเว้น: ${app.exception_type} (${app.exception_reason})`
+                                  : isLocked
+                                  ? `${app.app_name}: 🔒 ล็อคสิทธิ์โดย CIAM Admin (Spoke ห้ามแก้ไขกลับ)`
                                   : isPendingProvision
                                   ? `${app.app_name}: มอบสิทธิ์แล้ว รอสร้างบนระบบลูก (Pending Provision)`
                                   : isSpokeDisabled
@@ -1330,6 +1376,8 @@ export default function DirectoryPage() {
                                   ? "bg-purple-50 text-purple-900 border-purple-200"
                                   : !user.is_active_in_ad && isEffectiveActive && app.app_code.toLowerCase() !== "ad"
                                   ? "bg-amber-100 text-amber-950 border-amber-300"
+                                  : isLocked
+                                  ? "bg-amber-50 text-amber-950 border-amber-300 ring-1 ring-amber-400"
                                   : isPendingProvision
                                   ? "bg-sky-50 text-sky-900 border-sky-300"
                                   : isSpokeDisabled
@@ -1359,6 +1407,11 @@ export default function DirectoryPage() {
                                 }`}
                               ></span>
                               <span className="uppercase">{app.app_code}</span>
+                              {isLocked && (
+                                <span className="text-[9px]" title="ล็อคสิทธิ์เด็ดขาด">
+                                  🔒
+                                </span>
+                              )}
                               {isSpokeDisabled && (
                                 <span className="text-[8px] bg-amber-200 text-amber-950 px-0.5 rounded font-black">
                                   SPOKE
@@ -1893,7 +1946,13 @@ export default function DirectoryPage() {
                             </div>
 
                             <div className="flex flex-col items-end gap-1">
-                              {app.last_sync_status === "PENDING_PROVISION" ? (
+                              {app.is_status_locked && (
+                                <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-100 text-amber-950 border border-amber-300 flex items-center space-x-1" title="สถานะนี้ถูกล็อคเด็ดขาดโดย CIAM Admin ระบบลูกจะไม่สามารถเขียนทับได้">
+                                  <Lock className="w-3 h-3 text-amber-800" />
+                                  <span>ล็อคสิทธิ์โดย CIAM</span>
+                                </span>
+                              )}
+                              {app.last_sync_status === "PENDING_PROVISION" && app.sso_enabled ? (
                                 <span className="px-2 py-0.5 rounded text-xs font-bold bg-sky-100 text-sky-900 border border-sky-300">
                                   ⏳ รอสร้างในระบบลูก
                                 </span>
@@ -1967,6 +2026,32 @@ export default function DirectoryPage() {
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                                   )}
                                   <span>{isEffectiveActive ? "ระงับสิทธิ์ระบบนี้" : "เปิดใช้งานระบบนี้"}</span>
+                                </button>
+
+                                {/* CIAM Authority Lock Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleAppLock(selectedUser, app)}
+                                  disabled={lockingMappingId === app.mapping_id}
+                                  className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors cursor-pointer flex items-center space-x-1 border ${
+                                    app.is_status_locked
+                                      ? "bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-400"
+                                      : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-300"
+                                  }`}
+                                  title={
+                                    app.is_status_locked
+                                      ? "ปลดล็อคสิทธิ์ (อนุญาตให้ Spoke อัปเดตสถานะ)"
+                                      : "ล็อคสิทธิ์เด็ดขาด (ห้าม Spoke แก้ไขสถานะกลับ)"
+                                  }
+                                >
+                                  {lockingMappingId === app.mapping_id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : app.is_status_locked ? (
+                                    <Lock className="w-3 h-3 text-amber-800" />
+                                  ) : (
+                                    <Unlock className="w-3 h-3 text-slate-500" />
+                                  )}
+                                  <span>{app.is_status_locked ? "ปลดล็อค" : "🔒 ล็อคสิทธิ์"}</span>
                                 </button>
 
                                 <button

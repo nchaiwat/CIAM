@@ -24,6 +24,8 @@ class AppAccountSummary(BaseModel):
     status_origin: Optional[str] = "CIAM_ADMIN" # 'CIAM_ADMIN', 'SPOKE_APP', 'AD_INHERITED'
     status_updated_at: Optional[datetime] = None
     status_reason: Optional[str] = None
+    is_status_locked: bool = False
+    spoke_status_updated_at: Optional[datetime] = None
 
 class UserListItem(BaseModel):
     id: int
@@ -61,6 +63,11 @@ class AccountExceptionRequest(BaseModel):
 class AccountStatusUpdateRequest(BaseModel):
     is_active: bool
     reason: Optional[str] = "Individual system access update by administrator"
+    is_status_locked: Optional[bool] = None
+
+class AccountLockUpdateRequest(BaseModel):
+    is_status_locked: bool
+    reason: Optional[str] = "CIAM Admin authority lock toggled"
 
 class AccountActionResponse(BaseModel):
     status: str

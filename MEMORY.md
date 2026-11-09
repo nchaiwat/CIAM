@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 **Last Updated:** 2026-11-09  
-**Version:** 2.10.0 (Enterprise In-App 3-Layer Bot Defense & Spoke Framework Specification)  
+**Version:** 2.11.0 (Direct Infrastructure Isolation, Least Privilege, Timestamp Reconciliation & CIAM Authority Lock Standard)  
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 **Organization:** Window Asia Public Company Limited  
 **Repository Path:** `d:\Python\Central-IAM`  
@@ -226,6 +226,19 @@ FRONTEND_URL=http://localhost:3000
   * When a flagged user signs into Central IAM, `/portal` automatically displays a blocking Modal requiring an immediate password change before granting access.
 * **Spoke Direct Access Clarification:**
   * Local Accounts created on Central IAM **cannot log in directly to spoke applications** (e.g. IRM) using traditional login forms because spokes never receive or store plaintext passwords. Users must always authenticate via Central IAM SSO (`/portal`) to access connected spokes.
+
+### 4.10 Direct Infrastructure Isolation, Least Privilege & CIAM Authority Lock (Version 2.11.0)
+* **Direct Infrastructure Isolation (No WAIT for pfSense / M365 / SAP B1 / AD):**
+  - Direct Network & Infrastructure applications (`pfsense_ho`, `pfsense_fac`, `m365`, `sap_b1`, `ad`, `wa_rdt2`) are read-only inventory sources. They are NOT provisionable SSO apps.
+  - They **NEVER display `WAIT` (`PENDING_PROVISION`) status**.
+  - During sync, if an account does not exist in their live inventory, stale mappings are immediately purged. Only provisionable SSO apps (`is_provisionable_sso = True`) retain `PENDING_PROVISION` while awaiting Spoke confirmation.
+* **Least Privilege Auto-Provisioning:**
+  - When accounts are created from CIAM or pulled to Spoke, they start with lowest privileges (`Standard User` / `ciam_auto_provision_group`), preventing unauthorized elevation.
+* **Timestamp Reconciliation:**
+  - Sync reconciliation compares `status_updated_at` (CIAM) vs `spoke_status_updated_at` / `updated_at` (Spoke). Latest timestamp wins.
+* **CIAM Authority Lock (`is_status_locked`):**
+  - IT Super Admin can lock status via `[ 🔒 ล็อคสิทธิ์ ]` on `/directory`.
+  - Once locked, Spoke applications cannot override or re-enable the account during auto-sync or heartbeat. Central IAM rejects overrides with audit log `SPOKE_OVERRIDE_REJECTED`.
 
 ---
 

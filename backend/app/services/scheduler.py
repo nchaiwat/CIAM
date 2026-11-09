@@ -251,7 +251,15 @@ def persist_spoke_inventory(
         raw_last_login = item.get("last_login_at")
         if raw_last_login:
             try:
-                last_login_dt = datetime.fromisoformat(raw_last_login.replace("Z", "+00:00"))
+                last_login_dt = datetime.fromisoformat(str(raw_last_login).replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        spoke_updated_dt = None
+        raw_spoke_updated = item.get("status_updated_at") or item.get("updated_at")
+        if raw_spoke_updated:
+            try:
+                spoke_updated_dt = datetime.fromisoformat(str(raw_spoke_updated).replace("Z", "+00:00"))
             except Exception:
                 pass
 
@@ -267,32 +275,68 @@ def persist_spoke_inventory(
                 status_origin="AD_INHERITED" if is_ad_item else "SPOKE_APP",
                 status_updated_at=now,
                 status_reason=f"ตรวจพบบัญชีครั้งแรกจาก {app.app_name} ({act_desc})",
+                is_status_locked=False,
+                spoke_status_updated_at=spoke_updated_dt,
                 last_sync_status=sync_status,
                 last_app_login_at=last_login_dt,
                 created_at=now
             )
             db.add(mapping)
         else:
-            # Detect Spoke-Initiated Status Changes (Two-Way Bi-directional Sync)
-            if mapping.is_active_in_app != is_active:
-                old_status = mapping.is_active_in_app
-                mapping.is_active_in_app = is_active
-                mapping.status_origin = "AD_INHERITED" if is_ad_item else "SPOKE_APP"
-                mapping.status_updated_at = now
-                act_str = "เปิดใช้งาน" if is_active else "ระงับสิทธิ์"
-                mapping.status_reason = f"{act_str}โดย {app.app_name} (Inventory Sync)"
-                
-                db.add(IamAuditLog(
-                    actor_username=f"SYNC:{app.app_code.upper()}",
-                    action_type="SPOKE_STATUS_CHANGED",
-                    target_username=uname,
-                    affected_app_code=app.app_code,
-                    previous_status="ACTIVE" if old_status else "DISABLED",
-                    new_status="ACTIVE" if is_active else "DISABLED",
-                    execution_mode=app.connector_type,
-                    reason=f"ระบบลูก {app.app_name} ปรับสถานะเป็น {'เปิดใช้งาน' if is_active else 'ระงับสิทธิ์'} ผ่านการซิงก์ข้อมูล",
-                    status="SUCCESS"
-                ))
+            mapping.spoke_status_updated_at = spoke_updated_dt
+
+            # 1. CIAM Authority Lock: If CIAM Admin locked the status, Spoke CANNOT override!
+            if getattr(mapping, "is_status_locked", False):
+                if mapping.is_active_in_app != is_active:
+                    logger.warning(
+                        "Spoke Sync: User '%s' in %s has CIAM Authority Lock (%s). Ignoring Spoke's attempt to change to %s.",
+                        uname, app.app_code, mapping.is_active_in_app, is_active
+                    )
+                    db.add(IamAuditLog(
+                        actor_username=f"SYNC:{app.app_code.upper()}",
+                        action_type="SPOKE_OVERRIDE_REJECTED",
+                        target_username=uname,
+                        affected_app_code=app.app_code,
+                        previous_status="ACTIVE" if mapping.is_active_in_app else "DISABLED",
+                        new_status="ACTIVE" if is_active else "DISABLED",
+                        execution_mode=app.connector_type,
+                        reason=f"ระบบลูก {app.app_name} พยายามเปลี่ยนสถานะเป็น {'เปิดใช้งาน' if is_active else 'ระงับสิทธิ์'} แต่ถูกปฏิเสธเนื่องจากมีคำสั่ง Lock สิทธิ์โดย CIAM Admin",
+                        status="FAILED"
+                    ))
+            else:
+                # 2. Timestamp Comparison (Reconciliation):
+                # If Spoke sent status_updated_at and CIAM also has status_updated_at:
+                # Only let Spoke change status if Spoke's update is NEWER or equal to CIAM's update
+                should_update_status = (mapping.is_active_in_app != is_active)
+                if should_update_status and spoke_updated_dt and mapping.status_updated_at:
+                    spoke_utc = spoke_updated_dt if spoke_updated_dt.tzinfo else spoke_updated_dt.replace(tzinfo=timezone.utc)
+                    ciam_utc = mapping.status_updated_at if mapping.status_updated_at.tzinfo else mapping.status_updated_at.replace(tzinfo=timezone.utc)
+                    if ciam_utc > spoke_utc:
+                        should_update_status = False
+                        logger.info(
+                            "Spoke Sync: User '%s' in %s CIAM timestamp (%s) is newer than Spoke (%s); retaining CIAM status",
+                            uname, app.app_code, ciam_utc, spoke_utc
+                        )
+
+                if should_update_status:
+                    old_status = mapping.is_active_in_app
+                    mapping.is_active_in_app = is_active
+                    mapping.status_origin = "AD_INHERITED" if is_ad_item else "SPOKE_APP"
+                    mapping.status_updated_at = now
+                    act_str = "เปิดใช้งาน" if is_active else "ระงับสิทธิ์"
+                    mapping.status_reason = f"{act_str}โดย {app.app_name} (Inventory Sync)"
+
+                    db.add(IamAuditLog(
+                        actor_username=f"SYNC:{app.app_code.upper()}",
+                        action_type="SPOKE_STATUS_CHANGED",
+                        target_username=uname,
+                        affected_app_code=app.app_code,
+                        previous_status="ACTIVE" if old_status else "DISABLED",
+                        new_status="ACTIVE" if is_active else "DISABLED",
+                        execution_mode=app.connector_type,
+                        reason=f"ระบบลูก {app.app_name} ปรับสถานะเป็น {'เปิดใช้งาน' if is_active else 'ระงับสิทธิ์'} ผ่านการซิงก์ข้อมูล",
+                        status="SUCCESS"
+                    ))
 
             mapping.identity_id = identity.id
             mapping.app_username = uname
@@ -320,22 +364,33 @@ def persist_spoke_inventory(
             )
             .all()
         )
+        DIRECT_INFRA_CODES = {"pfsense_fac", "pfsense_ho", "m365", "sap_b1", "ad", "wa_rdt2"}
+        is_direct_infra = (
+            app.app_code.lower() in DIRECT_INFRA_CODES or
+            app.connector_type in ["RDP", "AD_PROXY"]
+        )
+        is_provisionable_sso = not is_direct_infra
+
         for stale in stale_mappings:
             if is_ad_item:
                 if stale.identity:
                     logger.info("AD Sync: User '%s' removed from AD. Setting is_active_in_ad = False", stale.app_username)
                     stale.identity.is_active_in_ad = False
                 db.delete(stale)
-            else:
-                # 🛡️ Protection against disappearing accounts:
-                # If an account was assigned or managed from CIAM, do NOT delete it blindly!
-                # Mark it as PENDING_PROVISION / UNSYNCED so it remains visible on CIAM.
+            elif is_provisionable_sso:
+                # 🛡️ Protection against disappearing accounts (ONLY for Provisionable SSO Apps):
+                # If an account was assigned or managed from CIAM, retain with PENDING_PROVISION
                 if getattr(stale, "status_origin", None) == "CIAM_ADMIN" or stale.is_active_in_app:
                     logger.info("Spoke Sync: User '%s' not present in %s inventory; retaining mapping with PENDING_PROVISION", stale.app_username, app.app_code)
                     stale.last_sync_status = "PENDING_PROVISION"
                     stale.status_reason = f"ยังไม่พบบัญชีใน {app.app_name} (รอการสร้างหรือเข้าใช้งานครั้งแรก)"
                 else:
                     db.delete(stale)
+            else:
+                # 🏢 Direct / Infrastructure Systems (pfSense, M365, SAP B1):
+                # CIAM is NOT the provisioner. If not present in live inventory, remove mapping immediately!
+                logger.info("Direct Infra Sync: User '%s' not in %s live inventory; removing mapping (No WAIT for Direct Infra)", stale.app_username, app.app_code)
+                db.delete(stale)
 
         db.flush()
 

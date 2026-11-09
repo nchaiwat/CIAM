@@ -69,6 +69,24 @@ def init_db():
                 conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN status_updated_at TIMESTAMP WITH TIME ZONE;"))
             if "status_reason" not in mapping_columns:
                 conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN status_reason VARCHAR(255);"))
+            if "is_status_locked" not in mapping_columns:
+                conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN is_status_locked BOOLEAN DEFAULT FALSE;"))
+            if "spoke_status_updated_at" not in mapping_columns:
+                conn.execute(text("ALTER TABLE app_account_mappings ADD COLUMN spoke_status_updated_at TIMESTAMP WITH TIME ZONE;"))
+
+            # Auto-clean: Purge erroneous PENDING_PROVISION from non-SSO / direct infrastructure systems
+            try:
+                conn.execute(text("""
+                    DELETE FROM app_account_mappings 
+                    WHERE last_sync_status = 'PENDING_PROVISION' 
+                    AND application_id IN (
+                        SELECT id FROM connected_applications 
+                        WHERE LOWER(app_code) IN ('pfsense_ho', 'pfsense_fac', 'm365', 'sap_b1', 'ad', 'wa_rdt2')
+                        OR sso_enabled = FALSE
+                    );
+                """))
+            except Exception as clean_err:
+                logger.debug("Auto-clean direct infra PENDING_PROVISION: %s", clean_err)
 
             # Safe auto-migration for connected_applications
             app_columns = [c["name"] for c in inspector.get_columns("connected_applications")]

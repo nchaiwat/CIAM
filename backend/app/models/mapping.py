@@ -16,6 +16,8 @@ class AppAccountMapping(Base):
     status_origin = Column(String(50), default="CIAM_ADMIN", nullable=True) # 'CIAM_ADMIN', 'SPOKE_APP', 'AD_INHERITED'
     status_updated_at = Column(DateTime(timezone=True), nullable=True)
     status_reason = Column(String(255), nullable=True)
+    is_status_locked = Column(Boolean, default=False, nullable=False) # True = CIAM Admin Locked (Spoke cannot override)
+    spoke_status_updated_at = Column(DateTime(timezone=True), nullable=True) # Timestamp reported by Spoke application
     last_sync_status = Column(String(50), default="IN_SYNC", nullable=False) # 'IN_SYNC', 'DISCREPANCY'
     last_app_login_at = Column(DateTime(timezone=True), nullable=True)
     is_approved_exception = Column(Boolean, default=False, nullable=False)

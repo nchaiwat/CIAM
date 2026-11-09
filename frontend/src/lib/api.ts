@@ -60,6 +60,8 @@ export interface AppAccountSummary {
   status_origin?: string | null;
   status_updated_at?: string | null;
   status_reason?: string | null;
+  is_status_locked?: boolean;
+  spoke_status_updated_at?: string | null;
 }
 
 export interface SpokeProvisionTarget {
@@ -413,8 +415,14 @@ export const ciamApi = {
       method: "DELETE",
     }),
 
-  updateAccountStatus: (mappingId: number, payload: { is_active: boolean; reason?: string }) =>
+  updateAccountStatus: (mappingId: number, payload: { is_active: boolean; reason?: string; is_status_locked?: boolean }) =>
     fetchApi<AccountActionResponse>(`/directory/accounts/${mappingId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  toggleAccountLock: (mappingId: number, payload: { is_status_locked: boolean; reason?: string }) =>
+    fetchApi<AccountActionResponse>(`/directory/accounts/${mappingId}/lock`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),

@@ -1,7 +1,7 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Current Version:** 2.10.0 (Enterprise In-App Bot Defense & Anti-Brute-Force Framework Standard)  
-**Effective Date:** 9 พฤศจิกายน 2026 (09/11/2026)  
+**Current Version:** 2.11.0 (Direct Infrastructure Isolation, Least Privilege, Timestamp Reconciliation & CIAM Authority Lock Standard)  
+**Effective Date:** 10 พฤศจิกายน 2026 (10/11/2026)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
 **Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
 **Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636) / OAuth 2.0 Security BCP (RFC 9700) / Model Context Protocol (MCP)
@@ -14,7 +14,8 @@
 
 | เวอร์ชัน (Version) | วันที่มีผล (Date) | สถานะ (Status) | สรุปรายการปรับปรุงจากเวอร์ชันก่อนหน้า (Change Summary & Key Differences) |
 | :---: | :---: | :---: | :--- |
-| **v2.10.0** | 09/11/2026 | **Current Active** | • **หมวด F: Enterprise In-App Bot Defense & Anti-Brute-Force Framework Standard:** กำหนดมาตรฐานการป้องกันบอทและ Brute-Force ภายในแอปพลิเคชัน 3 ชั้น (3-Layer Defense) สำหรับ Spoke ทุกระบบ ได้แก่ 1) Sliding-Window IP Rate Limiting 10 req/min, 2) Decoy Honeypot Trap ฟิลด์หลอก `corporate_fax` / `security_honey`, 3) Form Submission Velocity & Timing Guard (< 400ms rejection) เพื่อความปลอดภัยสูงสุดโดยไม่ต้องพึ่งพาบริการภายนอกหรือย้าย DNS |
+| **v2.11.0** | 10/11/2026 | **Current Active** | • **หมวด D.7: มาตรฐานการแบ่งแยกระบบ Direct Infra vs SSO Spoke, สิทธิ์ต่ำสุด (Least Privilege), การเทียบเวลา (Timestamp Reconciliation) และการล็อคสิทธิ์เด็ดขาด (CIAM Authority Lock):**<br/>1) **Direct Infrastructure Isolation:** แยกความแตกต่างระหว่างระบบโครงสร้างพื้นฐานระดับ Network/Directory (pfSense, M365, SAP B1, AD) ที่เป็น Read-Only Inventory กับระบบลูก SSO แบบสมบูรณ์ (IRM, QMS, MTPulse) อย่างเด็ดขาด โดยระบบ Direct Infra จะไม่มีสถานะ `WAIT` (`PENDING_PROVISION`) ค้าง หากไม่พบบัญชีในระบบจริงจะถูกตัดออกจากรายการทันที<br/>2) **Least Privilege Auto-Provisioning:** การสร้างบัญชีผู้ใช้ใหม่จาก CIAM หรือเมื่อระบบลูกดึงบัญชีไปสร้าง ต้องกำหนดสิทธิ์เริ่มต้นเป็นบทบาทต่ำสุดเสมอ (`Standard User` / `Viewer`) ตาม `ciam_auto_provision_group` ห้ามตั้งสิทธิ์ Admin โดยพลการ<br/>3) **Timestamp Reconciliation:** ใช้เวลาการเปลี่ยนแปลงล่าสุด (`status_updated_at` เทียบกับ `spoke_status_updated_at`) เป็นเกณฑ์ตัดสินสถานะจริง (Latest Update Wins)<br/>4) **CIAM Authority Lock Standard (`is_status_locked`):** แอดมิน CIAM สามารถกดล็อคสิทธิ์เด็ดขาดเพื่อตรึงสถานะ ป้องกันไม่ให้ระบบลูกส่งสถานะมาทับหรือเปิดใช้งานคืนโดยพลการ |
+| **v2.10.0** | 09/11/2026 | Superseded | • **หมวด F: Enterprise In-App Bot Defense & Anti-Brute-Force Framework Standard:** กำหนดมาตรฐานการป้องกันบอทและ Brute-Force ภายในแอปพลิเคชัน 3 ชั้น (3-Layer Defense) สำหรับ Spoke ทุกระบบ ได้แก่ 1) Sliding-Window IP Rate Limiting 10 req/min, 2) Decoy Honeypot Trap ฟิลด์หลอก `corporate_fax` / `security_honey`, 3) Form Submission Velocity & Timing Guard (< 400ms rejection) เพื่อความปลอดภัยสูงสุดโดยไม่ต้องพึ่งพาบริการภายนอกหรือย้าย DNS |
 | **v2.9.0** | 22/10/2026 | Superseded | • **หมวด D.6: True 2-Way Bi-directional Status Sync & Origin Tracking (มาตรฐานการซิงก์สถานะสองทางแบบใครเริ่มก่อนมีผลทันที):** กำหนดให้การเปลี่ยนแปลงสถานะบัญชี (เปิดใช้งาน / ระงับสิทธิ์) ที่เริ่มต้นจากฝั่งใด (ไม่ว่าจะเริ่มที่หน้าเว็บ CIAM หรือเริ่มที่หลังบ้านของ App Client) ต้องส่งผลไปยังอีกฝั่งโดยตรง (First-Action Wins with Origin Tracking)<br/>• **Status Origin Tracking (`status_origin`, `status_updated_at`, `status_reason`):** ระบบ CIAM จะบันทึกที่มาของการเปลี่ยนสถานะอย่างโปร่งใส (`CIAM_ADMIN`, `SPOKE_APP`, `AD_INHERITED`) หากระบบลูกส่งสถานะ Inactive มา CIAM จะยอมรับสถานะและไม่ส่งคำสั่ง `PROVISION_USER` หรือ `ENABLE_USER` ไปบังคับเปิดคืนให้ Spoke โดยเด็ดขาด<br/>• **Account Preservation (No Blind Deletion):** ป้องกันปัญหาบัญชีหาย โดยกำหนดให้ CIAM ไม่ลบการผูกสิทธิ์ (`AppAccountMapping`) ที่สร้างจากระบบกลางทิ้งแบบเงียบๆ หาก Spoke ยังไม่ได้สร้างในระบบตนเอง ให้คงสถานะเป็น `PENDING_PROVISION` เพื่อรอการซิงก์<br/>• **SSO Callback Inactive Guard (หมวด B.3):** กำหนดให้ Spoke ตรวจสอบสถานะบัญชีในระบบตนเอง หากบัญชีถูกระงับสิทธิ์จากฝั่ง Spoke เอง หรือถูกระงับสิทธิ์จาก CIAM ต้องปฏิเสธการล็อกอิน และห้ามปลดล็อก Active คืนอัตโนมัติเด็ดขาด |
 | **v2.8.0** | 17/10/2026 | Superseded | • **หมวด E: ข้อกำหนดมาตรฐาน In-App AI Copilot & MCP Tools ประจำระบบลูก (Spoke AI Assistant & Dynamic Settings Standard):** กำหนดมาตรฐานสำหรับ Spoke Application ที่ต้องการมีหน้าต่างแชท AI ประจำระบบของตนเอง ให้จัดเก็บการตั้งค่าแบบไดนามิกลงในตาราง `system_settings` (`ai_copilot_enabled`, `ai_provider`, `ai_api_key`, `ai_model`, `ai_system_prompt`) และบังคับให้ปิดการแสดงผลหน้า Chat หรือ Floating Widget อัตโนมัติเมื่อ `ai_copilot_enabled: false` หรือยังไม่ได้ระบุ API Key เพื่อความปลอดภัยและประหยัดค่าใช้จ่าย<br/>• **Model Context Protocol (MCP) Integration:** กำหนดแนวทางให้ AI ประจำ Spoke สามารถเรียกใช้งาน Central IAM Core MCP Server (Remote SSE over HTTPS via Bearer token) เพื่อตรวจเช็คความปลอดภัยของบัญชีผู้ใช้ และอนุญาตให้ Spoke พัฒนา MCP Tools ประจำระบบของตนเองได้ |
 | **v2.7.0** | 08/10/2026 | Superseded | • **Mode C Two-Way Directory Reconciliation & Auto-Provisioning (หมวด D.2, D.4):** กำหนดให้การเชื่อมต่อ Mode C เป็นแบบ Two-Way Reconciliation อย่างแท้จริง โดยเมื่อ Spoke ส่ง Heartbeat / Full Sync ขึ้นมา CIAM จะเปรียบเทียบกับบัญชีที่ได้รับสิทธิ์ใน CIAM (`AppAccountMapping`). หาก CIAM มีบัญชีใหม่ที่ Spoke ยังไม่มี CIAM จะส่ง `assigned_accounts` และคำสั่ง `PROVISION_USER` กลับไปเพื่อให้ Spoke สร้างบัญชีใน Local Database ทันที (Role เริ่มต้นตาม `ciam_auto_provision_group`, `is_active: true`) และส่งคำสั่ง `DISABLE_USER` หากถูกระงับสิทธิ์ ทำให้จำนวนและสถานะตรงกัน 100% โดยไม่ต้องรอ User ล็อกอิน<br/>• **Mandatory Spoke Mode C Immediate Sync Button (หมวด D.4, 5.1):** ข้อบังคับสำหรับ Spoke Mode C ต้องมีปุ่ม **`[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]` (Immediate Account Sync)** บนหน้าจอ System Setting เพื่อให้ Admin สั่งแลกเปลี่ยนข้อมูลและปรับยอดจำนวนบัญชีรวมถึงสถานะ Active/Inactive ให้ตรงกันได้แบบเรียลไทม์โดยไม่ต้องรอรอบเวลา 120 วินาที<br/>• **RFC 9700 Seamless SSO Bounce Standard (หมวด B.3):** กำหนดมาตรฐานการเปิดใช้งานจาก Employee Portal ผ่าน SSO Start Endpoint (`/auth/start`) เพื่อให้ Spoke ผูก Client State & PKCE กับเบราว์เซอร์ได้สมบูรณ์ 100% ตามคำแนะนำ RFC 9700 |
@@ -965,6 +966,43 @@ sudo systemctl start ciam-agent
   1. Central IAM จะ **ไม่ลบการผูกสิทธิ์ทิ้งแบบเงียบๆ** หากบัญชีนั้นถูกสร้างหรือมอบหมายจากระบบกลาง (`status_origin == 'CIAM_ADMIN'`)
   2. CIAM จะปรับสถานะการซิงก์เป็น **`PENDING_PROVISION`** (รอสร้างในระบบลูก) และคงการ์ดสิทธิ์ไว้บนหน้าจอ เพื่อรอให้ระบบลูกประมวลผลคำสั่งหรือพนักงานล็อกอิน SSO ครั้งแรกสำเร็จ
   3. การลบการผูกสิทธิ์จะเกิดขึ้นต่อเมื่อผู้ดูแลระบบกดปุ่ม "ยกเลิกสิทธิ์ระบบนี้" (Unassign / Revoke) จากหน้าจอ CIAM เท่านั้น
+
+---
+
+#### D.7 ข้อกำหนดมาตรฐานการแบ่งแยกระบบ Direct Infra vs SSO Spoke, สิทธิ์ต่ำสุด, การเทียบเวลา และการล็อคสิทธิ์เด็ดขาดโดย Central IAM (Authority Lock Standard)
+
+เพื่อให้สถาปัตยกรรมการควบคุมตัวตนขององค์กรมีความโปร่งใส แม่นยำ และลดความสับสนระหว่างระบบโครงสร้างพื้นฐานระดับ Core Network กับระบบงานสารสนเทศ (Spoke Business Applications):
+
+##### 1. การแบ่งแยกระบบโครงสร้างพื้นฐาน (Direct Infrastructure Systems) ออกจากระบบลูก SSO
+1. **ระบบประเภทโครงสร้างพื้นฐานตรง (Direct Infrastructure Systems เช่น pfSense HO, pfSense FAC, M365, SAP B1, Active Directory):**
+   - เป็นระบบระดับเครือข่าย อีเมล หรือ ERP หลักขององค์กร ซึ่งไม่ได้เป็น SSO Spoke Client และ CIAM ทำหน้าที่เป็น **Inventory Auditor (อ่านข้อมูลและตรวจสอบบัญชีผี)** เท่านั้น ไม่สามารถส่งคำสั่ง Auto-Provisioning หรือสร้างบัญชีจากหน้า CIAM ไปยังระบบเหล่านี้ได้
+   - **กฎเหล็กการแสดงผลสถานะ WAIT:** ระบบ Direct Infrastructure จะ **ไม่มีสถานะ WAIT (`PENDING_PROVISION`) โดยเด็ดขาด 100%**
+   - หากในรอบซิงก์ 04:00 น. หรือ Immediate Sync ไม่พบบัญชีผู้ใช้ใน Live Inventory ของระบบเหล่านี้ ระบบ CIAM จะทำการตัด Mapping ออกจากตารางแสดงผลทันที เพื่อไม่ให้เกิดความเข้าใจผิดว่ากำลัง "รอระบบปลายทางสร้างบัญชี"
+2. **ระบบลูกที่รองรับ SSO และการ Provisioning (Provisionable SSO Spokes เช่น IRM, QMS, MTPulse, QOL, WorkSync):**
+   - เป็นระบบงานที่รองรับการมอบสิทธิ์และสร้างบัญชีจากส่วนกลาง (Centralized Access Assignment)
+   - หากผู้ดูแลระบบ CIAM ทำการมอบสิทธิ์ระบบลูกเหล่านี้ให้กับพนักงาน แต่ระบบลูกยังไม่มีบัญชีใน Local Database ระบบจะคงสถานะ **`WAIT` (`PENDING_PROVISION`)** ไว้บนหน้าจออย่างถูกต้อง เพื่อรอคำสั่ง Provisioning ทำงาน หรือรอให้พนักงานล็อกอิน SSO ครั้งแรก (Just-In-Time)
+
+##### 2. มาตรฐานการสร้างบัญชีตามหลักสิทธิ์ต่ำสุด (Least Privilege Auto-Provisioning)
+* **การสร้างบัญชีผู้ใช้ใหม่ (User Creation Lifecycle):**
+  1. ระบบลูกสามารถสร้างบัญชีผู้ใช้ใหม่ที่หน้างานหรือหลังบ้านของระบบตนเองได้ตาม Work Process ปกติ เมื่อถึงรอบซิงก์ 04:00 น. หรือเมื่อกดปุ่ม Immediate Sync ข้อมูลบัญชีจะวิ่งขึ้นมารายงานตัวที่ Central IAM Console โดยอัตโนมัติ
+  2. ในกรณีที่สร้างหรือมอบหมายสิทธิ์จากหน้าจอ Central IAM ไปยังระบบลูก: ระบบลูก **ต้องกำหนดบทบาทเริ่มต้นด้วยสิทธิ์ต่ำสุดเสมอ (Lowest Privilege / Standard User / Viewer)** ตามกลุ่มที่กำหนดไว้ใน `ciam_auto_provision_group` ห้ามมอบหมายสิทธิ์ระดับสูง (Admin, Approver, Financial Privileges) ให้โดยพลการ
+  3. หากพนักงานต้องการสิทธิ์เพิ่มเติม ให้ผู้ดูแลระบบของระบบลูกเป็นผู้ปรับระดับสิทธิ์ในระบบตนเอง หรือส่งคำร้องขอสิทธิ์ตามขั้นตอน IT Governance
+
+##### 3. การเทียบเวลาเพื่อตัดสินสถานะจริง (Timestamp Reconciliation Standard)
+* ในการซิงก์แลกเปลี่ยนสถานะผู้ใช้งาน (Active / Inactive) ระหว่าง Central IAM และระบบลูก (ทั้งรอบ Auto-Sync 04:00 น. และ Immediate Sync):
+  - ระบบจะเปรียบเทียบวันเวลาที่มีการเปลี่ยนแปลงสถานะล่าสุดระหว่างทั้งสองฝั่ง:
+    - เวลาที่สถานะถูกแก้ไขบน CIAM (`status_updated_at`)
+    - เวลาที่สถานะถูกแก้ไขบน Spoke (`spoke_status_updated_at` หรือ `updated_at` จากก้อนข้อมูลบัญชี)
+  - **หลักการ Timestamp Reconciliation:** ฝั่งที่มีการแก้ไข **ล่าสุดที่สุด (Latest Timestamp Wins)** จะเป็นฝ่ายชนะ และสถานะนั้นจะมีผลบังคับใช้ เพื่อให้ทั้งสองระบบมีข้อมูลสอดคล้องตรงกันตามการปฏิบัติงานจริง
+
+##### 4. มาตรฐานการล็อคสิทธิ์เด็ดขาดโดย Central IAM (CIAM Authority Lock Standard)
+* สำหรับบัญชีผู้ใช้ที่ผู้บริหาร IT หรือ Security Auditor ต้องการควบคุมอย่างเข้มงวดเป็นพิเศษ ป้องกันไม่ให้แอดมินระบบลูกแอบเปิดใช้งานหรือเปลี่ยนแปลงสถานะคืน:
+  - ผู้ดูแลระบบ Super Admin ของ Central IAM สามารถกดปุ่ม **`[ 🔒 ล็อคสิทธิ์ ]` (`is_status_locked = true`)** ที่หน้ารายละเอียดผู้ใช้งาน (`/directory`)
+  - **ผลบังคับใช้ระดับระบบ (Enforcement Rule):**
+    1. เมื่อบัญชีนั้นถูกล็อคสิทธิ์ (`is_status_locked == true`) ไม่ว่าจะอยู่ในสถานะ `Active` หรือ `Inactive` ระบบลูกจะ **ไม่สามารถเปลี่ยนแปลงสถานะนี้ได้อีกต่อไป**
+    2. ในรอบการซิงก์ หากระบบลูกส่งสถานะที่ขัดแย้งกับสถานะที่ CIAM ล็อคไว้ ระบบ CIAM จะ **ปฏิเสธการเปลี่ยนแปลงจาก Spoke ทันที (Reject Spoke Override)**
+    3. ระบบ CIAM จะบันทึก Audit Log ชนิด **`SPOKE_OVERRIDE_REJECTED`** เพื่อแจ้งเตือนว่ามีความพยายามเปลี่ยนสถานะบัญชีที่ถูกล็อคโดยส่วนกลาง
+    4. การปลดล็อคสามารถทำได้โดย Super Admin จากหน้าจอ Central IAM เท่านั้น ผ่านปุ่ม **`[ ปลดล็อค ]`**
 
 ---
 

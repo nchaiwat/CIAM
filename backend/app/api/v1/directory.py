@@ -23,6 +23,7 @@ from app.schemas.directory import (
     AccountLinkRequest,
     AccountExceptionRequest,
     AccountStatusUpdateRequest,
+    AccountLockUpdateRequest,
     AccountActionResponse,
     LocalPortalAccountRequest,
     LocalPortalAccountResponse,
@@ -107,7 +108,7 @@ def _build_app_summaries(mappings: list, identity_is_active_in_ad: Optional[bool
                 app_username=m.app_username,
                 app_group_name=m.app_group_name,
                 is_active_in_app=is_act,
-                last_sync_status=m.last_sync_status,
+                last_sync_status="IN_SYNC" if (not getattr(app, "sso_enabled", False) and m.last_sync_status == "PENDING_PROVISION") else m.last_sync_status,
                 last_app_login_at=m.last_app_login_at,
                 created_at=m_created,
                 days_since_last_login=days_login,
@@ -120,6 +121,8 @@ def _build_app_summaries(mappings: list, identity_is_active_in_ad: Optional[bool
                 status_origin=getattr(m, "status_origin", "CIAM_ADMIN") or "CIAM_ADMIN",
                 status_updated_at=getattr(m, "status_updated_at", None),
                 status_reason=getattr(m, "status_reason", None),
+                is_status_locked=bool(getattr(m, "is_status_locked", False)),
+                spoke_status_updated_at=getattr(m, "spoke_status_updated_at", None),
             )
         )
     # Sort alphabetically by app_code so everyone has consistent sequence
@@ -829,6 +832,8 @@ async def update_account_status(
     mapping.is_active_in_app = payload.is_active
     mapping.status_origin = "CIAM_ADMIN"
     mapping.status_updated_at = now
+    if payload.is_status_locked is not None:
+        mapping.is_status_locked = payload.is_status_locked
     action_label = "เปิดใช้งาน" if payload.is_active else "ระงับสิทธิ์"
     mapping.status_reason = payload.reason or f"{action_label}โดย Admin ({current_admin.username}) จากหน้า CIAM Console"
 
@@ -891,8 +896,57 @@ async def update_account_status(
             "app_name": app_name,
             "app_username": target_username,
             "is_active_in_app": mapping.is_active_in_app,
+            "is_status_locked": mapping.is_status_locked,
             "connector_message": connector_msg
         }
+    )
+
+
+@router.patch("/accounts/{mapping_id}/lock", response_model=AccountActionResponse)
+async def toggle_account_lock(
+    mapping_id: int,
+    payload: AccountLockUpdateRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """
+    Lock or unlock authority status on a spoke application mapping.
+    When locked, Spoke applications cannot override or re-enable the account during sync.
+    """
+    mapping = db.query(AppAccountMapping).filter_by(id=mapping_id).first()
+    if not mapping:
+        raise HTTPException(status_code=404, detail="ไม่พบบัญชีระบบลูกที่ระบุ (AppAccountMapping not found)")
+
+    app = mapping.application
+    app_name = app.app_name if app else "ระบบลูก"
+    app_code = app.app_code if app else "spoke"
+    target_username = mapping.app_username
+
+    prev_locked = mapping.is_status_locked
+    mapping.is_status_locked = payload.is_status_locked
+    now = datetime.now(timezone.utc)
+    mapping.status_updated_at = now
+    lock_label = "ล็อคสิทธิ์เด็ดขาด" if payload.is_status_locked else "ปลดล็อคสิทธิ์"
+
+    audit_action = "ADMIN_LOCK_STATUS" if payload.is_status_locked else "ADMIN_UNLOCK_STATUS"
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type=audit_action,
+        target_username=target_username,
+        affected_app_code=app_code,
+        previous_status="LOCKED" if prev_locked else "UNLOCKED",
+        new_status="LOCKED" if payload.is_status_locked else "UNLOCKED",
+        execution_mode="CIAM_CONSOLE",
+        reason=f"{lock_label} ระบบ '{app_name}' ({app_code.upper()}) สำหรับบัญชี '{target_username}': {payload.reason}",
+        status="SUCCESS"
+    ))
+    db.commit()
+
+    return AccountActionResponse(
+        status="SUCCESS",
+        message=f"{lock_label}สำหรับบัญชี '{target_username}' บนระบบ {app_name} เรียบร้อยแล้ว (Spoke ไม่สามารถเขียนทับได้)",
+        details={"mapping_id": mapping.id, "is_status_locked": mapping.is_status_locked}
     )
 
 

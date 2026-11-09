@@ -96,7 +96,7 @@ export default function ApplicationsPage() {
       });
       if (!res.ok) throw new Error(`Download failed with status ${res.status}`);
       // Try to parse filename from Content-Disposition header if available
-      let filename = "CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.10.0.md";
+      let filename = "CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.11.0.md";
       const disposition = res.headers.get("content-disposition");
       if (disposition && disposition.includes("filename=")) {
         const match = disposition.match(/filename=["']?([^"']+)["']?/);
@@ -607,12 +607,12 @@ export default function ApplicationsPage() {
             {isDownloadingSpec ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
-                <span>กำลังเตรียมไฟล์ (v2.10.0)...</span>
+                <span>กำลังเตรียมไฟล์ (v2.11.0)...</span>
               </>
             ) : (
               <>
                 <Download className="w-4 h-4 text-emerald-600" />
-                <span>📥 สเปกเชื่อมต่อ (.md v2.10.0)</span>
+                <span>📥 สเปกเชื่อมต่อ (.md v2.11.0)</span>
               </>
             )}
           </button>
@@ -3040,7 +3040,7 @@ export default function ApplicationsPage() {
                 <Clock className="w-3.5 h-3.5" />
                 <span>📜 ประวัติการปรับปรุงสเปก (Revision Changelog)</span>
                 <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1">
-                  v2.10.0
+                  v2.11.0
                 </span>
               </button>
             </div>
@@ -3052,14 +3052,14 @@ export default function ApplicationsPage() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center space-x-2.5">
                       <span className="px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-500 text-slate-950">
-                        v2.10.0 ล่าสุด
+                        v2.11.0 ล่าสุด
                       </span>
                       <h4 className="font-extrabold text-sm text-white">
                         Enterprise Spoke Integration Standard
                       </h4>
                     </div>
                     <div className="text-[11px] text-slate-300 font-medium">
-                      วันที่มีผล: <span className="font-bold text-white">9 พฤศจิกายน 2026</span> • มาตรฐานความปลอดภัย ISO 27001
+                      วันที่มีผล: <span className="font-bold text-white">10 พฤศจิกายน 2026</span> • มาตรฐานความปลอดภัย ISO 27001
                     </div>
                   </div>
                   <p className="text-xs text-slate-300 leading-relaxed">
@@ -3069,15 +3069,32 @@ export default function ApplicationsPage() {
 
                 {/* Changelog Timeline */}
                 <div className="space-y-3">
-                  {/* v2.10.0 */}
+                  {/* v2.11.0 */}
                   <div className="p-3.5 rounded-lg border-2 border-emerald-300 bg-emerald-50/40 space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center space-x-2">
-                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.10.0</span>
-                        <span className="font-bold text-emerald-950">หมวด F: Enterprise In-App Bot Defense &amp; Anti-Brute-Force Framework Standard</span>
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.11.0</span>
+                        <span className="font-bold text-emerald-950">หมวด D.7: Direct Infra Isolation, Least Privilege, Timestamp Reconciliation &amp; CIAM Authority Lock</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                           Active Current
                         </span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">10/11/2026</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-700 text-[11.5px] leading-relaxed">
+                      <li><strong>Direct Infrastructure Isolation:</strong> แยกความแตกต่างชัดเจนระหว่างระบบโครงสร้างพื้นฐานตรง (pfSense FAC/HO, M365, SAP B1, AD) ที่เป็น Read-Only Inventory กับระบบลูก SSO แบบสมบูรณ์ (IRM, QMS, MTPulse) โดยระบบโครงสร้างพื้นฐานจะ<strong>ไม่มีสถานะ WAIT (Pending Provision) โดยเด็ดขาด</strong> หากไม่พบบัญชีในรอบซิงก์จะตัดออกจากรายการทันที</li>
+                      <li><strong>Least Privilege Auto-Provisioning:</strong> การสร้างบัญชีผู้ใช้ใหม่จาก CIAM หรือเมื่อระบบลูกดึงบัญชีไปสร้าง ต้องกำหนดสิทธิ์เริ่มต้นเป็นบทบาทต่ำสุดเสมอ (<code>Standard User</code> / <code>Viewer</code>) ตาม <code>ciam_auto_provision_group</code> ห้ามตั้งสิทธิ์ Admin หรือสิทธิ์ระดับสูงโดยพลการ</li>
+                      <li><strong>Timestamp Reconciliation:</strong> ใช้เวลาการเปลี่ยนแปลงล่าสุด (<code>status_updated_at</code> เทียบกับ <code>spoke_status_updated_at</code>) เป็นเกณฑ์ตัดสินสถานะจริง (Latest Update Wins)</li>
+                      <li><strong>CIAM Authority Lock (<code>[ 🔒 ล็อคสิทธิ์ ]</code>):</strong> แอดมิน CIAM สามารถกดล็อคสิทธิ์เด็ดขาดเพื่อตรึงสถานะ (Active/Inactive) ป้องกันไม่ให้ระบบลูกส่งสถานะมาทับหรือเปิดใช้งานคืนโดยพลการ พร้อม Audit Log <code>SPOKE_OVERRIDE_REJECTED</code></li>
+                    </ul>
+                  </div>
+
+                  {/* v2.10.0 */}
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded font-bold text-xs bg-slate-600 text-white">v2.10.0</span>
+                        <span className="font-bold text-slate-800">หมวด F: Enterprise In-App Bot Defense &amp; Anti-Brute-Force Framework Standard</span>
                       </div>
                       <span className="text-[11px] text-slate-500 font-medium">09/11/2026</span>
                     </div>

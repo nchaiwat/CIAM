@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 9 พฤศจิกายน 2026 (Local Time: ~20:00 ICT)  
+> **Date Updated:** 10 พฤศจิกายน 2026 (Local Time: ~05:30 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 92/92 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: feat(bot-defense): enterprise in-app 3-layer bot defense and spoke framework specification v2.10.0
+> **Test Integrity:** Backend Pytest: 94/94 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready — Latest Commit: feat(governance): direct infra isolation, timestamp reconciliation and ciam authority lock standard v2.11.0
 
 ---
 
@@ -15,7 +15,23 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Enterprise In-App 3-Layer Bot Defense & Spoke Framework Specification v2.10.0 (Sprint 53):**
+1. **Direct Infrastructure Isolation, Timestamp Reconciliation & CIAM Authority Lock Standard v2.11.0 (Sprint 54):**
+   - **แยกความแตกต่างระหว่าง Direct Infrastructure Systems กับ SSO Spoke Systems:**
+     - ระบบโครงสร้างพื้นฐานตรง (`pfSense FAC`, `pfSense HO`, `M365`, `SAP B1`, `AD`, `WA-RDT2`) เป็นเพียง Inventory Source สำหรับอ่านข้อมูลและตรวจสอบบัญชีผี (Safe Audit) ไม่สามารถรับคำสั่ง Auto-Provisioning ได้
+     - **กฎเหล็ก No WAIT for Direct Infra:** ระบบกลุ่มนี้จะ **ไม่มีสถานะ WAIT (`PENDING_PROVISION`) ค้างโดยเด็ดขาด 100%** หากในรอบซิงก์ 04:00 น. ไม่พบบัญชีในระบบจริง ระบบ CIAM จะตัด Mapping ออกจากตารางแสดงผลทันที เพื่อไม่ให้เกิดความสับสน
+     - ระบบลูก SSO แท้จริง (`IRM`, `QMS`, `MTPulse`, `QOL`, ฯลฯ) จะคงสถานะ `WAIT` (`PENDING_PROVISION`) เฉพาะเมื่อแอดมินมอบหมายสิทธิ์จาก CIAM และรอ Spoke สร้างหรือรอผู้ใช้ล็อกอิน SSO ครั้งแรก (Just-In-Time)
+   - **มาตรฐาน Least Privilege Auto-Provisioning:**
+     - บัญชีที่ถูกสร้างใหม่จากหน้าจอ CIAM หรือดึงไปสร้างที่ Spoke จะได้รับบทบาทเริ่มต้นเป็นสิทธิ์ต่ำสุดเสมอ (`Standard User` / `Viewer`) ตาม `ciam_auto_provision_group` ห้ามมอบหมายสิทธิ์ระดับสูงโดยพลการ
+   - **Timestamp Reconciliation (เปรียบเทียบเวลาล่าสุด):**
+     - ตรวจสอบ `status_updated_at` (CIAM) เทียบกับ `spoke_status_updated_at` / `updated_at` (Spoke) ฝั่งที่มีการแก้ไขล่าสุด (Latest Timestamp Wins) จะเป็นฝ่ายชนะ เพื่อให้สถานะสอดคล้องกับการใช้งานจริง
+   - **CIAM Authority Lock (`[ 🔒 ล็อคสิทธิ์ ]` / `is_status_locked`):**
+     - แอดมิน CIAM สามารถกดล็อคสิทธิ์บัญชีใดๆ ในระบบลูกได้ทันทีจาก Drawer รายละเอียดผู้ใช้ (`/directory`)
+     - เมื่อล็อคสิทธิ์แล้ว ระบบลูกจะไม่สามารถส่งสถานะมาทับหรือเปิดใช้งานคืนในรอบ Auto-Sync / Heartbeat ได้อีกต่อไป หากพยายามทับ ระบบ CIAM จะ Reject พร้อมบันทึก Audit Log `SPOKE_OVERRIDE_REJECTED`
+   - **Spoke Enterprise Integration Specification v2.11.0:**
+     - เพิ่มหมวด **D.7** ใน `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` และ `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`
+     - อัปเดตลิงก์ดาวน์โหลดบนหน้าเว็บและ Revision Changelog Modal เป็น `v2.11.0`
+   - **Test Suite Integrity 100%:** เพิ่ม `backend/tests/test_spoke_authority_lock.py` รวมชุดทดสอบ 94/94 passed (100%) และ Frontend `npx tsc --noEmit` 0 errors (100%)
+2. **Enterprise In-App 3-Layer Bot Defense & Spoke Framework Specification v2.10.0 (Sprint 53):**
    - **สถาปัตยกรรมป้องกันบอทในแอปพลิเคชัน 3 ชั้น (Zero External Dependency / Zero DNS Migration):**
      - **Layer 1 (Sliding-Window IP Rate Limiter):** ดักจับและจำกัดความถี่ 10 คำขอ / 60 วินาที ต่อ Client IP Address สำหรับ Endpoint ยืนยันตัวตน (`/api/v1/auth/login`) พร้อม Header `Retry-After: {seconds}` ตามมาตรฐาน RFC 6585 และยกเว้น IP ภายในองค์กร (Whitelist: Localhost, Docker Bridge `172.18.0.1`, VPS `157.173.219.153`, HQ WAN `49.231.185.245`)
      - **Layer 2 (Decoy Honeypot Trap):** วางกับดักฟิลด์หลอก `corporate_fax` และ `security_honey` ซ่อนอยู่นอกจอ (`position: absolute; left: -9999px; opacity: 0; pointer-events: none;` พร้อม `tabIndex={-1}`, `aria-hidden="true"`, `autoComplete="off"`) หากบอทหรือสคริปต์กรอกค่าเข้ามา ระบบจะบันทึก Audit Log `BOT_HONEYPOT_DETECTED` และ Reject ทันทีด้วย HTTP 401
