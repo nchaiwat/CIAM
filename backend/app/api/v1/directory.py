@@ -241,6 +241,7 @@ def list_users(
         elif stat == "ad_inactive":
             query = query.filter(MasterIdentity.is_active_in_ad == False)
 
+    query = query.order_by(MasterIdentity.full_name.asc(), MasterIdentity.username.asc())
     identities = query.all()
     if not identities:
         return []

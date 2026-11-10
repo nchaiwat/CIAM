@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 10 พฤศจิกายน 2026 (Local Time: ~09:20 ICT)  
+> **Date Updated:** 10 พฤศจิกายน 2026 (Local Time: ~09:40 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 94/94 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: fix(identity): unify Natcha.S & Nattcha.S (Samrongsap) and separate from Natcha.R (Ratsameeruengdet)
+> **Git Status:** Production Ready — Latest Commit: feat(directory): default sort by employee name with genuine identity priority
 
 ---
 
@@ -15,7 +15,14 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Identity Disambiguation & Unification for Natcha.S / Nattcha.S / Natcha.R (Sprint 56):**
+1. **Default Sorting by Name (A-Z) with Employee Priority (Sprint 57):**
+   - **กำหนดให้หน้าทะเบียนผู้ใช้ (`/directory`) จัดเรียงตามชื่อเป็นค่าเริ่มต้นทุกครั้งที่เข้ามา:**
+     - กำหนด `sortField: "name"` และ `sortOrder: "asc"` เป็นค่าเริ่มต้นเสมอ
+     - Backend API เพิ่ม `order_by(MasterIdentity.full_name.asc(), MasterIdentity.username.asc())`
+   - **จัดลำดับให้บัญชีพนักงานจริงขึ้นก่อนบัญชีสาขา:**
+     - บัญชีพนักงานขององค์กร (Corporate Employees) จะถูกจัดเรียงตามชื่อภาษาไทย/อังกฤษ ก-ฮ / A-Z ขึ้นมาแสดงในหน้าแรกทันที
+     - บัญชีเราเตอร์ VPN สาขาที่ขึ้นต้นด้วยตัวเลขและรหัสช็อป (เช่น `03 WA Shop...`, `05-WS...`) จะถูกส่งไปอยู่ท้ายตาราง ทำให้เปิดหน้าจอมาจะเห็นรายชื่อพนักงานทันที ไม่ถูกบัญชีช็อปแย่งพื้นที่
+2. **Identity Disambiguation & Unification for Natcha.S / Nattcha.S / Natcha.R (Sprint 56):**
    - **แก้ไขนามสกุลผิดพลาดของ `Natcha.S`:**
      - สาเหตุ: ใน Active Directory มีผู้ใช้ชื่อ Natcha 2 ท่านในแผนก PD คือ `Natcha.R` (Natcha Ratsameeruengdet) และ `Natcha.S` (Natcha Samrongsap) แต่ใน AD เดิมตั้ง Display Name ของ `Natcha.S` เป็น Ratsameeruengdet ซ้ำกับ `Natcha.R`
      - การแก้ไข: CIAM ล็อคและแก้ไข `full_name` ของ `Natcha.S` ให้เป็น **"Natcha Samrongsap"** อย่างถูกต้อง และคง `Natcha.R` เป็น **"Natcha Ratsameeruengdet"**

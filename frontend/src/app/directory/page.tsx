@@ -219,7 +219,7 @@ export default function DirectoryPage() {
   // Table Sorting State (Point 1: Click header to sort)
   type SortField = "name" | "department" | "ad_status" | "spokes" | "last_access";
   type SortOrder = "asc" | "desc";
-  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortField, setSortField] = useState<SortField>("name");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
   const handleSort = (field: SortField) => {
@@ -227,7 +227,8 @@ export default function DirectoryPage() {
       if (sortOrder === "asc") {
         setSortOrder("desc");
       } else {
-        setSortField(null);
+        // Reset to default sort by name asc
+        setSortField("name");
         setSortOrder("asc");
       }
     } else {
@@ -420,9 +421,27 @@ export default function DirectoryPage() {
     return [...users].sort((a, b) => {
       let cmp = 0;
       if (sortField === "name") {
+        // Prioritize actual employee accounts over branch shop VPN accounts
+        const aIsShop = a.is_ad_account === false && (
+          a.username.toLowerCase().startsWith("wa-shop") ||
+          a.username.toLowerCase().startsWith("ws-") ||
+          a.username.toLowerCase().includes("shop") ||
+          /^\d{2}/.test(a.username)
+        );
+        const bIsShop = b.is_ad_account === false && (
+          b.username.toLowerCase().startsWith("wa-shop") ||
+          b.username.toLowerCase().startsWith("ws-") ||
+          b.username.toLowerCase().includes("shop") ||
+          /^\d{2}/.test(b.username)
+        );
+        if (aIsShop !== bIsShop) {
+          return aIsShop ? 1 : -1;
+        }
+
         const aName = (a.full_name || a.username || "").toLowerCase();
         const bName = (b.full_name || b.username || "").toLowerCase();
         cmp = aName.localeCompare(bName, "th");
+        return sortOrder === "asc" ? cmp : -cmp;
       } else if (sortField === "department") {
         const aDept = (a.department || "").toLowerCase();
         const bDept = (b.department || "").toLowerCase();
