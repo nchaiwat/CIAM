@@ -22,6 +22,7 @@
    - **จัดลำดับให้บัญชีพนักงานจริงขึ้นก่อนบัญชีสาขา:**
      - บัญชีพนักงานขององค์กร (Corporate Employees) จะถูกจัดเรียงตามชื่อภาษาไทย/อังกฤษ ก-ฮ / A-Z ขึ้นมาแสดงในหน้าแรกทันที
      - บัญชีเราเตอร์ VPN สาขาที่ขึ้นต้นด้วยตัวเลขและรหัสช็อป (เช่น `03 WA Shop...`, `05-WS...`) จะถูกส่งไปอยู่ท้ายตาราง ทำให้เปิดหน้าจอมาจะเห็นรายชื่อพนักงานทันที ไม่ถูกบัญชีช็อปแย่งพื้นที่
+
 2. **Identity Disambiguation & Unification for Natcha.S / Nattcha.S / Natcha.R (Sprint 56):**
    - **แก้ไขนามสกุลผิดพลาดของ `Natcha.S`:**
      - สาเหตุ: ใน Active Directory มีผู้ใช้ชื่อ Natcha 2 ท่านในแผนก PD คือ `Natcha.R` (Natcha Ratsameeruengdet) และ `Natcha.S` (Natcha Samrongsap) แต่ใน AD เดิมตั้ง Display Name ของ `Natcha.S` เป็น Ratsameeruengdet ซ้ำกับ `Natcha.R`
@@ -29,7 +30,8 @@
    - **รวมตัวตน `Nattcha.S` (จาก SAP B1) เข้ากับ `Natcha.S` (ใน AD):**
      - บัญชี `Nattcha.S` ที่มาจาก SAP B1 มีการสะกดตัวอักษรเบิ้ล `tt` ทำให้ระบบเดิมมองเป็นคนละคนและแยกเป็น `[Local Acc]`
      - เพิ่มกลไก Auto-heal และ Phonetic Transliteration (`tt` <-> `t`) ใน `initial_data.py`, `scheduler.py`, และ `directory.py` เพื่อผสานสิทธิ์ SAP_B1 เข้าสู่ `Natcha.S` โดยอัตโนมัติ และลบแถวซ้ำซ้อนทิ้ง
-2. **Real-Time Debounced Search & Smart Ghost Filter Unblock (Sprint 55):**
+
+3. **Real-Time Debounced Search & Smart Ghost Filter Unblock (Sprint 55):**
    - **ระบบค้นหาแบบ Real-time Debounce (300ms):**
      - ผู้ใช้เพียงพิมพ์คำค้นหา (เช่น `wat`) ระบบจะค้นหาและแสดงผลให้อัตโนมัติทันที ไม่ต้องคลิกปุ่ม "ค้นหา" หรือกด Enter อีกต่อไป
      - เพิ่มปุ่ม `✕` (Clear Search) บนช่องค้นหาเพื่อล้างคำค้นหาได้อย่างรวดเร็วใน 1 คลิก
@@ -39,7 +41,8 @@
      - เพิ่ม Smart Fallback ในตาราง: หากค้นหาคำใดแล้วไม่พบในโหมดบัญชีตกค้าง จะมีปุ่ม `[ 🔍 ค้นหา "{search}" จากบัญชีพนักงานทั้งหมด ]` เพื่อปลดตัวกรองและแสดงผลทันที
    - **ขยายความยืดหยุ่นของ Keyword Matching ใน Backend:**
      - รองรับการสลับเครื่องหมายจุดและเว้นวรรค (เช่น `Chaiwat N` <-> `Chaiwat.N`), การแปลงเสียง `wat` <-> `vat`, และค้นหาด้วย `func.lower(col).like()` ควบคู่กับ `.ilike()` เพื่อความแม่นยำ 100% บนทุกฐานข้อมูล
-2. **Direct Infrastructure Isolation, Timestamp Reconciliation & CIAM Authority Lock Standard v2.11.0 (Sprint 54):**
+
+4. **Direct Infrastructure Isolation, Timestamp Reconciliation & CIAM Authority Lock Standard v2.11.0 (Sprint 54):**
    - **แยกความแตกต่างระหว่าง Direct Infrastructure Systems กับ SSO Spoke Systems:**
      - ระบบโครงสร้างพื้นฐานตรง (`pfSense FAC`, `pfSense HO`, `M365`, `SAP B1`, `AD`, `WA-RDT2`) เป็นเพียง Inventory Source สำหรับอ่านข้อมูลและตรวจสอบบัญชีผี (Safe Audit) ไม่สามารถรับคำสั่ง Auto-Provisioning ได้
      - **กฎเหล็ก No WAIT for Direct Infra:** ระบบกลุ่มนี้จะ **ไม่มีสถานะ WAIT (`PENDING_PROVISION`) ค้างโดยเด็ดขาด 100%** หากในรอบซิงก์ 04:00 น. ไม่พบบัญชีในระบบจริง ระบบ CIAM จะตัด Mapping ออกจากตารางแสดงผลทันที เพื่อไม่ให้เกิดความสับสน
@@ -55,7 +58,8 @@
      - เพิ่มหมวด **D.7** ใน `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` และ `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`
      - อัปเดตลิงก์ดาวน์โหลดบนหน้าเว็บและ Revision Changelog Modal เป็น `v2.11.0`
    - **Test Suite Integrity 100%:** เพิ่ม `backend/tests/test_spoke_authority_lock.py` รวมชุดทดสอบ 94/94 passed (100%) และ Frontend `npx tsc --noEmit` 0 errors (100%)
-2. **Enterprise In-App 3-Layer Bot Defense & Spoke Framework Specification v2.10.0 (Sprint 53):**
+
+5. **Enterprise In-App 3-Layer Bot Defense & Spoke Framework Specification v2.10.0 (Sprint 53):**
    - **สถาปัตยกรรมป้องกันบอทในแอปพลิเคชัน 3 ชั้น (Zero External Dependency / Zero DNS Migration):**
      - **Layer 1 (Sliding-Window IP Rate Limiter):** ดักจับและจำกัดความถี่ 10 คำขอ / 60 วินาที ต่อ Client IP Address สำหรับ Endpoint ยืนยันตัวตน (`/api/v1/auth/login`) พร้อม Header `Retry-After: {seconds}` ตามมาตรฐาน RFC 6585 และยกเว้น IP ภายในองค์กร (Whitelist: Localhost, Docker Bridge `172.18.0.1`, VPS `157.173.219.153`, HQ WAN `49.231.185.245`)
      - **Layer 2 (Decoy Honeypot Trap):** วางกับดักฟิลด์หลอก `corporate_fax` และ `security_honey` ซ่อนอยู่นอกจอ (`position: absolute; left: -9999px; opacity: 0; pointer-events: none;` พร้อม `tabIndex={-1}`, `aria-hidden="true"`, `autoComplete="off"`) หากบอทหรือสคริปต์กรอกค่าเข้ามา ระบบจะบันทึก Audit Log `BOT_HONEYPOT_DETECTED` และ Reject ทันทีด้วย HTTP 401
@@ -64,7 +68,8 @@
      - เพิ่ม **หมวด 12 (หมวด F): ข้อกำหนดมาตรฐานการป้องกันบอทและการโจมตีแบบ Brute-Force ภายในแอปพลิเคชัน** ใน `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` พร้อมโค้ดตัวอย่างพร้อมใช้สำหรับ Python (FastAPI), Node.js (Express / Next.js) และ React / HTML Frontend Form
      - อัปเดตลิงก์ดาวน์โหลดสเปกบนหน้า `/applications` เป็น `v2.10.0` พร้อมเพิ่มประวัติใน Modal Changelog
    - **ชุดทดสอบความปลอดภัย 100%:** เพิ่ม `backend/tests/test_bot_defense.py` ครอบคลุม Rate Limiting, Honeypot, Timing Guard และ Whitelist รวม 5/5 tests (ทั้งระบบ 92/92 tests ผ่าน 100%) และ Frontend TypeScript `npx tsc --noEmit` 0 errors
-2. **SAP B1 Real-Time Monitor & Configurable Interval Alerts (Sprint 52):**
+
+6. **SAP B1 Real-Time Monitor & Configurable Interval Alerts (Sprint 52):**
    - **จำกัดผู้รับในโหมดส่งทดสอบเฉพาะคนที่ระบุ & Auto-Heal อีเมล Admin ในฐานข้อมูล (Sprint 51.3):**
      - **สาเหตุที่มีอีเมลคนอื่นติดไปด้วย:** บนหน้าจอมีตัวเลือกเปิดใช้งาน `[✓] ส่งสำเนาให้อีเมลของ Admin ทุกคนที่มีในระบบอัตโนมัติ (Notify All Active Admins)` ซึ่งระบบจะไปดึงอีเมลของ Admin ทุกคนในตาราง `central_iam_admins` มาต่อท้ายรายชื่อผู้รับเสมอ
      - **การแก้ไข:**
@@ -85,7 +90,8 @@
      - **รองรับพอร์ต 465 (SSL) คู่กับ 587 (STARTTLS):** เพิ่มการสลับไปใช้ `smtplib.SMTP_SSL` อัตโนมัติเมื่อกำหนดพอร์ต 465
      - **สถาปัตยกรรม Error Handling & Rollback Resilience:** ครอบฟังก์ชัน `send_daily_digest_email` ด้วย `try...except` ชั้นนอกสุด หากการส่งล้มเหลวหรือเกิด Exception ใดๆ จะทำ `db.rollback()` และบันทึกประวัติ `IamAuditLog` ด้วยสถานะ `FAILED` เสมอ ไม่มีวันเกิด Unhandled 500 Error หลุดไปยังหน้าเว็บอีกต่อไป
      - **Unit Tests Coverage:** เพิ่มการทดสอบความยาวผู้รับ, การจำลอง SMTP ล้มเหลว, และการสกัด Envelope รวม 7/7 tests ผ่าน 100% (ชุดทดสอบทั้งระบบ 81/81 passed 100%)
-2. **Daily Security & Identity Email Digest (07:00 AM) & SMTP Engine (Sprint 51):**
+
+7. **Daily Security & Identity Email Digest (07:00 AM) & SMTP Engine (Sprint 51):**
    - **ระบบรายงานสรุปความเสี่ยงและสถานะประจำวันทางอีเมล (Executive Morning Digest):**
      - กำหนดเวลาส่งอัตโนมัติรอบเช้า **07:00 น.** (Asia/Bangkok) หลังรอบ Auto-Sync 04:00 น. เพื่อให้ผู้บริหาร IT และ Admin ได้รับรายงานสรุปก่อนเริ่มงาน
      - สร้าง Backend Engine `backend/app/services/daily_digest_service.py`:
@@ -112,7 +118,8 @@
        - ปุ่ม **[ 👁️ ดูตัวอย่างอีเมล (Preview) ]** เปิด Modal แสดงเทมเพลตอีเมลจริงผ่าน iframe
        - ปุ่ม **[ ⚡ ส่งทดสอบทันที ]** พร้อมแสดงผลลัพธ์การส่งและประเมินระดับความเสี่ยง
      - **Unit Tests Coverage:** เพิ่ม `backend/tests/test_daily_email_digest.py` ครอบคลุมการตั้งค่า, การคำนวณ KPI, การเรนเดอร์ HTML, API endpoints และการส่งเมลแบบ Mock (ผ่าน 4/4 tests 100%)
-2. **Hermes.N Local Account AD Isolation & Auto-Heal Fix (Sprint 50):**
+
+8. **Hermes.N Local Account AD Isolation & Auto-Heal Fix (Sprint 50):**
    - **แก้ปัญหาบัญชี Hermes.N แสดงสถานะอยู่ใน AD และ Active ผิดพลาด:**
      - สาเหตุเดิม: ใน `backend/app/initial_data.py` เดิมมี seed data ที่ระบุ `Hermes.N` มี `is_active_in_ad: True` และมี mapping กับ `ad` role `Domain Users` ทำให้ทุกครั้งที่ container start จะ overwrite ค่าเป็น Active ใน AD เสมอ
      - แก้ไข: ปรับ seed data ของ `Hermes.N` ให้ `is_active_in_ad: False` และถอด `app: ad` ออก พร้อมใส่ auto-heal ใน `initial_data.py` ให้ลบ `AppAccountMapping` ของ AD ทิ้ง, ตั้ง `is_approved_exception = True` และ `exception_type = "LOCAL_ACCOUNT"`
@@ -120,7 +127,8 @@
    - **ชี้แจงสถาปัตยกรรม M2M Sync ระหว่าง IRM กับ CIAM:**
      - CIAM ดึงข้อมูล (Pull) จาก IRM ผ่าน M2M API ทุก 04:00 น. หรือเมื่อกดปุ่ม "ซิงก์ข้อมูล" บนหน้า `/applications`
      - เพื่อให้การ Disable จากฝั่ง IRM ส่งผลมายัง CIAM แบบทันที (Instant Realtime) จำเป็นต้องมี Outbound Webhook ยิงจากฝั่ง IRM กลับมาแจ้ง CIAM เมื่อมีการ toggle status ผู้ใช้
-2. **True 2-Way Bi-directional Status Sync, Origin Tracking & Spoke Spec v2.9.0 (Sprint 49):**
+
+9. **True 2-Way Bi-directional Status Sync, Origin Tracking & Spoke Spec v2.9.0 (Sprint 49):**
    - **แก้ปัญหาสิทธิ์เด้งกลับและบัญชีหายแบบถาวร (Two-Way Synchronization with Origin Tracking):**
      - กำหนดหลักการ "ใครเริ่มก่อน ส่งผลให้อีกฝั่งด้วย พร้อมป้ายระบุที่มาชัดเจน (First-Action Wins with Origin Tracking)":
        - **ถ้า Spoke เริ่มก่อน (Spoke-Initiated):** หากแอดมินระบบลูกปิดสิทธิ์ (Disable) หรือเปิดสิทธิ์ในระบบตนเอง เมื่อส่งข้อมูลผ่าน Heartbeat หรือ Sync ระบบ CIAM จะยอมรับสถานะตามทันที ปรับ `is_active_in_app = false/true`, แปะป้าย `status_origin = 'SPOKE_APP'`, และ **ไม่ส่งคำสั่ง `PROVISION_USER` หรือ `ENABLE_USER` ไปบังคับเปิดคืนให้ Spoke เด็ดขาด**
@@ -134,7 +142,8 @@
    - **Framework Specification v2.9.0:**
      - อัปเดต [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) และ `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` เป็นเวอร์ชัน **2.9.0** เพิ่มหมวด D.6 กำหนดมาตรฐาน 2-Way และข้อบังคับ SSO Callback Inactive Guard สำหรับทีมผู้พัฒนาระบบลูกทุกระบบ
    - **Test Suite 100%:** Pytest ผ่าน 74/74 tests (100%), Frontend TypeScript `npx tsc --noEmit` 0 errors (100%)
-2. **Remote Desktop Spoke Application (WA-RDT2) with SAP B1 RBAC & Dynamic RDP Generation (Sprint 48):**
+
+10. **Remote Desktop Spoke Application (WA-RDT2) with SAP B1 RBAC & Dynamic RDP Generation (Sprint 48):**
    - **เพิ่ม Spoke App สำหรับ Windows Terminal / RDS Server `WA-RDT2`:**
      - เพิ่ม `wa_rdt2` ใน `backend/app/initial_data.py` (`connector_type: "RDP"`, `network_policy: "VPN_ONLY"`, `vpn_restriction_mode: "LOCK_WITH_BANNER"`, `portal_launch_url: "/api/v1/oauth/portal/rdp/wa_rdt2.rdp"`, `category: "การเงินและ ERP"`) พร้อมระบบ Auto-Heal อัตโนมัติเมื่อ Start Service
    - **ระบบคัดกรองสิทธิ์และ RBAC เฉพาะผู้ที่มีบัญชี SAP B1 (Strict SAP B1 Account Entitlement):**
@@ -148,7 +157,8 @@
      - ใน `handleLaunch()`: เมื่อคลิกการ์ดที่เป็นประเภท RDP ระบบจะทำการดาวน์โหลดไฟล์ `wa-rdt2.rdp` โดยตรงบนแท็บเดิมทันที เพื่อให้ระบบปฏิบัติการ Windows เปิด Remote Desktop Connection โดยไม่ต้องเปลี่ยนหน้าจอหรือรบกวนเซสชัน SSO Portal
    - **Unit Tests Coverage:**
      - เพิ่ม `test_wa_rdt2_portal_entitlement_and_rdp_download` ใน [`backend/tests/test_oauth_oidc_flow.py`](file:///d:/Python/Central-IAM/backend/tests/test_oauth_oidc_flow.py) ครอบคลุมการบล็อก User ที่ไม่มี SAP B1, การอนุญาต User ที่มี SAP B1, และตรวจสอบโครงสร้างเนื้อหาไฟล์ `.rdp` ไดนามิก (ผ่าน 100%)
-2. **AI Copilot Full Analytical Parity, RBAC Enforcement, Strict Read-Only & Zero-Training Data Sovereignty Governance (Sprint 47 — Commits `a4688ff`, `5027f34`):**
+
+11. **AI Copilot Full Analytical Parity, RBAC Enforcement, Strict Read-Only & Zero-Training Data Sovereignty Governance (Sprint 47 — Commits `a4688ff`, `5027f34`):**
    - **100% Read & Analytical Parity (แสดงผลและคำนวณได้ครบทุกหน้าจอที่มีใน CIAM):**
      - เพิ่ม MCP Tool `ciam_get_dashboard_summary()` ใน [`backend/app/mcp/server.py`](file:///d:/Python/Central-IAM/backend/app/mcp/server.py) เพื่อให้ AI Copilot คำนวณและแสดง KPI ทั้งหมดของหน้าแดชบอร์ด (`/`) ได้แก่ จำนวนตัวตนรวม, Active/Inactive ใน AD, **ตารางสรุปผู้ใช้งานแยกตามแผนก (`department_breakdown`)**, สรุปจำนวนบัญชีรายระบบลูก (`spoke_account_breakdown`), จำนวน Ghost Accounts, จำนวน Approved Exceptions และตารางเวลา Auto-Sync (04:00 น.)
      - เพิ่ม MCP Tool `ciam_preview_offboarding_impact(username)` สำหรับจำลองการตรวจสอบผลกระทบก่อนตัดสิทธิ์ (`/offboarding` Impact Preview) แบบ Read-Only 100%
@@ -165,7 +175,8 @@
      - สร้าง `sanitize_context_for_privacy()` (DLP Scrubber) เพื่อคัดกรองและปิดบังรหัสผ่าน (`hashed_password`), `api_key`, `client_secret`, `private_key` ออกจาก Context 100% ก่อนประมวลผล
      - แสดงป้ายรับรอง `Read-Only • Zero-Training (ไม่นำข้อมูลไป Train/ใช้นอกองค์กร)` บนหน้าต่างแชท [`CiamCopilotWidget.tsx`](file:///d:/Python/Central-IAM/frontend/src/components/ai/CiamCopilotWidget.tsx) และหน้า [`settings/page.tsx`](file:///d:/Python/Central-IAM/frontend/src/app/settings/page.tsx)
    - **บันทึกขอบเขต AI Copilot ลงใน Spoke Framework ([`SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) หมวด E ข้อ 11.1–11.5):** กำหนดเป็นกฎเหล็กมาตรฐานกลางสำหรับ CIAM และทุกระบบลูก (Spoke Apps) พร้อมซิงก์ไฟล์เข้า `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`
-2. **Proactive Zero-Action Session Auto-Logoff Watchdog & App Client Logout Return to SSO Portal (Sprint 46 — Commits `a0d9fb1`, `b9a5ec0`, `db5b8c3`, `b23c3e9`):**
+
+12. **Proactive Zero-Action Session Auto-Logoff Watchdog & App Client Logout Return to SSO Portal (Sprint 46 — Commits `a0d9fb1`, `b9a5ec0`, `db5b8c3`, `b23c3e9`):**
    - **สาเหตุปัญหาเดิม:** หน้า SSO Portal (`/portal`) และ Admin Console เดิมตรวจสอบเซสชันหมดอายุเฉพาะเมื่อผู้ใช้คลิกปุ่มที่ยิง API แล้วได้ HTTP 401 เท่านั้น (อายุ Token `ACCESS_TOKEN_EXPIRE_MINUTES = 480` นาที / 8 ชม.) หากเปิดหน้าจอทิ้งไว้เฉยๆ จะไม่ตัดออกจากระบบเอง
    - **สร้าง Proactive Session Watchdog ([`frontend/src/lib/session.ts`](file:///d:/Python/Central-IAM/frontend/src/lib/session.ts)):** ติดตั้งระบบจับเวลาถอยหลังแบบ Real-Time (`useSessionWatchdog`) ตรวจสอบ **Portal Idle Timeout (30 นาที)** และ **JWT Absolute Expiration (8 ชั่วโมง)** พร้อม Server Heartbeat (`/api/v1/auth/me` ทุก 60 วินาที) และ Cross-Tab Sync เมื่อเปิดหน้า SSO Portal ทิ้งไว้ครบ 30 นาทีโดยไม่ไปที่ระบบลูก ระบบจะสั่ง **Logoff ทันทีโดยไม่ต้องรอให้ User คลิกหรือกระทำการใดๆ** พร้อมแสดงป้ายนับเวลา `เซสชัน MM:SS` บนหัวเว็บ `/portal`
    - **ไม่คิด Idle Time ของ SSO Portal ขณะผู้ใช้อยู่ใน App Client (Spoke App) & กด Logout จาก App Client แล้วกลับมาหน้า `/portal` ทันที:**
@@ -173,31 +184,37 @@
      2. **เมื่อผู้ใช้กด Logout จากหน้า App Client (เช่น กดออกจากระบบใน IRM หรือวิ่งมาที่ `/oauth/logout` / `/portal`):** ระบบตรวจสอบเฉพาะอายุ JWT Token หลัก (`checkTokenValidOnReturn()`) โดยไม่นำเวลาที่อยู่ใน App Client มาคิดเป็น Idle Time แล้วพาผู้ใช้ **กลับมาที่หน้า SSO Portal (`https://ciam.windowasia.com/portal`) ของ CIAM ทันที** พร้อมรีเซ็ตตัวนับ Idle Time ของหน้า SSO Portal เริ่มต้นใหม่ที่ `30:00` นาที!
      3. **กรณีผู้ใช้กด Logout เอง (`performManualLogout`):** เมื่อกดปุ่ม `ออกจากระบบ` บนหน้า SSO Portal หรือ Admin Console ระบบจะตั้งแฟล็ก `ciam_manual_logout` เพื่อไม่ให้ Watchdog แทรกแซง และพาไปหน้า `/login` ที่สะอาด **โดยไม่แสดงกล่องข้อความเตือนเรื่องเซสชันหมดอายุ (แสดงเฉพาะกรณีเซสชันหมดเวลา Idle 30 นาที หรือ JWT 8 ชม. หมดอายุจริงเท่านั้น)**
    - **แก้ไข Remote MCP Routing (`/mcp/sse` และ `/api/v1/mcp/sse`):** เพิ่ม `PathPrefix(/mcp)` ใน Traefik rule ของ `docker-compose.yml`, เพิ่ม `BACKEND_INTERNAL_URL=http://api:8001` ตอน Build ใน `frontend/Dockerfile`, และ Mount MCP App ทั้งที่ `/api/v1/mcp` และ `/mcp` ใน `backend/app/main.py` เพื่อให้เรียก `/mcp/sse` หรือ `/api/v1/mcp/sse` ได้โดยไม่ติด HTTP 500 จาก Next.js rewrite (ตอบ `401 UNAUTHORIZED_MCP_ACCESS` เมื่อไม่ใส่ Key และเชื่อมต่อ SSE ได้ทันทีเมื่อใส่ Bearer Key)
-3. **AI Copilot Specific Username Search Extraction & Active AD Priority Ranking (Sprint 45):**
+
+13. **AI Copilot Specific Username Search Extraction & Active AD Priority Ranking (Sprint 45):**
    - **สาเหตุปัญหาที่พบ:** เมื่อผู้ใช้ถาม AI Copilot ถึงบัญชีเฉพาะเจาะจง เช่น `"Chaiwat.N ตรวจดูดีๆ"` ระบบ `detect_tool_intent` เดิมไม่ได้สกัดชื่อบัญชีไปใส่ในพารามิเตอร์ `search` ของ `ciam_list_users` (หรือกรณีไม่มีคีย์เวิร์ดคำว่า `"ผู้ใช้"` ก็จะไม่เรียก Tool เลย) และเมื่อเรียก `ciam_list_users(limit=30)` โดยไม่มี `search` ระบบเรียงลำดับตาม ASCII (`username.asc()`) ทำให้ 30 รายการแรกเป็นบัญชีสาขาที่ขึ้นต้นด้วยตัวเลข (`01-WS_...`, `03-WS_...`) ส่งผลให้ AI มองไม่เห็น `Chaiwat.N` และเข้าใจผิดว่าไม่มีในระบบ
    - **เพิ่มฟังก์ชัน `extract_user_search_term` ใน `ai_service.py`:** สกัดชื่อบัญชีรูปแบบ `Firstname.L` (เช่น `Chaiwat.N`), อีเมล, หรือคำค้นชื่อคนจากข้อความปัจจุบันและประวัติการสนทนา แล้วส่งเข้า `ciam_list_users(search=..., limit=50)` โดยตรง แม้ผู้ใช้พิมพ์แค่ `"Chaiwat.N ตรวจดูดีๆ"` ก็จะเรียกค้นหาทันที
    - **จัดเรียง Active AD Users ขึ้นก่อนใน `ciam_list_users` (`mcp/server.py`):** เปลี่ยนการเรียงลำดับเป็น `MasterIdentity.is_active_in_ad.desc(), MasterIdentity.username.asc()` เพื่อให้พนักงานจริงใน AD แสดงก่อนรหัสสาขา `01-WS_...` เสมอ พร้อมรองรับ Fallback ค้นหาด้วยชื่อต้น (Prefix) และแก้ไขการคำนวณ `is_ad_account` ให้ตรวจเช็คจาก `is_active_in_ad` และ `has_ad_spoke` อย่างถูกต้อง
-4. **Identity Unification (`Duanghathai.P` <-> `Duanghatai.P`) & Phonetic Directory Search + Facebook Technical Article (Sprint 44):**
+
+14. **Identity Unification (`Duanghathai.P` <-> `Duanghatai.P`) & Phonetic Directory Search + Facebook Technical Article (Sprint 44):**
    - **รวมตัวตนบน Production สำเร็จทันที:** ผสานบัญชี `Duanghatai.P` (ID 427 จาก SAP B1) เข้ากับตัวตนหลักใน Active Directory `Duanghathai.P` (`Duanghathai Phasuk` แผนก `AC`, ID 164) ทำให้แสดงสถานะ 🟢 Active ใน AD พร้อมผูกสิทธิ์ `AD` และ `SAP_B1` ครบในแถวเดียว
    - **เพิ่ม Phonetic Transliteration Matching (`thai` <-> `tai`):** อัปเดต `scheduler.py` (`persist_spoke_inventory`), `initial_data.py`, และ `directory.py` (`sync_active_directory_users`) ให้จับคู่ตัวสะกด `thai` <-> `tai` อัตโนมัติ ป้องกันไม่ให้การซิงก์ SAP B1 รอบถัดไปสร้างแถวซ้ำขึ้นมาอีก
    - **ขยายระบบค้นหาใน User Directory & MCP Tool (`list_users` & `ciam_list_users`):** รองรับการค้นหาด้วย `app_username` ของระบบลูก และคำค้นหาแบบเทียบเสียง (`Duanghatai.P` หรือ `Duanghathai.P`) ให้แสดงผลตัวตนหลักได้ตรงกัน 100%
    - **จัดทำบทความเชิงวิชาการและภาพประกอบสถาปัตยกรรมสำหรับโพสต์ Facebook (`docs/facebook_article/`):** สร้างบทความฉบับเต็มพร้อมภาพ Infographic 3 ภาพ (`01_ciam_cover_architecture.jpg`, `02_ciam_pain_vs_solution.jpg`, `03_ciam_hybrid_3_modes.jpg`) ใน `docs/facebook_article/FACEBOOK_POST_CIAM.md`
-5. **Spoke Spec v2.8.0 Synchronized across Backend & Frontend (Sprint 43):**
+
+15. **Spoke Spec v2.8.0 Synchronized across Backend & Frontend (Sprint 43):**
    - **ซิงก์ไฟล์สเปกสู่โฟลเดอร์ Backend:** ทำการคัดลอก `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` v2.8.0 (ที่มีหมวด E: In-App AI Copilot & MCP Tools) เข้าสู่โฟลเดอร์ `backend/` ซึ่งเป็น Build Context ของ Docker Container `/app` ทำให้ Backend ให้บริการไฟล์ v2.8.0 จริง
    - **ปรับปรุง API Endpoint `/applications/spec/download`:** อัปเดตการดึงเวอร์ชันไดนามิกและ fallback เป็น `v2.8.0` ใน `backend/app/api/v1/applications.py` และอัปเดต `tests/test_api_flow.py` ให้ตรวจเช็ค `v2.8.0` (ผ่าน 100%)
    - **ปรับปรุงปุ่มดาวน์โหลดและ Modal บน Frontend:** ปรับปุ่มดาวน์โหลด `📥 สเปกเชื่อมต่อ (.md v2.8.0)` ใน `frontend/src/app/applications/page.tsx` และเปลี่ยนการตั้งชื่อไฟล์ดาวน์โหลดให้อ่านจาก `Content-Disposition` แบบไดนามิก พร้อมเพิ่มรายละเอียดสเปก v2.8.0 ลงในแท็บประวัติการปรับปรุง (Revision Changelog) ในป๊อปอัปคู่มือ Dev
-6. **SSO Portal Muted Gray UI for Unavailable & VPN-Locked Apps (Sprint 42):**
+
+16. **SSO Portal Muted Gray UI for Unavailable & VPN-Locked Apps (Sprint 42):**
    - **ปรับโทนสีการ์ดระบบที่ยังไม่พร้อมใช้งาน (MTPulse VPN Locked / Offline / Disabled):** เปลี่ยนจากการ์ดสีขาวขอบส้มสดใส เป็นโทนสีเทาหม่น (`bg-slate-100/70`, `border-slate-300`, `opacity-80`)
    - **ไอคอน 3D Grayscale:** แปลงสีไอคอนระบบลูกที่ล็อกหรือไม่พร้อมใช้งาน (เช่น ไอคอนชีพจรสีส้มของ MTPulse) ให้เป็นสีเทา Muted Grayscale (`bg-slate-200 text-slate-400 grayscale`) ตัดความสดใสออกทั้งหมด
    - **ป้ายสถานะและปุ่มกดสีเทาชัดเจน:** เปลี่ยนป้าย `ต้องต่อ VPN` และปุ่ม `ต่อ VPN แล้วตรวจใหม่` ให้เป็นโทนสีเทา Slate เพื่อให้ผู้ใช้งานมองเห็นความแตกต่างได้ทันทีว่าระบบยังไม่พร้อมใช้งาน ต้องต่อ VPN เสียก่อน จึงจะไม่สับสนกับการ์ดระบบงานที่พร้อมใช้งาน (สีขาว ขอบสดใส ปุ่มไล่เฉดสีฟ้า-ส้ม-ม่วง)
    - **ปรับข้อความส่วนหัว Greeting Bar:** ปรับข้อความ `{apps.length} ระบบพร้อมใช้งาน` เป็น `{apps.length} ระบบงานที่ได้รับสิทธิ์` เพื่อความถูกต้องชัดเจนตามสถานะสิทธิ์ของผู้ใช้
-7. **AI Factual Grounding, Zero-Hallucination Policy & MCP Parameter Alignment (Sprint 41):**
+
+17. **AI Factual Grounding, Zero-Hallucination Policy & MCP Parameter Alignment (Sprint 41):**
    - **แก้ไข Tool Signature Mismatch 100%:** แก้ไข `execute_internal_mcp_tool` ใน `backend/app/services/ai_service.py` ให้ส่งอาร์กิวเมนต์ตรงกับฟังก์ชันจริงใน `server.py` (`ciam_list_users`, `ciam_get_spoke_data`, `ciam_get_audit_logs`) ไม่เกิด Exception จากพารามิเตอร์ผิดพลาดอีกต่อไป
    - **เพิ่มตัวกรองระบบลูกใน `ciam_list_users`:** เพิ่มพารามิเตอร์ `app_code` ใน `ciam_list_users` เพื่อให้สามารถค้นหาและนับจำนวนบัญชีที่ผูกกับระบบลูกแต่ละระบบ (MTPulse, IRM, SAP, pfSense) ได้ตรงเป๊ะกับหน้าทะเบียนผู้ใช้ (`/directory`)
    - **สร้าง Context-Aware Intent Detection:** ปรับปรุง `detect_tool_intent` ให้ตรวจจับบริบทจากประวัติการสนทนา 4 ข้อความย้อนหลัง ทำให้เมื่อผู้ใช้ถามคำถามต่อเนื่อง (เช่น "แล้วแสดงในหน้าทะเบียนกี่บัญชี", "ยืนยันใช่ไหม") ระบบยังคงระบุระบบลูก (เช่น MTPulse) ได้อย่างแม่นยำ
    - **บรรจุ Zero-Hallucination & Anti-Sycophancy Policy:** เพิ่มกฎเหล็กใน System Prompt และ Context Injection ให้ AI ยึดตัวเลขจริงจาก Tool Context 100% ห้ามเออออหรือตอบรับ "ยืนยันตามนี้ครับ" กับตัวเลขที่ผู้ใช้ถามนำเด็ดขาด หากตัวเลขไม่ตรง (เช่น ผู้ใช้ถาม 120 บัญชี แต่ข้อมูลจริงมี 6 บัญชี) AI จะปฏิเสธและแก้ไขตัวเลขจริงจากฐานข้อมูลทันที
    - **Explicit Factual Summaries ใน MCP Return:** เพิ่มฟิลด์ `summary`, `total_users_in_directory`, `total_accounts_in_directory` ในผลลัพธ์ของ Tool เพื่อให้ LLM อ่านและเข้าใจตัวเลขได้ทันที
-8. **Central IAM In-House AI Copilot, Remote MCP Server & Spoke Framework (Sprint 40):**
+
+18. **Central IAM In-House AI Copilot, Remote MCP Server & Spoke Framework (Sprint 40):**
    - **Phase 1: Central IAM Core MCP Server (Remote Cloud Transport):**
      - พัฒนา MCP Server ด้วย SDK `mcp` (v2.3) ติดตั้ง Enterprise Tools รองรับการเชื่อมต่อข้าม Cloud ผ่าน Remote SSE Transport (`https://ciam.windowasia.com/mcp/sse` และ `/api/v1/mcp/sse`) ป้องกันด้วย `RemoteMcpAuthMiddleware` รองรับ Bearer token (Admin JWT, `MCP_API_KEY`)
      - มีไฟล์คอนฟิก `mcp_config.json` สำหรับเชื่อมต่อ Cursor, Antigravity IDE, Claude Desktop
@@ -209,53 +226,73 @@
      - อัปเดต [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) เป็นเวอร์ชัน **2.8.0**
      - เพิ่ม **หมวด E: ข้อกำหนดมาตรฐานการพัฒนา In-App AI Copilot & MCP Tools ประจำระบบลูก** ให้คำแนะนำในการสร้างตาราง `system_settings` (`ai_copilot_enabled`, `ai_api_key`), กฎการปิดหน้า Chat เมื่อไม่มี Key, และโค้ดตัวอย่าง Backend/Frontend สำหรับทีมผู้พัฒนาระบบลูก (MTPulse, IRM, QMS, SAP B1 Service)
    - **Test Suite 100%:** Pytest ผ่าน 72/72 tests (100%), Frontend TypeScript `npx tsc --noEmit` 0 errors (100%)
-9. **Spoke UI Consolidation & AD Sync 500 Fix (Sprint 39):**
+
+19. **Spoke UI Consolidation & AD Sync 500 Fix (Sprint 39):**
    - **ลบสวิตช์ซ้ำซ้อนใน Modal:** นำสวิตช์เปิด/ปิด Spoke ออกจากป๊อปอัปตั้งค่าระบบ (`applications/page.tsx`) เนื่องจากหน้าการ์ดหลักมีสวิตช์เปิด/ปิดอยู่แล้ว และปรับฟอร์มส่วนหัวเป็น 3 คอลัมน์กว้างสบายตา
    - **รวมปุ่มตั้งค่าระบบลูกเป็นการตั้งค่าเดียว (Unified Settings Modal):** รวมปุ่มแยกตามประเภทระบบ (`SAP B1`, `AD Settings`, `M365`) เข้าเป็นปุ่มเดียว `[ ⚙️ ตั้งค่าเชื่อมต่อ ]` โดยเมื่อกดปุ่ม ระบบจะสลับไปแท็บที่ถูกต้องของระบบนั้นๆ โดยอัตโนมัติ (AD_PROXY, SAP_B1, M365, SSO, M2M)
    - **แสดง Base URL เต็มไม่ถูกตัดทอน:** ปรับการแสดงผล URL ปลายทางบนการ์ดระบบลูกให้แสดง URL เต็ม ไม่ตัดคำด้วย `...` (ใช้ `break-all`)
    - **แก้ไขบั๊ก 500 NameError ในการซิงก์จาก AD:** แก้ไข `backend/app/api/v1/directory.py` ที่เรียกใช้ `func.lower()` แต่ไม่ได้ import `func` จาก `sqlalchemy` ทำให้เกิด HTTP 500 เมื่อกดปุ่ม "ซิงก์จาก AD" ในหน้าทะเบียนผู้ใช้
-10. **Shop Accounts Sanitization from AD Filter & Spokes Matrix (Sprint 38 - บัญชี WA-Shop_*):**
+
+20. **Shop Accounts Sanitization from AD Filter & Spokes Matrix (Sprint 38 - บัญชี WA-Shop_*):**
     - แก้ไขปัญหาบัญชีสาขาร้านค้า (เช่น `25 WA Shop - น่าน`, `46 WA Shop - โคราช`) หลุดไปแสดงในตัวกรอง `Active Directory (DC Gateway)` และตัวกรอง `เฉพาะที่ยังใช้งานอยู่ (Active)` ทั้งที่คอลัมน์สถานะ AD เป็นขีด `-` (Local Acc)
     - ปรับปรุง `directory.py`: เมื่อกรอง `app_code == 'ad'` บัญชีจะต้องเป็นตัวตน AD จริง (`is_ad == True`) เท่านั้น บัญชีประเภท Shop (`is_shop_acc`) ถูกตัดสิทธิ์จากการแสดงในตัวกรอง AD อย่างเด็ดขาด และตัดป้าย `🔴 AD` ออกจากคอลัมน์ Spokes ของร้านค้า (แสดงเฉพาะ Spoke ที่ใช้งานจริง เช่น `PFSENSE_FAC`)
     - ปรับปรุง `scheduler.py`: ข้ามการ sync บัญชีร้านค้าจาก AD และลบการแมป AD ตกค้างของร้านค้าทิ้ง
     - ปรับปรุง `initial_data.py`: กวาดล้างและตัด AD mapping ของบัญชีร้านค้าทั้งหมดในฐานข้อมูล
-11. **AD Inactive Status Reconciliation & Auto-heal (Sprint 37 - กรณี Worawut.S):**
+
+21. **AD Inactive Status Reconciliation & Auto-heal (Sprint 37 - กรณี Worawut.S):**
     - แก้ไขปัญหาผู้ใช้ที่ถูกลบหรือไม่มีตัวตนใน Active Directory แล้ว (เช่น `worawut.s`) แต่ยังคงแสดงสถานะเป็น On (จุดเขียวกระพริบ 🟢) ในหน้า User Directory
     - ปรับปรุง `persist_spoke_inventory` ใน `scheduler.py`: เมื่อเชื่อมต่อ AD Sync Agent และดึงรายชื่อผู้ใช้ล่าสุด บัญชีใดที่ไม่อยู่ใน AD แล้วจะถูกปรับ `is_active_in_ad = False` ทันที และลบการแมปกับ AD ออก
     - ปรับปรุง `directory.py`: คำนวณ `effective_ad_active = bool(identity.is_active_in_ad and (has_ad_mapping or identity.ad_guid or identity.last_login_ad_at))` และมีกลไก Auto-heal ปรับตัวตนที่ไม่มี AD Footprint ให้เป็น `is_active_in_ad = False`
     - ปรับปรุง Tooltip ใน `frontend/src/app/directory/page.tsx` แสดงคำอธิบายสถานะให้ชัดเจนว่าบัญชีถูกปิดหรือไม่มีใน AD
-12. **Single Unified Front Door (Sprint 36):** ปรับปรุงโครงสร้าง Routing และ Authentication Guard ใน `AppShell.tsx` ให้ทุกคำขอที่ยังไม่ได้ล็อกอิน ไม่ว่าจะเป็นการพิมพ์ `ciam.windowasia.com` (Root Path `/`) หรือเปิดลิงก์ที่เซสชันหลุด จะวิ่งเข้าสู่หน้า `/login` (Window Asia App Portal สีขาว-น้ำเงิน) เสมอ 100% ป้องกันไม่ให้ผู้ใช้ทั่วไปหลุดเข้าไปเห็นหน้า `/admin/login` (Admin Console จอดำทะมึน พ.ร.บ.คอมฯ) ซึ่งสร้างความสับสนและตื่นตระหนกให้ผู้ใช้งาน
+
+22. **Single Unified Front Door (Sprint 36):** ปรับปรุงโครงสร้าง Routing และ Authentication Guard ใน `AppShell.tsx` ให้ทุกคำขอที่ยังไม่ได้ล็อกอิน ไม่ว่าจะเป็นการพิมพ์ `ciam.windowasia.com` (Root Path `/`) หรือเปิดลิงก์ที่เซสชันหลุด จะวิ่งเข้าสู่หน้า `/login` (Window Asia App Portal สีขาว-น้ำเงิน) เสมอ 100% ป้องกันไม่ให้ผู้ใช้ทั่วไปหลุดเข้าไปเห็นหน้า `/admin/login` (Admin Console จอดำทะมึน พ.ร.บ.คอมฯ) ซึ่งสร้างความสับสนและตื่นตระหนกให้ผู้ใช้งาน
+
+---
 
 ---
 
 ### 0.2 รายการ Git Commits ล่าสุดและแผนงานสำหรับการพัฒนาต่อในรอบหน้า (Next Session Roadmap)
 - **Git Commits ล่าสุดบน `origin/main`:**
-  - `86fb843`: `fix(directory): resolve Hermes.N AD status discrepancy and add local account auto-heal`
-  - `0a4b0c3`: `feat(sync): implement true 2-way status sync with origin tracking and update spoke spec to v2.9.0`
-  - `e81f248`: `feat: add WA-RDT2 Remote Desktop spoke app with SAP B1 RBAC and dynamic RDP generation`
-  - `5027f34`: `feat(ai-copilot): enforce Zero-Training, DLP privacy scrubber, and No-External-Data-Use governance across CIAM and Spoke Framework`
-  - `a4688ff`: `feat(ai-copilot): enforce 100% read-only analytical parity, RBAC scoping, and Spoke Framework governance`
-  - `b23c3e9`: `fix(mcp): route /mcp and /api/v1/mcp directly to FastAPI backend so SSE returns 401 instead of 500`
-  - `db5b8c3`: `fix(auth): suppress session expired notice when user manually logs out`
-  - `b9a5ec0`: `feat(portal): pause SSO Portal 30-min idle timer while in Spoke App and return directly to /portal on App Client logout`
-  - `a0d9fb1`: `feat(session): add proactive zero-action session auto-logoff watchdog and OIDC single logout return flow`
+  - `0e681cb`: `feat(directory): default sort by employee name with genuine identity priority` (Sprint 57)
+  - `3125bf5`: `fix(identity): unify Natcha.S & Nattcha.S (Samrongsap) and separate from Natcha.R (Ratsameeruengdet)` (Sprint 56)
+  - `f285c45`: `feat(directory): real-time debounced search, resilient keyword matching and ghost-filter unblock` (Sprint 55)
+  - `bdd1f8e`: `feat(governance): direct infra isolation, timestamp reconciliation and ciam authority lock standard v2.11.0` (Sprint 54)
+  - `aa9aae3`: `feat(bot-defense): enterprise in-app 3-layer bot defense and spoke framework specification v2.10.0` (Sprint 53)
+  - `02fbe2a`: `feat(sap-monitor): real-time sap b1 downtime monitoring with configurable 5m interval and telegram alerts` (Sprint 52)
+  - `6788f19`: `fix(daily-digest): isolate scheduled date, decouple scheduler worker and add activity log filter` (Sprint 51.3)
+  - `2626ab8`: `docs(handoff): record complete Sprint 51 Daily Email Digest and bugfix history`
+  - `86fb843`: `fix(directory): resolve Hermes.N AD status discrepancy and add local account auto-heal` (Sprint 50)
+  - `0a4b0c3`: `feat(sync): implement true 2-way status sync with origin tracking and update spoke spec to v2.9.0` (Sprint 49)
+  - `e81f248`: `feat: add WA-RDT2 Remote Desktop spoke app with SAP B1 RBAC and dynamic RDP generation` (Sprint 48)
+  - `5027f34`: `feat(ai-copilot): enforce Zero-Training, DLP privacy scrubber, and No-External-Data-Use governance across CIAM and Spoke Framework` (Sprint 47)
+  - `a4688ff`: `feat(ai-copilot): enforce 100% read-only analytical parity, RBAC scoping, and Spoke Framework governance` (Sprint 47)
+  - `b23c3e9`: `fix(mcp): route /mcp and /api/v1/mcp directly to FastAPI backend so SSE returns 401 instead of 500` (Sprint 46)
+  - `db5b8c3`: `fix(auth): suppress session expired notice when user manually logs out` (Sprint 46)
+  - `b9a5ec0`: `feat(portal): pause SSO Portal 30-min idle timer while in Spoke App and return directly to /portal on App Client logout` (Sprint 46)
+  - `a0d9fb1`: `feat(session): add proactive zero-action session auto-logoff watchdog and OIDC single logout return flow` (Sprint 46)
 - **แนวทางเมื่อกลับมาพัฒนาต่อรอบหน้า (Pending Issues & Next Session Roadmap):**
-  1. **[เตรียมส่งมอบทีม Dev ระบบลูก] ส่งต่อ Spoke Specification v2.9.0 ให้แต่ละ App (MTPulse, IRM, QMS, QTOnline):**
-     - นำข้อกำหนดมาตรฐานใน `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` เวอร์ชัน **2.9.0** (หมวด D.6: True 2-Way Bi-directional Status Sync with Origin Tracking และหมวด B.3: SSO Callback Inactive Guard) ส่งต่อให้ Developer ของแต่ละระบบลูก
-     - ชี้แจงแนวปฏิบัติเรื่อง Inactive Guard: หากผู้ใช้ถูกระงับสิทธิ์ (Disable) ไม่ว่าจะเริ่มจากฝั่ง CIAM หรือเริ่มจาก Spoke เอง ระบบลูกต้องปฏิเสธการล็อกอิน และห้ามปลดล็อคคืนสถานะ Active เองโดยเด็ดขาด
-  2. **[พัฒนาระบบลูก - IRM Real-time Outbound Webhook Sync]:**
+  1. **[ตรวจสอบ Production Deployment บน VPS]:**
+     - ดำเนินการรันคำสั่ง Deploy บน `/var/www/Ciam` (ทั้ง `web` และ `api`) เพื่อให้โค้ด Sprints 54-57 มีผลบนเซิร์ฟเวอร์จริง:
+       - No WAIT for Direct Infra (`pfSense FAC/HO`, `M365`, `SAP B1`, `AD`, `WA-RDT2`)
+       - Debounced Search 300ms + ปุ่ม `✕` และการปลดล็อก `ghostOnly` จาก `localStorage`
+       - ปรับชื่อ-นามสกุล `Natcha.S` เป็น "Natcha Samrongsap" (PD) และรวม `Nattcha.S` (SAP B1) โดยอัตโนมัติ
+       - Default Sort By Name (A-Z) จัดพนักงานจริงขึ้นก่อนบัญชีเราเตอร์ช็อป
+  2. **[สื่อสาร Spoke Specification v2.11.0 ให้ทีม Dev ระบบลูก]:**
+     - นำข้อกำหนดมาตรฐานใน `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` เวอร์ชัน **2.11.0** (หมวด D.7: Least Privilege Auto-Provisioning, Timestamp Reconciliation & CIAM Authority Lock Standard) ส่งต่อให้ Developer ของแต่ละระบบลูก (MTPulse, IRM, QMS, QTOnline)
+     - เน้นย้ำ: หากแอดมิน CIAM กดล็อคสิทธิ์ (`is_status_locked`) ระบบลูกต้องเคารพสิทธิ์และไม่ส่งสถานะมาทับในรอบ Sync หรือ Heartbeat อีก
+  3. **[Windows Domain Controller - ADUC]:**
+     - ในอนาคตเมื่อแอดมินเข้าเครื่อง Domain Controller (`wa.net`): ตรวจสอบ Display Name ของ `Natcha.S` ใน AD Users & Computers (ADUC) และแก้ไขให้เป็น "Natcha Samrongsap" ใน AD ต้นทาง (ปัจจุบันระบบ CIAM มีกลไก Protection & Auto-Heal ล็อคให้แสดงผลถูกต้องแล้ว)
+  4. **[พัฒนาระบบลูก - IRM Real-time Outbound Webhook Sync]:**
      - ในระบบลูก เช่น IRM (`backend/app/routers/users.py`): ปัจจุบันเมื่อแอดมินปิด/เปิดสิทธิ์ จะอัปเดตเฉพาะฐานข้อมูล Local ของตนเอง ทำให้ CIAM ต้องรอรอบดึงข้อมูล (Reconciliation 04:00 น. หรือกดปุ่มซิงก์)
      - รอบถัดไป: พิจารณาเพิ่มคำสั่งยิง Webhook ขาออกจาก IRM มายัง Endpoint ของ CIAM ทันทีที่มีการ toggle active status เพื่อให้สถานะฝั่ง CIAM อัปเดตเป็น Inactive/Active แบบทันที (Real-time Instant Sync)
-  3. **[ตรวจสอบ Production Deployment บน VPS]:**
-     - ดำเนินการรันคำสั่ง Deploy บน `/var/www/Ciam` (ทั้ง `web` และ `api`) เพื่อให้โค้ด Auto-heal ของ `Hermes.N` และ True 2-Way Sync v2.9.0 มีผลบน Production จริง
-  4. **[เรื่องค้างสำคัญ] การปรับปรุงช่องทางเข้าใช้งาน SAP B1 (WA-RDT2 Remote Desktop vs SAP B1 Web Client):**
-     - **ปัญหาเดิม:** การกดปุ่มเข้าใช้งานแบบ RDP เดิมใช้วิธีดาวน์โหลดไฟล์ `wa-rdt2.rdp` ส่งผลให้เบราว์เซอร์สร้างไฟล์สะสมซ้ำๆ ในโฟลเดอร์ Downloads (`wa-rdt2 (1).rdp`, `wa-rdt2 (2).rdp`)
+  5. **[เรื่องค้างสำคัญ] การปรับปรุงช่องทางเข้าใช้งาน SAP B1 (WA-RDT2 Remote Desktop vs SAP B1 Web Client):**
+     - **ปัญหาเดิม:** การกดปุ่มเข้าใช้งานแบบ RDP เดิมใช้วิธีดาวน์โหลดไฟล์ `wa-rdt2.rdp` ส่งผลให้เบราว์เซอร์สร้างไฟล์สะสมซ้ำๆ ในโฟルเดอร์ Downloads (`wa-rdt2 (1).rdp`, `wa-rdt2 (2).rdp`)
      - **แนวทางแก้ไขที่อยู่ระหว่างพิจารณาตัดสินใจ:**
        - **แนวทาง A (ตรวจสอบ SAP Business One 10.0 Web Client):** ตรวจสอบว่าเครื่องเซิร์ฟเวอร์ SAP B1 (`WA-RDT2` IP `192.168.12.18`) มีการเปิดใช้งาน **SAP B1 Web Client** (พอร์ต `443` หรือ `2443`) หรือไม่ ผ่านหน้า System Landscape Directory (SLD: `https://<IP>:40000/ControlCenter/` แท็บ Services) หากเปิดใช้งานอยู่แล้ว จะสามารถปรับ Spoke Application ให้เชื่อมต่อไปยัง Web Client ตรงๆ แบบเดียวกับ MTPulse (`https://...`) ได้ทันที 100% โดยไม่ต้องใช้ Remote Desktop และไม่มีการดาวน์โหลดไฟล์ใดๆ
        - **แนวทาง B (Apache Guacamole Clientless HTML5 Gateway):** เพิ่ม Container Guacamole ลงใน Docker Compose ของ CIAM เพื่อแปลงสัญญาณ RDP พอร์ต `3389` ของ `192.168.12.18` (ผ่าน AD Gateway `192.168.12.11` / `172.18.0.1`) ให้พนักงานเปิดหน้าต่าง Desktop ของ Windows SAP B1 รันบนแท็บเบราว์เซอร์ได้ทันที
        - **แนวทาง C (Windows URI Protocol Handler `rdp://`):** สั่งเปิดโปรแกรม Remote Desktop Connection (`mstsc.exe`) บนเครื่องพนักงานตรงๆ ผ่าน Protocol โดยไม่ต้องดาวน์โหลดไฟล์ `.rdp` ลงโฟลเดอร์ Downloads
-  5. ตรวจสอบการเชื่อมต่อ Spoke Applications ใหม่ๆ เพิ่มเติม (เช่น QMS Production Cutover หรือการขยาย In-App AI Copilot ไปยังระบบลูก IRM / MTPulse ตามมาตรฐานหมวด E ของ `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`)
-  6. ตรวจสอบผลการทำงานของระบบ Proactive Session Watchdog และ AI Copilot Read-Only / Zero-Training บน Production VPS (`https://ciam.windowasia.com`)
+  6. ตรวจสอบการเชื่อมต่อ Spoke Applications ใหม่ๆ เพิ่มเติม (เช่น QMS Production Cutover หรือการขยาย In-App AI Copilot ไปยังระบบลูก IRM / MTPulse ตามมาตรฐานหมวด E ของ `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`)
+  7. ตรวจสอบผลการทำงานของระบบ Proactive Session Watchdog และ AI Copilot Read-Only / Zero-Training บน Production VPS (`https://ciam.windowasia.com`)
 
 ---
 

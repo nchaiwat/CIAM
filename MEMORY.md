@@ -842,5 +842,65 @@ FRONTEND_URL=http://localhost:3000
 * **5. Spoke Framework Standard (`SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` หมวด E ข้อ 11.1–11.5):**
   - บันทึกขอบเขต 4 เสาหลัก (100% Analytical Parity, Role-Based Access Control, Strict Read-Only / Zero-Mutation, และ Strict Zero-Training / No External Data Use) ลงในสเปกกลางเพื่อให้ทุกระบบลูกในเครือปฏิบัติตามมาตรฐานเดียวกัน
 
+---
 
+## 25. WA-RDT2 Remote Desktop Spoke & SAP B1 RBAC (Sprint 48)
+* **Spoke Application:** `wa_rdt2` (connector_type: `RDP`, category: `การเงินและ ERP`)
+* **Strict SAP B1 Account Entitlement:** พนักงานจะมองเห็นและกดเปิด Remote Desktop (`WA-RDT2`) ได้เฉพาะเมื่อมีบัญชีที่ Active ในระบบ SAP B1 (`sap_b1`) เท่านั้น
+* **Dynamic RDP Generator:** `/api/v1/oauth/portal/rdp/wa_rdt2.rdp` สร้างไฟล์ `.rdp` พร้อมกรอกโดเมน `WINDOWASIA\{sap_username}` และตั้งค่า Multimonitor, Clipboard, CredSSP อัตโนมัติ
 
+---
+
+## 26. True 2-Way Bi-directional Status Sync with Origin Tracking & Spec v2.9.0 (Sprint 49)
+* **First-Action Wins with Origin Tracking:**
+  - `status_origin = 'SPOKE_APP'`: เมื่อ Spoke ปิดสิทธิ์ในระบบตนเอง CIAM จะยอมรับสถานะตาม และไม่ส่งคำสั่ง Force Active คืนให้ Spoke เด็ดขาด
+  - `status_origin = 'CIAM_ADMIN'`: เมื่อแอดมินปิดสิทธิ์จาก CIAM Console จะส่งคำสั่งไปยัง Spoke ตามปกติ
+  - `is_active_in_app`, `status_origin`, `status_updated_at`, `status_reason` บันทึกใน `app_account_mappings`
+* **Hermes.N Local Account Isolation (Sprint 50):** บัญชีประเภท `LOCAL_ACCOUNT` เช่น `hermes.n`, `pinyada.s` จะถูกตัด mapping `ad` และกำหนด `effective_ad_active = False` ป้องกันไม่ให้ขึ้นจุดเขียว AD
+
+---
+
+## 27. Daily Executive Email Digest (07:00 AM) & SAP B1 Alert Interval (Sprints 51-52)
+* **Daily Security Email Digest (07:00 น.):**
+  - ส่งสรุป KPI ตัวตนรวม, บัญชีผีตกค้าง (Ghost Accounts), ระบบลูกออนไลน์, รายการ Offboarding ในรอบ 24 ชม.
+  - SMTP Engine รองรับ STARTTLS (พอร์ต 587) และ SSL (พอร์ต 465) พร้อมระบบ Envelope Address Sanitization และ `msg.as_bytes()`
+  - โหมดทดสอบ `POST /daily-digest/test-send` ส่งเฉพาะผู้รับที่ระบุ ไม่ส่งให้อีเมลแอดมินคนอื่น
+* **SAP B1 Real-Time Monitor (Sprint 52):** แจ้งเตือนเมื่อ Service Layer ขัดข้อง พร้อมกำหนดช่วงเวลาตรวจสอบ (Interval) และแจ้งเตือนผ่าน Telegram
+
+---
+
+## 28. Enterprise In-App 3-Layer Bot Defense & Spoke Spec v2.10.0 (Sprint 53)
+* **Zero External Dependency / Zero DNS Migration:**
+  - **Layer 1 (Rate Limiting):** Sliding-window 10 คำขอ / 60 วินาที ต่อ IP พร้อมยกเว้น Internal IP Whitelist
+  - **Layer 2 (Honeypot Trap):** ฟิลด์หลอก `corporate_fax`, `security_honey` หากบอทกรอกเข้ามาจะ Reject ทันทีด้วย HTTP 401
+  - **Layer 3 (Timing Guard):** ตรวจจับ `form_render_ts` หากส่งเร็วกว่า 400ms ถือเป็น Automation Script บันทึก Audit Log และ Reject
+* **Spoke Specification v2.10.0:** บรรจุหมวด 12 (หมวด F) ให้ทุกระบบลูกนำโค้ดและมาตรฐานไปปรับใช้
+
+---
+
+## 29. Direct Infrastructure Isolation, Timestamp Reconciliation & CIAM Authority Lock Standard v2.11.0 (Sprint 54)
+* **No WAIT for Direct Infra:**
+  - ระบบโครงสร้างพื้นฐานตรง (`pfSense FAC`, `pfSense HO`, `M365`, `SAP B1`, `AD`, `WA-RDT2`) เป็นเพียง Inventory Source
+  - ไม่มีสถานะ `WAIT` (`PENDING_PROVISION`) ค้างโดยเด็ดขาด 100% หากไม่พบในระบบจริง CIAM จะตัด Mapping ทันที
+  - เฉพาะ SSO Spokes แท้จริง (`IRM`, `QMS`, `MTPulse`, `QOL`) จึงจะมีสถานะ `WAIT` เมื่อรอสร้างหรือรอผู้ใช้ล็อกอิน SSO ครั้งแรก
+* **Least Privilege Auto-Provisioning:** บัญชีสร้างใหม่หรือสร้างไป Spoke เริ่มต้นด้วยสิทธิ์ต่ำสุดเสมอ (`Standard User` / `Viewer`)
+* **Timestamp Reconciliation:** เปรียบเทียบ `status_updated_at` (CIAM) กับ `spoke_status_updated_at` (Spoke) ฝั่งที่เวลากว่าล่าสุดเป็นฝ่ายชนะ
+* **CIAM Authority Lock (`[ 🔒 ล็อคสิทธิ์ ]` / `is_status_locked`):**
+  - แอดมิน CIAM กดล็อคสิทธิ์ใน Drawer `/directory`
+  - หากล็อคแล้ว Spoke จะไม่สามารถส่งสถานะมาทับในรอบ Sync หรือ Heartbeat ได้อีก (Reject พร้อม Audit Log `SPOKE_OVERRIDE_REJECTED`)
+* **Spoke Specification v2.11.0:** เพิ่มหมวด D.7 กำหนดมาตรฐาน Authority Lock และ Least Privilege
+
+---
+
+## 30. Real-time Search, Identity Disambiguation & Default Sort By Name (Sprints 55-57)
+* **Real-time Debounced Search (300ms) & Smart Ghost Unblock (Sprint 55):**
+  - ค้นหาแบบ Real-time Debounce 300ms พร้อมปุ่ม `✕` (Clear Search)
+  - ยกเลิกการจำค่า `ghostOnly` ใน `localStorage` เพื่อไม่ให้บล็อกพนักงานปกติ (เช่น `wat` -> `Chaiwat.N`)
+  - ค้นหายืดหยุ่นด้วย Space/Dot tolerance, Phonetic Transliteration (`wat` <-> `vat`), และ lower case matching
+* **Identity Disambiguation & Unification (Sprint 56):**
+  - แก้ไขนามสกุลของ `Natcha.S` ในแผนก PD จาก `Ratsameeruengdet` เป็น **`Natcha Samrongsap`** อย่างถูกต้อง และคง `Natcha.R` เป็น **`Natcha Ratsameeruengdet`**
+  - รวมตัวตน `Nattcha.S` (SAP B1 ตัวสะกด `tt`) เข้ากับ `Natcha.S` (AD) อัตโนมัติด้วย Auto-heal และ Phonetic rule `tt` <-> `t`
+* **Default Sort by Name (A-Z) with Employee Priority (Sprint 57):**
+  - หน้า `/directory` กำหนด `sortField: "name"` และ `sortOrder: "asc"` เป็นค่าเริ่มต้นเสมอ
+  - Backend API เพิ่ม `order_by(MasterIdentity.full_name.asc(), MasterIdentity.username.asc())`
+  - พนักงานองค์กรจริง (Corporate Employees) จะถูกเรียงตามชื่อ ก-ฮ / A-Z ขึ้นก่อน ส่วนบัญชีเราเตอร์สาขาที่ขึ้นต้นด้วยตัวเลข (`03 WA Shop...`, `05-WS...`) จะอยู่ท้ายตาราง
