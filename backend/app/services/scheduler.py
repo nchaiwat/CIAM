@@ -157,6 +157,10 @@ def persist_spoke_inventory(
                 alt_prefixes.append(p_low.replace("thai", "tai"))
             if "tai" in p_low and "thai" not in p_low:
                 alt_prefixes.append(p_low.replace("tai", "thai"))
+            if "tt" in p_low:
+                alt_prefixes.append(p_low.replace("tt", "t"))
+            if "t" in p_low and "tt" not in p_low:
+                alt_prefixes.append(p_low.replace("t", "tt"))
             for ap in alt_prefixes:
                 alt_uname = f"{ap}.{initial.lower()}"
                 identity = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == alt_uname).first()

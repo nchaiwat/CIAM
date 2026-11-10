@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 10 พฤศจิกายน 2026 (Local Time: ~05:30 ICT)  
+> **Date Updated:** 10 พฤศจิกายน 2026 (Local Time: ~09:20 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 94/94 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: feat(directory): real-time debounced search, resilient keyword matching and ghost-filter unblock
+> **Git Status:** Production Ready — Latest Commit: fix(identity): unify Natcha.S & Nattcha.S (Samrongsap) and separate from Natcha.R (Ratsameeruengdet)
 
 ---
 
@@ -15,7 +15,14 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Real-Time Debounced Search & Smart Ghost Filter Unblock (Sprint 55):**
+1. **Identity Disambiguation & Unification for Natcha.S / Nattcha.S / Natcha.R (Sprint 56):**
+   - **แก้ไขนามสกุลผิดพลาดของ `Natcha.S`:**
+     - สาเหตุ: ใน Active Directory มีผู้ใช้ชื่อ Natcha 2 ท่านในแผนก PD คือ `Natcha.R` (Natcha Ratsameeruengdet) และ `Natcha.S` (Natcha Samrongsap) แต่ใน AD เดิมตั้ง Display Name ของ `Natcha.S` เป็น Ratsameeruengdet ซ้ำกับ `Natcha.R`
+     - การแก้ไข: CIAM ล็อคและแก้ไข `full_name` ของ `Natcha.S` ให้เป็น **"Natcha Samrongsap"** อย่างถูกต้อง และคง `Natcha.R` เป็น **"Natcha Ratsameeruengdet"**
+   - **รวมตัวตน `Nattcha.S` (จาก SAP B1) เข้ากับ `Natcha.S` (ใน AD):**
+     - บัญชี `Nattcha.S` ที่มาจาก SAP B1 มีการสะกดตัวอักษรเบิ้ล `tt` ทำให้ระบบเดิมมองเป็นคนละคนและแยกเป็น `[Local Acc]`
+     - เพิ่มกลไก Auto-heal และ Phonetic Transliteration (`tt` <-> `t`) ใน `initial_data.py`, `scheduler.py`, และ `directory.py` เพื่อผสานสิทธิ์ SAP_B1 เข้าสู่ `Natcha.S` โดยอัตโนมัติ และลบแถวซ้ำซ้อนทิ้ง
+2. **Real-Time Debounced Search & Smart Ghost Filter Unblock (Sprint 55):**
    - **ระบบค้นหาแบบ Real-time Debounce (300ms):**
      - ผู้ใช้เพียงพิมพ์คำค้นหา (เช่น `wat`) ระบบจะค้นหาและแสดงผลให้อัตโนมัติทันที ไม่ต้องคลิกปุ่ม "ค้นหา" หรือกด Enter อีกต่อไป
      - เพิ่มปุ่ม `✕` (Clear Search) บนช่องค้นหาเพื่อล้างคำค้นหาได้อย่างรวดเร็วใน 1 คลิก

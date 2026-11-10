@@ -1327,7 +1327,7 @@ async def sync_active_directory_users(
         synced_count = persist_spoke_inventory(ad_app, raw_accounts, db, actor_username=current_admin.username)
 
         # Auto-heal phonetic / transliteration duplicate pairs into canonical AD identity
-        for canon_u, dup_u in [("wachirawoot.b", "wachirawut.b"), ("duanghathai.p", "duanghatai.p")]:
+        for canon_u, dup_u in [("wachirawoot.b", "wachirawut.b"), ("duanghathai.p", "duanghatai.p"), ("natcha.s", "nattcha.s")]:
             canonical_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == canon_u).first()
             dup_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == dup_u).first()
             if canonical_ident and dup_ident and canonical_ident.id != dup_ident.id:
@@ -1345,6 +1345,16 @@ async def sync_active_directory_users(
                 db.flush()
                 db.delete(dup_ident)
                 db.flush()
+
+        # Ensure correct surnames for Natcha.S and Natcha.R
+        natcha_s_i = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "natcha.s").first()
+        if natcha_s_i:
+            natcha_s_i.full_name = "Natcha Samrongsap"
+            db.flush()
+        natcha_r_i = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "natcha.r").first()
+        if natcha_r_i:
+            natcha_r_i.full_name = "Natcha Ratsameeruengdet"
+            db.flush()
 
         db.add(IamAuditLog(
             actor_username=current_admin.username,

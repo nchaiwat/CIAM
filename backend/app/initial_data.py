@@ -615,7 +615,7 @@ def init_db():
                             m.last_sync_status = "IN_SYNC"
 
         # Auto-heal phonetic / transliteration duplicate pairs into canonical AD identity
-        for canon_u, dup_u in [("wachirawoot.b", "wachirawut.b"), ("duanghathai.p", "duanghatai.p")]:
+        for canon_u, dup_u in [("wachirawoot.b", "wachirawut.b"), ("duanghathai.p", "duanghatai.p"), ("natcha.s", "nattcha.s")]:
             canonical_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == canon_u).first()
             duplicate_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == dup_u).first()
             if canonical_ident and duplicate_ident and canonical_ident.id != duplicate_ident.id:
@@ -635,6 +635,17 @@ def init_db():
                 db.delete(duplicate_ident)
                 db.flush()
                 logger.info("Successfully merged %s into %s (spoke mappings preserved)", dup_u, canon_u)
+
+        # Correct verified full names for Natcha.S and Natcha.R
+        natcha_s_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "natcha.s").first()
+        if natcha_s_ident:
+            natcha_s_ident.full_name = "Natcha Samrongsap"
+            db.flush()
+
+        natcha_r_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "natcha.r").first()
+        if natcha_r_ident:
+            natcha_r_ident.full_name = "Natcha Ratsameeruengdet"
+            db.flush()
 
         # Auto-recover MTPulse commands for legitimate IT users
         from app.models.application import SpokePendingCommand
