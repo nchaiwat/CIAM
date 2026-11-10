@@ -713,24 +713,12 @@ def init_db():
                     orphan.is_active_in_ad = False
                 db.flush()
 
-        # Ensure ENABLE_USER commands exist so MTPulse re-activates them on next heartbeat
-        for legit_u in ["Wimonpan.P", "Ronnakorn.P"]:
-            exists_cmd = db.query(SpokePendingCommand).filter(
-                SpokePendingCommand.app_code == "mtpulse",
-                SpokePendingCommand.action == "ENABLE_USER",
-                func.lower(SpokePendingCommand.username) == legit_u.lower(),
-                SpokePendingCommand.status.in_(["PENDING", "SENT"])
-            ).first()
-            if not exists_cmd:
-                db.add(SpokePendingCommand(
-                    command_id=f"cmd_recov_{secrets.token_hex(4)}",
-                    app_code="mtpulse",
-                    action="ENABLE_USER",
-                    username=legit_u,
-                    reason="Auto-Recovery: Re-enable legitimate corporate identity in MTPulse",
-                    status="PENDING",
-                    issued_by="System-AutoHeal"
-                ))
+        # Clean up any obsolete recovery commands for MTPulse
+        db.query(SpokePendingCommand).filter(
+            SpokePendingCommand.app_code == "mtpulse",
+            SpokePendingCommand.action == "ENABLE_USER",
+            SpokePendingCommand.command_id.like("cmd_recov_%")
+        ).delete()
  
         # 4. Seed Corporate VPN / Office Network Subnets
         vpn_setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "corporate_vpn_networks").first()

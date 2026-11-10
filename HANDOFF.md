@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 10 พฤศจิกายน 2026 (Local Time: ~09:40 ICT)  
+> **Date Updated:** 10 พฤศจิกายน 2026 (Local Time: ~11:30 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 94/94 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: feat(directory): default sort by employee name with genuine identity priority
+> **Test Integrity:** Backend Pytest: 91/91 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready — Latest Commit: fix(spoke): resolve mtpulse recurring enable_user command loop on container restarts
 
 ---
 
@@ -15,7 +15,17 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Default Sorting by Name (A-Z) with Employee Priority (Sprint 57):**
+1. **MTPulse Sync & Auto-Recovery Loop Resolution (Sprint 58):**
+   - **วิเคราะห์สาเหตุของประวัติ `AGENT:MTPULSE` ซิงก์คำสั่ง `AGENT_CMD_ENABLE_USER` ตลอดเวลา:**
+     - สาเหตุ: โค้ด Auto-Heal ใน `backend/app/initial_data.py` เคยมีบล็อกโค้ดสั่งสร้างคำสั่ง `ENABLE_USER` ให้กับ `Ronnakorn.P` และ `Wimonpan.P` ทุกครั้งที่ Backend Container (`api`) เริ่มทำงาน (`init_db()`) โดยตรวจสอบเฉพาะสถานะ `PENDING` และ `SENT`
+     - เมื่อ MTPulse ดึงคำสั่งไปรันบน DB ตนเองสำเร็จและตอบกลับมาว่า `COMPLETED` ทำให้คำสั่งไม่ค้างในสถานะ `PENDING`/`SENT` อีกต่อไป
+     - เมื่อผู้ดูแลระบบทำการ Deploy โค้ดหรือ Restart Container (เช่น ในรอบ 09:26 น., 09:46 น., 09:56 น.) โค้ดมองว่าไม่มีคำสั่งค้างอยู่ จึงสร้างคำสั่งใหม่ใส่คิวซ้ำ ส่งผลให้ MTPulse ได้รับคำสั่งและรายงาน Audit Log ซ้ำทุกครั้งที่มีการ Restart Container
+   - **การแก้ไข:**
+     - ถอดคำสั่ง Auto-queue `ENABLE_USER` ใน `initial_data.py` ออก เนื่องจากผู้ใช้ทั้งสองท่านมีสิทธิ์ Active ใน MTPulse สมบูรณ์แล้ว
+     - เพิ่มการ Purge คำสั่งกู้คืนเก่า (`cmd_recov_%`) ออกจากตาราง `spoke_pending_commands`
+     - คอนเฟิร์มพฤติกรรมการ Sync ของ MTPulse ตามมาตรฐาน Mode C (Outbound Reverse Heartbeat ทุก 120s): Heartbeat ตามปกติจะไม่มีการบันทึก Audit Log พร่ำเพรื่อ จะบันทึกเฉพาะเมื่อมีคำสั่งจาก Admin หรือผลลัพธ์จริงเท่านั้น
+
+2. **Default Sorting by Name (A-Z) with Employee Priority (Sprint 57):**
    - **กำหนดให้หน้าทะเบียนผู้ใช้ (`/directory`) จัดเรียงตามชื่อเป็นค่าเริ่มต้นทุกครั้งที่เข้ามา:**
      - กำหนด `sortField: "name"` และ `sortOrder: "asc"` เป็นค่าเริ่มต้นเสมอ
      - Backend API เพิ่ม `order_by(MasterIdentity.full_name.asc(), MasterIdentity.username.asc())`

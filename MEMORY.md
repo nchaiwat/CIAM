@@ -469,6 +469,10 @@ FRONTEND_URL=http://localhost:3000
 * **Developer Specifications & Agent Script:**
   - [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) หมวด D บันทึกสเปกฉบับเต็ม, JSON Schemas, ตัวอย่างสคริปต์ `ciam_agent.py` ที่พร้อม Copy ไปรันได้ทันที, พร้อมคู่มือ Systemd Service, Linux Crontab, และ Windows Task Scheduler
 
+### 11.4 Prevention of Recurring Seed Commands (Sprint 58)
+* คำสั่งใน `spoke_pending_commands` ต้องเกิดจากการกระทำจริงของแอดมินหรือความแตกต่างในรอบ Sync เท่านั้น
+* ห้ามใส่โค้ด hardcoded สร้างคำสั่ง `ENABLE_USER` / `DISABLE_USER` ใน `initial_data.py` ตอนเริ่มต้นคอนเทนเนอร์ เพราะเมื่อ Agent รายงานกลับมาเป็น `COMPLETED` การรีสตาร์ทคอนเทนเนอร์รอบใหม่จะทำให้โค้ดสร้างคำสั่งซ้ำวนลูปไม่สิ้นสุด
+
 ---
 
 ## 12. Same-Tab Portal Launch & Spoke Portal Switcher Architecture (Version 1.9.8)
