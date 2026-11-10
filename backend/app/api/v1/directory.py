@@ -183,7 +183,7 @@ def list_users(
     if search:
         raw_s = search.strip()
         s_low = raw_s.lower()
-        search_variants = {raw_s}
+        search_variants = {raw_s, s_low}
         if "thai" in s_low:
             search_variants.add(s_low.replace("thai", "tai"))
         if "tai" in s_low and "thai" not in s_low:
@@ -192,20 +192,44 @@ def list_users(
             search_variants.add(s_low.replace("wut", "woot"))
         if "woot" in s_low:
             search_variants.add(s_low.replace("woot", "wut"))
+        if "wat" in s_low:
+            search_variants.add(s_low.replace("wat", "vat"))
+        if "vat" in s_low and "wat" not in s_low:
+            search_variants.add(s_low.replace("vat", "wat"))
+
+        # Space and dot interchanging (e.g. "Chaiwat N" <-> "Chaiwat.N")
+        if " " in raw_s:
+            search_variants.add(raw_s.replace(" ", "."))
+            search_variants.add(s_low.replace(" ", "."))
+            search_variants.add(s_low.replace(" ", "%"))
+        if "." in raw_s:
+            search_variants.add(raw_s.replace(".", " "))
+            search_variants.add(s_low.replace(".", " "))
+            search_variants.add(s_low.replace(".", "%"))
 
         or_clauses = []
         for sv in search_variants:
             st = f"%{sv}%"
+            st_low = f"%{sv.lower()}%"
             mapped_ids_subq = (
                 db.query(AppAccountMapping.identity_id)
-                .filter(AppAccountMapping.app_username.ilike(st))
+                .filter(
+                    or_(
+                        AppAccountMapping.app_username.ilike(st),
+                        func.lower(AppAccountMapping.app_username).like(st_low)
+                    )
+                )
             )
             or_clauses.extend([
                 MasterIdentity.username.ilike(st),
+                func.lower(MasterIdentity.username).like(st_low),
                 MasterIdentity.full_name.ilike(st),
+                func.lower(MasterIdentity.full_name).like(st_low),
                 MasterIdentity.employee_id.ilike(st),
                 MasterIdentity.department.ilike(st),
+                func.lower(MasterIdentity.department).like(st_low),
                 MasterIdentity.email.ilike(st),
+                func.lower(MasterIdentity.email).like(st_low),
                 MasterIdentity.id.in_(mapped_ids_subq),
             ])
         query = query.filter(or_(*or_clauses))

@@ -7,7 +7,7 @@
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 94/94 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: feat(governance): direct infra isolation, timestamp reconciliation and ciam authority lock standard v2.11.0
+> **Git Status:** Production Ready — Latest Commit: feat(directory): real-time debounced search, resilient keyword matching and ghost-filter unblock
 
 ---
 
@@ -15,7 +15,17 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Direct Infrastructure Isolation, Timestamp Reconciliation & CIAM Authority Lock Standard v2.11.0 (Sprint 54):**
+1. **Real-Time Debounced Search & Smart Ghost Filter Unblock (Sprint 55):**
+   - **ระบบค้นหาแบบ Real-time Debounce (300ms):**
+     - ผู้ใช้เพียงพิมพ์คำค้นหา (เช่น `wat`) ระบบจะค้นหาและแสดงผลให้อัตโนมัติทันที ไม่ต้องคลิกปุ่ม "ค้นหา" หรือกด Enter อีกต่อไป
+     - เพิ่มปุ่ม `✕` (Clear Search) บนช่องค้นหาเพื่อล้างคำค้นหาได้อย่างรวดเร็วใน 1 คลิก
+   - **แก้ไขปัญหาปุ่ม "เฉพาะบัญชีตกค้าง" บล็อกการแสดงผลพนักงานปกติ:**
+     - สาเหตุเดิม: `ghostOnly` เคยถูกบันทึกลง `localStorage` ทำให้เมื่อเปิดหน้าเว็บใหม่ ตัวกรองบัญชีตกค้างจะยังคงค้างอยู่ (`has_ghost=true`) ส่งผลให้เมื่อค้นหาชื่อพนักงานปกติที่ Active ใน AD เช่น `wat` (`Chaiwat.N`) จะถูกตัดออกจากผลลัพธ์เพราะไม่ใช่บัญชีผี
+     - การแก้ไข: ยกเลิกการจำค่า `ghostOnly` ข้ามเซสชันใน `localStorage`, สั่งปิด `ghostOnly` อัตโนมัติเมื่อเลือกดรอปดาวน์ "แสดงทั้งหมด (All Accounts)", และเปลี่ยนป้ายปุ่มให้ชัดเจน `✓ กรองบัญชีตกค้าง (คลิกเพื่อยกเลิก)`
+     - เพิ่ม Smart Fallback ในตาราง: หากค้นหาคำใดแล้วไม่พบในโหมดบัญชีตกค้าง จะมีปุ่ม `[ 🔍 ค้นหา "{search}" จากบัญชีพนักงานทั้งหมด ]` เพื่อปลดตัวกรองและแสดงผลทันที
+   - **ขยายความยืดหยุ่นของ Keyword Matching ใน Backend:**
+     - รองรับการสลับเครื่องหมายจุดและเว้นวรรค (เช่น `Chaiwat N` <-> `Chaiwat.N`), การแปลงเสียง `wat` <-> `vat`, และค้นหาด้วย `func.lower(col).like()` ควบคู่กับ `.ilike()` เพื่อความแม่นยำ 100% บนทุกฐานข้อมูล
+2. **Direct Infrastructure Isolation, Timestamp Reconciliation & CIAM Authority Lock Standard v2.11.0 (Sprint 54):**
    - **แยกความแตกต่างระหว่าง Direct Infrastructure Systems กับ SSO Spoke Systems:**
      - ระบบโครงสร้างพื้นฐานตรง (`pfSense FAC`, `pfSense HO`, `M365`, `SAP B1`, `AD`, `WA-RDT2`) เป็นเพียง Inventory Source สำหรับอ่านข้อมูลและตรวจสอบบัญชีผี (Safe Audit) ไม่สามารถรับคำสั่ง Auto-Provisioning ได้
      - **กฎเหล็ก No WAIT for Direct Infra:** ระบบกลุ่มนี้จะ **ไม่มีสถานะ WAIT (`PENDING_PROVISION`) ค้างโดยเด็ดขาด 100%** หากในรอบซิงก์ 04:00 น. ไม่พบบัญชีในระบบจริง ระบบ CIAM จะตัด Mapping ออกจากตารางแสดงผลทันที เพื่อไม่ให้เกิดความสับสน

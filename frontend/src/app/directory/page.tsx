@@ -35,6 +35,7 @@ import {
   Settings,
   Lock,
   Unlock,
+  X,
 } from "lucide-react";
 import {
   ciamApi,
@@ -79,28 +80,39 @@ export default function DirectoryPage() {
   const [adminRoles, setAdminRoles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("active");
   const [appFilter, setAppFilter] = useState("");
   const [ghostOnly, setGhostOnly] = useState(false);
   const [filtersReady, setFiltersReady] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
 
+  // Debounce search input by 300ms for instant real-time typing response
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
 
-  // Load persistent filter preferences from localStorage (Point 6)
+  // Load persistent filter preferences from localStorage
   useEffect(() => {
     try {
       const savedStatus = localStorage.getItem("ciam_dir_status");
       if (savedStatus) setStatusFilter(savedStatus);
       const savedApp = localStorage.getItem("ciam_dir_app");
       if (savedApp !== null) setAppFilter(savedApp);
-      const savedGhost = localStorage.getItem("ciam_dir_ghost");
-      if (savedGhost !== null) setGhostOnly(savedGhost === "true");
+      // Clean up any old sticky ghost-only filter so directory starts clean
+      localStorage.removeItem("ciam_dir_ghost");
     } catch {}
     setFiltersReady(true);
   }, []);
 
   const handleStatusFilterChange = (val: string) => {
     setStatusFilter(val);
+    if (val === "all") {
+      setGhostOnly(false);
+    }
     try {
       localStorage.setItem("ciam_dir_status", val);
     } catch {}
@@ -114,13 +126,7 @@ export default function DirectoryPage() {
   };
 
   const handleGhostToggle = () => {
-    setGhostOnly((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("ciam_dir_ghost", String(next));
-      } catch {}
-      return next;
-    });
+    setGhostOnly((prev) => !prev);
   };
 
   // Role Management State
@@ -275,11 +281,12 @@ export default function DirectoryPage() {
     }
   };
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (searchTerm?: string) => {
     try {
       setLoading(true);
+      const querySearch = searchTerm !== undefined ? searchTerm : debouncedSearch;
       const data = await ciamApi.getUsers({
-        search: search || undefined,
+        search: querySearch.trim() || undefined,
         status: statusFilter || undefined,
         app_code: appFilter || undefined,
         has_ghost: ghostOnly ? true : undefined,
@@ -339,13 +346,14 @@ export default function DirectoryPage() {
   useEffect(() => {
     if (!filtersReady) return;
     setCurrentPage(1);
-    fetchUsers();
-  }, [filtersReady, statusFilter, appFilter, ghostOnly]);
+    fetchUsers(debouncedSearch);
+  }, [filtersReady, statusFilter, appFilter, ghostOnly, debouncedSearch]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentPage(1);
-    fetchUsers();
+    setDebouncedSearch(search);
+    fetchUsers(search);
   };
 
   // When selectedUser changes, initialize selectedRole and reset assign app state
@@ -1034,7 +1042,7 @@ export default function DirectoryPage() {
       {/* Search & Filters Toolbar (Sticky Freeze on Scroll) */}
       <div className="sticky top-11 z-20 bg-white/95 backdrop-blur-xs p-2 rounded-md border border-slate-300 shadow-xs">
         <form onSubmit={handleSearchSubmit} className="flex flex-col md:flex-row items-center gap-2">
-          {/* Search Input */}
+          {/* Search Input with Instant Clear */}
           <div className="relative flex-1 w-full">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -1042,8 +1050,21 @@ export default function DirectoryPage() {
               placeholder="ค้นหาด้วย รหัสพนักงาน, ชื่อ, Username หรือ แผนก..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-100"
+              className="w-full pl-9 pr-8 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-100"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  setDebouncedSearch("");
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 cursor-pointer"
+                title="ล้างคำค้นหา"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Filters */}
@@ -1073,19 +1094,18 @@ export default function DirectoryPage() {
               ))}
             </select>
 
-
-
             <button
               type="button"
               onClick={handleGhostToggle}
               className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-md text-xs font-bold transition-all border cursor-pointer ${
                 ghostOnly
-                  ? "bg-amber-400 text-amber-950 border-amber-500 shadow-2xs"
+                  ? "bg-amber-400 text-amber-950 border-amber-500 shadow-2xs hover:bg-amber-500"
                   : "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200"
               }`}
+              title={ghostOnly ? "กำลังกรองเฉพาะบัญชีตกค้าง คลิกเพื่อยกเลิกและดูบัญชีทั้งหมด" : "กรองเฉพาะบัญชีตกค้าง"}
             >
               <AlertTriangle className={`w-3.5 h-3.5 ${ghostOnly ? "text-amber-950" : "text-slate-500"}`} />
-              <span>เฉพาะบัญชีตกค้าง</span>
+              <span>{ghostOnly ? "✓ กรองบัญชีตกค้าง (คลิกเพื่อยกเลิก)" : "เฉพาะบัญชีตกค้าง"}</span>
             </button>
 
             <button
@@ -1189,8 +1209,32 @@ export default function DirectoryPage() {
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500 text-sm font-semibold">
-                    ไม่พบข้อมูลผู้ใช้ที่ตรงตามเงื่อนไข
+                  <td colSpan={6} className="py-12 text-center">
+                    {ghostOnly && search.trim() ? (
+                      <div className="space-y-3 max-w-md mx-auto">
+                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 text-amber-700">
+                          <AlertTriangle className="w-5 h-5" />
+                        </div>
+                        <p className="text-slate-800 font-bold text-sm">
+                          ไม่พบบัญชีตกค้างที่ตรงกับคำค้นหา &ldquo;{search}&rdquo;
+                        </p>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          เนื่องจากกำลังเปิดตัวกรอง <strong>&ldquo;เฉพาะบัญชีตกค้าง&rdquo;</strong> จึงแสดงเฉพาะบัญชีที่ Inactive ใน AD แต่ยังค้างสิทธิ์ในระบบลูก (หากต้องการค้นหาพนักงานปกติ กรุณากดปุ่มด้านล่าง)
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setGhostOnly(false)}
+                          className="inline-flex items-center space-x-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-bold transition-all shadow-sm cursor-pointer hover:scale-105 active:scale-95"
+                        >
+                          <Search className="w-3.5 h-3.5" />
+                          <span>ค้นหา &ldquo;{search}&rdquo; จากบัญชีพนักงานทั้งหมด</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 text-sm font-semibold">
+                        ไม่พบข้อมูลผู้ใช้ที่ตรงตามเงื่อนไข
+                      </div>
+                    )}
                   </td>
                 </tr>
               ) : (
