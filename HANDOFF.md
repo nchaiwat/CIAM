@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 12 พฤศจิกายน 2026 (Local Time: ~08:45 ICT)  
+> **Date Updated:** 12 พฤศจิกายน 2026 (Local Time: ~09:35 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 91/91 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: fix(sync): preserve admin identity merges and add ck-k transliteration for julaluk.b/Julaluck.B
+> **Test Integrity:** Backend Pytest: 92/92 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready — Latest Commit: fix(sync): preserve admin identity merges and add ck-k transliteration for julaluk.b/Julaluck.B (Commit `bfe2fa0`)
 
 ---
 
@@ -17,40 +17,39 @@
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
 1. **Identity Disambiguation & Persistent Mapping Preservation for Julaluck.B / julaluk.b (Sprint 60):**
    - **วิเคราะห์สาเหตุที่การรวมตัวตนหลุดกลับมาเป็นบัญชีผีอีกในตอนเช้า:**
-     - สาเหตุ: บน Active Directory พนักงานใช้ Username Julaluck.B (สะกดด้วย ck) แต่บน Microsoft 365 (Entra ID & Exchange) บัญชีเมลใช้ julaluk.b@windowasia.com (สะกดด้วย k ตัวเดียว)
-     - เมื่อแอดมินกดรวมตัวตนในหน้าเว็บ ระบบผูก AppAccountMapping เข้ากับ Julaluck.B และลบ Identity julaluk.b ตัวชั่วคราวทิ้ง
-     - แต่ในรอบ **Auto-Sync ประจำวันเวลา 04:00 น.** ฟังก์ชัน persist_spoke_inventory ดึงบัญชีจาก M365 เข้ามาพบ julaluk.b โดย:
-       1) ค้นหาใน MasterIdentity ด้วยชื่อ julaluk.b ไม่พบ (เนื่องจากใน AD ชื่อ Julaluck.B มีตัว c)
-       2) ระบบยังไม่มีการแปลงเสียงคำสะกด ck <-> k (มีเพียง 	t <-> 	, 	hai <-> 	ai, wut <-> woot)
-       3) ระบบเดิม **ไม่ได้ตรวจสอบว่าบัญชีนี้เคยถูก Admin ผูกสิทธิ์ไว้ใน AppAccountMapping ของตัวตนหลักใดอยู่แล้วหรือไม่**
-       4) ส่งผลให้ระบบสร้าง MasterIdentity ใหม่ชื่อ julaluk.b (is_active_in_ad: False) และดึงเอา Mapping ของ M365 กลับไปผูกกับบัญชีใหม่ กลายเป็นบัญชีผี (Ghost Account) อีกครั้ง และถูกส่งรายงานสรุปทางอีเมลรอบ 07:00 น.
+     - สาเหตุ: บน Active Directory พนักงานใช้ Username `Julaluck.B` (สะกดด้วย `ck`) แต่บน Microsoft 365 (Entra ID & Exchange) บัญชีเมลใช้ `julaluk.b@windowasia.com` (สะกดด้วย `k` ตัวเดียว)
+     - เมื่อแอดมินกดรวมตัวตนในหน้าเว็บ ระบบผูก `AppAccountMapping` เข้ากับ `Julaluck.B` และลบ Identity `julaluk.b` ตัวชั่วคราวทิ้ง
+     - แต่ในรอบ **Auto-Sync ประจำวันเวลา 04:00 น.** ฟังก์ชัน `persist_spoke_inventory` ดึงบัญชีจาก M365 เข้ามาพบ `julaluk.b` โดย:
+       1) ค้นหาใน `MasterIdentity` ด้วยชื่อ `julaluk.b` ไม่พบ (เนื่องจากใน AD ชื่อ `Julaluck.B` มีตัว `c`)
+       2) ระบบยังไม่มีการแปลงเสียงคำสะกด `ck` <-> `k` (มีเพียง `tt` <-> `t`, `thai` <-> `tai`, `wut` <-> `woot`)
+       3) ระบบเดิม **ไม่ได้ตรวจสอบว่าบัญชีนี้เคยถูก Admin ผูกสิทธิ์ไว้ใน `AppAccountMapping` ของตัวตนหลักใดอยู่แล้วหรือไม่**
+       4) ส่งผลให้ระบบสร้าง `MasterIdentity` ใหม่ชื่อ `julaluk.b` (`is_active_in_ad: False`) และดึงเอา Mapping ของ M365 กลับไปผูกกับบัญชีใหม่ กลายเป็นบัญชีผี (Ghost Account) อีกครั้ง และถูกส่งรายงานสรุปทางอีเมลรอบ 07:00 น.
    - **การแก้ไขและป้องกันถาวร (Permanent Fix):**
-     1) **Persistent Mapping Awareness:** ใน scheduler.py หากไม่พบบัญชีใน MasterIdentity ให้ตรวจสอบจากตาราง AppAccountMapping ว่าเคยถูก Admin มอบหมายหรือรวมเข้ากับ MasterIdentity ตัวใดไว้แล้วหรือไม่ หากมี ให้ใช้ Identity นั้นทันที เพื่อเคารพและคงผลการรวมตัวตนของ Admin ไว้อย่างถาวร
-     2) **Phonetic Transliteration (ck <-> k):** เพิ่มกฎการแปลงเสียง ck <-> k (เช่น julaluk <-> julaluck) ใน scheduler.py, directory.py และ mcp/server.py เพื่อให้ระบบค้นหาและผูกบัญชีเข้าด้วยกันโดยอัตโนมัติ
-     3) **Automatic Email Inheritance:** ใน merge_and_link_identity (directory.py) ให้ทำการสืบทอดอีเมล M365 (julaluk.b@windowasia.com) ไปยัง 	arget_identity.email ทันทีที่กดรวม
-     4) **Auto-Heal on Startup:** ใน initial_data.py เพิ่มบล็อกประสานสิทธิ์ julaluk.b เข้าสู่ Julaluck.B อัตโนมัติเมื่อ Start Container
-     5) **Unit Test Suite:** เพิ่ม 	est_julaluk_m365_sync_preserves_merge_and_aliases ใน 	est_identity_linking_exception.py ผ่าน 100%
+     1) **Persistent Mapping Awareness:** ใน `scheduler.py` หากไม่พบบัญชีใน `MasterIdentity` ให้ตรวจสอบจากตาราง `AppAccountMapping` ว่าเคยถูก Admin มอบหมายหรือรวมเข้ากับ `MasterIdentity` ตัวใดไว้แล้วหรือไม่ หากมี ให้ใช้ Identity นั้นทันที เพื่อเคารพและคงผลการรวมตัวตนของ Admin ไว้อย่างถาวร
+     2) **Phonetic Transliteration (`ck` <-> `k`):** เพิ่มกฎการแปลงเสียง `ck` <-> `k` (เช่น `julaluk` <-> `julaluck`) ใน `scheduler.py`, `directory.py` และ `mcp/server.py` เพื่อให้ระบบค้นหาและผูกบัญชีเข้าด้วยกันโดยอัตโนมัติ
+     3) **Automatic Email Inheritance:** ใน `merge_and_link_identity` (`directory.py`) ให้ทำการสืบทอดอีเมล M365 (`julaluk.b@windowasia.com`) ไปยัง `target_identity.email` ทันทีที่กดรวม
+     4) **Auto-Heal on Startup:** ใน `initial_data.py` เพิ่มบล็อกประสานสิทธิ์ `julaluk.b` เข้าสู่ `Julaluck.B` อัตโนมัติเมื่อ Start Container
+     5) **Unit Test Suite:** เพิ่ม `test_julaluk_m365_sync_preserves_merge_and_aliases` ใน `test_identity_linking_exception.py` ผ่าน 100%
 
 2. **Enterprise 90-Day Local Password Rotation, Complexity & Spoke Framework v2.12.0 (Sprint 59):**
    - **90-Day Forced Password Expiration / Rotation Policy:**
-     - บังคับใช้นโยบายความปลอดภัยหมุนเวียนรหัสผ่านท้องถิ่นทุกๆ 90 วัน (LOCAL_PASSWORD_EXPIRY_DAYS = 90) ตามมาตรฐาน ISO 27001 และ NIST SP 800-63B
-     - เพิ่มคอลัมน์ password_changed_at ในโมเดล AdminUser พร้อม auto-migration และ backfill จาก created_at
-     - เพิ่มฟังก์ชัน check_password_expiry() คำนวณวันหมดอายุ วันคงเหลือ และสถานะ is_password_expired ส่งต่อไปยัง API (/login, /me, PUT /profile)
+     - บังคับใช้นโยบายความปลอดภัยหมุนเวียนรหัสผ่านท้องถิ่นทุกๆ 90 วัน (`LOCAL_PASSWORD_EXPIRY_DAYS = 90`) ตามมาตรฐาน ISO 27001 และ NIST SP 800-63B
+     - เพิ่มคอลัมน์ `password_changed_at` ในโมเดล `AdminUser` พร้อม auto-migration และ backfill จาก `created_at`
+     - เพิ่มฟังก์ชัน `check_password_expiry()` คำนวณวันหมดอายุ วันคงเหลือ และสถานะ `is_password_expired` ส่งต่อไปยัง API (`/login`, `/me`, `PUT /profile`)
    - **Enterprise Password Complexity Requirements (8 - 16 ตัวอักษร):**
      - ยกระดับจาก 8-10 ตัวอักษรเดิมเป็น **8 - 16 ตัวอักษร**
      - กฎเกณฑ์เข้มงวด: ตัวพิมพ์ใหญ่ (A-Z) >= 1, ตัวพิมพ์เล็ก (a-z) >= 1, ตัวเลข (0-9) >= 1, อักขระพิเศษ (!@#$%^&*...) >= 1, และห้ามมี Username ปะปน
-     - ตรวจสอบความถูกต้องทั้งระดับ Backend (alidate_password_complexity) และ Client-side ฟอร์มกรอกรหัสผ่าน
+     - ตรวจสอบความถูกต้องทั้งระดับ Backend (`validate_password_complexity`) และ Client-side ฟอร์มกรอกรหัสผ่าน
    - **Frontend App Portal & Directory UX:**
-     - Header Key button บน Employee Portal (/portal): แสดง Badge สีส้มแจ้งเตือนเมื่อรหัสผ่านใกล้หมดอายุ (<= 14 วัน) และ Badge สีแดงเมื่อหมดอายุ
-     - Quarantine Modal: หากรหัสผ่านหมดอายุครบ 90 วัน หรือถูกตั้งค่า must_change_password = true ระบบจะบล็อกการเปิดใช้งานระบบลูกและบังคับเปลี่ยนรหัสผ่านทันที
-     - อัปเดตหน้า /directory แจ้งกฎเกณฑ์ 8 - 16 ตัวอักษร และรอบหมดอายุ 90 วัน
+     - Header Key button บน Employee Portal (`/portal`): แสดง Badge สีส้มแจ้งเตือนเมื่อรหัสผ่านใกล้หมดอายุ (<= 14 วัน) และ Badge สีแดงเมื่อหมดอายุ
+     - Quarantine Modal: หากรหัสผ่านหมดอายุครบ 90 วัน หรือถูกตั้งค่า `must_change_password = true` ระบบจะบล็อกการเปิดใช้งานระบบลูกและบังคับเปลี่ยนรหัสผ่านทันที
+     - อัปเดตหน้า `/directory` แจ้งกฎเกณฑ์ 8 - 16 ตัวอักษร และรอบหมดอายุ 90 วัน
    - **Spoke Enterprise Integration Specification v2.12.0 (หมวด G ข้อ 13):**
      - บรรจุข้อกำหนดมาตรฐานความปลอดภัยรหัสผ่านสำหรับระบบลูกทุกระบบ พร้อมโค้ด Framework ตัวอย่างสำเร็จรูปทั้ง Python (FastAPI/SQLAlchemy), Node.js (TypeScript), PHP (PDO) และ React Form
-     - อัปเดตลิงก์ดาวน์โหลดสเปกบนหน้า /applications และ Modal Changelog เป็น v2.12.0
-   - **Test Suite Integrity 100%:** เพิ่ม ackend/tests/test_password_policy.py และปรับปรุง 	est_api_flow.py รวมชุดทดสอบผ่าน 91/91 passed (100%) และ Frontend TypeScript 
-px tsc --noEmit 0 errors
+     - อัปเดตลิงก์ดาวน์โหลดสเปกบนหน้า `/applications` และ Modal Changelog เป็น `v2.12.0`
+   - **Test Suite Integrity 100%:** เพิ่ม `backend/tests/test_password_policy.py` และปรับปรุง `test_api_flow.py` รวมชุดทดสอบผ่าน 92/92 passed (100%) และ Frontend TypeScript `npx tsc --noEmit` 0 errors (100%)
 
-2. **MTPulse Sync & Auto-Recovery Loop Resolution (Sprint 58):**
+3. **MTPulse Sync & Auto-Recovery Loop Resolution (Sprint 58):**
    - **วิเคราะห์สาเหตุของประวัติ `AGENT:MTPULSE` ซิงก์คำสั่ง `AGENT_CMD_ENABLE_USER` ตลอดเวลา:**
      - สาเหตุ: โค้ด Auto-Heal ใน `backend/app/initial_data.py` เคยมีบล็อกโค้ดสั่งสร้างคำสั่ง `ENABLE_USER` ให้กับ `Ronnakorn.P` และ `Wimonpan.P` ทุกครั้งที่ Backend Container (`api`) เริ่มทำงาน (`init_db()`) โดยตรวจสอบเฉพาะสถานะ `PENDING` และ `SENT`
      - เมื่อ MTPulse ดึงคำสั่งไปรันบน DB ตนเองสำเร็จและตอบกลับมาว่า `COMPLETED` ทำให้คำสั่งไม่ค้างในสถานะ `PENDING`/`SENT` อีกต่อไป
@@ -60,7 +59,7 @@ px tsc --noEmit 0 errors
      - เพิ่มการ Purge คำสั่งกู้คืนเก่า (`cmd_recov_%`) ออกจากตาราง `spoke_pending_commands`
      - คอนเฟิร์มพฤติกรรมการ Sync ของ MTPulse ตามมาตรฐาน Mode C (Outbound Reverse Heartbeat ทุก 120s): Heartbeat ตามปกติจะไม่มีการบันทึก Audit Log พร่ำเพรื่อ จะบันทึกเฉพาะเมื่อมีคำสั่งจาก Admin หรือผลลัพธ์จริงเท่านั้น
 
-2. **Default Sorting by Name (A-Z) with Employee Priority (Sprint 57):**
+4. **Default Sorting by Name (A-Z) with Employee Priority (Sprint 57):**
    - **กำหนดให้หน้าทะเบียนผู้ใช้ (`/directory`) จัดเรียงตามชื่อเป็นค่าเริ่มต้นทุกครั้งที่เข้ามา:**
      - กำหนด `sortField: "name"` และ `sortOrder: "asc"` เป็นค่าเริ่มต้นเสมอ
      - Backend API เพิ่ม `order_by(MasterIdentity.full_name.asc(), MasterIdentity.username.asc())`
@@ -68,7 +67,7 @@ px tsc --noEmit 0 errors
      - บัญชีพนักงานขององค์กร (Corporate Employees) จะถูกจัดเรียงตามชื่อภาษาไทย/อังกฤษ ก-ฮ / A-Z ขึ้นมาแสดงในหน้าแรกทันที
      - บัญชีเราเตอร์ VPN สาขาที่ขึ้นต้นด้วยตัวเลขและรหัสช็อป (เช่น `03 WA Shop...`, `05-WS...`) จะถูกส่งไปอยู่ท้ายตาราง ทำให้เปิดหน้าจอมาจะเห็นรายชื่อพนักงานทันที ไม่ถูกบัญชีช็อปแย่งพื้นที่
 
-2. **Identity Disambiguation & Unification for Natcha.S / Nattcha.S / Natcha.R (Sprint 56):**
+5. **Identity Disambiguation & Unification for Natcha.S / Nattcha.S / Natcha.R (Sprint 56):**
    - **แก้ไขนามสกุลผิดพลาดของ `Natcha.S`:**
      - สาเหตุ: ใน Active Directory มีผู้ใช้ชื่อ Natcha 2 ท่านในแผนก PD คือ `Natcha.R` (Natcha Ratsameeruengdet) และ `Natcha.S` (Natcha Samrongsap) แต่ใน AD เดิมตั้ง Display Name ของ `Natcha.S` เป็น Ratsameeruengdet ซ้ำกับ `Natcha.R`
      - การแก้ไข: CIAM ล็อคและแก้ไข `full_name` ของ `Natcha.S` ให้เป็น **"Natcha Samrongsap"** อย่างถูกต้อง และคง `Natcha.R` เป็น **"Natcha Ratsameeruengdet"**
@@ -76,7 +75,7 @@ px tsc --noEmit 0 errors
      - บัญชี `Nattcha.S` ที่มาจาก SAP B1 มีการสะกดตัวอักษรเบิ้ล `tt` ทำให้ระบบเดิมมองเป็นคนละคนและแยกเป็น `[Local Acc]`
      - เพิ่มกลไก Auto-heal และ Phonetic Transliteration (`tt` <-> `t`) ใน `initial_data.py`, `scheduler.py`, และ `directory.py` เพื่อผสานสิทธิ์ SAP_B1 เข้าสู่ `Natcha.S` โดยอัตโนมัติ และลบแถวซ้ำซ้อนทิ้ง
 
-3. **Real-Time Debounced Search & Smart Ghost Filter Unblock (Sprint 55):**
+6. **Real-Time Debounced Search & Smart Ghost Filter Unblock (Sprint 55):**
    - **ระบบค้นหาแบบ Real-time Debounce (300ms):**
      - ผู้ใช้เพียงพิมพ์คำค้นหา (เช่น `wat`) ระบบจะค้นหาและแสดงผลให้อัตโนมัติทันที ไม่ต้องคลิกปุ่ม "ค้นหา" หรือกด Enter อีกต่อไป
      - เพิ่มปุ่ม `✕` (Clear Search) บนช่องค้นหาเพื่อล้างคำค้นหาได้อย่างรวดเร็วใน 1 คลิก
@@ -87,7 +86,7 @@ px tsc --noEmit 0 errors
    - **ขยายความยืดหยุ่นของ Keyword Matching ใน Backend:**
      - รองรับการสลับเครื่องหมายจุดและเว้นวรรค (เช่น `Chaiwat N` <-> `Chaiwat.N`), การแปลงเสียง `wat` <-> `vat`, และค้นหาด้วย `func.lower(col).like()` ควบคู่กับ `.ilike()` เพื่อความแม่นยำ 100% บนทุกฐานข้อมูล
 
-4. **Direct Infrastructure Isolation, Timestamp Reconciliation & CIAM Authority Lock Standard v2.11.0 (Sprint 54):**
+7. **Direct Infrastructure Isolation, Timestamp Reconciliation & CIAM Authority Lock Standard v2.11.0 (Sprint 54):**
    - **แยกความแตกต่างระหว่าง Direct Infrastructure Systems กับ SSO Spoke Systems:**
      - ระบบโครงสร้างพื้นฐานตรง (`pfSense FAC`, `pfSense HO`, `M365`, `SAP B1`, `AD`, `WA-RDT2`) เป็นเพียง Inventory Source สำหรับอ่านข้อมูลและตรวจสอบบัญชีผี (Safe Audit) ไม่สามารถรับคำสั่ง Auto-Provisioning ได้
      - **กฎเหล็ก No WAIT for Direct Infra:** ระบบกลุ่มนี้จะ **ไม่มีสถานะ WAIT (`PENDING_PROVISION`) ค้างโดยเด็ดขาด 100%** หากในรอบซิงก์ 04:00 น. ไม่พบบัญชีในระบบจริง ระบบ CIAM จะตัด Mapping ออกจากตารางแสดงผลทันที เพื่อไม่ให้เกิดความสับสน
@@ -104,7 +103,7 @@ px tsc --noEmit 0 errors
      - อัปเดตลิงก์ดาวน์โหลดบนหน้าเว็บและ Revision Changelog Modal เป็น `v2.11.0`
    - **Test Suite Integrity 100%:** เพิ่ม `backend/tests/test_spoke_authority_lock.py` รวมชุดทดสอบ 94/94 passed (100%) และ Frontend `npx tsc --noEmit` 0 errors (100%)
 
-5. **Enterprise In-App 3-Layer Bot Defense & Spoke Framework Specification v2.10.0 (Sprint 53):**
+8. **Enterprise In-App 3-Layer Bot Defense & Spoke Framework Specification v2.10.0 (Sprint 53):**
    - **สถาปัตยกรรมป้องกันบอทในแอปพลิเคชัน 3 ชั้น (Zero External Dependency / Zero DNS Migration):**
      - **Layer 1 (Sliding-Window IP Rate Limiter):** ดักจับและจำกัดความถี่ 10 คำขอ / 60 วินาที ต่อ Client IP Address สำหรับ Endpoint ยืนยันตัวตน (`/api/v1/auth/login`) พร้อม Header `Retry-After: {seconds}` ตามมาตรฐาน RFC 6585 และยกเว้น IP ภายในองค์กร (Whitelist: Localhost, Docker Bridge `172.18.0.1`, VPS `157.173.219.153`, HQ WAN `49.231.185.245`)
      - **Layer 2 (Decoy Honeypot Trap):** วางกับดักฟิลด์หลอก `corporate_fax` และ `security_honey` ซ่อนอยู่นอกจอ (`position: absolute; left: -9999px; opacity: 0; pointer-events: none;` พร้อม `tabIndex={-1}`, `aria-hidden="true"`, `autoComplete="off"`) หากบอทหรือสคริปต์กรอกค่าเข้ามา ระบบจะบันทึก Audit Log `BOT_HONEYPOT_DETECTED` และ Reject ทันทีด้วย HTTP 401
@@ -114,7 +113,7 @@ px tsc --noEmit 0 errors
      - อัปเดตลิงก์ดาวน์โหลดสเปกบนหน้า `/applications` เป็น `v2.10.0` พร้อมเพิ่มประวัติใน Modal Changelog
    - **ชุดทดสอบความปลอดภัย 100%:** เพิ่ม `backend/tests/test_bot_defense.py` ครอบคลุม Rate Limiting, Honeypot, Timing Guard และ Whitelist รวม 5/5 tests (ทั้งระบบ 92/92 tests ผ่าน 100%) และ Frontend TypeScript `npx tsc --noEmit` 0 errors
 
-6. **SAP B1 Real-Time Monitor & Configurable Interval Alerts (Sprint 52):**
+9. **SAP B1 Real-Time Monitor & Configurable Interval Alerts (Sprint 52):**
    - **จำกัดผู้รับในโหมดส่งทดสอบเฉพาะคนที่ระบุ & Auto-Heal อีเมล Admin ในฐานข้อมูล (Sprint 51.3):**
      - **สาเหตุที่มีอีเมลคนอื่นติดไปด้วย:** บนหน้าจอมีตัวเลือกเปิดใช้งาน `[✓] ส่งสำเนาให้อีเมลของ Admin ทุกคนที่มีในระบบอัตโนมัติ (Notify All Active Admins)` ซึ่งระบบจะไปดึงอีเมลของ Admin ทุกคนในตาราง `central_iam_admins` มาต่อท้ายรายชื่อผู้รับเสมอ
      - **การแก้ไข:**
@@ -136,7 +135,7 @@ px tsc --noEmit 0 errors
      - **สถาปัตยกรรม Error Handling & Rollback Resilience:** ครอบฟังก์ชัน `send_daily_digest_email` ด้วย `try...except` ชั้นนอกสุด หากการส่งล้มเหลวหรือเกิด Exception ใดๆ จะทำ `db.rollback()` และบันทึกประวัติ `IamAuditLog` ด้วยสถานะ `FAILED` เสมอ ไม่มีวันเกิด Unhandled 500 Error หลุดไปยังหน้าเว็บอีกต่อไป
      - **Unit Tests Coverage:** เพิ่มการทดสอบความยาวผู้รับ, การจำลอง SMTP ล้มเหลว, และการสกัด Envelope รวม 7/7 tests ผ่าน 100% (ชุดทดสอบทั้งระบบ 81/81 passed 100%)
 
-7. **Daily Security & Identity Email Digest (07:00 AM) & SMTP Engine (Sprint 51):**
+10. **Daily Security & Identity Email Digest (07:00 AM) & SMTP Engine (Sprint 51):**
    - **ระบบรายงานสรุปความเสี่ยงและสถานะประจำวันทางอีเมล (Executive Morning Digest):**
      - กำหนดเวลาส่งอัตโนมัติรอบเช้า **07:00 น.** (Asia/Bangkok) หลังรอบ Auto-Sync 04:00 น. เพื่อให้ผู้บริหาร IT และ Admin ได้รับรายงานสรุปก่อนเริ่มงาน
      - สร้าง Backend Engine `backend/app/services/daily_digest_service.py`:
@@ -164,7 +163,7 @@ px tsc --noEmit 0 errors
        - ปุ่ม **[ ⚡ ส่งทดสอบทันที ]** พร้อมแสดงผลลัพธ์การส่งและประเมินระดับความเสี่ยง
      - **Unit Tests Coverage:** เพิ่ม `backend/tests/test_daily_email_digest.py` ครอบคลุมการตั้งค่า, การคำนวณ KPI, การเรนเดอร์ HTML, API endpoints และการส่งเมลแบบ Mock (ผ่าน 4/4 tests 100%)
 
-8. **Hermes.N Local Account AD Isolation & Auto-Heal Fix (Sprint 50):**
+11. **Hermes.N Local Account AD Isolation & Auto-Heal Fix (Sprint 50):**
    - **แก้ปัญหาบัญชี Hermes.N แสดงสถานะอยู่ใน AD และ Active ผิดพลาด:**
      - สาเหตุเดิม: ใน `backend/app/initial_data.py` เดิมมี seed data ที่ระบุ `Hermes.N` มี `is_active_in_ad: True` และมี mapping กับ `ad` role `Domain Users` ทำให้ทุกครั้งที่ container start จะ overwrite ค่าเป็น Active ใน AD เสมอ
      - แก้ไข: ปรับ seed data ของ `Hermes.N` ให้ `is_active_in_ad: False` และถอด `app: ad` ออก พร้อมใส่ auto-heal ใน `initial_data.py` ให้ลบ `AppAccountMapping` ของ AD ทิ้ง, ตั้ง `is_approved_exception = True` และ `exception_type = "LOCAL_ACCOUNT"`
@@ -173,7 +172,7 @@ px tsc --noEmit 0 errors
      - CIAM ดึงข้อมูล (Pull) จาก IRM ผ่าน M2M API ทุก 04:00 น. หรือเมื่อกดปุ่ม "ซิงก์ข้อมูล" บนหน้า `/applications`
      - เพื่อให้การ Disable จากฝั่ง IRM ส่งผลมายัง CIAM แบบทันที (Instant Realtime) จำเป็นต้องมี Outbound Webhook ยิงจากฝั่ง IRM กลับมาแจ้ง CIAM เมื่อมีการ toggle status ผู้ใช้
 
-9. **True 2-Way Bi-directional Status Sync, Origin Tracking & Spoke Spec v2.9.0 (Sprint 49):**
+12. **True 2-Way Bi-directional Status Sync, Origin Tracking & Spoke Spec v2.9.0 (Sprint 49):**
    - **แก้ปัญหาสิทธิ์เด้งกลับและบัญชีหายแบบถาวร (Two-Way Synchronization with Origin Tracking):**
      - กำหนดหลักการ "ใครเริ่มก่อน ส่งผลให้อีกฝั่งด้วย พร้อมป้ายระบุที่มาชัดเจน (First-Action Wins with Origin Tracking)":
        - **ถ้า Spoke เริ่มก่อน (Spoke-Initiated):** หากแอดมินระบบลูกปิดสิทธิ์ (Disable) หรือเปิดสิทธิ์ในระบบตนเอง เมื่อส่งข้อมูลผ่าน Heartbeat หรือ Sync ระบบ CIAM จะยอมรับสถานะตามทันที ปรับ `is_active_in_app = false/true`, แปะป้าย `status_origin = 'SPOKE_APP'`, และ **ไม่ส่งคำสั่ง `PROVISION_USER` หรือ `ENABLE_USER` ไปบังคับเปิดคืนให้ Spoke เด็ดขาด**
@@ -188,7 +187,7 @@ px tsc --noEmit 0 errors
      - อัปเดต [SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) และ `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` เป็นเวอร์ชัน **2.9.0** เพิ่มหมวด D.6 กำหนดมาตรฐาน 2-Way และข้อบังคับ SSO Callback Inactive Guard สำหรับทีมผู้พัฒนาระบบลูกทุกระบบ
    - **Test Suite 100%:** Pytest ผ่าน 74/74 tests (100%), Frontend TypeScript `npx tsc --noEmit` 0 errors (100%)
 
-10. **Remote Desktop Spoke Application (WA-RDT2) with SAP B1 RBAC & Dynamic RDP Generation (Sprint 48):**
+13. **Remote Desktop Spoke Application (WA-RDT2) with SAP B1 RBAC & Dynamic RDP Generation (Sprint 48):**
    - **เพิ่ม Spoke App สำหรับ Windows Terminal / RDS Server `WA-RDT2`:**
      - เพิ่ม `wa_rdt2` ใน `backend/app/initial_data.py` (`connector_type: "RDP"`, `network_policy: "VPN_ONLY"`, `vpn_restriction_mode: "LOCK_WITH_BANNER"`, `portal_launch_url: "/api/v1/oauth/portal/rdp/wa_rdt2.rdp"`, `category: "การเงินและ ERP"`) พร้อมระบบ Auto-Heal อัตโนมัติเมื่อ Start Service
    - **ระบบคัดกรองสิทธิ์และ RBAC เฉพาะผู้ที่มีบัญชี SAP B1 (Strict SAP B1 Account Entitlement):**
@@ -203,7 +202,7 @@ px tsc --noEmit 0 errors
    - **Unit Tests Coverage:**
      - เพิ่ม `test_wa_rdt2_portal_entitlement_and_rdp_download` ใน [`backend/tests/test_oauth_oidc_flow.py`](file:///d:/Python/Central-IAM/backend/tests/test_oauth_oidc_flow.py) ครอบคลุมการบล็อก User ที่ไม่มี SAP B1, การอนุญาต User ที่มี SAP B1, และตรวจสอบโครงสร้างเนื้อหาไฟล์ `.rdp` ไดนามิก (ผ่าน 100%)
 
-11. **AI Copilot Full Analytical Parity, RBAC Enforcement, Strict Read-Only & Zero-Training Data Sovereignty Governance (Sprint 47 — Commits `a4688ff`, `5027f34`):**
+14. **AI Copilot Full Analytical Parity, RBAC Enforcement, Strict Read-Only & Zero-Training Data Sovereignty Governance (Sprint 47 — Commits `a4688ff`, `5027f34`):**
    - **100% Read & Analytical Parity (แสดงผลและคำนวณได้ครบทุกหน้าจอที่มีใน CIAM):**
      - เพิ่ม MCP Tool `ciam_get_dashboard_summary()` ใน [`backend/app/mcp/server.py`](file:///d:/Python/Central-IAM/backend/app/mcp/server.py) เพื่อให้ AI Copilot คำนวณและแสดง KPI ทั้งหมดของหน้าแดชบอร์ด (`/`) ได้แก่ จำนวนตัวตนรวม, Active/Inactive ใน AD, **ตารางสรุปผู้ใช้งานแยกตามแผนก (`department_breakdown`)**, สรุปจำนวนบัญชีรายระบบลูก (`spoke_account_breakdown`), จำนวน Ghost Accounts, จำนวน Approved Exceptions และตารางเวลา Auto-Sync (04:00 น.)
      - เพิ่ม MCP Tool `ciam_preview_offboarding_impact(username)` สำหรับจำลองการตรวจสอบผลกระทบก่อนตัดสิทธิ์ (`/offboarding` Impact Preview) แบบ Read-Only 100%
@@ -221,7 +220,7 @@ px tsc --noEmit 0 errors
      - แสดงป้ายรับรอง `Read-Only • Zero-Training (ไม่นำข้อมูลไป Train/ใช้นอกองค์กร)` บนหน้าต่างแชท [`CiamCopilotWidget.tsx`](file:///d:/Python/Central-IAM/frontend/src/components/ai/CiamCopilotWidget.tsx) และหน้า [`settings/page.tsx`](file:///d:/Python/Central-IAM/frontend/src/app/settings/page.tsx)
    - **บันทึกขอบเขต AI Copilot ลงใน Spoke Framework ([`SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) หมวด E ข้อ 11.1–11.5):** กำหนดเป็นกฎเหล็กมาตรฐานกลางสำหรับ CIAM และทุกระบบลูก (Spoke Apps) พร้อมซิงก์ไฟล์เข้า `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`
 
-12. **Proactive Zero-Action Session Auto-Logoff Watchdog & App Client Logout Return to SSO Portal (Sprint 46 — Commits `a0d9fb1`, `b9a5ec0`, `db5b8c3`, `b23c3e9`):**
+15. **Proactive Zero-Action Session Auto-Logoff Watchdog & App Client Logout Return to SSO Portal (Sprint 46 — Commits `a0d9fb1`, `b9a5ec0`, `db5b8c3`, `b23c3e9`):**
    - **สาเหตุปัญหาเดิม:** หน้า SSO Portal (`/portal`) และ Admin Console เดิมตรวจสอบเซสชันหมดอายุเฉพาะเมื่อผู้ใช้คลิกปุ่มที่ยิง API แล้วได้ HTTP 401 เท่านั้น (อายุ Token `ACCESS_TOKEN_EXPIRE_MINUTES = 480` นาที / 8 ชม.) หากเปิดหน้าจอทิ้งไว้เฉยๆ จะไม่ตัดออกจากระบบเอง
    - **สร้าง Proactive Session Watchdog ([`frontend/src/lib/session.ts`](file:///d:/Python/Central-IAM/frontend/src/lib/session.ts)):** ติดตั้งระบบจับเวลาถอยหลังแบบ Real-Time (`useSessionWatchdog`) ตรวจสอบ **Portal Idle Timeout (30 นาที)** และ **JWT Absolute Expiration (8 ชั่วโมง)** พร้อม Server Heartbeat (`/api/v1/auth/me` ทุก 60 วินาที) และ Cross-Tab Sync เมื่อเปิดหน้า SSO Portal ทิ้งไว้ครบ 30 นาทีโดยไม่ไปที่ระบบลูก ระบบจะสั่ง **Logoff ทันทีโดยไม่ต้องรอให้ User คลิกหรือกระทำการใดๆ** พร้อมแสดงป้ายนับเวลา `เซสชัน MM:SS` บนหัวเว็บ `/portal`
    - **ไม่คิด Idle Time ของ SSO Portal ขณะผู้ใช้อยู่ใน App Client (Spoke App) & กด Logout จาก App Client แล้วกลับมาหน้า `/portal` ทันที:**
