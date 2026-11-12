@@ -722,6 +722,40 @@ def init_db():
             SpokePendingCommand.action == "ENABLE_USER",
             SpokePendingCommand.command_id.like("cmd_recov_%")
         ).delete()
+
+        # Auto-heal: Ensure Julaluck.B (AD) and julaluk.b (M365) are unified permanently
+        julaluck_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "julaluck.b").first()
+        julaluk_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "julaluk.b").first()
+        if julaluck_ident:
+            julaluck_ident.email = "julaluk.b@windowasia.com"
+            if julaluk_ident and julaluk_ident.id != julaluck_ident.id:
+                # Reassign all spoke mappings from julaluk.b to Julaluck.B
+                j_maps = db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == julaluk_ident.id).all()
+                for jm in j_maps:
+                    existing_tm = db.query(AppAccountMapping).filter(
+                        AppAccountMapping.identity_id == julaluck_ident.id,
+                        AppAccountMapping.application_id == jm.application_id,
+                        AppAccountMapping.id != jm.id
+                    ).first()
+                    if existing_tm:
+                        db.delete(existing_tm)
+                    jm.identity_id = julaluck_ident.id
+                    jm.last_sync_status = "IN_SYNC" if julaluck_ident.is_active_in_ad else "DISCREPANCY"
+                db.flush()
+                db.delete(julaluk_ident)
+                logger.info("Auto-healed: Unified julaluk.b into Julaluck.B")
+
+            # Also ensure M365 mapping with app_username julaluk.b is assigned to Julaluck.B
+            m365_app_lookup = app_objs.get("m365") or db.query(ConnectedApplication).filter(func.lower(ConnectedApplication.app_code) == "m365").first()
+            if m365_app_lookup:
+                m365_map = db.query(AppAccountMapping).filter(
+                    AppAccountMapping.application_id == m365_app_lookup.id,
+                    func.lower(AppAccountMapping.app_username) == "julaluk.b"
+                ).first()
+                if m365_map and m365_map.identity_id != julaluck_ident.id:
+                    m365_map.identity_id = julaluck_ident.id
+                    m365_map.last_sync_status = "IN_SYNC"
+                    logger.info("Auto-healed: Pointed M365 mapping julaluk.b to Julaluck.B")
  
         # 4. Seed Corporate VPN / Office Network Subnets
         vpn_setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "corporate_vpn_networks").first()

@@ -7,7 +7,7 @@
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 91/91 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: feat(security): enforce 90-day local password rotation, enterprise complexity and spoke framework v2.12.0
+> **Git Status:** Production Ready — Latest Commit: fix(sync): preserve admin identity merges and add ck-k transliteration for julaluk.b/Julaluck.B
 
 ---
 
@@ -15,7 +15,23 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **Enterprise 90-Day Local Password Rotation, Complexity & Spoke Framework v2.12.0 (Sprint 59):**
+1. **Identity Disambiguation & Persistent Mapping Preservation for Julaluck.B / julaluk.b (Sprint 60):**
+   - **วิเคราะห์สาเหตุที่การรวมตัวตนหลุดกลับมาเป็นบัญชีผีอีกในตอนเช้า:**
+     - สาเหตุ: บน Active Directory พนักงานใช้ Username Julaluck.B (สะกดด้วย ck) แต่บน Microsoft 365 (Entra ID & Exchange) บัญชีเมลใช้ julaluk.b@windowasia.com (สะกดด้วย k ตัวเดียว)
+     - เมื่อแอดมินกดรวมตัวตนในหน้าเว็บ ระบบผูก AppAccountMapping เข้ากับ Julaluck.B และลบ Identity julaluk.b ตัวชั่วคราวทิ้ง
+     - แต่ในรอบ **Auto-Sync ประจำวันเวลา 04:00 น.** ฟังก์ชัน persist_spoke_inventory ดึงบัญชีจาก M365 เข้ามาพบ julaluk.b โดย:
+       1) ค้นหาใน MasterIdentity ด้วยชื่อ julaluk.b ไม่พบ (เนื่องจากใน AD ชื่อ Julaluck.B มีตัว c)
+       2) ระบบยังไม่มีการแปลงเสียงคำสะกด ck <-> k (มีเพียง 	t <-> 	, 	hai <-> 	ai, wut <-> woot)
+       3) ระบบเดิม **ไม่ได้ตรวจสอบว่าบัญชีนี้เคยถูก Admin ผูกสิทธิ์ไว้ใน AppAccountMapping ของตัวตนหลักใดอยู่แล้วหรือไม่**
+       4) ส่งผลให้ระบบสร้าง MasterIdentity ใหม่ชื่อ julaluk.b (is_active_in_ad: False) และดึงเอา Mapping ของ M365 กลับไปผูกกับบัญชีใหม่ กลายเป็นบัญชีผี (Ghost Account) อีกครั้ง และถูกส่งรายงานสรุปทางอีเมลรอบ 07:00 น.
+   - **การแก้ไขและป้องกันถาวร (Permanent Fix):**
+     1) **Persistent Mapping Awareness:** ใน scheduler.py หากไม่พบบัญชีใน MasterIdentity ให้ตรวจสอบจากตาราง AppAccountMapping ว่าเคยถูก Admin มอบหมายหรือรวมเข้ากับ MasterIdentity ตัวใดไว้แล้วหรือไม่ หากมี ให้ใช้ Identity นั้นทันที เพื่อเคารพและคงผลการรวมตัวตนของ Admin ไว้อย่างถาวร
+     2) **Phonetic Transliteration (ck <-> k):** เพิ่มกฎการแปลงเสียง ck <-> k (เช่น julaluk <-> julaluck) ใน scheduler.py, directory.py และ mcp/server.py เพื่อให้ระบบค้นหาและผูกบัญชีเข้าด้วยกันโดยอัตโนมัติ
+     3) **Automatic Email Inheritance:** ใน merge_and_link_identity (directory.py) ให้ทำการสืบทอดอีเมล M365 (julaluk.b@windowasia.com) ไปยัง 	arget_identity.email ทันทีที่กดรวม
+     4) **Auto-Heal on Startup:** ใน initial_data.py เพิ่มบล็อกประสานสิทธิ์ julaluk.b เข้าสู่ Julaluck.B อัตโนมัติเมื่อ Start Container
+     5) **Unit Test Suite:** เพิ่ม 	est_julaluk_m365_sync_preserves_merge_and_aliases ใน 	est_identity_linking_exception.py ผ่าน 100%
+
+2. **Enterprise 90-Day Local Password Rotation, Complexity & Spoke Framework v2.12.0 (Sprint 59):**
    - **90-Day Forced Password Expiration / Rotation Policy:**
      - บังคับใช้นโยบายความปลอดภัยหมุนเวียนรหัสผ่านท้องถิ่นทุกๆ 90 วัน (LOCAL_PASSWORD_EXPIRY_DAYS = 90) ตามมาตรฐาน ISO 27001 และ NIST SP 800-63B
      - เพิ่มคอลัมน์ password_changed_at ในโมเดล AdminUser พร้อม auto-migration และ backfill จาก created_at

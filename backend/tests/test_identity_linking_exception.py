@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy import func
 from fastapi.testclient import TestClient
 from app.main import app
 from app.core.database import SessionLocal
@@ -151,6 +152,104 @@ def test_link_account_and_exception_lifecycle():
         discrepancies_after_link = find_account_discrepancies(db)
         ghost_usernames_after = [d.username.lower() for d in discrepancies_after_link]
         assert "nattcha.s" not in ghost_usernames_after
+
+    finally:
+        db.close()
+
+
+def test_julaluk_m365_sync_preserves_merge_and_aliases():
+    """Verify that M365 account julaluk.b automatically resolves to Julaluck.B (AD) and persists across syncs."""
+    from app.services.scheduler import persist_spoke_inventory
+
+    db = SessionLocal()
+    try:
+        # 1. Setup AD Master Identity: Julaluck.B
+        ad_user = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "julaluck.b").first()
+        if not ad_user:
+            ad_user = MasterIdentity(
+                username="Julaluck.B",
+                full_name="Julaluck Bunsripoom",
+                department="RD",
+                is_active_in_ad=True,
+                ad_guid="guid-julaluck-ad-test"
+            )
+            db.add(ad_user)
+            db.commit()
+            db.refresh(ad_user)
+        else:
+            ad_user.is_active_in_ad = True
+            db.commit()
+
+        # 2. Setup M365 Application
+        m365_app = db.query(ConnectedApplication).filter_by(app_code="m365").first()
+        if not m365_app:
+            m365_app = ConnectedApplication(
+                app_code="m365",
+                app_name="Microsoft 365",
+                connector_type="M365",
+                is_active=True
+            )
+            db.add(m365_app)
+            db.commit()
+            db.refresh(m365_app)
+
+        # Clean any stray julaluk.b placeholder identity
+        stray_julaluk = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "julaluk.b").first()
+        if stray_julaluk and stray_julaluk.id != ad_user.id:
+            db.query(AppAccountMapping).filter_by(identity_id=stray_julaluk.id).delete()
+            db.delete(stray_julaluk)
+            db.commit()
+
+        # 3. Simulate M365 sync returning julaluk.b (spelled with 'k')
+        raw_m365_accounts = [
+            {
+                "username": "julaluk.b",
+                "email": "julaluk.b@windowasia.com",
+                "full_name": "Julaluk Bunsripoom",
+                "is_active": True,
+                "group_name": "Mailbox"
+            }
+        ]
+
+        count = persist_spoke_inventory(m365_app, raw_m365_accounts, db, actor_username="TEST_SYNC")
+        assert count == 1
+
+        # 4. Verify that Julaluck.B was matched (via 'k' <-> 'ck' alias)
+        db.expire_all()
+        refreshed_ad = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "julaluck.b").first()
+        assert refreshed_ad is not None
+        assert refreshed_ad.email == "julaluk.b@windowasia.com"
+
+        # Check mapping
+        m365_map = db.query(AppAccountMapping).filter(
+            AppAccountMapping.application_id == m365_app.id,
+            func.lower(AppAccountMapping.app_username) == "julaluk.b"
+        ).first()
+        assert m365_map is not None
+        assert m365_map.identity_id == refreshed_ad.id
+        assert m365_map.last_sync_status == "IN_SYNC"
+
+        # No duplicate placeholder identity created
+        duplicate_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "julaluk.b").first()
+        assert duplicate_ident is None
+
+        # Verify reconciliation flags ZERO discrepancies for julaluk
+        discrepancies = find_account_discrepancies(db)
+        ghost_names = [d.username.lower() for d in discrepancies]
+        assert "julaluk.b" not in ghost_names
+        assert "julaluck.b" not in ghost_names
+
+        # 5. Simulate a subsequent 04:00 AM sync (repeated run)
+        count_again = persist_spoke_inventory(m365_app, raw_m365_accounts, db, actor_username="TEST_SYNC_2")
+        assert count_again == 1
+
+        db.expire_all()
+        m365_map_again = db.query(AppAccountMapping).filter(
+            AppAccountMapping.application_id == m365_app.id,
+            func.lower(AppAccountMapping.app_username) == "julaluk.b"
+        ).first()
+        assert m365_map_again.identity_id == refreshed_ad.id
+        assert m365_map_again.last_sync_status == "IN_SYNC"
 
     finally:
         db.close()

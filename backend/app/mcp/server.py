@@ -255,6 +255,10 @@ def ciam_list_users(
                 search_variants.add(s_low.replace("wut", "woot"))
             if "woot" in s_low:
                 search_variants.add(s_low.replace("woot", "wut"))
+            if "ck" in s_low:
+                search_variants.add(s_low.replace("ck", "k"))
+            if "k" in s_low and "ck" not in s_low:
+                search_variants.add(s_low.replace("k", "ck"))
 
             or_clauses = []
             for sv in search_variants:

@@ -196,6 +196,10 @@ def list_users(
             search_variants.add(s_low.replace("wat", "vat"))
         if "vat" in s_low and "wat" not in s_low:
             search_variants.add(s_low.replace("vat", "wat"))
+        if "ck" in s_low:
+            search_variants.add(s_low.replace("ck", "k"))
+        if "k" in s_low and "ck" not in s_low:
+            search_variants.add(s_low.replace("k", "ck"))
 
         # Space and dot interchanging (e.g. "Chaiwat N" <-> "Chaiwat.N")
         if " " in raw_s:
@@ -663,6 +667,12 @@ def link_account_to_identity(
     mapping.last_sync_status = "IN_SYNC" if target_identity.is_active_in_ad else "DISCREPANCY"
     db.flush()
 
+    # Transfer email and telegram if target identity is missing them
+    if old_identity and old_identity.email and (not target_identity.email or "@windowasia.com" in old_identity.email):
+        target_identity.email = old_identity.email
+    if old_identity and old_identity.telegram_id and not target_identity.telegram_id:
+        target_identity.telegram_id = old_identity.telegram_id
+
     # If the previous identity was an orphaned spoke placeholder with no AD presence and no other accounts, remove it
     orphaned_cleaned = False
     if old_identity and old_identity.id != target_identity.id:
@@ -746,6 +756,11 @@ def merge_and_link_identity(
     # Delete source identity if it is not in AD
     cleaned = False
     if not source_identity.is_active_in_ad and not source_identity.ad_guid:
+        # Transfer official email and telegram_id to target identity if missing or from corporate email
+        if source_identity.email and (not target_identity.email or "@windowasia.com" in source_identity.email):
+            target_identity.email = source_identity.email
+        if source_identity.telegram_id and not target_identity.telegram_id:
+            target_identity.telegram_id = source_identity.telegram_id
         db.delete(source_identity)
         cleaned = True
 

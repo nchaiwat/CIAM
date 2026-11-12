@@ -161,11 +161,24 @@ def persist_spoke_inventory(
                 alt_prefixes.append(p_low.replace("tt", "t"))
             if "t" in p_low and "tt" not in p_low:
                 alt_prefixes.append(p_low.replace("t", "tt"))
+            if "ck" in p_low:
+                alt_prefixes.append(p_low.replace("ck", "k"))
+            if "k" in p_low and "ck" not in p_low:
+                alt_prefixes.append(p_low.replace("k", "ck"))
             for ap in alt_prefixes:
                 alt_uname = f"{ap}.{initial.lower()}"
                 identity = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == alt_uname).first()
                 if identity:
                     break
+
+        # Check if this spoke account has already been mapped/merged to an existing MasterIdentity (Preserve Admin Merges)
+        if not identity:
+            existing_spoke_map = db.query(AppAccountMapping).filter(
+                AppAccountMapping.application_id == app.id,
+                func.lower(AppAccountMapping.app_username) == uname.lower()
+            ).first()
+            if existing_spoke_map and existing_spoke_map.identity_id:
+                identity = db.query(MasterIdentity).filter_by(id=existing_spoke_map.identity_id).first()
 
         telegram_val = str(item.get("telegram_id") or item.get("pager") or "").strip() or None
 
