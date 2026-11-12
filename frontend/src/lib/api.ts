@@ -936,6 +936,10 @@ export interface AdminUserOut {
   telegram_id?: string | null;
   is_ad_user?: boolean;
   must_change_password?: boolean;
+  password_changed_at?: string | null;
+  password_expires_at?: string | null;
+  days_until_password_expiry?: number | null;
+  is_password_expired?: boolean;
 }
 
 export interface AdminTokenResponse {

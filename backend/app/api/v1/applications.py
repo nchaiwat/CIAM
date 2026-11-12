@@ -625,7 +625,7 @@ def download_spoke_spec():
     for p in possible_paths:
         if os.path.exists(p) and os.path.isfile(p):
             import re
-            version_str = "v2.11.0"
+            version_str = "v2.12.0"
             try:
                 with open(p, "r", encoding="utf-8") as f:
                     header_sample = f.read(600)

@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel, EmailStr
 
 class LoginRequest(BaseModel):
@@ -27,6 +28,10 @@ class AdminUserOut(BaseModel):
     telegram_id: Optional[str] = None
     is_ad_user: bool = True
     must_change_password: bool = False
+    password_changed_at: Optional[datetime] = None
+    password_expires_at: Optional[datetime] = None
+    days_until_password_expiry: Optional[int] = None
+    is_password_expired: bool = False
 
     model_config = {"from_attributes": True}
 

@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 10 พฤศจิกายน 2026 (Local Time: ~11:30 ICT)  
+> **Date Updated:** 12 พฤศจิกายน 2026 (Local Time: ~08:45 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 91/91 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: fix(spoke): resolve mtpulse recurring enable_user command loop on container restarts
+> **Git Status:** Production Ready — Latest Commit: feat(security): enforce 90-day local password rotation, enterprise complexity and spoke framework v2.12.0
 
 ---
 
@@ -15,7 +15,26 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-1. **MTPulse Sync & Auto-Recovery Loop Resolution (Sprint 58):**
+1. **Enterprise 90-Day Local Password Rotation, Complexity & Spoke Framework v2.12.0 (Sprint 59):**
+   - **90-Day Forced Password Expiration / Rotation Policy:**
+     - บังคับใช้นโยบายความปลอดภัยหมุนเวียนรหัสผ่านท้องถิ่นทุกๆ 90 วัน (LOCAL_PASSWORD_EXPIRY_DAYS = 90) ตามมาตรฐาน ISO 27001 และ NIST SP 800-63B
+     - เพิ่มคอลัมน์ password_changed_at ในโมเดล AdminUser พร้อม auto-migration และ backfill จาก created_at
+     - เพิ่มฟังก์ชัน check_password_expiry() คำนวณวันหมดอายุ วันคงเหลือ และสถานะ is_password_expired ส่งต่อไปยัง API (/login, /me, PUT /profile)
+   - **Enterprise Password Complexity Requirements (8 - 16 ตัวอักษร):**
+     - ยกระดับจาก 8-10 ตัวอักษรเดิมเป็น **8 - 16 ตัวอักษร**
+     - กฎเกณฑ์เข้มงวด: ตัวพิมพ์ใหญ่ (A-Z) >= 1, ตัวพิมพ์เล็ก (a-z) >= 1, ตัวเลข (0-9) >= 1, อักขระพิเศษ (!@#$%^&*...) >= 1, และห้ามมี Username ปะปน
+     - ตรวจสอบความถูกต้องทั้งระดับ Backend (alidate_password_complexity) และ Client-side ฟอร์มกรอกรหัสผ่าน
+   - **Frontend App Portal & Directory UX:**
+     - Header Key button บน Employee Portal (/portal): แสดง Badge สีส้มแจ้งเตือนเมื่อรหัสผ่านใกล้หมดอายุ (<= 14 วัน) และ Badge สีแดงเมื่อหมดอายุ
+     - Quarantine Modal: หากรหัสผ่านหมดอายุครบ 90 วัน หรือถูกตั้งค่า must_change_password = true ระบบจะบล็อกการเปิดใช้งานระบบลูกและบังคับเปลี่ยนรหัสผ่านทันที
+     - อัปเดตหน้า /directory แจ้งกฎเกณฑ์ 8 - 16 ตัวอักษร และรอบหมดอายุ 90 วัน
+   - **Spoke Enterprise Integration Specification v2.12.0 (หมวด G ข้อ 13):**
+     - บรรจุข้อกำหนดมาตรฐานความปลอดภัยรหัสผ่านสำหรับระบบลูกทุกระบบ พร้อมโค้ด Framework ตัวอย่างสำเร็จรูปทั้ง Python (FastAPI/SQLAlchemy), Node.js (TypeScript), PHP (PDO) และ React Form
+     - อัปเดตลิงก์ดาวน์โหลดสเปกบนหน้า /applications และ Modal Changelog เป็น v2.12.0
+   - **Test Suite Integrity 100%:** เพิ่ม ackend/tests/test_password_policy.py และปรับปรุง 	est_api_flow.py รวมชุดทดสอบผ่าน 91/91 passed (100%) และ Frontend TypeScript 
+px tsc --noEmit 0 errors
+
+2. **MTPulse Sync & Auto-Recovery Loop Resolution (Sprint 58):**
    - **วิเคราะห์สาเหตุของประวัติ `AGENT:MTPULSE` ซิงก์คำสั่ง `AGENT_CMD_ENABLE_USER` ตลอดเวลา:**
      - สาเหตุ: โค้ด Auto-Heal ใน `backend/app/initial_data.py` เคยมีบล็อกโค้ดสั่งสร้างคำสั่ง `ENABLE_USER` ให้กับ `Ronnakorn.P` และ `Wimonpan.P` ทุกครั้งที่ Backend Container (`api`) เริ่มทำงาน (`init_db()`) โดยตรวจสอบเฉพาะสถานะ `PENDING` และ `SENT`
      - เมื่อ MTPulse ดึงคำสั่งไปรันบน DB ตนเองสำเร็จและตอบกลับมาว่า `COMPLETED` ทำให้คำสั่งไม่ค้างในสถานะ `PENDING`/`SENT` อีกต่อไป

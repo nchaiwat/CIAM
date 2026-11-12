@@ -1137,11 +1137,11 @@ def create_or_update_local_portal_account(
     now = datetime.now(timezone.utc)
     raw_password = (payload.password or "").strip()
     if raw_password:
-        pwd_err = validate_password_complexity(raw_password)
+        pwd_err = validate_password_complexity(raw_password, username=identity.username)
         if pwd_err:
             raise HTTPException(status_code=400, detail=pwd_err)
     else:
-        # Generate 10-char password strictly conforming to Enterprise Complexity Policy
+        # Generate password strictly conforming to Enterprise Complexity Policy (8-16 chars)
         raw_password = generate_compliant_password()
 
     hashed_pwd = hash_password(raw_password)
@@ -1164,7 +1164,8 @@ def create_or_update_local_portal_account(
             role="PORTAL_USER",
             is_active=True,
             failed_login_attempts=0,
-            must_change_password=must_change
+            must_change_password=must_change,
+            password_changed_at=now
         )
         db.add(admin_user)
     else:
@@ -1173,6 +1174,7 @@ def create_or_update_local_portal_account(
         admin_user.failed_login_attempts = 0
         admin_user.locked_until = None
         admin_user.must_change_password = must_change
+        admin_user.password_changed_at = now
         if admin_user.role not in ["SUPER_ADMIN", "ADMIN"]:
             admin_user.role = "PORTAL_USER"
 

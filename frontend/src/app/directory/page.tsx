@@ -2903,14 +2903,14 @@ export default function DirectoryPage() {
                   </label>
                   <input
                     type="text"
-                    maxLength={10}
+                    maxLength={16}
                     value={localPassword}
                     onChange={(e) => setLocalPassword(e.target.value)}
                     placeholder="ปล่อยว่างไว้เพื่อให้ระบบสุ่มรหัสผ่านให้อัตโนมัติ"
                     className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-mono focus:outline-none focus:border-emerald-600"
                   />
                   <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                    หากไม่ระบุ ระบบจะสุ่มรหัสผ่านตามนโยบายอัตโนมัติ (8-10 ตัวอักษร: ตัวพิมพ์ใหญ่, ตัวพิมพ์เล็ก, ตัวเลข และอักขระพิเศษ)
+                    หากไม่ระบุ ระบบจะสุ่มรหัสผ่านตามนโยบายอัตโนมัติ (8-16 ตัวอักษร: ตัวพิมพ์ใหญ่, ตัวพิมพ์เล็ก, ตัวเลข และอักขระพิเศษ, หมดอายุทุก 90 วัน)
                   </p>
                 </div>
 
@@ -2927,7 +2927,7 @@ export default function DirectoryPage() {
                         บังคับให้ผู้ใช้เปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก
                       </span>
                       <span className="text-[11px] text-slate-600 block leading-tight mt-0.5">
-                        ระบบจะแสดงหน้าต่างให้ตั้งรหัสผ่านใหม่ (8-10 ตัวอักษร, พิมพ์ใหญ่, เล็ก, ตัวเลข, อักขระพิเศษ) ทันทีที่ล็อกอินเข้าสู่ App Portal
+                        ระบบจะแสดงหน้าต่างให้ตั้งรหัสผ่านใหม่ (8-16 ตัวอักษร, พิมพ์ใหญ่, เล็ก, ตัวเลข, อักขระพิเศษ) ทันทีที่ล็อกอินเข้าสู่ App Portal
                       </span>
                     </div>
                   </label>

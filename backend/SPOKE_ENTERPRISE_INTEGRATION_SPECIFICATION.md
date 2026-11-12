@@ -1,7 +1,7 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Current Version:** 2.11.0 (Direct Infrastructure Isolation, Least Privilege, Timestamp Reconciliation & CIAM Authority Lock Standard)  
-**Effective Date:** 10 พฤศจิกายน 2026 (10/11/2026)  
+**Current Version:** 2.12.0 (Enterprise Local Password Policy, 90-Day Forced Rotation & Complexity Framework Standard)  
+**Effective Date:** 12 พฤศจิกายน 2026 (12/11/2026)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
 **Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
 **Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636) / OAuth 2.0 Security BCP (RFC 9700) / Model Context Protocol (MCP)
@@ -14,7 +14,8 @@
 
 | เวอร์ชัน (Version) | วันที่มีผล (Date) | สถานะ (Status) | สรุปรายการปรับปรุงจากเวอร์ชันก่อนหน้า (Change Summary & Key Differences) |
 | :---: | :---: | :---: | :--- |
-| **v2.11.0** | 10/11/2026 | **Current Active** | • **หมวด D.7: มาตรฐานการแบ่งแยกระบบ Direct Infra vs SSO Spoke, สิทธิ์ต่ำสุด (Least Privilege), การเทียบเวลา (Timestamp Reconciliation) และการล็อคสิทธิ์เด็ดขาด (CIAM Authority Lock):**<br/>1) **Direct Infrastructure Isolation:** แยกความแตกต่างระหว่างระบบโครงสร้างพื้นฐานระดับ Network/Directory (pfSense, M365, SAP B1, AD) ที่เป็น Read-Only Inventory กับระบบลูก SSO แบบสมบูรณ์ (IRM, QMS, MTPulse) อย่างเด็ดขาด โดยระบบ Direct Infra จะไม่มีสถานะ `WAIT` (`PENDING_PROVISION`) ค้าง หากไม่พบบัญชีในระบบจริงจะถูกตัดออกจากรายการทันที<br/>2) **Least Privilege Auto-Provisioning:** การสร้างบัญชีผู้ใช้ใหม่จาก CIAM หรือเมื่อระบบลูกดึงบัญชีไปสร้าง ต้องกำหนดสิทธิ์เริ่มต้นเป็นบทบาทต่ำสุดเสมอ (`Standard User` / `Viewer`) ตาม `ciam_auto_provision_group` ห้ามตั้งสิทธิ์ Admin โดยพลการ<br/>3) **Timestamp Reconciliation:** ใช้เวลาการเปลี่ยนแปลงล่าสุด (`status_updated_at` เทียบกับ `spoke_status_updated_at`) เป็นเกณฑ์ตัดสินสถานะจริง (Latest Update Wins)<br/>4) **CIAM Authority Lock Standard (`is_status_locked`):** แอดมิน CIAM สามารถกดล็อคสิทธิ์เด็ดขาดเพื่อตรึงสถานะ ป้องกันไม่ให้ระบบลูกส่งสถานะมาทับหรือเปิดใช้งานคืนโดยพลการ |
+| **v2.12.0** | 12/11/2026 | **Current Active** | • **หมวด G (ข้อกำหนดที่ 13): Enterprise Local Password Policy & 90-Day Rotation Framework Standard (มาตรฐานความปลอดภัยรหัสผ่านบัญชีท้องถิ่น และการบังคับเปลี่ยนรหัสผ่านทุก 90 วัน สำหรับระบบลูก):**<br/>1) **90-Day Forced Password Rotation:** บัญชีท้องถิ่น (Local Accounts), บัญชีฉุกเฉิน (Break-Glass Local Admin), และบัญชีเฉพาะระบบที่ไม่ได้ยืนยันตัวตนผ่าน Active Directory ในระบบลูกทุกระบบ ต้องมีคอลัมน์ `password_changed_at` และมีกลไกบังคับเปลี่ยนรหัสผ่านทุกๆ 90 วันโดยเด็ดขาด<br/>2) **Strict Password Complexity Requirements:** ความยาว 8 - 16 ตัวอักษร, มีตัวพิมพ์ใหญ่ (A-Z) &ge; 1, ตัวพิมพ์เล็ก (a-z) &ge; 1, ตัวเลข (0-9) &ge; 1, อักขระพิเศษ (!@#$%^&*...) &ge; 1 และห้ามมี Username ปะปนอยู่ในรหัสผ่าน<br/>3) **Forced Password Change Interception:** เมื่อรหัสผ่านครบ 90 วัน หรือ `must_change_password = true` ระบบลูกต้องบล็อกการเข้าสู่หน้าระบบงาน และบังคับเปิด Modal เปลี่ยนรหัสผ่านทันที (ห้ามข้าม)<br/>4) **Ready-to-Use Framework Implementation:** โค้ดตัวอย่างสำเร็จรูปสำหรับ Python (FastAPI/SQLAlchemy), Node.js (Express/TypeScript), PHP (PDO/Native) และ React Form |
+| **v2.11.0** | 10/11/2026 | Superseded | • **หมวด D.7: มาตรฐานการแบ่งแยกระบบ Direct Infra vs SSO Spoke, สิทธิ์ต่ำสุด (Least Privilege), การเทียบเวลา (Timestamp Reconciliation) และการล็อคสิทธิ์เด็ดขาด (CIAM Authority Lock):**<br/>1) **Direct Infrastructure Isolation:** แยกความแตกต่างระหว่างระบบโครงสร้างพื้นฐานระดับ Network/Directory (pfSense, M365, SAP B1, AD) ที่เป็น Read-Only Inventory กับระบบลูก SSO แบบสมบูรณ์ (IRM, QMS, MTPulse) อย่างเด็ดขาด โดยระบบ Direct Infra จะไม่มีสถานะ `WAIT` (`PENDING_PROVISION`) ค้าง หากไม่พบบัญชีในระบบจริงจะถูกตัดออกจากรายการทันที<br/>2) **Least Privilege Auto-Provisioning:** การสร้างบัญชีผู้ใช้ใหม่จาก CIAM หรือเมื่อระบบลูกดึงบัญชีไปสร้าง ต้องกำหนดสิทธิ์เริ่มต้นเป็นบทบาทต่ำสุดเสมอ (`Standard User` / `Viewer`) ตาม `ciam_auto_provision_group` ห้ามตั้งสิทธิ์ Admin โดยพลการ<br/>3) **Timestamp Reconciliation:** ใช้เวลาการเปลี่ยนแปลงล่าสุด (`status_updated_at` เทียบกับ `spoke_status_updated_at`) เป็นเกณฑ์ตัดสินสถานะจริง (Latest Update Wins)<br/>4) **CIAM Authority Lock Standard (`is_status_locked`):** แอดมิน CIAM สามารถกดล็อคสิทธิ์เด็ดขาดเพื่อตรึงสถานะ ป้องกันไม่ให้ระบบลูกส่งสถานะมาทับหรือเปิดใช้งานคืนโดยพลการ |
 | **v2.10.0** | 09/11/2026 | Superseded | • **หมวด F: Enterprise In-App Bot Defense & Anti-Brute-Force Framework Standard:** กำหนดมาตรฐานการป้องกันบอทและ Brute-Force ภายในแอปพลิเคชัน 3 ชั้น (3-Layer Defense) สำหรับ Spoke ทุกระบบ ได้แก่ 1) Sliding-Window IP Rate Limiting 10 req/min, 2) Decoy Honeypot Trap ฟิลด์หลอก `corporate_fax` / `security_honey`, 3) Form Submission Velocity & Timing Guard (< 400ms rejection) เพื่อความปลอดภัยสูงสุดโดยไม่ต้องพึ่งพาบริการภายนอกหรือย้าย DNS |
 | **v2.9.0** | 22/10/2026 | Superseded | • **หมวด D.6: True 2-Way Bi-directional Status Sync & Origin Tracking (มาตรฐานการซิงก์สถานะสองทางแบบใครเริ่มก่อนมีผลทันที):** กำหนดให้การเปลี่ยนแปลงสถานะบัญชี (เปิดใช้งาน / ระงับสิทธิ์) ที่เริ่มต้นจากฝั่งใด (ไม่ว่าจะเริ่มที่หน้าเว็บ CIAM หรือเริ่มที่หลังบ้านของ App Client) ต้องส่งผลไปยังอีกฝั่งโดยตรง (First-Action Wins with Origin Tracking)<br/>• **Status Origin Tracking (`status_origin`, `status_updated_at`, `status_reason`):** ระบบ CIAM จะบันทึกที่มาของการเปลี่ยนสถานะอย่างโปร่งใส (`CIAM_ADMIN`, `SPOKE_APP`, `AD_INHERITED`) หากระบบลูกส่งสถานะ Inactive มา CIAM จะยอมรับสถานะและไม่ส่งคำสั่ง `PROVISION_USER` หรือ `ENABLE_USER` ไปบังคับเปิดคืนให้ Spoke โดยเด็ดขาด<br/>• **Account Preservation (No Blind Deletion):** ป้องกันปัญหาบัญชีหาย โดยกำหนดให้ CIAM ไม่ลบการผูกสิทธิ์ (`AppAccountMapping`) ที่สร้างจากระบบกลางทิ้งแบบเงียบๆ หาก Spoke ยังไม่ได้สร้างในระบบตนเอง ให้คงสถานะเป็น `PENDING_PROVISION` เพื่อรอการซิงก์<br/>• **SSO Callback Inactive Guard (หมวด B.3):** กำหนดให้ Spoke ตรวจสอบสถานะบัญชีในระบบตนเอง หากบัญชีถูกระงับสิทธิ์จากฝั่ง Spoke เอง หรือถูกระงับสิทธิ์จาก CIAM ต้องปฏิเสธการล็อกอิน และห้ามปลดล็อก Active คืนอัตโนมัติเด็ดขาด |
 | **v2.8.0** | 17/10/2026 | Superseded | • **หมวด E: ข้อกำหนดมาตรฐาน In-App AI Copilot & MCP Tools ประจำระบบลูก (Spoke AI Assistant & Dynamic Settings Standard):** กำหนดมาตรฐานสำหรับ Spoke Application ที่ต้องการมีหน้าต่างแชท AI ประจำระบบของตนเอง ให้จัดเก็บการตั้งค่าแบบไดนามิกลงในตาราง `system_settings` (`ai_copilot_enabled`, `ai_provider`, `ai_api_key`, `ai_model`, `ai_system_prompt`) และบังคับให้ปิดการแสดงผลหน้า Chat หรือ Floating Widget อัตโนมัติเมื่อ `ai_copilot_enabled: false` หรือยังไม่ได้ระบุ API Key เพื่อความปลอดภัยและประหยัดค่าใช้จ่าย<br/>• **Model Context Protocol (MCP) Integration:** กำหนดแนวทางให้ AI ประจำ Spoke สามารถเรียกใช้งาน Central IAM Core MCP Server (Remote SSE over HTTPS via Bearer token) เพื่อตรวจเช็คความปลอดภัยของบัญชีผู้ใช้ และอนุญาตให้ Spoke พัฒนา MCP Tools ประจำระบบของตนเองได้ |
@@ -2441,3 +2442,339 @@ export function LoginForm() {
   );
 }
 ```
+
+
+---
+
+## 13. หมวด G: ข้อกำหนดมาตรฐานความปลอดภัยรหัสผ่านบัญชีท้องถิ่น และการบังคับเปลี่ยนรหัสผ่านทุก 90 วัน (Enterprise Local Password Policy & 90-Day Rotation Framework Standard)
+
+> [!IMPORTANT]
+> **วัตถุประสงค์และขอบเขตการบังคับใช้ตามมาตรฐาน ISO 27001 (A.9.4.3 Password Management System):**
+> * **บัญชี SSO (Active Directory / Central IAM):** สำหรับพนักงานที่ล็อกอินผ่าน Central IAM SSO วงจรชีวิตรหัสผ่านจะถูกบริหารจัดการและคุ้มครองโดย Active Directory Domain Controller และ Central IAM Portal โดยตรง
+> * **บัญชีท้องถิ่นในระบบลูก (Local Spoke Accounts & Emergency Break-Glass Accounts):** สำหรับบัญชีเฉพาะระบบที่ไม่ได้ผูกกับ AD เช่น บัญชีผู้ดูแลระบบฉุกเฉิน (Break-Glass Local Admin), บัญชีผู้รับเหมาภายนอก, หรือบัญชีบริการในระบบลูก (Local DB Users) **ระบบลูกทุกระบบต้องปฏิบัติตามมาตรฐานการหมุนเวียนรหัสผ่านทุก 90 วันและความซับซ้อนของรหัสผ่านในหมวดนี้อย่างเคร่งครัด 100%** เพื่อป้องกันภัยคุกคามจากการเดารหัสผ่านและรหัสผ่านค้างเก่า
+
+### 13.1 กฎเกณฑ์ความซับซ้อนของรหัสผ่านระดับองค์กร (Enterprise Password Complexity Rules)
+รหัสผ่านของบัญชีท้องถิ่นทุกบัญชีต้องผ่านการตรวจสอบตามเกณฑ์ 6 ประการต่อไปนี้ ทั้งในฝั่ง Client-side (Real-time Feedback) และ Server-side (Strict Validation Guard):
+1. **ความยาว (Length):** ความยาวขั้นต่ำ **8 ตัวอักษร** และสูงสุดไม่เกิน **16 ตัวอักษร** (Strict 8 - 16 characters)
+2. **ตัวอักษรพิมพ์ใหญ่ (Uppercase):** มีตัวอักษรภาษาอังกฤษพิมพ์ใหญ่ `A-Z` อย่างน้อย 1 ตัว
+3. **ตัวอักษรพิมพ์เล็ก (Lowercase):** มีตัวอักษรภาษาอังกฤษพิมพ์เล็ก `a-z` อย่างน้อย 1 ตัว
+4. **ตัวเลข (Digits):** มีตัวเลข `0-9` อย่างน้อย 1 ตัว
+5. **อักขระพิเศษ (Special Characters):** มีอักขระพิเศษอย่างน้อย 1 ตัวจากชุด `!@#$%^&*()_+-=[]{}|;:,.<>?/~`
+6. **ห้ามมีชื่อผู้ใช้ (No Username in Password):** รหัสผ่านต้องไม่มีชื่อผู้ใช้ (`username`) ปะปนอยู่ (Case-insensitive check สำหรับชื่อที่มีความยาวตั้งแต่ 3 ตัวอักษรขึ้นไป)
+
+---
+
+### 13.2 การขยายโครงสร้างฐานข้อมูลของระบบลูก (Database Schema Requirements)
+ระบบลูกต้องเพิ่มคอลัมน์ในตารางผู้ใช้ท้องถิ่น (เช่น `users` หรือ `accounts`) ดังนี้:
+
+```sql
+-- สำหรับ PostgreSQL
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT TRUE;
+
+-- สำหรับ MySQL / MariaDB
+ALTER TABLE users ADD COLUMN password_changed_at DATETIME DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE users ADD COLUMN must_change_password TINYINT(1) DEFAULT 1;
+
+-- สำหรับ SQLite
+ALTER TABLE users ADD COLUMN password_changed_at TIMESTAMP;
+ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 1;
+```
+
+---
+
+### 13.3 วงจรการบังคับเปลี่ยนรหัสผ่านทุก 90 วัน (90-Day Forced Password Rotation Lifecycle)
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   90-DAY PASSWORD ROTATION LIFECYCLE                   │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+                     [ ผู้ใช้ล็อกอินเข้าสู่ระบบลูก ]
+                                    │
+                                    ▼
+       ┌─────────────────────────────────────────────────────────┐
+       │ คำนวณ: (now - password_changed_at).days >= 90 วัน ?       │
+       │ หรือ must_change_password == true ?                     │
+       └────────────────────────────┬────────────────────────────┘
+                                    │
+                    ┌───────────────┴───────────────┐
+                    │ ใช่ (ครบ 90 วัน / บังคับเปลี่ยน)│ ไม่ใช่ (ยังไม่ครบ)
+                    ▼                               ▼
+       ┌─────────────────────────┐      ┌─────────────────────────┐
+       │ บล็อกการเข้าหน้าระบบงาน   │      │ อนุญาตให้เข้าใช้งานระบบ   │
+       │ บังคับเปิด Modal เปลี่ยน │      │ ตามสิทธิ์ปกติ           │
+       │ รหัสผ่านทันที (ห้ามข้าม) │      └─────────────────────────┘
+       └────────────┬────────────┘
+                    │
+                    ▼
+       ┌─────────────────────────┐
+       │ ตรวจสอบ Complexity 8-16 │
+       │ บันทึก hashed_password  │
+       │ password_changed_at=now │
+       │ must_change_password=F  │
+       └─────────────────────────┘
+```
+
+1. **เมื่อล็อกอินสำเร็จ:**
+   - ระบบลูกตรวจสอบ: หาก `(now - password_changed_at) >= 90 วัน` ให้ตั้งค่า `must_change_password = true`
+2. **การกักกันสิทธิ์ (Access Interception):**
+   - หาก `must_change_password == true`: ระบบลูกต้องแสดง Modal บังคับเปลี่ยนรหัสผ่านทันที โดยผู้ใช้ไม่สามารถกดปิด ปฏิเสธ หรือคลิกเข้าเมนูอื่นได้จนกว่าจะเปลี่ยนรหัสผ่านสำเร็จ
+3. **เมื่อเปลี่ยนรหัสผ่านสำเร็จ:**
+   - ตรวจสอบความซับซ้อนตามข้อ 13.1
+   - บันทึก `hashed_password` ด้วยอัลกอริทึมที่ปลอดภัย (`bcrypt` หรือ `argon2`)
+   - อัปเดต `password_changed_at = CURRENT_TIMESTAMP`
+   - ปรับสถานะ `must_change_password = false`
+   - บันทึกประวัติลง `transaction_logs` หมวดความปลอดภัย
+
+---
+
+### 13.4 โค้ดตัวอย่างมาตรฐานสำหรับ Spoke Applications (Ready-to-Use Implementations)
+
+#### A. โค้ดภาษา Python (FastAPI / SQLAlchemy)
+
+```python
+import re
+from datetime import datetime, timezone, timedelta
+from typing import Optional
+import bcrypt
+
+LOCAL_PASSWORD_EXPIRY_DAYS = 90
+
+def validate_password_complexity(password: str, username: Optional[str] = None) -> Optional[str]:
+    """
+    Enterprise Password Complexity Standard:
+    - 8 to 16 characters
+    - Uppercase (A-Z), Lowercase (a-z), Digit (0-9), Special Char
+    - No username in password
+    """
+    if not password:
+        return "กรุณาระบุรหัสผ่าน"
+    pwd = password.strip()
+    if len(pwd) < 8 or len(pwd) > 16:
+        return f"รหัสผ่านต้องมีความยาวระหว่าง 8 ถึง 16 ตัวอักษร (ปัจจุบัน {len(pwd)} ตัวอักษร)"
+    if not re.search(r"[A-Z]", pwd):
+        return "รหัสผ่านต้องมีตัวอักษรพิมพ์ใหญ่ (A-Z) อย่างน้อย 1 ตัว"
+    if not re.search(r"[a-z]", pwd):
+        return "รหัสผ่านต้องมีตัวอักษรพิมพ์เล็ก (a-z) อย่างน้อย 1 ตัว"
+    if not re.search(r"[0-9]", pwd):
+        return "รหัสผ่านต้องมีตัวเลข (0-9) อย่างน้อย 1 ตัว"
+    if not re.search(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]", pwd):
+        return "รหัสผ่านต้องมีอักขระพิเศษ (!@#$%^&*...) อย่างน้อย 1 ตัว"
+    if username and len(username.strip()) >= 3 and username.strip().lower() in pwd.lower():
+        return "รหัสผ่านต้องไม่มีชื่อผู้ใช้ (Username) ปะปนอยู่"
+    return None
+
+def is_password_expired(password_changed_at: Optional[datetime], created_at: Optional[datetime] = None) -> tuple[bool, int]:
+    """Return (is_expired: bool, days_left: int) based on 90-day rotation policy."""
+    now = datetime.now(timezone.utc)
+    base_dt = password_changed_at or created_at or now
+    if base_dt.tzinfo is None:
+        base_dt = base_dt.replace(tzinfo=timezone.utc)
+    days_elapsed = (now - base_dt).days
+    days_left = max(0, LOCAL_PASSWORD_EXPIRY_DAYS - days_elapsed)
+    return (days_elapsed >= LOCAL_PASSWORD_EXPIRY_DAYS, days_left)
+
+# Route Handler Example
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+@router.post("/api/auth/local/change-password")
+def change_local_password(req: ChangePasswordRequest, current_user = Depends(get_current_user), db = Depends(get_db)):
+    # 1. Verify old password
+    if not bcrypt.checkpw(req.old_password.encode(), current_user.hashed_password.encode()):
+        raise HTTPException(status_code=400, detail="รหัสผ่านเดิมไม่ถูกต้อง")
+
+    # 2. Validate complexity
+    err = validate_password_complexity(req.new_password, username=current_user.username)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    # 3. Hash and save new password
+    salt = bcrypt.gensalt()
+    current_user.hashed_password = bcrypt.hashpw(req.new_password.encode(), salt).decode()
+    current_user.password_changed_at = datetime.now(timezone.utc)
+    current_user.must_change_password = False
+    db.commit()
+
+    return {"status": "SUCCESS", "message": "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว (มีอายุ 90 วัน)"}
+```
+
+#### B. โค้ดภาษา Node.js (Express / TypeScript)
+
+```typescript
+import bcrypt from "bcrypt";
+
+const LOCAL_PASSWORD_EXPIRY_DAYS = 90;
+
+export function validatePasswordComplexity(password: string, username?: string): string | null {
+  const pwd = password.trim();
+  if (pwd.length < 8 || pwd.length > 16) {
+    return `รหัสผ่านต้องมีความยาวระหว่าง 8 ถึง 16 ตัวอักษร (ปัจจุบัน ${pwd.length} ตัวอักษร)`;
+  }
+  if (!/[A-Z]/.test(pwd)) return "รหัสผ่านต้องมีตัวอักษรพิมพ์ใหญ่ (A-Z) อย่างน้อย 1 ตัว";
+  if (!/[a-z]/.test(pwd)) return "รหัสผ่านต้องมีตัวอักษรพิมพ์เล็ก (a-z) อย่างน้อย 1 ตัว";
+  if (!/[0-9]/.test(pwd)) return "รหัสผ่านต้องมีตัวเลข (0-9) อย่างน้อย 1 ตัว";
+  if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]/.test(pwd)) {
+    return "รหัสผ่านต้องมีอักขระพิเศษ (!@#$%^&*...) อย่างน้อย 1 ตัว";
+  }
+  if (username && username.trim().length >= 3 && pwd.toLowerCase().includes(username.trim().toLowerCase())) {
+    return "รหัสผ่านต้องไม่มีชื่อผู้ใช้ (Username) ปะปนอยู่";
+  }
+  return null;
+}
+
+export function isPasswordExpired(passwordChangedAt: Date | null): { expired: boolean; daysLeft: number } {
+  const now = new Date();
+  const base = passwordChangedAt ? new Date(passwordChangedAt) : now;
+  const elapsedDays = Math.floor((now.getTime() - base.getTime()) / (1000 * 60 * 60 * 24));
+  const daysLeft = Math.max(0, LOCAL_PASSWORD_EXPIRY_DAYS - elapsedDays);
+  return { expired: elapsedDays >= LOCAL_PASSWORD_EXPIRY_DAYS, daysLeft };
+}
+```
+
+#### C. โค้ดภาษา PHP (PDO / Native PHP)
+
+```php
+<?php
+define('LOCAL_PASSWORD_EXPIRY_DAYS', 90);
+
+function validatePasswordComplexity(string $password, ?string $username = null): ?string {
+    $pwd = trim($password);
+    $len = strlen($pwd);
+    if ($len < 8 || $len > 16) {
+        return "รหัสผ่านต้องมีความยาวระหว่าง 8 ถึง 16 ตัวอักษร (ปัจจุบัน {$len} ตัวอักษร)";
+    }
+    if (!preg_match('/[A-Z]/', $pwd)) {
+        return "รหัสผ่านต้องมีตัวอักษรพิมพ์ใหญ่ (A-Z) อย่างน้อย 1 ตัว";
+    }
+    if (!preg_match('/[a-z]/', $pwd)) {
+        return "รหัสผ่านต้องมีตัวอักษรพิมพ์เล็ก (a-z) อย่างน้อย 1 ตัว";
+    }
+    if (!preg_match('/[0-9]/', $pwd)) {
+        return "รหัสผ่านต้องมีตัวเลข (0-9) อย่างน้อย 1 ตัว";
+    }
+    if (!preg_match('/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?\/~`]/', $pwd)) {
+        return "รหัสผ่านต้องมีอักขระพิเศษ (!@#$%^&*...) อย่างน้อย 1 ตัว";
+    }
+    if ($username && strlen(trim($username)) >= 3 && stripos($pwd, trim($username)) !== false) {
+        return "รหัสผ่านต้องไม่มีชื่อผู้ใช้ (Username) ปะปนอยู่";
+    }
+    return null;
+}
+
+function checkPasswordExpiry90Days(?string $passwordChangedAt): array {
+    $now = new DateTime('now', new DateTimeZone('UTC'));
+    $base = $passwordChangedAt ? new DateTime($passwordChangedAt, new DateTimeZone('UTC')) : $now;
+    $diff = $now->diff($base);
+    $daysElapsed = (int)$diff->format('%a');
+    $daysLeft = max(0, LOCAL_PASSWORD_EXPIRY_DAYS - $daysElapsed);
+    return [
+        'is_expired' => ($daysElapsed >= LOCAL_PASSWORD_EXPIRY_DAYS),
+        'days_left'  => $daysLeft
+    ];
+}
+```
+
+#### D. โค้ดฝั่ง Frontend React Form พร้อม Real-time Checklist
+
+```tsx
+import React, { useState } from 'react';
+
+interface PasswordFormProps {
+  username: string;
+  isExpired: boolean;
+  onSuccess: () => void;
+}
+
+export function ForcedPasswordChangeModal({ username, isExpired, onSuccess }: PasswordFormProps) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const isLenValid = newPassword.length >= 8 && newPassword.length <= 16;
+  const isUpperValid = /[A-Z]/.test(newPassword);
+  const isLowerValid = /[a-z]/.test(newPassword);
+  const isDigitValid = /[0-9]/.test(newPassword);
+  const isSpecialValid = /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]/.test(newPassword);
+  const isNoUserValid = !username || username.length < 3 || !newPassword.toLowerCase().includes(username.toLowerCase());
+  const isAllValid = isLenValid && isUpperValid && isLowerValid && isDigitValid && isSpecialValid && isNoUserValid;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAllValid) {
+      setError('กรุณาตั้งรหัสผ่านให้ตรงตามเกณฑ์ความปลอดภัยทั้งหมด');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('รหัสผ่านยืนยันไม่ตรงกัน');
+      return;
+    }
+    // Call Spoke Backend API...
+    onSuccess();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+        <h3 className="text-base font-black text-slate-900 mb-1">
+          {isExpired ? '⚠️ รหัสผ่านหมดอายุตามรอบความปลอดภัย 90 วัน' : '🔒 จำเป็นต้องเปลี่ยนรหัสผ่าน'}
+        </h3>
+        <p className="text-xs text-slate-500 mb-4">
+          กรุณาตั้งรหัสผ่านใหม่ (8-16 ตัวอักษร) เพื่อดำเนินการเข้าใช้งานระบบ
+        </p>
+
+        {error && <div className="p-2.5 rounded-lg bg-rose-50 text-rose-800 text-xs font-bold mb-3">{error}</div>}
+
+        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] mb-4 space-y-1">
+          <div className="font-bold text-slate-700">ข้อกำหนดความปลอดภัยของรหัสผ่าน:</div>
+          <div className={isLenValid ? 'text-emerald-700 font-bold' : 'text-slate-500'}>• ความยาว 8 - 16 ตัวอักษร</div>
+          <div className={isUpperValid ? 'text-emerald-700 font-bold' : 'text-slate-500'}>• ตัวพิมพ์ใหญ่ (A-Z) อย่างน้อย 1 ตัว</div>
+          <div className={isLowerValid ? 'text-emerald-700 font-bold' : 'text-slate-500'}>• ตัวพิมพ์เล็ก (a-z) อย่างน้อย 1 ตัว</div>
+          <div className={isDigitValid ? 'text-emerald-700 font-bold' : 'text-slate-500'}>• ตัวเลข (0-9) อย่างน้อย 1 ตัว</div>
+          <div className={isSpecialValid ? 'text-emerald-700 font-bold' : 'text-slate-500'}>• อักขระพิเศษ (!@#$%^&*...) อย่างน้อย 1 ตัว</div>
+          <div className={isNoUserValid ? 'text-emerald-700 font-bold' : 'text-slate-500'}>• ห้ามมี Username ในรหัสผ่าน</div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">รหัสผ่านใหม่ *</label>
+            <input
+              type="password"
+              required
+              maxLength={16}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg text-xs"
+              placeholder="กรอกรหัสผ่านใหม่ (8-16 ตัวอักษร)"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">ยืนยันรหัสผ่านใหม่ *</label>
+            <input
+              type="password"
+              required
+              maxLength={16}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg text-xs"
+              placeholder="กรอกรหัสผ่านใหม่อีกครั้งให้ตรงกัน"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={!isAllValid || newPassword !== confirmPassword}
+            className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs disabled:opacity-50 mt-2"
+          >
+            บันทึกรหัสผ่านใหม่ (อายุ 90 วัน)
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

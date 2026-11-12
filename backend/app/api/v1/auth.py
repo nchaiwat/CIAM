@@ -36,6 +36,43 @@ def _resolve_is_ad_user(username: str, ident: Optional[MasterIdentity]) -> bool:
     return True
 
 
+def _enrich_user_out(out: AdminUserOut, user: AdminUser, db: Session, ident: Optional[MasterIdentity] = None) -> AdminUserOut:
+    """Populate AD status, department, employee_id, and 90-day password expiry info."""
+    if ident is None:
+        ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == user.username.lower()).first()
+
+    out.is_ad_user = _resolve_is_ad_user(user.username, ident)
+    out.must_change_password = bool(getattr(user, "must_change_password", False))
+
+    if not out.is_ad_user:
+        from app.core.security import check_password_expiry
+        is_exp, days_left, exp_at = check_password_expiry(user.password_changed_at, user.created_at)
+        out.password_changed_at = user.password_changed_at
+        out.password_expires_at = exp_at
+        out.days_until_password_expiry = days_left
+        out.is_password_expired = is_exp
+
+        # If expired, enforce must_change_password
+        if is_exp:
+            out.must_change_password = True
+            if not user.must_change_password:
+                user.must_change_password = True
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+
+    if ident:
+        out.department = ident.department
+        out.employee_id = ident.employee_id
+        if ident.full_name and ident.full_name != user.username:
+            out.full_name = ident.full_name
+        if not out.telegram_id and ident.telegram_id:
+            out.telegram_id = ident.telegram_id
+
+    return out
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """
@@ -467,8 +504,7 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
 
     user_out = AdminUserOut.model_validate(user)
     ident_login = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == user.username.lower()).first()
-    user_out.is_ad_user = _resolve_is_ad_user(user.username, ident_login)
-    user_out.must_change_password = bool(getattr(user, "must_change_password", False))
+    user_out = _enrich_user_out(user_out, user, db, ident_login)
 
     token = create_access_token(subject=user.username)
     return TokenResponse(
@@ -482,22 +518,10 @@ def get_current_user_profile(
     current_user: AdminUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Return currently logged in user profile with MasterIdentity details."""
+    """Return currently logged in user profile with MasterIdentity details and 90-day password expiry."""
     out = AdminUserOut.model_validate(current_user)
     ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == current_user.username.lower()).first()
-
-    # Determine whether user is AD user or Local account
-    out.is_ad_user = _resolve_is_ad_user(current_user.username, ident)
-    out.must_change_password = bool(getattr(current_user, "must_change_password", False))
-
-    if ident:
-        out.department = ident.department
-        out.employee_id = ident.employee_id
-        if ident.full_name and ident.full_name != current_user.username:
-            out.full_name = ident.full_name
-        if not out.telegram_id and ident.telegram_id:
-            out.telegram_id = ident.telegram_id
-    return out
+    return _enrich_user_out(out, current_user, db, ident)
 
 
 @router.put("/profile", response_model=AdminUserOut)
@@ -516,10 +540,11 @@ def update_current_user_profile(
         current_user.telegram_id = t_id if t_id else None
     if payload.new_password:
         from app.core.security import validate_password_complexity
-        pwd_err = validate_password_complexity(payload.new_password)
+        pwd_err = validate_password_complexity(payload.new_password, username=current_user.username)
         if pwd_err:
             raise HTTPException(status_code=400, detail=pwd_err)
         current_user.hashed_password = hash_password(payload.new_password)
+        current_user.password_changed_at = datetime.now(timezone.utc)
         current_user.must_change_password = False
 
     # Also sync to MasterIdentity if exists
@@ -543,9 +568,13 @@ def update_current_user_profile(
         target_username=current_user.username,
         affected_app_code="CIAM",
         execution_mode="PORTAL_ADMIN",
-        reason=f"อัปเดตข้อมูลโปรไฟล์ผู้ดูแลระบบ (Telegram ID: {current_user.telegram_id or 'N/A'})",
+        reason=f"อัปเดตข้อมูลโปรไฟล์ผู้ดูแลระบบ (Telegram ID: {current_user.telegram_id or 'N/A'}{', เปลี่ยนรหัสผ่านใหม่' if payload.new_password else ''})",
         status="SUCCESS"
     ))
+    db.commit()
+
+    out = AdminUserOut.model_validate(current_user)
+    return _enrich_user_out(out, current_user, db, ident)
     db.commit()
 
     out = AdminUserOut.model_validate(current_user)

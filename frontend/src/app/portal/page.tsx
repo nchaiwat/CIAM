@@ -216,9 +216,9 @@ export default function PortalPage() {
     }
   };
 
-  const validatePasswordComplexityClient = (pwd: string): string | null => {
-    if (pwd.length < 8 || pwd.length > 10) {
-      return `รหัสผ่านต้องมีความยาวระหว่าง 8 ถึง 10 ตัวอักษร (ปัจจุบัน ${pwd.length} ตัวอักษร)`;
+  const validatePasswordComplexityClient = (pwd: string, username?: string): string | null => {
+    if (pwd.length < 8 || pwd.length > 16) {
+      return `รหัสผ่านต้องมีความยาวระหว่าง 8 ถึง 16 ตัวอักษร (ปัจจุบัน ${pwd.length} ตัวอักษร)`;
     }
     if (!/[A-Z]/.test(pwd)) {
       return "รหัสผ่านต้องมีตัวอักษรพิมพ์ใหญ่ (A-Z) อย่างน้อย 1 ตัว";
@@ -232,12 +232,18 @@ export default function PortalPage() {
     if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]/.test(pwd)) {
       return "รหัสผ่านต้องมีอักขระพิเศษ (!@#$%^&*...) อย่างน้อย 1 ตัว";
     }
+    if (username && username.trim().length >= 3) {
+      const cleanUser = username.trim().toLowerCase();
+      if (pwd.toLowerCase().includes(cleanUser)) {
+        return "รหัสผ่านต้องไม่มีชื่อผู้ใช้ (Username) ปะปนอยู่";
+      }
+    }
     return null;
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    const complexityErr = validatePasswordComplexityClient(newPassword);
+    const complexityErr = validatePasswordComplexityClient(newPassword, currentUser?.username);
     if (complexityErr) {
       setPasswordError(complexityErr);
       return;
@@ -250,13 +256,10 @@ export default function PortalPage() {
     try {
       setPasswordSaving(true);
       setPasswordError(null);
-      await api.updateAdminProfile({ new_password: newPassword });
+      const res = await api.updateAdminProfile({ new_password: newPassword });
       setPasswordSuccess(true);
-      if (currentUser) {
-        const updated = { ...currentUser, must_change_password: false };
-        setCurrentUser(updated);
-        localStorage.setItem("ciam_user", JSON.stringify(updated));
-      }
+      setCurrentUser(res);
+      localStorage.setItem("ciam_user", JSON.stringify(res));
       setTimeout(() => {
         setIsPasswordModalOpen(false);
         setPasswordSuccess(false);
@@ -490,10 +493,28 @@ export default function PortalPage() {
                     setPasswordSuccess(false);
                     setIsPasswordModalOpen(true);
                   }}
-                  className="p-1 rounded-full text-slate-500 hover:text-blue-600 hover:bg-white transition-colors cursor-pointer"
-                  title="เปลี่ยนรหัสผ่าน Single Sign-On (Local Account)"
+                  className={`px-1.5 py-1 rounded-full transition-colors cursor-pointer flex items-center gap-1 text-[11px] font-bold ${
+                    currentUser.is_password_expired
+                      ? "text-rose-700 bg-rose-100 hover:bg-rose-200 animate-pulse border border-rose-300"
+                      : currentUser.days_until_password_expiry !== undefined && currentUser.days_until_password_expiry !== null && currentUser.days_until_password_expiry <= 14
+                      ? "text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300"
+                      : "text-slate-500 hover:text-blue-600 hover:bg-white"
+                  }`}
+                  title={
+                    currentUser.is_password_expired
+                      ? "รหัสผ่านหมดอายุ 90 วันแล้ว - กรุณาเปลี่ยนรหัสผ่าน"
+                      : currentUser.days_until_password_expiry !== undefined && currentUser.days_until_password_expiry !== null
+                      ? `รหัสผ่านมีอายุเหลืออีก ${currentUser.days_until_password_expiry} วัน (รอบ 90 วัน)`
+                      : "เปลี่ยนรหัสผ่าน Single Sign-On (Local Account)"
+                  }
                 >
                   <Key className="w-3.5 h-3.5" />
+                  {currentUser.is_password_expired && (
+                    <span className="text-[10px] text-rose-700">หมดอายุ</span>
+                  )}
+                  {!currentUser.is_password_expired && currentUser.days_until_password_expiry !== undefined && currentUser.days_until_password_expiry !== null && currentUser.days_until_password_expiry <= 14 && (
+                    <span className="text-[10px] text-amber-800">{currentUser.days_until_password_expiry} วัน</span>
+                  )}
                 </button>
               </>
             )}
@@ -885,12 +906,26 @@ export default function PortalPage() {
 
             {/* Force Password Change Warning Banner */}
             {currentUser?.must_change_password && (
-              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 text-xs flex items-start gap-2.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                currentUser.is_password_expired
+                  ? "bg-rose-50 border-rose-300 text-rose-950"
+                  : "bg-amber-50 border-amber-300 text-amber-950"
+              }`}>
+                <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${
+                  currentUser.is_password_expired ? "text-rose-600" : "text-amber-600"
+                }`} />
                 <div>
-                  <span className="font-bold">จำเป็นต้องเปลี่ยนรหัสผ่าน:</span>
-                  <p className="text-[11px] text-amber-800 mt-0.5 leading-snug">
-                    ผู้ดูแลระบบกำหนดให้คุณต้องตั้งรหัสผ่านใหม่ก่อนเข้าใช้งานระบบงาน App Portal
+                  <span className="font-bold">
+                    {currentUser.is_password_expired
+                      ? "รหัสผ่านหมดอายุตามรอบความปลอดภัย 90 วัน:"
+                      : "จำเป็นต้องเปลี่ยนรหัสผ่าน:"}
+                  </span>
+                  <p className={`text-[11px] mt-0.5 leading-snug ${
+                    currentUser.is_password_expired ? "text-rose-800" : "text-amber-800"
+                  }`}>
+                    {currentUser.is_password_expired
+                      ? "รหัสผ่านของคุณมีอายุครบ 90 วันตามนโยบายความปลอดภัยขององค์กร กรุณาตั้งรหัสผ่านใหม่เพื่อเข้าใช้งานระบบงาน"
+                      : "ผู้ดูแลระบบกำหนดให้คุณต้องตั้งรหัสผ่านใหม่ก่อนเข้าใช้งานระบบงาน App Portal"}
                   </p>
                 </div>
               </div>
@@ -900,7 +935,7 @@ export default function PortalPage() {
               <div className="p-5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs space-y-2 text-center">
                 <CheckCircle2 className="w-9 h-9 text-emerald-600 mx-auto" />
                 <div className="font-bold text-sm text-emerald-900">เปลี่ยนรหัสผ่านสำเร็จ!</div>
-                <p className="text-slate-600 font-medium">ระบบได้อัปเดตรหัสผ่านกลางของคุณเรียบร้อยแล้ว</p>
+                <p className="text-slate-600 font-medium">ระบบได้อัปเดตรหัสผ่านกลางของคุณเรียบร้อยแล้ว (มีอายุ 90 วัน)</p>
               </div>
             ) : (
               <form onSubmit={handlePasswordChange} className="space-y-3.5">
@@ -912,10 +947,10 @@ export default function PortalPage() {
 
                 {/* Password Complexity Checklist Guide */}
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] space-y-1.5">
-                  <div className="font-bold text-slate-700">ข้อกำหนดความปลอดภัยของรหัสผ่าน:</div>
+                  <div className="font-bold text-slate-700">ข้อกำหนดความปลอดภัยของรหัสผ่าน (รอบเปลี่ยนทุก 90 วัน):</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px]">
-                    <div className={`flex items-center gap-1.5 ${newPassword.length >= 8 && newPassword.length <= 10 ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
-                      <span>• ความยาว 8 - 10 ตัวอักษร</span>
+                    <div className={`flex items-center gap-1.5 ${newPassword.length >= 8 && newPassword.length <= 16 ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
+                      <span>• ความยาว 8 - 16 ตัวอักษร</span>
                     </div>
                     <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(newPassword) ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
                       <span>• ตัวพิมพ์ใหญ่ (A-Z) อย่างน้อย 1 ตัว</span>
@@ -926,24 +961,27 @@ export default function PortalPage() {
                     <div className={`flex items-center gap-1.5 ${/[0-9]/.test(newPassword) ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
                       <span>• ตัวเลข (0-9) อย่างน้อย 1 ตัว</span>
                     </div>
-                    <div className={`flex items-center gap-1.5 sm:col-span-2 ${/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]/.test(newPassword) ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
-                      <span>• อักขระพิเศษ (!@#$%^&*...) อย่างน้อย 1 ตัว</span>
+                    <div className={`flex items-center gap-1.5 ${/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]/.test(newPassword) ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
+                      <span>• อักขระพิเศษ (!@#$%^&*...)</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${currentUser?.username && currentUser.username.trim().length >= 3 && !newPassword.toLowerCase().includes(currentUser.username.trim().toLowerCase()) ? "text-emerald-700 font-bold" : "text-slate-500"}`}>
+                      <span>• ห้ามมี Username ในรหัสผ่าน</span>
                     </div>
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    รหัสผ่านใหม่ (ความยาว 8-10 ตัวอักษร) *
+                    รหัสผ่านใหม่ (ความยาว 8-16 ตัวอักษร) *
                   </label>
                   <div className="relative">
                     <input
                       type={showPassword ? "text" : "password"}
                       required
-                      maxLength={10}
+                      maxLength={16}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="กรอกรหัสผ่านใหม่ (8-10 ตัวอักษร)"
+                      placeholder="กรอกรหัสผ่านใหม่ (8-16 ตัวอักษร)"
                       className="w-full px-3 py-2 pr-9 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-blue-600"
                     />
                     <button
@@ -963,7 +1001,7 @@ export default function PortalPage() {
                   <input
                     type={showPassword ? "text" : "password"}
                     required
-                    maxLength={10}
+                    maxLength={16}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="กรอกรหัสผ่านใหม่อีกครั้งให้ตรงกัน"

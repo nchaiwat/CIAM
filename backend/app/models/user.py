@@ -18,4 +18,5 @@ class AdminUser(Base):
     failed_login_attempts = Column(Integer, default=0, nullable=False)
     locked_until = Column(DateTime(timezone=True), nullable=True)
     must_change_password = Column(Boolean, default=False, nullable=False)
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)
 
