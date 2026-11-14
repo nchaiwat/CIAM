@@ -1,9 +1,10 @@
 from typing import Optional
+from sqlalchemy.orm import object_session
 from app.models.application import ConnectedApplication
 from app.connectors.base import BaseConnector
 from app.connectors.rest_api import RestApiConnector
 from app.connectors.sap_b1 import SapB1Connector
-from app.connectors.ad_proxy import AdProxyConnector
+from app.connectors.ad_proxy import AdProxyConnector, get_ad_gateway_candidates
 from app.connectors.rpa.mock_legacy import MockLegacyErpRpaAdapter
 from app.connectors.m365_graph import M365GraphConnector
 from app.connectors.sso_only import SsoOnlyConnector
@@ -31,12 +32,17 @@ def get_connector_for_app(app: ConnectedApplication) -> BaseConnector:
             app_code=app.app_code
         )
     elif c_type in ["AD_PROXY", "AD_GATEWAY"] or app.app_code.lower() == "ad":
+        db_session = object_session(app)
+        candidates = get_ad_gateway_candidates(db_session, primary_override=app.base_url) if db_session else None
+        primary_url = candidates[0] if candidates else app.base_url
+        fallback_urls = candidates[1:] if (candidates and len(candidates) > 1) else None
         return AdProxyConnector(
-            base_url=app.base_url,
+            base_url=primary_url,
             api_key=app.api_key or "mgmt_ciam_key_9a88b1c0d2e3f4a5",
             secret_key=app.client_secret or "aa0a27f191208cbe6543c88636d18ff40b9bea422dfc51d426bf920ca54c1823",
             allow_status_patch=bool(getattr(app, "ad_allow_status_patch", False)),
-            origin_ip=app.sap_company_db or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
+            origin_ip=app.sap_company_db or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153"),
+            fallback_urls=fallback_urls,
         )
     elif c_type in ["SSO_ONLY", "SSO_CLIENT", "CLIENT_MODE", "ON_PREM_SSO"]:
         return SsoOnlyConnector(

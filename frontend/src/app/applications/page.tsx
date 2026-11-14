@@ -457,7 +457,7 @@ export default function ApplicationsPage() {
       const msg = err.message || "";
       const isIpError = msg.includes("IP Whitelist") || msg.includes("Origin IP") || msg.includes("403");
       const ipMatch = msg.match(/Origin IP ['"]?([0-9.]+)['"]?/i);
-      const detectedIp = ipMatch ? ipMatch[1] : "58.8.188.214";
+      const detectedIp = ipMatch ? ipMatch[1] : "157.173.219.153";
 
       if (isIpError) {
         setErrorNotice({
@@ -520,7 +520,7 @@ export default function ApplicationsPage() {
       const msg = err.message || "";
       const isIpError = msg.includes("IP Whitelist") || msg.includes("Origin IP") || msg.includes("403");
       const ipMatch = msg.match(/Origin IP ['"]?([0-9.]+)['"]?/i);
-      const detectedIp = ipMatch ? ipMatch[1] : "58.8.188.214";
+      const detectedIp = ipMatch ? ipMatch[1] : "157.173.219.153";
 
       if (isIpError) {
         setErrorNotice({
@@ -1172,7 +1172,7 @@ export default function ApplicationsPage() {
                           ส่งใน Request Header: <code className="bg-white px-1 py-0.2 rounded border border-amber-300 font-mono font-bold text-amber-900">X-Management-API-Key</code>
                         </li>
                         <li>
-                          Whitelist IP เซิร์ฟเวอร์ CIAM: <code className="bg-white px-1 py-0.2 rounded border border-amber-300 font-mono text-slate-900">58.8.188.214</code>
+                          Whitelist IP เซิร์ฟเวอร์ CIAM: <code className="bg-white px-1 py-0.2 rounded border border-amber-300 font-mono text-slate-900">157.173.219.153</code>
                         </li>
                       </ul>
                     </div>

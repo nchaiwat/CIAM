@@ -1,6 +1,7 @@
-from typing import Optional
+import json
+from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 class LoginRequest(BaseModel):
     username: str
@@ -32,6 +33,23 @@ class AdminUserOut(BaseModel):
     password_expires_at: Optional[datetime] = None
     days_until_password_expiry: Optional[int] = None
     is_password_expired: bool = False
+    portal_preferences: Optional[Dict[str, Any]] = None
+
+    @field_validator("portal_preferences", mode="before")
+    @classmethod
+    def _parse_portal_preferences(cls, value: Any) -> Optional[Dict[str, Any]]:
+        if value is None or isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+            try:
+                parsed = json.loads(raw)
+                return parsed if isinstance(parsed, dict) else None
+            except Exception:
+                return None
+        return None
 
     model_config = {"from_attributes": True}
 
@@ -43,5 +61,9 @@ class AdminProfileUpdateRequest(BaseModel):
     email: Optional[str] = None
     telegram_id: Optional[str] = None
     new_password: Optional[str] = None
+
+class PortalPreferencesUpdateRequest(BaseModel):
+    app_order: Optional[List[str]] = None
+    theme: Optional[Literal["light", "dark"]] = None
 
 TokenResponse.model_rebuild()

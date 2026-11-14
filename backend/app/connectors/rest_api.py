@@ -229,6 +229,28 @@ class RestApiConnector(BaseConnector):
                 return response.json()
             raise Exception(f"Failed to fetch inventory from {self.app_code.upper()}: HTTP {response.status_code} - {response.text[:200]}")
 
+    async def _probe_spoke_sso(self, client: httpx.AsyncClient) -> Optional[bool]:
+        """Probe spoke's public SSO config endpoint, falling back to /api/auth/session if needed."""
+        for path in ("/api/auth/sso/config", "/api/auth/session"):
+            try:
+                sso_cfg_res = await client.get(f"{self.base_url}{path}", timeout=4.0)
+                if sso_cfg_res.status_code == 200:
+                    sso_data = sso_cfg_res.json()
+                    if isinstance(sso_data, dict):
+                        has_sso_flags = any(
+                            k in sso_data
+                            for k in ("sso_enabled", "ciam_enabled", "break_glass_active", "break_glass_enabled")
+                        )
+                        if path == "/api/auth/sso/config" or has_sso_flags:
+                            is_enabled = bool(sso_data.get("sso_enabled", sso_data.get("ciam_enabled", True)))
+                            is_break_glass = bool(
+                                sso_data.get("break_glass_active", sso_data.get("break_glass_enabled", False))
+                            )
+                            return bool(is_enabled and not is_break_glass)
+            except Exception:
+                pass
+        return None
+
     async def health_check(self) -> ConnectorHealth:
         start_time = time.time()
         endpoint = f"{self.base_url}/api/v1/directory/accounts?status=active"
@@ -237,22 +259,12 @@ class RestApiConnector(BaseConnector):
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(endpoint, headers=headers)
                 elapsed = int((time.time() - start_time) * 1000)
+                spoke_sso_active = await self._probe_spoke_sso(client)
+
                 if response.status_code == 200:
                     data = response.json()
                     app_name = data.get("application_name", self.app_code.upper())
                     total = data.get("total_accounts", len(data.get("accounts", [])))
-
-                    # Probe Spoke's SSO Config endpoint (Spec Section B.1)
-                    spoke_sso_active = None
-                    try:
-                        sso_cfg_res = await client.get(f"{self.base_url}/api/auth/sso/config", timeout=4.0)
-                        if sso_cfg_res.status_code == 200:
-                            sso_data = sso_cfg_res.json()
-                            is_enabled = sso_data.get("sso_enabled", True)
-                            is_break_glass = sso_data.get("break_glass_active", False)
-                            spoke_sso_active = bool(is_enabled and not is_break_glass)
-                    except Exception:
-                        pass
 
                     msg = f"M2M REST API Active ({app_name}, {total} accounts)"
                     if spoke_sso_active is False:
@@ -268,7 +280,7 @@ class RestApiConnector(BaseConnector):
                     is_online=False,
                     latency_ms=elapsed,
                     message=f"HTTP {response.status_code}: {response.text[:100]}",
-                    spoke_sso_active=False
+                    spoke_sso_active=spoke_sso_active
                 )
         except Exception as exc:
             elapsed = int((time.time() - start_time) * 1000)
@@ -276,5 +288,5 @@ class RestApiConnector(BaseConnector):
                 is_online=False,
                 latency_ms=elapsed,
                 message=f"Unreachable: {str(exc)[:60]}",
-                spoke_sso_active=False
+                spoke_sso_active=None
             )

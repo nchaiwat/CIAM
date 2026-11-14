@@ -133,26 +133,12 @@ def verify_employee_credentials(
     # Live AD Gateway verification per ADAuthen.md & Spoke Specification
     import httpx
     from app.models.application import ConnectedApplication
+    from app.connectors.ad_proxy import get_ad_gateway_candidates, get_ad_gateway_cluster_config
 
     ad_app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "ad").first()
-
-    def _norm(url: str) -> str:
-        return url.replace("/api/v2/login", "").rstrip("/")
-
-    db_base = _norm(ad_app.base_url) if ad_app and ad_app.base_url else None
-    cfg_base = _norm(settings.AD_GATEWAY_URL)
-    docker_base = "http://172.18.0.1:3100"
-
-    url_candidates_raw = [db_base, docker_base, cfg_base]
-    seen_urls: set = set()
-    url_candidates: list = []
-    for u in url_candidates_raw:
-        if u and "192.168." not in u and u not in seen_urls:
-            seen_urls.add(u)
-            url_candidates.append(u)
-
-    if not url_candidates:
-        url_candidates = [docker_base]
+    url_candidates = get_ad_gateway_candidates(db, primary_override=ad_app.base_url if ad_app else None)
+    cluster_cfg = get_ad_gateway_cluster_config(db)
+    timeout_map = {s["url"]: float(s.get("timeout_seconds") or 3.5) for s in cluster_cfg.get("servers", [])}
 
     primary_app_id = (ad_app.client_id if ad_app and ad_app.client_id else settings.AD_APP_ID) or "CIAM"
     primary_secret = (ad_app.client_secret or ad_app.api_key if ad_app else None) or settings.AD_SECRET_KEY
@@ -161,50 +147,62 @@ def verify_employee_credentials(
     utc_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     try:
-        with httpx.Client(timeout=3.0) as client:
-            for ad_base_candidate in url_candidates:
-                ad_url = f"{ad_base_candidate}/api/v2/login"
-                payload = {
-                    "app_id": primary_app_id,
-                    "app_name": primary_app_id,
-                    "secret_key": primary_secret,
-                    "username": clean_username,
-                    "password": password,
-                    "timestamp": utc_timestamp
-                }
-                headers = {
-                    "Content-Type": "application/json",
-                    "X-Forwarded-For": origin_ip,
-                    "x-forwarded-for": origin_ip,
-                    "X-Request-Timestamp": utc_timestamp,
-                    "X-Timestamp": utc_timestamp,
-                    "timestamp": utc_timestamp,
-                    "X-App-Id": primary_app_id,
-                    "x-app-id": primary_app_id,
-                    "X-Secret-Key": primary_secret,
-                    "x-secret-key": primary_secret,
-                    "X-Management-API-Key": primary_secret,
-                    "x-management-api-key": primary_secret,
-                }
-                try:
+        for ad_base_candidate in url_candidates:
+            ad_url = f"{ad_base_candidate}/api/v2/login"
+            req_timeout = timeout_map.get(ad_base_candidate, 3.5)
+            payload = {
+                "app_id": primary_app_id,
+                "app_name": primary_app_id,
+                "secret_key": primary_secret,
+                "username": clean_username,
+                "password": password,
+                "timestamp": utc_timestamp
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "X-Forwarded-For": origin_ip,
+                "x-forwarded-for": origin_ip,
+                "X-Request-Timestamp": utc_timestamp,
+                "X-Timestamp": utc_timestamp,
+                "timestamp": utc_timestamp,
+                "X-App-Id": primary_app_id,
+                "x-app-id": primary_app_id,
+                "X-Secret-Key": primary_secret,
+                "x-secret-key": primary_secret,
+                "X-Management-API-Key": primary_secret,
+                "x-management-api-key": primary_secret,
+            }
+            try:
+                with httpx.Client(timeout=req_timeout) as client:
                     resp = client.post(ad_url, json=payload, headers=headers)
-                    if resp.status_code == 200:
-                        resp_data = resp.json()
-                        is_ok = (
-                            resp_data.get("status") in ["success", "OK", True]
-                            or resp_data.get("authenticated", False)
-                            or ("data" in resp_data and not resp_data.get("error"))
-                        )
-                        if is_ok:
-                            ad_auth_success = True
-                            break
+                if resp.status_code == 200:
+                    resp_data = resp.json()
+                    is_ok = (
+                        resp_data.get("status") in ["success", "OK", True]
+                        or resp_data.get("authenticated", False)
+                        or ("data" in resp_data and not resp_data.get("error"))
+                    )
+                    if is_ok and not resp_data.get("error"):
+                        ad_auth_success = True
+                        break
                     else:
-                        try:
-                            ad_err_msg = resp.json().get("message", f"HTTP {resp.status_code}")
-                        except Exception:
-                            ad_err_msg = f"HTTP {resp.status_code}"
-                except Exception as probe_ex:
-                    ad_err_msg = str(probe_ex)
+                        ad_err_msg = resp_data.get("message") or resp_data.get("error") or "Invalid credentials"
+                        break  # AD explicitly rejected credentials
+                elif resp.status_code in (400, 401, 403, 404, 422):
+                    try:
+                        ad_err_msg = resp.json().get("message", f"HTTP {resp.status_code}")
+                    except Exception:
+                        ad_err_msg = f"HTTP {resp.status_code}"
+                    break  # Smart failover: stop on credential/policy failure
+                else:
+                    try:
+                        ad_err_msg = resp.json().get("message", f"HTTP {resp.status_code}")
+                    except Exception:
+                        ad_err_msg = f"HTTP {resp.status_code}"
+                    continue  # 5xx error -> failover to backup channel
+            except Exception as probe_ex:
+                ad_err_msg = str(probe_ex)
+                continue
     except Exception as e:
         logger.error("Failed to connect to AD Gateway at %s: %s", url_candidates, e)
 

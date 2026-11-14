@@ -316,6 +316,12 @@ def list_users(
             effective_ad_active = False
 
         app_summaries = _build_app_summaries(mappings, identity_is_active_in_ad=effective_ad_active, now=now)
+
+        # Every user listed in Directory must belong to at least one system (AD or Spoke),
+        # even if disabled, unless explicitly marked as an approved exception.
+        if not effective_ad_active and len(app_summaries) == 0 and not getattr(identity, "is_approved_exception", False):
+            continue
+
         created_at, last_access, days_since_access = _get_identity_activity(identity, mappings, now=now)
 
         # Check overall active status across AD and spokes
@@ -1319,17 +1325,22 @@ async def sync_active_directory_users(
     Directly query Active Directory via AD Sync Agent to update each user's
     department (OU), active status, and attributes in real time.
     """
-    from app.connectors.ad_proxy import AdProxyConnector
-    from app.services.scheduler import persist_spoke_inventory
+    from app.connectors.ad_proxy import AdProxyConnector, get_ad_gateway_candidates
+    from app.services.scheduler import persist_spoke_inventory, cleanup_orphan_identities
     
     ad_app = db.query(ConnectedApplication).filter(func.lower(ConnectedApplication.app_code) == "ad").first()
     if not ad_app:
         raise HTTPException(status_code=404, detail="ระบบ Active Directory (app_code: 'ad') ไม่ได้ลงทะเบียนในระบบ")
 
+    candidates = get_ad_gateway_candidates(db, primary_override=ad_app.base_url)
+    primary_url = candidates[0] if candidates else ad_app.base_url
+    fallback_urls = candidates[1:] if len(candidates) > 1 else []
+
     connector = AdProxyConnector(
-        base_url=ad_app.base_url,
+        base_url=primary_url,
         api_key=ad_app.api_key,
-        secret_key=ad_app.client_secret
+        secret_key=ad_app.client_secret,
+        fallback_urls=fallback_urls,
     )
     
     try:

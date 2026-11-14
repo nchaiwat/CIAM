@@ -1,12 +1,234 @@
 import time
+import uuid
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import httpx
 from datetime import datetime, timezone, timedelta
+from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.connectors.base import BaseConnector, ConnectorResult, ConnectorHealth
 from app.core.config import settings
 
 logger = logging.getLogger("ciam.connectors.ad_proxy")
+
+AD_CLUSTER_SETTING_KEY = "ad_gateway_cluster"
+DEFAULT_AD_GATEWAY_URL = "http://172.18.0.1:3100"
+
+
+def _clean_gateway_url(url: Optional[str]) -> str:
+    if not url or not isinstance(url, str):
+        return ""
+    return url.strip().replace("/api/v2/login", "").rstrip("/")
+
+
+def get_ad_gateway_cluster_config(db: Session) -> Dict[str, Any]:
+    """Read multi-server AD Gateway cluster configuration from SystemSetting + ConnectedApplication."""
+    from app.models.setting import SystemSetting
+    from app.models.application import ConnectedApplication
+
+    ad_app = db.query(ConnectedApplication).filter(func.lower(ConnectedApplication.app_code) == "ad").first()
+    setting = db.query(SystemSetting).filter(SystemSetting.setting_key == AD_CLUSTER_SETTING_KEY).first()
+
+    raw_app_url = _clean_gateway_url(getattr(ad_app, "base_url", None))
+    default_primary = (
+        raw_app_url
+        if raw_app_url and "192.168." not in raw_app_url
+        else (_clean_gateway_url(getattr(settings, "AD_GATEWAY_URL", None)) or DEFAULT_AD_GATEWAY_URL)
+    )
+
+    if setting and isinstance(setting.setting_value, dict):
+        cfg = dict(setting.setting_value)
+    else:
+        cfg = {
+            "servers": [
+                {
+                    "id": "primary-tunnel",
+                    "name": "Primary AD Gateway (SSH Tunnel)",
+                    "url": default_primary,
+                    "channel_type": "SSH_TUNNEL",
+                    "priority": 1,
+                    "enabled": True,
+                    "timeout_seconds": 3.5,
+                    "notes": "Main channel via VPS Docker Bridge / plink SSH tunnel",
+                }
+            ],
+            "base_dn": "DC=wa,DC=net",
+            "allow_status_patch": bool(getattr(ad_app, "ad_allow_status_patch", False)) if ad_app else False,
+            "failover_strategy": "PRIORITY_ORDERED",
+        }
+
+    normalized_servers: List[Dict[str, Any]] = []
+    for idx, srv in enumerate(cfg.get("servers") or []):
+        if not isinstance(srv, dict):
+            continue
+        url = _clean_gateway_url(srv.get("url"))
+        if not url:
+            continue
+        normalized_servers.append({
+            "id": str(srv.get("id") or f"ad-gw-{idx + 1}"),
+            "name": str(srv.get("name") or f"AD Gateway #{idx + 1}").strip(),
+            "url": url,
+            "channel_type": str(srv.get("channel_type") or "VPN_CHANNEL").upper(),
+            "priority": int(srv.get("priority") or (idx + 1)),
+            "enabled": bool(srv.get("enabled", True)),
+            "timeout_seconds": float(srv.get("timeout_seconds") or 3.5),
+            "notes": str(srv.get("notes") or "").strip(),
+        })
+
+    if not normalized_servers:
+        normalized_servers = [{
+            "id": "primary-tunnel",
+            "name": "Primary AD Gateway (SSH Tunnel)",
+            "url": default_primary,
+            "channel_type": "SSH_TUNNEL",
+            "priority": 1,
+            "enabled": True,
+            "timeout_seconds": 3.5,
+            "notes": "Default fallback gateway",
+        }]
+
+    normalized_servers.sort(key=lambda s: (s["priority"], 0 if s["enabled"] else 1))
+    allow_patch = bool(cfg.get("allow_status_patch", getattr(ad_app, "ad_allow_status_patch", False) if ad_app else False))
+    return {
+        "servers": normalized_servers,
+        "base_dn": str(cfg.get("base_dn") or "DC=wa,DC=net").strip(),
+        "allow_status_patch": allow_patch,
+        "failover_strategy": str(cfg.get("failover_strategy") or "PRIORITY_ORDERED"),
+    }
+
+
+def save_ad_gateway_cluster_config(db: Session, payload: Dict[str, Any], updated_by: str = "admin") -> Dict[str, Any]:
+    """Validate and persist AD Gateway cluster configuration, syncing Primary URL & PATCH guardrail to ConnectedApplication."""
+    from app.models.setting import SystemSetting
+    from app.models.application import ConnectedApplication
+
+    raw_servers = payload.get("servers") or []
+    cleaned_servers: List[Dict[str, Any]] = []
+    seen_urls: set = set()
+    for idx, srv in enumerate(raw_servers):
+        if not isinstance(srv, dict):
+            continue
+        url = _clean_gateway_url(srv.get("url"))
+        if not url or not (url.startswith("http://") or url.startswith("https://")):
+            continue
+        if url.lower() in seen_urls:
+            continue
+        seen_urls.add(url.lower())
+        timeout_val = float(srv.get("timeout_seconds") or 3.5)
+        timeout_val = max(1.0, min(15.0, timeout_val))
+        cleaned_servers.append({
+            "id": str(srv.get("id") or f"ad-gw-{uuid.uuid4().hex[:8]}"),
+            "name": str(srv.get("name") or f"AD Gateway #{idx + 1}").strip()[:100],
+            "url": url,
+            "channel_type": str(srv.get("channel_type") or "VPN_CHANNEL").upper()[:30],
+            "priority": int(srv.get("priority") or (idx + 1)),
+            "enabled": bool(srv.get("enabled", True)),
+            "timeout_seconds": timeout_val,
+            "notes": str(srv.get("notes") or "").strip()[:255],
+        })
+
+    if not cleaned_servers or not any(s["enabled"] for s in cleaned_servers):
+        raise ValueError("ต้องระบุ AD Gateway Server ที่เปิดใช้งานอย่างน้อย 1 เครื่อง (HTTP/HTTPS)")
+
+    cleaned_servers.sort(key=lambda s: (s["priority"], 0 if s["enabled"] else 1))
+    for i, srv in enumerate(cleaned_servers):
+        srv["priority"] = i + 1
+
+    allow_patch = bool(payload.get("allow_status_patch", False))
+    base_dn = str(payload.get("base_dn") or "DC=wa,DC=net").strip() or "DC=wa,DC=net"
+    new_cfg = {
+        "servers": cleaned_servers,
+        "base_dn": base_dn,
+        "allow_status_patch": allow_patch,
+        "failover_strategy": "PRIORITY_ORDERED",
+        "updated_by": updated_by,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    setting = db.query(SystemSetting).filter(SystemSetting.setting_key == AD_CLUSTER_SETTING_KEY).first()
+    if setting:
+        setting.setting_value = new_cfg
+    else:
+        setting = SystemSetting(
+            setting_key=AD_CLUSTER_SETTING_KEY,
+            setting_value=new_cfg,
+            description="Redundant Multi-Server / Multi-VPN Active Directory Gateway Cluster",
+        )
+        db.add(setting)
+
+    primary_enabled = next((s for s in cleaned_servers if s["enabled"]), cleaned_servers[0])
+    ad_app = db.query(ConnectedApplication).filter(func.lower(ConnectedApplication.app_code) == "ad").first()
+    if ad_app:
+        ad_app.base_url = primary_enabled["url"]
+        ad_app.ad_allow_status_patch = allow_patch
+
+    db.flush()
+    return get_ad_gateway_cluster_config(db)
+
+
+def get_ad_gateway_candidates(db: Session, primary_override: Optional[str] = None) -> List[str]:
+    """Build ordered list of enabled AD Gateway base URLs for authentication & sync failover."""
+    from app.models.setting import SystemSetting
+
+    setting = db.query(SystemSetting).filter(SystemSetting.setting_key == AD_CLUSTER_SETTING_KEY).first()
+    candidates: List[str] = []
+
+    def _add(raw: Optional[str]) -> None:
+        cleaned = _clean_gateway_url(raw)
+        if cleaned and cleaned not in candidates:
+            candidates.append(cleaned)
+
+    if setting and isinstance(setting.setting_value, dict):
+        cfg = get_ad_gateway_cluster_config(db)
+        for srv in cfg["servers"]:
+            if srv.get("enabled"):
+                _add(srv.get("url"))
+        ov = _clean_gateway_url(primary_override)
+        disabled_urls = {s["url"].lower() for s in cfg["servers"] if not s.get("enabled")}
+        if ov and ov.lower() not in disabled_urls and "192.168." not in ov:
+            _add(ov)
+        if candidates:
+            return candidates
+
+    ov = _clean_gateway_url(primary_override)
+    if ov and "192.168." not in ov:
+        _add(ov)
+    cfg_url = _clean_gateway_url(getattr(settings, "AD_GATEWAY_URL", None))
+    if cfg_url and "192.168." not in cfg_url:
+        _add(cfg_url)
+    _add(DEFAULT_AD_GATEWAY_URL)
+    return candidates
+
+
+async def ping_ad_gateway_server(
+    server: Dict[str, Any],
+    api_key: Optional[str] = None,
+    secret_key: Optional[str] = None,
+    origin_ip: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Probe health of a single AD Gateway server entry without failing over to backups."""
+    url = _clean_gateway_url(server.get("url"))
+    timeout_sec = max(1.0, min(15.0, float(server.get("timeout_seconds") or 3.5)))
+    connector = AdProxyConnector(
+        base_url=url,
+        api_key=api_key,
+        secret_key=secret_key,
+        origin_ip=origin_ip,
+        fallback_urls=[],
+        preserve_custom_url=True,
+        timeout_seconds=timeout_sec,
+    )
+    health = await connector.health_check()
+    return {
+        "id": server.get("id"),
+        "name": server.get("name"),
+        "url": url,
+        "channel_type": server.get("channel_type"),
+        "enabled": bool(server.get("enabled", True)),
+        "is_online": health.is_online,
+        "latency_ms": health.latency_ms,
+        "message": health.message,
+    }
 
 def extract_ou_department(dn: Optional[str], fallback: Optional[str] = None) -> Optional[str]:
     """
@@ -65,30 +287,41 @@ class AdProxyConnector(BaseConnector):
         api_key: Optional[str] = None,
         secret_key: Optional[str] = None,
         allow_status_patch: bool = False,
-        origin_ip: Optional[str] = None
+        origin_ip: Optional[str] = None,
+        fallback_urls: Optional[List[str]] = None,
+        preserve_custom_url: bool = False,
+        timeout_seconds: float = 3.5,
     ):
         # Docker bridge IP (172.18.0.1) is the correct host IP from inside Docker container on VPS.
         # It routes through the plink.exe SSH tunnel to reach the On-Prem AD Sync Agent on port 3100.
-        raw_endpoint = (base_url or settings.AD_GATEWAY_URL or "http://172.18.0.1:3100").replace("/api/v2/login", "").rstrip("/")
+        raw_endpoint = _clean_gateway_url(base_url or settings.AD_GATEWAY_URL or DEFAULT_AD_GATEWAY_URL)
 
-        # Detect private subnet IP that won't work from Docker container
+        # Detect private subnet IP that won't work from Docker container when no explicit cluster override is given
         import ipaddress
         def _is_unreachable_private(url: str) -> bool:
             try:
                 host = url.split("://")[-1].split(":")[0].split("/")[0]
                 addr = ipaddress.ip_address(host)
-                # 172.18.x.x is Docker bridge — reachable; other private ranges are not
+                # 172.18.x.x is Docker bridge; 10.x / 172.16-31 may be VPN tunnel peers when explicitly preserved
                 return addr.is_private and not host.startswith("172.18.")
             except Exception:
                 return False
 
-        DOCKER_BRIDGE = "http://172.18.0.1:3100"
-        if _is_unreachable_private(raw_endpoint) or "192.168." in raw_endpoint:
+        DOCKER_BRIDGE = DEFAULT_AD_GATEWAY_URL
+        explicit_cluster = preserve_custom_url or (fallback_urls is not None)
+        if not explicit_cluster and (_is_unreachable_private(raw_endpoint) or "192.168." in raw_endpoint):
             self.base_url = DOCKER_BRIDGE
-            self.base_url_fallbacks: list = []
+            self.base_url_fallbacks: List[str] = []
         else:
-            self.base_url = raw_endpoint
-            self.base_url_fallbacks = [DOCKER_BRIDGE] if raw_endpoint != DOCKER_BRIDGE else []
+            self.base_url = raw_endpoint or DOCKER_BRIDGE
+            cleaned_fallbacks: List[str] = []
+            for fb in (fallback_urls if fallback_urls is not None else ([DOCKER_BRIDGE] if self.base_url != DOCKER_BRIDGE else [])):
+                cfb = _clean_gateway_url(fb)
+                if cfb and cfb != self.base_url and cfb not in cleaned_fallbacks:
+                    cleaned_fallbacks.append(cfb)
+            self.base_url_fallbacks = cleaned_fallbacks
+
+        self.timeout_seconds = max(1.0, float(timeout_seconds or 3.5))
 
         # Management API key for ciam-extension (GET /api/v1/ad/users, PATCH /status)
         self.api_key = (api_key or getattr(settings, "AD_MANAGEMENT_KEY", None) or "mgmt_ciam_key_9a88b1c0d2e3f4a5").strip()
@@ -97,6 +330,14 @@ class AdProxyConnector(BaseConnector):
         self.allow_status_patch = allow_status_patch
         self.origin_ip = origin_ip or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
         self.app_id = getattr(settings, "AD_APP_ID", "CIAM")
+
+    def _get_base_urls(self) -> List[str]:
+        urls: List[str] = []
+        for u in [self.base_url] + list(getattr(self, "base_url_fallbacks", [])):
+            cu = _clean_gateway_url(u)
+            if cu and cu not in urls:
+                urls.append(cu)
+        return urls or [DEFAULT_AD_GATEWAY_URL]
 
     def _get_headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         # ISO 8601 UTC timestamp format with trailing 'Z'
@@ -138,71 +379,61 @@ class AdProxyConnector(BaseConnector):
                 execution_time_ms=5,
                 details={"patch_skipped": True, "read_only_mode": True}
             )
-        endpoint = f"{self.base_url}/api/v1/ad/users/{username}/status"
-        headers = self._get_headers()
+        last_exc: Optional[Exception] = None
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            for base_candidate in self._get_base_urls():
+                endpoint = f"{base_candidate}/api/v1/ad/users/{username}/status"
+                try:
+                    response = await client.patch(endpoint, headers=headers, json=payload)
+                    elapsed = int((time.time() - start_time) * 1000)
 
-        payload = {
-            "is_active": is_active,
-            "reason": reason,
-            "updated_by": updated_by
-        }
+                    if response.status_code in [200, 204]:
+                        resp_data = response.json() if response.text else {}
+                        action_name = "enabled" if is_active else "disabled"
+                        return ConnectorResult(
+                            success=True,
+                            status_code=response.status_code,
+                            execution_mode="AD_LDAP",
+                            message=resp_data.get("message") or f"AD Proxy: Account '{username}' {action_name} in Active Directory",
+                            execution_time_ms=elapsed,
+                            details=resp_data
+                        )
+                    elif response.status_code == 404:
+                        return ConnectorResult(
+                            success=False,
+                            status_code=404,
+                            execution_mode="AD_LDAP",
+                            message=f"AD Proxy: Account '{username}' not found in Active Directory domain",
+                            execution_time_ms=elapsed
+                        )
+                    elif response.status_code >= 500:
+                        logger.warning("AD Proxy HTTP %s at %s for PATCH status; trying backup channel", response.status_code, base_candidate)
+                        last_exc = RuntimeError(f"HTTP {response.status_code}")
+                        continue
+                    else:
+                        return ConnectorResult(
+                            success=False,
+                            status_code=response.status_code,
+                            execution_mode="AD_LDAP",
+                            message=f"AD Proxy error (HTTP {response.status_code}): {response.text[:200]}",
+                            execution_time_ms=elapsed
+                        )
+                except Exception as exc:
+                    last_exc = exc
+                    logger.warning("AD Proxy unreachable at %s for PATCH status: %s", base_candidate, exc)
+                    continue
 
-        # If AD sync is disabled in config, gracefully simulate development success
-        if not settings.AD_SYNC_ENABLED:
-            action_name = "enabled" if is_active else "disabled"
-            return ConnectorResult(
-                success=True,
-                status_code=200,
-                execution_mode="AD_LDAP",
-                message=f"AD Proxy: Active Directory account '{username}' {action_name} successfully (Simulated AD Agent)",
-                execution_time_ms=18,
-                details={"simulation": True, "target": self.base_url}
-            )
-
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.patch(endpoint, headers=headers, json=payload)
-                elapsed = int((time.time() - start_time) * 1000)
-
-                if response.status_code in [200, 204]:
-                    resp_data = response.json() if response.text else {}
-                    action_name = "enabled" if is_active else "disabled"
-                    return ConnectorResult(
-                        success=True,
-                        status_code=response.status_code,
-                        execution_mode="AD_LDAP",
-                        message=resp_data.get("message") or f"AD Proxy: Account '{username}' {action_name} in Active Directory",
-                        execution_time_ms=elapsed,
-                        details=resp_data
-                    )
-                elif response.status_code == 404:
-                    return ConnectorResult(
-                        success=False,
-                        status_code=404,
-                        execution_mode="AD_LDAP",
-                        message=f"AD Proxy: Account '{username}' not found in Active Directory domain",
-                        execution_time_ms=elapsed
-                    )
-                else:
-                    return ConnectorResult(
-                        success=False,
-                        status_code=response.status_code,
-                        execution_mode="AD_LDAP",
-                        message=f"AD Proxy error (HTTP {response.status_code}): {response.text[:200]}",
-                        execution_time_ms=elapsed
-                    )
-        except Exception as exc:
-            elapsed = int((time.time() - start_time) * 1000)
-            logger.warning("AD Proxy unreachable at %s: %s (falling back to simulation)", self.base_url, exc)
-            action_name = "enabled" if is_active else "disabled"
-            return ConnectorResult(
-                success=True,
-                status_code=200,
-                execution_mode="AD_LDAP",
-                message=f"AD Proxy: Account '{username}' {action_name} (Simulated fallback: {str(exc)[:60]})",
-                execution_time_ms=elapsed or 25,
-                details={"simulation_fallback": True, "error": str(exc)}
-            )
+        elapsed = int((time.time() - start_time) * 1000)
+        logger.warning("All AD Proxy endpoints unreachable: %s (falling back to simulation)", last_exc)
+        action_name = "enabled" if is_active else "disabled"
+        return ConnectorResult(
+            success=True,
+            status_code=200,
+            execution_mode="AD_LDAP",
+            message=f"AD Proxy: Account '{username}' {action_name} (Simulated fallback: {str(last_exc)[:60]})",
+            execution_time_ms=elapsed or 25,
+            details={"simulation_fallback": True, "error": str(last_exc)}
+        )
 
     async def deprovision(self, username: str, reason: str) -> ConnectorResult:
         return await self.set_account_status(username=username, is_active=False, reason=reason)
@@ -275,50 +506,52 @@ class AdProxyConnector(BaseConnector):
     async def health_check(self) -> ConnectorHealth:
         start_time = time.time()
         headers = self._get_headers()
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+        last_status: Optional[int] = None
+        last_err: Optional[str] = None
+
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            for base_candidate in self._get_base_urls():
                 # 1. Probe /api/v1/ad/health and /health
                 for h_path in ["/api/v1/ad/health", "/health"]:
                     try:
-                        res = await client.get(f"{self.base_url}{h_path}", headers=headers)
+                        res = await client.get(f"{base_candidate}{h_path}", headers=headers)
                         elapsed = int((time.time() - start_time) * 1000)
                         if res.status_code == 200:
                             return ConnectorHealth(
                                 is_online=True,
                                 latency_ms=elapsed,
-                                message=f"AD Sync Agent Online ({self.base_url})"
+                                message=f"AD Sync Agent Online ({base_candidate})"
                             )
                     except Exception:
                         pass
 
                 # 2. Dual Probe /api/v2/login with proper app_id payload
-                login_payload = {
-                    "app_id": self.app_id,
-                    "api_key": self.api_key,
-                    "secret_key": self.secret_key,
-                    "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-                }
-                res = await client.post(f"{self.base_url}/api/v2/login", headers=headers, json=login_payload)
-                elapsed = int((time.time() - start_time) * 1000)
-                if res.status_code in [200, 400, 401, 403, 422]:
-                    # Server at Port 3100 actively responded to HTTP request
-                    return ConnectorHealth(
-                        is_online=True,
-                        latency_ms=elapsed,
-                        message=f"AD Gateway ตอบสนองปกติ (Port 3100 Online ผ่าน {self.base_url})"
-                    )
-                return ConnectorHealth(
-                    is_online=False,
-                    latency_ms=elapsed,
-                    message=f"AD Proxy HTTP {res.status_code}"
-                )
-        except Exception as exc:
-            elapsed = int((time.time() - start_time) * 1000)
-            return ConnectorHealth(
-                is_online=False,
-                latency_ms=elapsed or 15,
-                message=f"Unreachable ({self.base_url}): {str(exc)[:80]}"
-            )
+                try:
+                    login_payload = {
+                        "app_id": self.app_id,
+                        "api_key": self.api_key,
+                        "secret_key": self.secret_key,
+                        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    }
+                    res = await client.post(f"{base_candidate}/api/v2/login", headers=headers, json=login_payload)
+                    elapsed = int((time.time() - start_time) * 1000)
+                    if res.status_code in [200, 400, 401, 403, 422]:
+                        return ConnectorHealth(
+                            is_online=True,
+                            latency_ms=elapsed,
+                            message=f"AD Gateway ตอบสนองปกติ (Online ผ่าน {base_candidate})"
+                        )
+                    last_status = res.status_code
+                except Exception as exc:
+                    last_err = str(exc)[:80]
+
+        elapsed = int((time.time() - start_time) * 1000)
+        msg = f"AD Proxy HTTP {last_status}" if last_status else f"Unreachable ({self.base_url}): {last_err or 'Connection failed'}"
+        return ConnectorHealth(
+            is_online=False,
+            latency_ms=elapsed or 15,
+            message=msg
+        )
 
     async def sync_inventory(self) -> dict:
         utc_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -577,6 +810,8 @@ class AdProxyConnector(BaseConnector):
             elif "enabled" in u:
                 is_act = bool(u["enabled"])
 
+            ad_guid = u.get("ad_guid") or u.get("objectGUID") or u.get("ObjectGUID") or u.get("guid") or None
+
             normalized.append({
                 "username": uname,
                 "full_name": str(fname).strip(),
@@ -585,6 +820,7 @@ class AdProxyConnector(BaseConnector):
                 "employee_id": str(emp_id).strip() if emp_id else None,
                 "telegram_id": str(pager).strip() if pager else None,
                 "distinguished_name": str(dn).strip() if dn else None,
+                "ad_guid": str(ad_guid).strip() if ad_guid else None,
                 "is_active": is_act,
                 "group_name": "Domain Users"
             })

@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.core.security import verify_password, create_access_token, hash_password
 from app.models.user import AdminUser
 from app.models.audit import IamAuditLog
-from app.schemas.auth import LoginRequest, TokenResponse, AdminUserOut, AdminRoleUpdateRequest, AdminProfileUpdateRequest
+from app.schemas.auth import LoginRequest, TokenResponse, AdminUserOut, AdminRoleUpdateRequest, AdminProfileUpdateRequest, PortalPreferencesUpdateRequest
 from app.api.deps import get_current_admin, get_current_user
 from app.models.identity import MasterIdentity
 from app.core.bot_defense import auth_rate_limiter, extract_client_ip, verify_submission_timing
@@ -193,44 +193,13 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
         try:
             from app.models.application import ConnectedApplication
             from app.core.config import settings
+            from app.connectors.ad_proxy import get_ad_gateway_candidates, get_ad_gateway_cluster_config
             import httpx
 
             ad_app = db.query(ConnectedApplication).filter(ConnectedApplication.app_code == "ad").first()
-
-            # --- Build candidate AD Gateway URLs ---
-            # The Docker container (VPS) uses 172.18.0.1 as the Docker host bridge IP
-            # which tunnels through plink.exe VPN to reach the On-Prem AD Sync Agent.
-            # Other apps (IRM, PettyCash) also use http://172.18.0.1:3100/api/v2/login
-            def _norm(url: str) -> str:
-                return url.replace("/api/v2/login", "").rstrip("/")
-
-            db_base = _norm(ad_app.base_url) if ad_app and ad_app.base_url else None
-            cfg_base = _norm(settings.AD_GATEWAY_URL)
-            docker_base = "http://172.18.0.1:3100"
-
-            # Auto-heal legacy on-prem IP (192.168.x.x) in database or config
-            if db_base and "192.168." in db_base:
-                db_base = docker_base
-                if ad_app:
-                    ad_app.base_url = docker_base
-                    try:
-                        db.commit()
-                    except Exception:
-                        db.rollback()
-            if cfg_base and "192.168." in cfg_base:
-                cfg_base = docker_base
-
-            # Priority: DB value first, then Docker bridge (most reliable in container), then config
-            url_candidates_raw = [db_base, docker_base, cfg_base]
-            seen_urls: set = set()
-            url_candidates: list = []
-            for u in url_candidates_raw:
-                if u and "192.168." not in u and u not in seen_urls:
-                    seen_urls.add(u)
-                    url_candidates.append(u)
-
-            if not url_candidates:
-                url_candidates = [docker_base]
+            url_candidates = get_ad_gateway_candidates(db, primary_override=ad_app.base_url if ad_app else None)
+            cluster_cfg = get_ad_gateway_cluster_config(db)
+            timeout_map = {s["url"]: float(s.get("timeout_seconds") or 3.5) for s in cluster_cfg.get("servers", [])}
 
             # Active Directory Authentication for Central IAM
             # Strict Enterprise Rule: When authenticating from Central IAM, identify strictly as 'CIAM'.
@@ -246,94 +215,100 @@ def login(login_req: LoginRequest, request: Request, db: Session = Depends(get_d
 
             ad_probe_logs: list = []
 
-            with httpx.Client(timeout=3.0) as client:
-                for ad_base_candidate in url_candidates:
-                    ad_url = f"{ad_base_candidate}/api/v2/login"
-                    payload = {
-                        "app_id": ad_app_id,
-                        "app_name": ad_app_id,
-                        "secret_key": ad_secret,
-                        "username": clean_username,
-                        "password": login_req.password,
-                        "timestamp": utc_timestamp
-                    }
-                    headers = {
-                        "Content-Type": "application/json",
-                        "X-Forwarded-For": origin_ip,
-                        "x-forwarded-for": origin_ip,
-                        "X-Request-Timestamp": utc_timestamp,
-                        "X-Timestamp": utc_timestamp,
-                        "timestamp": utc_timestamp,
-                        "X-App-Id": ad_app_id,
-                        "x-app-id": ad_app_id,
-                        "X-App-Name": ad_app_id,
-                        "x-app-name": ad_app_id,
-                        "X-Secret-Key": ad_secret,
-                        "x-secret-key": ad_secret,
-                        "X-Management-API-Key": ad_secret,
-                        "x-management-api-key": ad_secret,
-                    }
-                    try:
+            for ad_base_candidate in url_candidates:
+                ad_url = f"{ad_base_candidate}/api/v2/login"
+                req_timeout = timeout_map.get(ad_base_candidate, 3.5)
+                payload = {
+                    "app_id": ad_app_id,
+                    "app_name": ad_app_id,
+                    "secret_key": ad_secret,
+                    "username": clean_username,
+                    "password": login_req.password,
+                    "timestamp": utc_timestamp
+                }
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-Forwarded-For": origin_ip,
+                    "x-forwarded-for": origin_ip,
+                    "X-Request-Timestamp": utc_timestamp,
+                    "X-Timestamp": utc_timestamp,
+                    "timestamp": utc_timestamp,
+                    "X-App-Id": ad_app_id,
+                    "x-app-id": ad_app_id,
+                    "X-App-Name": ad_app_id,
+                    "x-app-name": ad_app_id,
+                    "X-Secret-Key": ad_secret,
+                    "x-secret-key": ad_secret,
+                    "X-Management-API-Key": ad_secret,
+                    "x-management-api-key": ad_secret,
+                }
+                try:
+                    with httpx.Client(timeout=req_timeout) as client:
                         ad_resp = client.post(ad_url, json=payload, headers=headers)
-                        resp_text_preview = ad_resp.text[:500]
-                        ad_probe_logs.append({
-                            "url": ad_url,
-                            "app_id": ad_app_id,
-                            "user": clean_username,
-                            "status_code": ad_resp.status_code,
-                            "response": resp_text_preview,
-                            "timestamp": utc_timestamp
-                        })
-                        logger.info(
-                            "AD Gateway auth request URL=%s app_id=%s user=%s ts=%s → HTTP %s: %s",
-                            ad_url, ad_app_id, clean_username, utc_timestamp, ad_resp.status_code, resp_text_preview[:200]
-                        )
-                        if ad_resp.status_code == 200:
-                            try:
-                                resp_data = ad_resp.json()
-                            except Exception:
-                                resp_data = {}
+                    resp_text_preview = ad_resp.text[:500]
+                    ad_probe_logs.append({
+                        "url": ad_url,
+                        "app_id": ad_app_id,
+                        "user": clean_username,
+                        "status_code": ad_resp.status_code,
+                        "response": resp_text_preview,
+                        "timestamp": utc_timestamp
+                    })
+                    logger.info(
+                        "AD Gateway auth request URL=%s app_id=%s user=%s ts=%s → HTTP %s: %s",
+                        ad_url, ad_app_id, clean_username, utc_timestamp, ad_resp.status_code, resp_text_preview[:200]
+                    )
+                    if ad_resp.status_code == 200:
+                        try:
+                            resp_data = ad_resp.json()
+                        except Exception:
+                            resp_data = {}
 
-                            is_auth_ok = (
-                                resp_data.get("success") in [True, "true", "True", 1]
-                                or resp_data.get("authenticated") in [True, "true", "True", 1]
-                                or resp_data.get("status") in ["success", "OK", "ok", True, 200]
-                                or resp_data.get("code") in [200, "200"]
-                                or ("user" in resp_data and not resp_data.get("error"))
-                                or ("userData" in resp_data and not resp_data.get("error"))
-                                or ("sAMAccountName" in resp_data and not resp_data.get("error"))
-                                or ("data" in resp_data and not resp_data.get("error"))
-                            )
-                            if is_auth_ok and not resp_data.get("error"):
-                                ad_auth_success = True
-                                break  # success — authenticated via AD Gateway
-                            else:
-                                ad_err_detail = resp_data.get("message") or resp_data.get("error") or "AD Gateway rejected credentials"
+                        is_auth_ok = (
+                            resp_data.get("success") in [True, "true", "True", 1]
+                            or resp_data.get("authenticated") in [True, "true", "True", 1]
+                            or resp_data.get("status") in ["success", "OK", "ok", True, 200]
+                            or resp_data.get("code") in [200, "200"]
+                            or ("user" in resp_data and not resp_data.get("error"))
+                            or ("userData" in resp_data and not resp_data.get("error"))
+                            or ("sAMAccountName" in resp_data and not resp_data.get("error"))
+                            or ("data" in resp_data and not resp_data.get("error"))
+                        )
+                        if is_auth_ok and not resp_data.get("error"):
+                            ad_auth_success = True
+                            break  # success — authenticated via AD Gateway
                         else:
-                            ad_err_detail = f"AD Gateway HTTP {ad_resp.status_code}: {resp_text_preview}"
-                    except (httpx.ConnectError, httpx.ConnectTimeout) as conn_err:
-                        err_str = str(conn_err)
-                        ad_probe_logs.append({
-                            "url": ad_url,
-                            "app_id": ad_app_id,
-                            "user": clean_username,
-                            "error": f"Connection unreachable: {err_str}",
-                            "timestamp": utc_timestamp
-                        })
-                        ad_err_detail = f"AD Gateway connection error ({ad_base_candidate}): {err_str[:120]}"
-                    except Exception as probe_err:
-                        err_str = str(probe_err)
-                        ad_probe_logs.append({
-                            "url": ad_url,
-                            "app_id": ad_app_id,
-                            "user": clean_username,
-                            "error": err_str,
-                            "timestamp": utc_timestamp
-                        })
-                        ad_err_detail = f"AD Gateway connection error ({ad_base_candidate}): {err_str[:120]}"
-                        logger.warning("AD Gateway request exception URL=%s app_id=%s: %s", ad_url, ad_app_id, probe_err)
-                    if ad_auth_success:
-                        break
+                            ad_err_detail = resp_data.get("message") or resp_data.get("error") or "AD Gateway rejected credentials"
+                            break  # AD explicitly rejected credentials — do not double-count against Domain Controller
+                    elif ad_resp.status_code in (400, 401, 403, 404, 422):
+                        ad_err_detail = f"AD Gateway HTTP {ad_resp.status_code}: {resp_text_preview}"
+                        break  # Smart failover: stop on credential/policy error so AD bad-password lockout counter isn't doubled
+                    else:
+                        ad_err_detail = f"AD Gateway HTTP {ad_resp.status_code}: {resp_text_preview}"
+                        continue  # 5xx server error -> try next VPN / AD Gateway channel
+                except (httpx.ConnectError, httpx.ConnectTimeout) as conn_err:
+                    err_str = str(conn_err)
+                    ad_probe_logs.append({
+                        "url": ad_url,
+                        "app_id": ad_app_id,
+                        "user": clean_username,
+                        "error": f"Connection unreachable: {err_str}",
+                        "timestamp": utc_timestamp
+                    })
+                    ad_err_detail = f"AD Gateway connection error ({ad_base_candidate}): {err_str[:120]}"
+                except Exception as probe_err:
+                    err_str = str(probe_err)
+                    ad_probe_logs.append({
+                        "url": ad_url,
+                        "app_id": ad_app_id,
+                        "user": clean_username,
+                        "error": err_str,
+                        "timestamp": utc_timestamp
+                    })
+                    ad_err_detail = f"AD Gateway connection error ({ad_base_candidate}): {err_str[:120]}"
+                    logger.warning("AD Gateway request exception URL=%s app_id=%s: %s", ad_url, ad_app_id, probe_err)
+                if ad_auth_success:
+                    break
 
             # Fail-safe Direct LDAP Bind Fallback (per HANDOFF.md Section 1)
             # If REST Gateway probe didn't succeed (e.g. app_id not found in registry.json or group restriction in index.js),
@@ -519,6 +494,44 @@ def get_current_user_profile(
     db: Session = Depends(get_db)
 ):
     """Return currently logged in user profile with MasterIdentity details and 90-day password expiry."""
+    out = AdminUserOut.model_validate(current_user)
+    ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == current_user.username.lower()).first()
+    return _enrich_user_out(out, current_user, db, ident)
+
+
+@router.put("/portal-preferences", response_model=AdminUserOut)
+def update_portal_preferences(
+    payload: PortalPreferencesUpdateRequest,
+    current_user: AdminUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Save current user's personal SSO Portal preferences (app_order & light/dark theme)."""
+    existing: dict = {}
+    if current_user.portal_preferences:
+        try:
+            parsed = json.loads(current_user.portal_preferences)
+            if isinstance(parsed, dict):
+                existing = parsed
+        except Exception:
+            existing = {}
+
+    if payload.app_order is not None:
+        cleaned_order: list = []
+        seen_codes: set = set()
+        for code in payload.app_order:
+            c = str(code or "").strip().lower()
+            if c and c not in seen_codes:
+                seen_codes.add(c)
+                cleaned_order.append(c)
+        existing["app_order"] = cleaned_order
+
+    if payload.theme is not None:
+        existing["theme"] = payload.theme
+
+    current_user.portal_preferences = json.dumps(existing, ensure_ascii=False)
+    db.commit()
+    db.refresh(current_user)
+
     out = AdminUserOut.model_validate(current_user)
     ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == current_user.username.lower()).first()
     return _enrich_user_out(out, current_user, db, ident)

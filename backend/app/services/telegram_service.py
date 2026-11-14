@@ -11,7 +11,7 @@ from app.models.setting import SystemSetting
 from app.models.application import ConnectedApplication
 from app.models.user import AdminUser
 from app.models.audit import IamAuditLog
-from app.connectors.ad_proxy import AdProxyConnector
+from app.connectors.ad_proxy import AdProxyConnector, get_ad_gateway_candidates
 
 logger = logging.getLogger("ciam.telegram")
 
@@ -139,8 +139,12 @@ async def check_full_system_health(db: Session) -> Dict[str, Any]:
     except Exception as exc:
         logger.error("DB health check error: %s", exc)
 
-    # 2. AD Sync Agent / AD Gateway Check
-    ad_connector = AdProxyConnector()
+    # 2. AD Sync Agent / AD Gateway Check (cluster-aware)
+    ad_candidates = get_ad_gateway_candidates(db)
+    ad_connector = AdProxyConnector(
+        base_url=ad_candidates[0] if ad_candidates else None,
+        fallback_urls=ad_candidates[1:] if len(ad_candidates) > 1 else None,
+    )
     ad_health = await ad_connector.health_check()
 
     # 3. Connected Applications
@@ -530,7 +534,11 @@ async def check_and_notify_ad_status(db: Session, force_check: bool = False) -> 
         except Exception:
             pass
 
-    ad_connector = AdProxyConnector()
+    ad_candidates = get_ad_gateway_candidates(db)
+    ad_connector = AdProxyConnector(
+        base_url=ad_candidates[0] if ad_candidates else None,
+        fallback_urls=ad_candidates[1:] if len(ad_candidates) > 1 else None,
+    )
     ad_health = await ad_connector.health_check()
     is_online = bool(ad_health.is_online)
 

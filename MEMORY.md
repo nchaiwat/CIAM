@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 
-**Last Updated:** 2026-11-12  
+**Last Updated:** 2026-11-14  
 
 **Version:** 2.12.0 (Enterprise Local Password Policy, 90-Day Forced Rotation & Complexity Framework Standard)  
 
@@ -1826,4 +1826,20 @@ FRONTEND_URL=http://localhost:3000
   - Backend API เพิ่ม `order_by(MasterIdentity.full_name.asc(), MasterIdentity.username.asc())`
 
   - พนักงานองค์กรจริง (Corporate Employees) จะถูกเรียงตามชื่อ ก-ฮ / A-Z ขึ้นก่อน ส่วนบัญชีเราเตอร์สาขาที่ขึ้นต้นด้วยตัวเลข (`03 WA Shop...`, `05-WS...`) จะอยู่ท้ายตาราง
+
+---
+
+## 31. Redundant AD Gateway Cluster, Portal Personalization & Orphan Cleanup (Sprint 61)
+
+* **Zero-System Orphan Identity Prevention & Cleanup:**
+  - `directory.py` (`list_users`) คัดกรองบัญชี 0 ระบบ (`not effective_ad_active and len(app_summaries) == 0 and not is_approved_exception`) เพื่อป้องกันแถว `Local Acc` ที่ไม่มีระบบใดเชื่อมโยง (`-`)
+  - `scheduler.py` มี `cleanup_orphan_identities(db)` เรียกใน `initial_data.py` ตอน Startup และทำความสะอาด Identity ที่ไม่เหลือ Mapping หลัง Direct Infra ลบ Stale Mapping พร้อมบันทึก `ad_guid`
+* **Redundant AD Gateway Cluster (`ad_gateway_cluster`):**
+  - `ad_proxy.py` (`get_ad_gateway_cluster_config`, `save_ad_gateway_cluster_config`, `get_ad_gateway_candidates`, `ping_ad_gateway_server`) รองรับ > 1 Server / Multi-VPN Channel พร้อม Smart Failover ใน `auth.py`, `oidc_service.py`, `factory.py`, `telegram_service.py` (หยุด Failover ทันทีเมื่อ HTTP 400/401/403/404/422 เพื่อไม่ล็อกบัญชี AD ซ้ำ)
+  - `applications.py` เพิ่ม `/ad-cluster/config` (GET/PUT) และ `/ad-cluster/ping` (POST) พร้อม UI แก้ไขได้จริงใน `frontend/src/app/settings/page.tsx`
+* **Portal Personalization (`/portal`):**
+  - เพิ่ม `AdminUser.portal_preferences` (`PUT /api/v1/auth/portal-preferences`) บันทึกลำดับการ์ด (`app_order`) จากการ Drag-and-Drop และธีม `light` / `dark` รายบุคคลใน `frontend/src/app/portal/page.tsx`
+* **Spoke SSO Status Probe & Whitelist IP:**
+  - `RestApiConnector._probe_spoke_sso` (`connectors/rest_api.py`) ตรวจ `/api/auth/sso/config` พร้อม Fallback `/api/auth/session` ไม่ตีความ M2M Ping ล้มเหลวเป็น `DISABLED` และเปลี่ยน Hardcoded IP `58.8.188.214` เป็น `157.173.219.153` ใน `frontend/src/app/applications/page.tsx`
+
 

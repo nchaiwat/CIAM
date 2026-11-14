@@ -822,6 +822,26 @@ export const ciamApi = {
       body: JSON.stringify({ custom_recipients: customRecipients }),
     }),
   getDailyDigestPreviewHtmlUrl: () => `${API_BASE_URL}/dashboard/daily-digest/preview-html`,
+
+  // User Portal Preferences (Drag-and-drop Card Order & Light/Dark Theme)
+  updatePortalPreferences: (payload: { app_order?: string[]; theme?: "light" | "dark" }) =>
+    fetchApi<AdminUserOut>("/auth/portal-preferences", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  // Redundant AD Gateway Cluster Settings
+  getAdClusterConfig: () => fetchApi<AdGatewayClusterConfig>("/applications/ad-cluster/config"),
+  updateAdClusterConfig: (payload: Partial<AdGatewayClusterConfig>) =>
+    fetchApi<{ status: string; message: string; config: AdGatewayClusterConfig }>("/applications/ad-cluster/config", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  pingAdCluster: (servers?: AdGatewayServer[]) =>
+    fetchApi<{ results: AdGatewayPingResult[]; online_count: number; total_count: number }>("/applications/ad-cluster/ping", {
+      method: "POST",
+      body: JSON.stringify(servers ? { servers } : {}),
+    }),
 };
 
 export const api = ciamApi;
@@ -940,6 +960,41 @@ export interface AdminUserOut {
   password_expires_at?: string | null;
   days_until_password_expiry?: number | null;
   is_password_expired?: boolean;
+  portal_preferences?: PortalPreferences | null;
+}
+
+export interface PortalPreferences {
+  app_order?: string[];
+  theme?: "light" | "dark";
+}
+
+export interface AdGatewayServer {
+  id: string;
+  name: string;
+  url: string;
+  channel_type: string;
+  priority: number;
+  enabled: boolean;
+  timeout_seconds: number;
+  notes?: string;
+}
+
+export interface AdGatewayClusterConfig {
+  servers: AdGatewayServer[];
+  base_dn: string;
+  allow_status_patch: boolean;
+  failover_strategy: string;
+}
+
+export interface AdGatewayPingResult {
+  id?: string | null;
+  name?: string | null;
+  url: string;
+  channel_type?: string | null;
+  enabled: boolean;
+  is_online: boolean;
+  latency_ms: number;
+  message: string;
 }
 
 export interface AdminTokenResponse {

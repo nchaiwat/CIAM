@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 12 พฤศจิกายน 2026 (Local Time: ~09:35 ICT)  
+> **Date Updated:** 14 พฤศจิกายน 2026 (Local Time: ~13:52 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 92/92 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit: fix(sync): preserve admin identity merges and add ck-k transliteration for julaluk.b/Julaluck.B (Commit `bfe2fa0`)
+> **Test Integrity:** Backend Pytest: 98/98 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready — Sprint 61 (Redundant AD Cluster, Portal Drag-Drop & Dark/Light Mode, Zero-System Orphan Cleanup, Spoke SSO Probe Fallback & Whitelist IP `157.173.219.153`)
 
 ---
 
@@ -15,6 +15,20 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
+0. **Redundant AD Gateway Cluster, Portal Personalization, Zero-System Orphan Cleanup & APEX SSO Probe Fix (Sprint 61):**
+   - **Zero-System Orphan Identity Prevention & Cleanup (`Thanasit.C` Fix):**
+     - ปรับ `directory.py` (`list_users`) ให้ไม่แสดงบัญชีที่ไม่มีระบบใดเชื่อมโยง (`not effective_ad_active`, `len(app_summaries) == 0`, `not is_approved_exception`) เพื่อรับประกันว่าบัญชีใน Directory ต้องสังกัดอย่างน้อย 1 ระบบ (แม้ถูก Disable แล้วก็ตาม)
+     - เพิ่ม `cleanup_orphan_identities(db)` ใน `scheduler.py` + เรียกตอน Startup (`initial_data.py`), ล้าง Orphan ทันทีเมื่อ Direct Infra ลบ Stale Mapping และบันทึก `ad_guid` ใน `ad_proxy.py` / `scheduler.py`
+   - **Redundant Multi-Server / Multi-VPN AD Gateway Cluster & Editable `/settings` UI:**
+     - เก็บคลัสเตอร์หลายช่องทาง (`ad_gateway_cluster`) ใน `SystemSetting` ซิงก์กับ `ConnectedApplication(app_code="ad")`, เพิ่ม Smart Failover ใน `auth.py`, `oidc_service.py`, `ad_proxy.py`, `factory.py`, `telegram_service.py` (Failover เฉพาะ Network/Timeout/5xx และหยุดทันทีเมื่อพบ 400/401/403/404/422 หรือรหัสผิดเพื่อไม่นับ Bad Password ซ้ำ)
+     - เพิ่ม API `GET/PUT /api/v1/applications/ad-cluster/config`, `POST /api/v1/applications/ad-cluster/ping` ใน `applications.py` และเปลี่ยนการ์ด AD Specs ใน `frontend/src/app/settings/page.tsx` เป็นแผงจัดการคลัสเตอร์ที่เพิ่ม/ลบ/จัดลำดับและกดทดสอบ Latency ทีละ Server ได้จริง
+   - **SSO App Portal Personalization (`/portal`):**
+     - เพิ่มคอลัมน์ `portal_preferences` บน `AdminUser` (`models/user.py`, `schemas/auth.py`) พร้อม Endpoint `PUT /api/v1/auth/portal-preferences`
+     - รองรับการลากวาง (Drag-and-Drop) เรียงลำดับการ์ดแอปพลิเคชันรายบุคคล ปุ่มรีเซ็ตลำดับ และปุ่มสลับ Light / Dark Mode ใน `frontend/src/app/portal/page.tsx`
+   - **Apex Break-Glass / Spoke SSO Probe Fix & Whitelist IP (`157.173.219.153`):**
+     - แทนที่ IP เก่าที่ Hardcode `58.8.188.214` ด้วย `157.173.219.153` ใน `frontend/src/app/applications/page.tsx`
+     - ปรับ `RestApiConnector._probe_spoke_sso` ใน `connectors/rest_api.py` ให้ตรวจ `/api/auth/sso/config` แล้ว Fallback ไป `/api/auth/session` อัตโนมัติ, ไม่ตีความ M2M Ping ล้มเหลวเป็น Break-Glass (`DISABLED`) ใน `applications.py` (`ping_application`), และ Auto-heal สถานะ `DISABLED` ที่ค้างบนแอปที่เปิด SSO ใน `initial_data.py`
+
 1. **Identity Disambiguation & Persistent Mapping Preservation for Julaluck.B / julaluk.b (Sprint 60):**
    - **วิเคราะห์สาเหตุที่การรวมตัวตนหลุดกลับมาเป็นบัญชีผีอีกในตอนเช้า:**
      - สาเหตุ: บน Active Directory พนักงานใช้ Username `Julaluck.B` (สะกดด้วย `ck`) แต่บน Microsoft 365 (Entra ID & Exchange) บัญชีเมลใช้ `julaluk.b@windowasia.com` (สะกดด้วย `k` ตัวเดียว)

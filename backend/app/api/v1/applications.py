@@ -1,9 +1,10 @@
+import asyncio
 import logging
 import os
 import secrets
-from typing import List
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.responses import FileResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from app.api.deps import get_current_admin
 from app.models.user import AdminUser
 from app.models.application import ConnectedApplication
 from app.models.mapping import AppAccountMapping
+from app.models.audit import IamAuditLog
 from app.schemas.application import (
     AppCreate,
     AppUpdate,
@@ -243,6 +245,78 @@ def update_automated_sync_schedule(
     """Update automated daily synchronization schedule (enabled flag and HH:MM time)."""
     return update_sync_schedule(db, data.model_dump(exclude_unset=True))
 
+
+@router.get("/ad-cluster/config")
+def get_ad_cluster_config_endpoint(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Retrieve Redundant Multi-Server / Multi-VPN Active Directory Gateway cluster configuration."""
+    from app.connectors.ad_proxy import get_ad_gateway_cluster_config
+    return get_ad_gateway_cluster_config(db)
+
+
+@router.put("/ad-cluster/config")
+def update_ad_cluster_config_endpoint(
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Update Redundant AD Gateway cluster servers, priorities, Base DN, and PATCH guardrail."""
+    from app.connectors.ad_proxy import save_ad_gateway_cluster_config
+    try:
+        cfg = save_ad_gateway_cluster_config(db, payload, updated_by=current_admin.username)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="UPDATE_AD_CLUSTER",
+        target_username="AD_GATEWAY_CLUSTER",
+        affected_app_code="AD",
+        execution_mode="SYSTEM_SETTING",
+        reason=f"อัปเดตการตั้งค่า AD Gateway Cluster ({len(cfg.get('servers', []))} servers, Allow PATCH={cfg.get('allow_status_patch')})",
+        status="SUCCESS"
+    ))
+    db.commit()
+    return {
+        "status": "SUCCESS",
+        "message": "บันทึกการตั้งค่า AD Gateway Cluster สำเร็จ",
+        "config": cfg
+    }
+
+
+@router.post("/ad-cluster/ping")
+async def ping_ad_cluster_endpoint(
+    payload: Optional[Dict[str, Any]] = Body(default=None),
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin)
+):
+    """Concurrently test reachability and latency of all AD Gateway servers in the cluster."""
+    from app.connectors.ad_proxy import get_ad_gateway_cluster_config, ping_ad_gateway_server
+
+    ad_app = db.query(ConnectedApplication).filter(func.lower(ConnectedApplication.app_code) == "ad").first()
+    api_key = ad_app.api_key if ad_app else None
+    secret_key = ad_app.client_secret if ad_app else None
+    origin_ip = ad_app.sap_company_db if ad_app else None
+
+    if payload and isinstance(payload.get("servers"), list) and len(payload["servers"]) > 0:
+        servers = payload["servers"]
+    else:
+        servers = get_ad_gateway_cluster_config(db).get("servers", [])
+
+    results = await asyncio.gather(*[
+        ping_ad_gateway_server(srv, api_key=api_key, secret_key=secret_key, origin_ip=origin_ip)
+        for srv in servers
+    ])
+    online_count = sum(1 for r in results if r.get("is_online"))
+    return {
+        "results": list(results),
+        "online_count": online_count,
+        "total_count": len(results)
+    }
+
+
 @router.get("/{app_id}/credentials", response_model=AppCredentialOut)
 
 def get_application_credentials(
@@ -394,7 +468,9 @@ async def ping_application(
     if health.spoke_sso_active is not None:
         app.spoke_sso_status = "ACTIVE" if health.spoke_sso_active else "DISABLED"
     elif not health.is_online:
-        app.spoke_sso_status = "DISABLED"
+        # Preserve ACTIVE / existing SSO status on transient M2M ping failure unless explicitly reported disabled
+        if getattr(app, "spoke_sso_status", None) not in ("ACTIVE", "DISABLED"):
+            app.spoke_sso_status = "UNKNOWN"
     db.commit()
 
     return PingResult(

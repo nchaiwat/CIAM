@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from app.core.database import Base
 
 class AdminUser(Base):
@@ -19,4 +19,5 @@ class AdminUser(Base):
     locked_until = Column(DateTime(timezone=True), nullable=True)
     must_change_password = Column(Boolean, default=False, nullable=False)
     password_changed_at = Column(DateTime(timezone=True), nullable=True)
+    portal_preferences = Column(Text, nullable=True) # JSON string: {"app_order": [...], "theme": "light"|"dark"}
 

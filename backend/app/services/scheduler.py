@@ -183,6 +183,9 @@ def persist_spoke_inventory(
         telegram_val = str(item.get("telegram_id") or item.get("pager") or "").strip() or None
 
         raw_item_email = (item.get("email") or "").strip() or None
+        ad_guid_val = str(
+            item.get("ad_guid") or item.get("guid") or item.get("object_guid") or item.get("objectGUID") or ""
+        ).strip() or None
 
         is_m365_item = app.app_code.lower() == "m365"
 
@@ -193,6 +196,7 @@ def persist_spoke_inventory(
                 email=raw_item_email if is_m365_item else None,
                 department=item.get("department") if is_ad_item else None,
                 employee_id=item.get("employee_id") if is_ad_item else None,
+                ad_guid=ad_guid_val if is_ad_item else None,
                 telegram_id=telegram_val,
                 is_active_in_ad=is_active if is_ad_item else False,
                 created_at=now
@@ -202,6 +206,8 @@ def persist_spoke_inventory(
         else:
             if is_ad_item:
                 identity.is_active_in_ad = is_active
+                if ad_guid_val:
+                    identity.ad_guid = ad_guid_val
                 if item.get("employee_id"):
                     identity.employee_id = item.get("employee_id")
                 # Department comes strictly from Active Directory OU
@@ -407,7 +413,13 @@ def persist_spoke_inventory(
                 # 🏢 Direct / Infrastructure Systems (pfSense, M365, SAP B1):
                 # CIAM is NOT the provisioner. If not present in live inventory, remove mapping immediately!
                 logger.info("Direct Infra Sync: User '%s' not in %s live inventory; removing mapping (No WAIT for Direct Infra)", stale.app_username, app.app_code)
+                stale_ident = stale.identity
                 db.delete(stale)
+                db.flush()
+                if stale_ident and not stale_ident.is_active_in_ad and not getattr(stale_ident, "is_approved_exception", False):
+                    remaining_cnt = db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == stale_ident.id).count()
+                    if remaining_cnt == 0:
+                        db.delete(stale_ident)
 
         db.flush()
 
@@ -457,6 +469,35 @@ def persist_spoke_inventory(
 
     db.commit()
     return synced_count
+
+
+def cleanup_orphan_identities(db: Session) -> int:
+    """
+    Delete orphaned MasterIdentity records that no longer belong to Active Directory
+    or any spoke application, unless marked as an approved exception.
+    Returns the number of cleaned records.
+    """
+    from sqlalchemy import exists, or_
+    orphans = (
+        db.query(MasterIdentity)
+        .filter(
+            MasterIdentity.is_active_in_ad == False,
+            or_(
+                MasterIdentity.is_approved_exception == False,
+                MasterIdentity.is_approved_exception.is_(None),
+            ),
+            ~exists().where(AppAccountMapping.identity_id == MasterIdentity.id),
+        )
+        .all()
+    )
+    removed = 0
+    for orphan in orphans:
+        db.delete(orphan)
+        removed += 1
+    if removed:
+        db.flush()
+        logger.info("Cleaned up %d zero-system orphan MasterIdentity records", removed)
+    return removed
 
 
 async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler") -> Dict[str, Any]:

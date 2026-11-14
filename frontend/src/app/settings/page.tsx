@@ -31,6 +31,10 @@ import {
   FileText,
   Check,
   X,
+  Plus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import {
   ciamApi,
@@ -43,6 +47,9 @@ import {
   AICopilotSettings,
   DailyDigestConfig,
   DailyDigestTestResult,
+  AdGatewayClusterConfig,
+  AdGatewayServer,
+  AdGatewayPingResult,
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
 
@@ -157,14 +164,38 @@ export default function SettingsPage() {
   const [digestTestResult, setDigestTestResult] = useState<DailyDigestTestResult | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
+  // Redundant AD Gateway Cluster State
+  const [adCluster, setAdCluster] = useState<AdGatewayClusterConfig>({
+    servers: [
+      {
+        id: "primary-tunnel",
+        name: "Primary AD Gateway (SSH Tunnel)",
+        url: "http://172.18.0.1:3100",
+        channel_type: "SSH_TUNNEL",
+        priority: 1,
+        enabled: true,
+        timeout_seconds: 3.5,
+        notes: "Main channel via VPS Docker Bridge / plink SSH tunnel",
+      },
+    ],
+    base_dn: "DC=wa,DC=net",
+    allow_status_patch: false,
+    failover_strategy: "PRIORITY_ORDERED",
+  });
+  const [adClusterSaving, setAdClusterSaving] = useState(false);
+  const [adClusterMessage, setAdClusterMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [adClusterPinging, setAdClusterPinging] = useState(false);
+  const [adClusterPingResults, setAdClusterPingResults] = useState<Record<string, AdGatewayPingResult>>({});
+
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const [healthData, scheduleData, aiData, digestData] = await Promise.all([
+      const [healthData, scheduleData, aiData, digestData, adClusterData] = await Promise.all([
         ciamApi.getHealthMonitorStatus().catch(() => null),
         ciamApi.getSyncSchedule().catch(() => null),
         ciamApi.getAICopilotSettings().catch(() => null),
         ciamApi.getDailyDigestStatus().catch(() => null),
+        ciamApi.getAdClusterConfig().catch(() => null),
       ]);
 
       if (healthData) {
@@ -193,10 +224,96 @@ export default function SettingsPage() {
         setDigestConfig(digestData.config);
         setInputRecipients((digestData.config.recipients || []).join(", "));
       }
+      if (adClusterData) {
+        setAdCluster(adClusterData);
+      }
     } catch (err) {
       console.error("Error loading system settings:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddAdServer = () => {
+    setAdCluster((prev) => ({
+      ...prev,
+      servers: [
+        ...prev.servers,
+        {
+          id: `ad-gw-${Date.now()}`,
+          name: `Backup AD Gateway #${prev.servers.length + 1} (VPN Channel)`,
+          url: "http://",
+          channel_type: "VPN_CHANNEL",
+          priority: prev.servers.length + 1,
+          enabled: true,
+          timeout_seconds: 3.5,
+          notes: "On-Prem VPN Secondary Channel",
+        },
+      ],
+    }));
+  };
+
+  const handleUpdateAdServer = (idx: number, patch: Partial<AdGatewayServer>) => {
+    setAdCluster((prev) => ({
+      ...prev,
+      servers: prev.servers.map((srv, i) => (i === idx ? { ...srv, ...patch } : srv)),
+    }));
+  };
+
+  const handleMoveAdServer = (idx: number, dir: -1 | 1) => {
+    const targetIdx = idx + dir;
+    if (targetIdx < 0 || targetIdx >= adCluster.servers.length) return;
+    setAdCluster((prev) => {
+      const next = [...prev.servers];
+      const [item] = next.splice(idx, 1);
+      next.splice(targetIdx, 0, item);
+      return {
+        ...prev,
+        servers: next.map((s, i) => ({ ...s, priority: i + 1 })),
+      };
+    });
+  };
+
+  const handleRemoveAdServer = (idx: number) => {
+    if (adCluster.servers.length <= 1) return;
+    setAdCluster((prev) => ({
+      ...prev,
+      servers: prev.servers
+        .filter((_, i) => i !== idx)
+        .map((s, i) => ({ ...s, priority: i + 1 })),
+    }));
+  };
+
+  const handlePingAdCluster = async () => {
+    try {
+      setAdClusterPinging(true);
+      setAdClusterMessage(null);
+      const res = await ciamApi.pingAdCluster(adCluster.servers);
+      const mapped: Record<string, AdGatewayPingResult> = {};
+      for (const item of res.results || []) {
+        if (item.id) mapped[item.id] = item;
+        if (item.url) mapped[item.url] = item;
+      }
+      setAdClusterPingResults(mapped);
+    } catch (err: any) {
+      setAdClusterMessage({ type: "error", text: `ทดสอบการเชื่อมต่อล้มเหลว: ${err.message || err}` });
+    } finally {
+      setAdClusterPinging(false);
+    }
+  };
+
+  const handleSaveAdCluster = async () => {
+    try {
+      setAdClusterSaving(true);
+      setAdClusterMessage(null);
+      const res = await ciamApi.updateAdClusterConfig(adCluster);
+      setAdCluster(res.config);
+      setAdClusterMessage({ type: "success", text: res.message || "บันทึกการตั้งค่า AD Cluster สำเร็จ" });
+      setTimeout(() => setAdClusterMessage(null), 5000);
+    } catch (err: any) {
+      setAdClusterMessage({ type: "error", text: err.message || "บันทึกการตั้งค่า AD Cluster ล้มเหลว" });
+    } finally {
+      setAdClusterSaving(false);
     }
   };
 
@@ -1371,62 +1488,220 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* CARD 3 & 4: AD Integration Specs & Live Health */}
+      {/* CARD 3 & 4: Active Directory Redundant Gateway Cluster & Live Health */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Active Directory & Proxy Specs */}
+        {/* Active Directory Redundant Multi-VPN Cluster Configuration */}
         <div className="bg-white rounded-xl border border-slate-300 shadow-sm p-5 space-y-4">
-          <div className="flex items-center space-x-2.5 pb-2 border-b border-slate-200">
-            <Shield className="w-5 h-5 text-blue-700" />
-            <div>
-              <h3 className="font-bold text-sm text-slate-900">
-                ข้อกำหนดการเชื่อมต่อ Active Directory (AD Specs)
-              </h3>
-              <p className="text-[11px] text-slate-500">
-                กฎเกณฑ์การดึงแผนกจาก OU และหมายเลข Telegram ID จาก Pager
-              </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
+            <div className="flex items-center space-x-2.5">
+              <Shield className="w-5 h-5 text-blue-700" />
+              <div>
+                <h3 className="font-bold text-sm text-slate-900">
+                  Redundant AD Gateway &amp; Multi-VPN Cluster
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  กำหนด AD Auth Server มากกว่า 1 ช่องทาง (Primary / VPN Channel สำรอง) พร้อม Smart Failover
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handlePingAdCluster}
+                disabled={adClusterPinging}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold border border-slate-300 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${adClusterPinging ? "animate-spin" : ""}`} />
+                <span>ทดสอบทุกเครื่อง</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleAddAdServer}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold border border-blue-200 cursor-pointer"
+              >
+                <Plus className="w-3 h-3" />
+                <span>เพิ่ม VPN Server</span>
+              </button>
             </div>
           </div>
 
-          <div className="space-y-3 text-xs text-slate-700 leading-relaxed">
-            <div className="p-3 bg-blue-50/80 rounded-lg border border-blue-200">
-              <div className="font-bold text-blue-900 mb-1 flex items-center space-x-1.5">
-                <span>📁 แผนกอิงตามโครงสร้าง OU (Users WA)</span>
-              </div>
-              <p className="text-[11px] text-slate-700">
-                ระบบ Central-IAM จะสกัดชื่อแผนกจาก DistinguishedName ของผู้ใช้โดยตรง เช่น ผู้ใช้อยู่ใน{" "}
-                <code className="font-mono bg-blue-100 px-1 rounded text-blue-900">
-                  OU=Purchasing,OU=Users WA,DC=wa,DC=net
-                </code>{" "}
-                จะถูกจัดให้อยู่ในแผนก <b>&quot;Purchasing&quot;</b> อัตโนมัติ
-              </p>
+          {adClusterMessage && (
+            <div
+              className={`p-2.5 rounded-lg text-xs font-semibold flex items-center gap-2 border ${
+                adClusterMessage.type === "success"
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : "bg-rose-50 border-rose-200 text-rose-800"
+              }`}
+            >
+              {adClusterMessage.type === "success" ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+              )}
+              <span>{adClusterMessage.text}</span>
             </div>
+          )}
 
-            <div className="p-3 bg-sky-50/80 rounded-lg border border-sky-200">
-              <div className="font-bold text-sky-900 mb-1 flex items-center space-x-1.5">
-                <span>✈️ Telegram ID อิงตามฟิลด์ Pager</span>
-              </div>
-              <p className="text-[11px] text-slate-700">
-                ในหน้า AD User Properties แถบ <b>Telephones &gt; Pager</b> จะถูกดึงมาเป็นหมายเลข{" "}
-                <b>Telegram ID</b> สำหรับส่งการแจ้งเตือนส่วนตัว (DM) ผ่านบอทกลาง
-              </p>
-            </div>
+          {/* Ordered Server List */}
+          <div className="space-y-2.5">
+            {adCluster.servers.map((srv, idx) => {
+              const pingInfo = adClusterPingResults[srv.id] || adClusterPingResults[srv.url];
+              return (
+                <div
+                  key={srv.id || idx}
+                  className={`p-3 rounded-lg border space-y-2 transition-colors ${
+                    srv.enabled ? "bg-slate-50/80 border-slate-200" : "bg-slate-100/60 border-slate-200 opacity-65"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-blue-700 text-white text-[10px] font-black shrink-0">
+                        #{idx + 1} {idx === 0 ? "PRIMARY" : "FAILOVER"}
+                      </span>
+                      <input
+                        type="text"
+                        value={srv.name}
+                        onChange={(e) => handleUpdateAdServer(idx, { name: e.target.value })}
+                        placeholder="ชื่อช่องทาง (เช่น VPN Channel 2)"
+                        className="text-xs font-bold text-slate-900 bg-white border border-slate-300 rounded px-2 py-1 w-48 sm:w-56 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {pingInfo && (
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            pingInfo.is_online
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-rose-50 text-rose-700 border-rose-200"
+                          }`}
+                          title={pingInfo.message}
+                        >
+                          {pingInfo.is_online ? `ONLINE ${pingInfo.latency_ms}ms` : "OFFLINE"}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateAdServer(idx, { enabled: !srv.enabled })}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer ${
+                          srv.enabled
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                            : "bg-slate-200 text-slate-600 border-slate-300"
+                        }`}
+                      >
+                        {srv.enabled ? "เปิด" : "ปิด"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveAdServer(idx, -1)}
+                        disabled={idx === 0}
+                        className="p-1 rounded bg-white border border-slate-200 text-slate-500 hover:text-slate-800 disabled:opacity-30 cursor-pointer"
+                        title="เลื่อนขึ้น (ความสำคัญสูงขึ้น)"
+                      >
+                        <ArrowUp className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveAdServer(idx, 1)}
+                        disabled={idx === adCluster.servers.length - 1}
+                        className="p-1 rounded bg-white border border-slate-200 text-slate-500 hover:text-slate-800 disabled:opacity-30 cursor-pointer"
+                        title="เลื่อนลง"
+                      >
+                        <ArrowDown className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAdServer(idx)}
+                        disabled={adCluster.servers.length <= 1}
+                        className="p-1 rounded bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 disabled:opacity-30 cursor-pointer"
+                        title="ลบ Server นี้"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
 
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5">
-              <div className="flex justify-between">
-                <span className="text-slate-500">AD Gateway Endpoint:</span>
-                <span className="font-mono text-slate-800 font-bold">http://172.18.0.1:3100</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">สิทธิ์แก้ไขสถานะใน AD (PATCH):</span>
-                <span className="font-bold text-slate-700 bg-slate-200 px-1.5 rounded text-[10px]">
-                  Read-Only (โหมดสังเกตการณ์)
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Base DN Domain Controller:</span>
-                <span className="font-mono text-slate-800 font-bold">DC=wa,DC=net</span>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <div className="sm:col-span-6">
+                      <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">Endpoint URL (HTTP/HTTPS)</label>
+                      <input
+                        type="text"
+                        value={srv.url}
+                        onChange={(e) => handleUpdateAdServer(idx, { url: e.target.value })}
+                        placeholder="http://172.18.0.1:3100 หรือ http://10.8.0.5:3100"
+                        className="w-full font-mono text-xs bg-white border border-slate-300 rounded px-2 py-1 text-slate-800 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="sm:col-span-4">
+                      <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">ประเภทช่องทาง</label>
+                      <select
+                        value={srv.channel_type}
+                        onChange={(e) => handleUpdateAdServer(idx, { channel_type: e.target.value })}
+                        className="w-full text-xs bg-white border border-slate-300 rounded px-2 py-1 text-slate-800 focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="SSH_TUNNEL">SSH Tunnel (Docker Bridge)</option>
+                        <option value="VPN_CHANNEL">VPN Channel (On-Prem Server)</option>
+                        <option value="DIRECT_HTTPS">Direct HTTPS / Cloudflare</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">Timeout (วิ)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min={1}
+                        max={15}
+                        value={srv.timeout_seconds}
+                        onChange={(e) => handleUpdateAdServer(idx, { timeout_seconds: parseFloat(e.target.value) || 3.5 })}
+                        className="w-full text-xs font-mono bg-white border border-slate-300 rounded px-2 py-1 text-slate-800 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Cluster Guardrails & Global AD Options */}
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">Base DN Domain Controller</label>
+              <input
+                type="text"
+                value={adCluster.base_dn}
+                onChange={(e) => setAdCluster((prev) => ({ ...prev, base_dn: e.target.value }))}
+                className="w-full font-mono text-xs bg-white border border-slate-300 rounded px-2.5 py-1.5 text-slate-800"
+              />
             </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">สิทธิ์แก้ไขสถานะใน AD (PATCH)</label>
+              <button
+                type="button"
+                onClick={() => setAdCluster((prev) => ({ ...prev, allow_status_patch: !prev.allow_status_patch }))}
+                className={`w-full px-2.5 py-1.5 rounded text-xs font-bold border text-left transition-colors cursor-pointer ${
+                  adCluster.allow_status_patch
+                    ? "bg-amber-50 border-amber-300 text-amber-900"
+                    : "bg-slate-200 border-slate-300 text-slate-700"
+                }`}
+              >
+                {adCluster.allow_status_patch ? "Read-Write (อนุญาตส่งคำสั่ง PATCH AD)" : "Read-Only (โหมดสังเกตการณ์)"}
+              </button>
+            </div>
+          </div>
+
+          {/* Compact OU & Pager Spec Reminder + Save Button */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <div className="text-[11px] text-slate-500">
+              <span>📁 แผนกอิงตาม OU • ✈️ Telegram อิงฟิลด์ Pager • 🛡️ หยุด Failover ทันทีเมื่อรหัสผิด</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveAdCluster}
+              disabled={adClusterSaving}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{adClusterSaving ? "กำลังบันทึก..." : "บันทึกการตั้งค่า AD Cluster"}</span>
+            </button>
           </div>
         </div>
 

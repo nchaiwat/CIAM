@@ -36,6 +36,8 @@ def init_db():
             if "password_changed_at" not in columns:
                 conn.execute(text("ALTER TABLE central_iam_admins ADD COLUMN password_changed_at TIMESTAMP WITH TIME ZONE;"))
                 conn.execute(text("UPDATE central_iam_admins SET password_changed_at = COALESCE(created_at, CURRENT_TIMESTAMP) WHERE password_changed_at IS NULL;"))
+            if "portal_preferences" not in columns:
+                conn.execute(text("ALTER TABLE central_iam_admins ADD COLUMN portal_preferences TEXT;"))
 
             # Safe auto-migration for master_identities
             identity_columns = [c["name"] for c in inspector.get_columns("master_identities")]
@@ -829,6 +831,16 @@ def init_db():
             if clean_em and clean_em != a.email:
                 logger.info("Auto-healed AdminUser %s email: %s -> %s", a.username, a.email, clean_em)
                 a.email = clean_em
+
+        # Auto-heal: Reset falsely cached spoke_sso_status='DISABLED' on SSO-enabled apps at startup
+        db.query(ConnectedApplication).filter(
+            ConnectedApplication.sso_enabled == True,
+            ConnectedApplication.spoke_sso_status == "DISABLED"
+        ).update({"spoke_sso_status": "ACTIVE"}, synchronize_session=False)
+
+        # Auto-clean: Remove zero-system orphaned identities (e.g., accounts removed from all spokes & AD)
+        from app.services.scheduler import cleanup_orphan_identities
+        cleanup_orphan_identities(db)
 
         db.commit()
         logger.info("Database initialization and seeding complete with real data!")
