@@ -7,7 +7,7 @@
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 98/98 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Sprint 61 (Redundant AD Cluster, Portal Drag-Drop & Dark/Light Mode, Zero-System Orphan Cleanup, Spoke SSO Probe Fallback & Whitelist IP `157.173.219.153`)
+> **Git Status:** Production Ready — Latest Commit on `origin/main`: `b2bb697` (Sprint 61: Redundant AD Cluster, Portal Drag-Drop & Dark/Light Mode, Zero-System Orphan Cleanup, Spoke SSO Probe Fallback & Whitelist IP `157.173.219.153`)
 
 ---
 
@@ -1773,54 +1773,36 @@ docker compose up -d api web
 
 ## 4. สถานะระบบปัจจุบัน และ แผนงานที่จะปรับปรุงต่อในรอบถัดไป (Current Status & Next Steps Roadmap)
 
-> **ปรับปรุงล่าสุด:** 15 ตุลาคม 2026 (Local Time: ~20:45 ICT)  
-> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (ทุกการเปลี่ยนแปลงได้ผ่านการทดสอบ 100% และ Push สู่ `origin/main` ที่ Commit `2e73e5e` เรียบร้อยแล้ว)
+> **ปรับปรุงล่าสุด:** 14 พฤศจิกายน 2026 (Local Time: ~14:00 ICT)  
+> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (Commit ล่าสุด `b2bb697` Push สู่ `origin/main` เรียบร้อยแล้ว)
 
 ### 4.1 สถานะระบบที่ตรวจสอบและส่งมอบแล้ว (Verified & Production Ready)
-* **Git Commits ล่าสุด (10 Commits ล่าสุดบน `origin/main`):**
-  - `f02e978` — `fix(ai): extract specific username queries in AI Copilot and prioritize active AD users in ciam_list_users` (Sprint 45)
-  - `8f5d84a` — `fix(directory): unify Duanghathai.P and Duanghatai.P identity and support phonetic search` (Sprint 44)
-  - `3f7627b` — `docs(memory): document Sprints 41-43 and spec v2.8.0 synchronization` (Sprint 43)
-  - `e913ed5` — `fix(spec): sync Spoke Specification v2.8.0 across backend and frontend download button` (Sprint 43)
-  - `fb7b817` — `style(portal): display unavailable and vpn-locked app cards in muted gray` (Sprint 42)
-  - `88c7b7e` — `fix(ai): enforce zero-hallucination policy and align internal mcp tool parameters` (Sprint 41)
-  - `fb3f046` — `fix(copilot): enforce Thai response, accelerate latency with Flash models, and sync active model` (Sprint 40)
-  - `e4551a5` — `feat(ai): integrate dynamic Gemini ListModels auto-discovery and smart error diagnostics` (Sprint 40)
-  - `09a0a56` — `feat(ai): support gemini-2.0-flash with resilient multi-version fallbacks and quick model selectors` (Sprint 40)
-  - `baba904` — `fix(deploy): add mcp>=2.3.0 to requirements.txt and add api rewrites to next.config.ts` (Sprint 40)
+* **Git Commits ล่าสุดบน `origin/main`:**
+  - `b2bb697` — `feat(ciam): redundant AD gateway cluster, portal drag-drop & dark mode, orphan cleanup, and spoke sso probe fallback` (Sprint 61)
+  - `de3db00` / `bfe2fa0` — Sprints 59–60 (`ck`<->`k` transliteration, 90-day password policy & Spoke Spec v2.12.0)
 
-* **ผลการตรวจสอบคุณภาพและความถูกต้อง (Test & Type Integrity):**
-  - **Backend Test Suite:** รัน `pytest` ผ่านครบถ้วน **68/68 tests (100% Passed)**
+* **ผลการตรวจสอบคุณภาพและความถูกต้องล่าสุด (Sprint 61 Verification):**
+  - **Backend Test Suite (`pytest`):** ผ่านครบถ้วน **98/98 tests (100% Passed)**
   - **Frontend Type Check:** รัน `npx tsc --noEmit` ผ่านสมบูรณ์ **0 TypeScript Errors**
-  - **Git Working Tree:** สะอาด (Working tree clean, synced with `origin/main` at commit `f02e978`)
-
-* **สรุปฟังก์ชันและสถาปัตยกรรมหลักที่ส่งมอบแล้วในรอบล่าสุด (Sprints 40 - 45):**
-  1. **AI Copilot Specific Username Search & Active AD Priority Ranking (Sprint 45):** เพิ่ม `extract_user_search_term` ใน `ai_service.py` เพื่อสกัดชื่อบัญชี (`Chaiwat.N`, อีเมล, ชื่อพนักงาน) ส่งเข้า `ciam_list_users(search=...)` โดยตรง และจัดเรียงผู้ใช้ที่ Active ใน AD ขึ้นก่อนบัญชีรหัสสาขา (`01-WS_...`) เสมอ พร้อมแก้ไข `is_ad_account` ใน `mcp/server.py`
-  2. **Phonetic Identity Unification (`Duanghathai.P` <-> `Duanghatai.P`) & Directory Search (Sprint 44):** รวมตัวตนของคุณดวงหทัย ผาสุข บน Production และเพิ่มระบบจับคู่ตัวสะกดเทียบเสียง `thai` $\leftrightarrow$ `tai` ใน `scheduler.py`, `directory.py`, `initial_data.py`, และ `mcp/server.py` พร้อมจัดทำบทความวิชาการและภาพประกอบสถาปัตยกรรมสำหรับโพสต์ Facebook ใน `docs/facebook_article/FACEBOOK_POST_CIAM.md`
-  3. **Spoke Spec v2.8.0 Synchronized across Backend & Frontend (Sprint 43):** ซิงก์ไฟล์ `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` v2.8.0 เข้าสู่โฟลเดอร์ `backend/` และอัปเดตปุ่มดาวน์โหลดบนหน้า `/applications` ให้แสดงเวอร์ชัน v2.8.0
-  4. **SSO Portal Muted Gray UI for Unavailable Apps (Sprint 42):** ปรับโทนสีการ์ดแอปพลิเคชันที่ยังไม่พร้อมใช้งานหรือต้องต่อ VPN (เช่น MTPulse เมื่ออยู่นอกวงแลน) เป็นสีเทาหม่น (`grayscale`) แยกความแตกต่างจากระบบที่พร้อมใช้งานอย่างชัดเจน
-  5. **AI Factual Grounding & Zero-Hallucination Policy (Sprint 41):** บังคับให้ AI Copilot ยึดตัวเลขจริงจากฐานข้อมูล 100% ห้ามเออออตามตัวเลขที่ผู้ใช้ถามนำ และปรับพารามิเตอร์ Tool Calling ให้ตรงกับ `mcp/server.py` ทุกฟังก์ชัน
-  6. **Central IAM In-House AI Copilot & Remote MCP Server (Sprint 40):** พัฒนา MCP Server (8 Tools) รองรับ Remote SSE Transport (`/mcp/sse`) และสร้าง Floating AI Copilot Widget พร้อมหน้าตั้งค่า Provider (Gemini, OpenAI, Anthropic, Ollama)
-
----
+  - **FastAPI OpenAPI & Route Registration:** ตรวจพบ `/api/v1/auth/portal-preferences`, `/api/v1/applications/ad-cluster/config`, `/api/v1/applications/ad-cluster/ping` ครบถ้วน
 
 ### 4.2 แผนงานและข้อสังเกตสำหรับการปรับปรุงในรอบถัดไป (Next Iteration Roadmap)
 เมื่อกลับมาทำงานต่อในรอบถัดไป ให้ดำเนินการตามลำดับความสำคัญดังต่อไปนี้:
 
-1. **อัปเดต Production VPS (`/var/www/Ciam`) และทดสอบ AI Copilot ล่าสุด:**
-   - รันคำสั่ง Deploy `api` บน Production Server (`/var/www/Ciam`) เพื่อนำโค้ด Sprint 44-45 ขึ้นใช้งานจริง
-   - ทดสอบถาม AI Copilot ด้วยชื่อบัญชีเฉพาะเจาะจง เช่น `"Chaiwat.N"`, `"Duanghathai.P"` เพื่อยืนยันว่า AI แสดงข้อมูลสถานะ AD และระบบลูกที่ผูกอยู่ได้ถูกต้องแม่นยำ 100%
+1. **Deploy Central-IAM บน Production VPS (`/var/www/Ciam`) และตรวจสอบหลัง Deploy:**
+   - รันคำสั่ง Deploy `api` และ `web` บน `/var/www/Ciam` ตาม Section 5 ด้านล่าง
+   - ตรวจสอบหน้า `/directory` ว่าไม่มีบัญชี 0 ระบบตกค้าง (`Thanasit.C` ฯลฯ ถูกล้างและคัดกรองเรียบร้อย)
+   - ทดสอบหน้า `/portal`: ลากวางเรียงลำดับการ์ด + สลับโหมด Dark / Light และยืนยันว่าการ์ด **Apex** กลับมามีสถานะพร้อมใช้งาน
 
-2. **การทดสอบความร่วมมือกับ Spoke Mode C (MTPulse) และระบบลูกอื่นๆ (QMS, IRM):**
-   - ติดตามผลการเชื่อมโยงข้อมูลผ่าน Outbound Reverse Heartbeat API (`/api/v1/agent/heartbeat`) และทดสอบการส่งคำสั่ง `DISABLE_USER` / `ENABLE_USER` / `REQUEST_FULL_SYNC`
-   - ตรวจสอบการนำมาตรฐาน Spoke Spec v2.8.0 (รวมถึงหมวด E: In-App AI Copilot & MCP Tools) ไปประยุกต์ใช้ในระบบลูก
+2. **ตั้งค่า Redundant AD Gateway / VPN Channel สำรองบน `/settings`:**
+   - เมื่อเตรียม On-Prem Server สำหรับเปิด VPN Channel ที่ 2 พร้อมแล้ว ให้เพิ่ม URL ของ Channel สำรองในแผง **Redundant AD Gateway & Multi-VPN Cluster** หน้า `/settings` แล้วกด **"ทดสอบทุกเครื่อง"** และ **"บันทึกการตั้งค่า AD Cluster"**
 
-3. **ระบบจัดการพนักงานลาออกอัตโนมัติ (Offboarding & Deprovisioning Orchestration):**
-   - ตรวจสอบหน้า `/offboarding` สำหรับการปิดสิทธิ์พนักงานออกจากทุก Spoke Applications แบบ One-Click Kill Switch (AD, pfSense, M365, SAP B1, IRM, MTPulse)
-   - ทดสอบการออกใบรับรองการเพิกถอนสิทธิ์ (ISO/IEC 27001 Revocation Certificate)
+3. **ประสานงานฝั่ง APEX (`D:\Python\APEX`):**
+   - ติดตามการ Push ไฟล์ `rbac.js`, `ciam.js`, และ `postgres.js` โดยทีม Dev ของ APEX ขึ้น Git และ Deploy ขึ้น Production (`/var/www/Apex`) เพื่อเปิดใช้งาน `GET /api/auth/sso/config` อย่างสมบูรณ์
 
-4. **การเตรียม Starter Template ภาษา Native PHP + MySQL:**
-   - เตรียมตัวอย่างโค้ด PHP ดั้งเดิม (Native PHP 3 ไฟล์: `ciam_sso.php`, `ciam_callback.php`, `ciam_agent.php`) เพื่อส่งมอบให้ทีม Dev ภายในองค์กรนำไปเชื่อมต่อกับระบบ On-Premise เดิมของบริษัท
+4. **รายการระยะยาวเดิมจาก Sprint ก่อน:**
+   - ทดสอบ Offboarding Flow & การออกใบรับรองการเพิกถอนสิทธิ์ บน `/offboarding`
+   - เตรียม Starter Template ภาษา Native PHP + MySQL สำหรับระบบ On-Premise เดิมของบริษัท
 
 ---
 
