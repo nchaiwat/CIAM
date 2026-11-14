@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 14 พฤศจิกายน 2026 (Local Time: ~16:00 ICT)  
+> **Date Updated:** 14 พฤศจิกายน 2026 (Local Time: ~18:50 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
-> **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
+> **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM` และ `D:\Python\APEX`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 101/101 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Sprint 62 Complete (CIAM Origin IP `157.173.219.153` Enforcement, `X-CIAM-Origin-IP` / `ciam_origin_ip` Propagation & Pytest Spoke Network Isolation; built on `b2bb697` / `aa554a8`)
+> **Test Integrity:** Backend Pytest: 101/101 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%), APEX `node scripts/verify-local.js`: 10/10 passed  
+> **Git Status:** Production Ready — Sprint 63 Complete (APEX CIAM SSO Identity Resolution `Chaiwat.N`, Portal Direct Launch & Logout Redirect + CIAM `/oauth2/*` Compatibility Rewrites; built on `051a7ac` / `393efef`)
 
 ---
 
@@ -15,6 +15,17 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
+0a. **APEX CIAM SSO Identity Resolution (`Chaiwat.N`), Portal Direct Launch & Logout Redirect Fix (Sprint 63):**
+   - **สาเหตุปัญหาฝั่ง APEX (`D:\Python\APEX`):**
+     1) **ไม่ได้ล็อกอินเป็น `Chaiwat.N` (ค้างบัญชี `U01` / `u01@windowasia.co.th`):** `ciam.js` เรียก endpoint `/oauth2/authorize`, `/oauth2/token`, `/oauth2/userinfo` แทน `/oauth/authorize`, `/api/v1/oauth/token`, `/api/v1/oauth/userinfo`, ไม่ได้ล้างคุกกี้ `apex_session` เก่าของ `U01`, `app/index.js` (`express.static`) ดักเสิร์ฟ `index.html` ทันทีเมื่อถูก Redirect กลับมาที่ `/?code=...&state=...` จึงไม่เข้า Callback, และ `ciam.js` ยังปฏิเสธ Direct Launch (`state=ciam_launch_*`) จาก CIAM Portal รวมถึงยังไม่มี JIT Auto-Provisioning สำหรับผู้ใช้ CIAM/AD ใหม่
+     2) **กด Logout แล้วกลับมาหน้า Login ของ APEX แทน CIAM Portal:** `#btnTopLogout` ใน `app/public/js/ciam-admin-panel.js` เรียก `window.location.reload()` โดยไม่นำทางไปยัง `redirect_uri` (`https://ciam.windowasia.com/portal`)
+   - **การแก้ไข (`D:\Python\APEX` branch `Sec1`):**
+     - `app/src/security/ciam.js`: เพิ่ม `clearApexSessionCookie`, แก้ Endpoint เป็น `/oauth/authorize` และ `/api/v1/oauth/token` / `/api/v1/oauth/userinfo` (รองรับ `/api/auth/sso/callback` และ `/auth/callback`), รองรับ `ciam_launch_*`, ทำ JIT Provisioning (`DIR-PROVISION`) ผู้ใช้ที่ผ่านการยืนยันจาก CIAM (ห้าม Fallback กลับไป `U01`), และเชื่อม `handleSsoLogout` บน `POST/GET /api/auth/sso/logout` กลับ `https://ciam.windowasia.com/portal`
+     - `app/index.js`: เพิ่ม `forwardOAuthParamsToCallback` ก่อน `express.static` และใน `app.get('*')` เพื่อส่งต่อ `?code=...&state=...` เข้า `/api/auth/sso/callback`
+     - `app/public/js/ciam-admin-panel.js` & `app/public/sw.js`: เปลี่ยน `#btnTopLogout` ให้ Redirect ไป `out.redirect_uri` (CIAM Portal), กันตกค้าง `?code=&state=` ใน `DOMContentLoaded`, และ Bump Service Worker เป็น `apex-pwa-v2` (ไม่แคช `?code=`)
+   - **ความเข้ากันได้ย้อนหลังฝั่ง CIAM (`d:\Python\Central-IAM`):**
+     - `frontend/next.config.ts`: เพิ่ม Next.js Rewrites `/oauth2/authorize` -> `/oauth/authorize`, `/oauth2/logout` -> `/oauth/logout`, `/oauth2/token` -> `${backendUrl}/api/v1/oauth/token`, `/oauth2/userinfo` -> `${backendUrl}/api/v1/oauth/userinfo`
+
 0. **CIAM Origin IP (`157.173.219.153`) End-to-End Enforcement & Pytest Network Isolation (Sprint 62):**
    - **Test Isolation (อุดรอยรั่ว `58.8.185.18` จากเครื่อง Dev ระหว่างรัน `pytest`):**
      - เพิ่ม `autouse` fixture `_block_external_spoke_network_calls` ใน [`backend/tests/conftest.py`](file:///d:/Python/Central-IAM/backend/tests/conftest.py) เพื่อดักจับเมธอดของ `RestApiConnector` (`set_account_status`, `provision_account`, `sync_inventory`, `health_check`) เมื่อ `base_url` เป็น `http://` หรือ `https://` และ Mock `set_account_status` ใน [`backend/tests/test_api_flow.py`](file:///d:/Python/Central-IAM/backend/tests/test_api_flow.py) (`test_granular_spoke_status_toggle_and_alphabetical_sorting`) เพื่อไม่ให้ `pytest` ยิงจริงไปยัง Production Spoke (`irm.windowasia.com` ฯลฯ) จนเกิด `ip_forbidden`

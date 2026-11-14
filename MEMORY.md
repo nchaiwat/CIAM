@@ -1855,4 +1855,16 @@ FRONTEND_URL=http://localhost:3000
   - ระบบลูกทุกตัว (IRM, APEX, QOL, WaLink) ต้องอ่าน Header ตามลำดับ `x-ciam-origin-ip` -> `x-origin-ip` -> `x-forwarded-for` และใช้ `.split(',')[0].trim()` เสมอเพื่อไม่ให้เกิดค่าซ้อนเช่น `"58.8.185.18, 172.18.0.2"`, บันทึก `157.173.219.153` เป็น IP หลักสำหรับธุรกรรม CIAM SSO/M2M และเก็บ IP เบราว์เซอร์จริงไว้ใน `details` (`browser_ip` / `client_ip`)
   - ชื่อ Service ใน `D:\Python\IRM\docker-compose.yml` คือ `irm-backend` และ `irm-frontend` และใน `D:\Python\APEX\docker-compose.yml` คือ `apex-app` (ส่วน CIAM ใช้ `api` และ `web`)
 
+---
+
+## 33. APEX CIAM SSO Identity Resolution (`Chaiwat.N`), Logout Redirect & `/oauth2/*` Rewrites (Sprint 63)
+
+* **APEX (`D:\Python\APEX`, branch `Sec1`):**
+  - `app/src/security/ciam.js`: เพิ่ม `clearApexSessionCookie` ล้างคุกกี้/เซสชันเก่าก่อนเริ่ม SSO และก่อนสร้างเซสชัน SSO ใหม่, แก้ OIDC endpoints เป็น `/oauth/authorize`, `/api/v1/oauth/token`, `/api/v1/oauth/userinfo`, Mount callback ทั้ง `/api/auth/sso/callback` และ `/auth/callback`, รองรับ Direct Portal Launch (`state=ciam_launch_*`), เพิ่ม JIT Auto-Provisioning (`DIR-PROVISION`) โดยไม่ Fallback กลับไป `U01` (`u01@windowasia.co.th`), และ Redirect `POST/GET /api/auth/sso/logout` กลับไป `https://ciam.windowasia.com/portal`
+  - `app/index.js`: เพิ่ม `forwardOAuthParamsToCallback` ก่อน `express.static(publicDir)` และใน `app.get('*')` เพื่อกันเบราว์เซอร์ค้างหน้า SPA เดิมเมื่อ Redirect มาพร้อม `?code=...&state=...`
+  - `app/public/js/ciam-admin-panel.js` & `app/public/sw.js`: แก้ปุ่ม Logout (`#btnTopLogout`) ให้นำทางไปยัง `out.redirect_uri` (CIAM Portal) แทนการรีโหลดหน้า Login ของ APEX และอัปเดต Service Worker เป็น `apex-pwa-v2` (ไม่แคช `?code=`)
+* **Central-IAM (`d:\Python\Central-IAM`):**
+  - `frontend/next.config.ts`: เพิ่ม Next.js Rewrites รองรับ `/oauth2/authorize`, `/oauth2/logout`, `/oauth2/token`, `/oauth2/userinfo` สำหรับ Spoke ที่เรียก Path รูปแบบ `/oauth2/*` ให้แมปเข้า `/oauth/*` และ `${backendUrl}/api/v1/oauth/*` โดยอัตโนมัติ
+
+
 
