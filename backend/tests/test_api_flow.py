@@ -606,31 +606,48 @@ def test_granular_spoke_status_toggle_and_alphabetical_sorting():
     mapping_id = target_app["mapping_id"]
     initial_status = target_app["is_active_in_app"]
 
-    # 3. Toggle status to the opposite
-    toggle_res = client.patch(
-        f"/api/v1/directory/accounts/{mapping_id}/status",
-        headers=headers,
-        json={"is_active": not initial_status, "reason": "Test granular deprovisioning"}
-    )
-    assert toggle_res.status_code == 200
-    toggle_data = toggle_res.json()
-    assert toggle_data["status"] == "SUCCESS"
-    assert toggle_data["details"]["is_active_in_app"] == (not initial_status)
+    # 3. Toggle status to the opposite (mocked to avoid calling real Spoke HTTP endpoints)
+    from unittest.mock import patch, AsyncMock
+    from app.connectors.base import ConnectorResult
 
-    # 4. Re-fetch user and verify updated status
-    refreshed_res = client.get(f"/api/v1/directory/users/{target_user['id']}", headers=headers)
-    assert refreshed_res.status_code == 200
-    refreshed_user = refreshed_res.json()["user"]
-    refreshed_app = next(a for a in refreshed_user["connected_apps"] if a["mapping_id"] == mapping_id)
-    assert refreshed_app["is_active_in_app"] == (not initial_status)
-
-    # 5. Restore original status
-    restore_res = client.patch(
-        f"/api/v1/directory/accounts/{mapping_id}/status",
-        headers=headers,
-        json={"is_active": initial_status, "reason": "Restore original status"}
+    mock_result = ConnectorResult(
+        success=True,
+        status_code=200,
+        execution_mode="MOCKED",
+        message="Mocked spoke status update",
+        execution_time_ms=1,
+        details={"mocked": True},
     )
-    assert restore_res.status_code == 200
+    with patch(
+        "app.connectors.rest_api.RestApiConnector.set_account_status",
+        new_callable=AsyncMock,
+        return_value=mock_result,
+    ) as mock_set_status:
+        toggle_res = client.patch(
+            f"/api/v1/directory/accounts/{mapping_id}/status",
+            headers=headers,
+            json={"is_active": not initial_status, "reason": "Test granular deprovisioning"}
+        )
+        assert toggle_res.status_code == 200
+        toggle_data = toggle_res.json()
+        assert toggle_data["status"] == "SUCCESS"
+        assert toggle_data["details"]["is_active_in_app"] == (not initial_status)
+
+        # 4. Re-fetch user and verify updated status
+        refreshed_res = client.get(f"/api/v1/directory/users/{target_user['id']}", headers=headers)
+        assert refreshed_res.status_code == 200
+        refreshed_user = refreshed_res.json()["user"]
+        refreshed_app = next(a for a in refreshed_user["connected_apps"] if a["mapping_id"] == mapping_id)
+        assert refreshed_app["is_active_in_app"] == (not initial_status)
+
+        # 5. Restore original status
+        restore_res = client.patch(
+            f"/api/v1/directory/accounts/{mapping_id}/status",
+            headers=headers,
+            json={"is_active": initial_status, "reason": "Restore original status"}
+        )
+        assert restore_res.status_code == 200
+        assert mock_set_status.call_count == 2
 
 def test_ad_account_status_preservation_and_auto_heal():
     from app.core.database import SessionLocal

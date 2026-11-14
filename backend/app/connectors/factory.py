@@ -8,7 +8,22 @@ from app.connectors.ad_proxy import AdProxyConnector, get_ad_gateway_candidates
 from app.connectors.rpa.mock_legacy import MockLegacyErpRpaAdapter
 from app.connectors.m365_graph import M365GraphConnector
 from app.connectors.sso_only import SsoOnlyConnector
+import ipaddress
+
 from app.core.config import settings
+
+
+def _resolve_origin_ip(candidate: str | None) -> str:
+    """Return candidate only if it is a valid IPv4/IPv6 address, otherwise CIAM's server origin IP."""
+    default_ip = getattr(settings, "AD_ORIGIN_IP", "157.173.219.153") or "157.173.219.153"
+    cleaned = (candidate or "").strip()
+    if not cleaned:
+        return default_ip
+    try:
+        ipaddress.ip_address(cleaned)
+        return cleaned
+    except ValueError:
+        return default_ip
 
 def get_connector_for_app(app: ConnectedApplication) -> BaseConnector:
     """Instantiate appropriate connector based on application connector_type and code."""
@@ -69,6 +84,6 @@ def get_connector_for_app(app: ConnectedApplication) -> BaseConnector:
             app_code=app.app_code,
             base_url=app.base_url or "",
             api_key=app.api_key or "",
-            origin_ip=app.sap_company_db or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153")
+            origin_ip=_resolve_origin_ip(app.sap_company_db)
         )
 

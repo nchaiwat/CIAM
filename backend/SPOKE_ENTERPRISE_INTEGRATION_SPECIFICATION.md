@@ -356,10 +356,11 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
      * `iss` ต้องตรงกับ `ciam_base_url`
      * `aud` ต้องตรงกับ `client_id` ของตนเอง
      * `exp` ต้องยังไม่หมดอายุ
+     * `ciam_origin_ip` (`"157.173.219.153"` — และส่งซ้ำใน HTTP Response Header `X-CIAM-Origin-IP` ของ `/token` และ `/userinfo`)
   4. **User Resolution & Auto-Provisioning:**
      * ค้นหาผู้ใช้จากตาราง `users` ด้วย `username` หรือ `email`
      * หากยังไม่เคยมีบัญชีในระบบลูก ให้สร้างบัญชีใหม่ทันที โดยผูกกับกลุ่มสิทธิ์ตามค่า `ciam_auto_provision_group` ใน System Settings และตั้งสถานะ `is_active = true`
-  5. บันทึก `transaction_logs` หมวด `ciam_sso`
+  5. บันทึก `transaction_logs` หมวด `ciam_sso` โดยใช้ `ciam_origin_ip` (`157.173.219.153`) เป็น IP หลักของธุรกรรม SSO และบันทึก IP เบราว์เซอร์ของพนักงานไว้ใน `details.browser_ip` / `details.client_ip` (ทุกจุดที่อ่าน IP จาก `X-Forwarded-For` ต้องใช้ `.split(',')[0].trim()` เสมอ เพื่อไม่ให้เกิดค่าซ้อนเช่น `"58.8.185.18, 172.18.0.2"`)
   6. ออก Session Token (JWT) ประจำระบบลูก และตอบกลับให้เบราว์เซอร์
 
 **Request Body:**
@@ -415,7 +416,7 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 > [!IMPORTANT]
 > **ความปลอดภัยระดับองค์กร (Enterprise Security Constraints สำหรับ Mode A):**
-> 1. **IP Whitelist:** ไฟร์วอลล์และ Reverse Proxy ของระบบลูกต้องอนุญาตเฉพาะ IP VPS ของ Central IAM: **`157.173.219.153`** (ระบบ CIAM จะแนบ Header `X-Forwarded-For: 157.173.219.153` มาด้วยเสมอ)
+> 1. **IP Whitelist & Origin Headers:** ไฟร์วอลล์และ Reverse Proxy ของระบบลูกต้องอนุญาต IP VPS ของ Central IAM: **`157.173.219.153`** โดยระบบ CIAM จะแนบ **`X-CIAM-Origin-IP: 157.173.219.153`**, **`X-Origin-IP: 157.173.219.153`** และ `X-Forwarded-For: 157.173.219.153` มาด้วยเสมอ ระบบลูกควรอ่าน Header ตามลำดับ `x-ciam-origin-ip` → `x-origin-ip` → `x-forwarded-for` และสกัด IP แรกด้วย `.split(',')[0].trim()` เสมอ (เพื่อป้องกัน Nginx/Docker Reverse Proxy เขียนทับหรือต่อท้าย Proxy Hop ลงใน `X-Forwarded-For`)
 > 2. **Authentication Header:** ทุก Endpoint ในหมวด C ต้องส่ง HTTP Header: **`X-Management-API-Key: <SPOKE_API_KEY>`** (นำมาจากปุ่ม `🔑 M2M Key` ในหน้าทะเบียนระบบลูกของ Central IAM)
 > 3. **Timestamp Verification:** CIAM จะส่ง `X-Request-Timestamp` เพื่อตรวจสอบและป้องกัน Replay Attacks
 > 4. **Idempotent:** ทุก Endpoint ต้องรองรับการเรียกซ้ำได้โดยไม่เกิด Error ซ้ำซ้อน (Idempotent Execution)
@@ -1297,10 +1298,14 @@ def verify_ciam_management_access(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing X-Management-API-Key header.",
         )
-    # 2. ตรวจสอบ IP Whitelist (ถ้าต้องการจำกัดระดับ Network)
-    client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
-    if "," in client_ip:
-        client_ip = client_ip.split(",")[0].strip()
+    # 2. ตรวจสอบ IP Whitelist (อ่าน X-CIAM-Origin-IP ก่อน X-Forwarded-For เพื่อไม่ให้ Reverse Proxy เขียนทับ)
+    raw_ip = (
+        request.headers.get("x-ciam-origin-ip")
+        or request.headers.get("x-origin-ip")
+        or request.headers.get("x-forwarded-for")
+        or (request.client.host if request.client else "unknown")
+    )
+    client_ip = raw_ip.split(",")[0].strip() if raw_ip else "unknown"
     # ใน Local/Dev ให้ยกเว้น localhost
     if client_ip not in [ALLOWED_CIAM_IP, "127.0.0.1", "localhost", "::1"]:
         # raise HTTPException(status_code=403, detail=f"IP {client_ip} not allowed")
@@ -1384,12 +1389,28 @@ const router = express.Router();
 const EXPECTED_M2M_KEY = process.env.CIAM_M2M_KEY || "sec_your_app_mgmt_key_here";
 const ALLOWED_CIAM_IP = "157.173.219.153";
 
-// Middleware ตรวจสอบความปลอดภัย
+// Middleware ตรวจสอบความปลอดภัย (API Key + X-CIAM-Origin-IP)
+function extractCiamOriginIp(req) {
+  return (
+    (req.headers['x-ciam-origin-ip'] || '').split(',')[0].trim() ||
+    (req.headers['x-origin-ip'] || '').split(',')[0].trim() ||
+    (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+    (req.socket?.remoteAddress || '').replace(/^::ffff:/, '') ||
+    'unknown'
+  );
+}
+
 function verifyCiamManagementAccess(req, res, next) {
   const apiKey = req.headers['x-management-api-key'];
   if (!apiKey || apiKey !== EXPECTED_M2M_KEY) {
     return res.status(401).json({ status: "FAILED", message: "Invalid or missing X-Management-API-Key" });
   }
+  const clientIp = extractCiamOriginIp(req);
+  const whitelist = new Set([ALLOWED_CIAM_IP, "127.0.0.1", "localhost", "::1", "172.18.0.1"]);
+  if (!whitelist.has(clientIp)) {
+    return res.status(403).json({ status: "FAILED", message: `IP ${clientIp} not allowed` });
+  }
+  req.ciamOriginIp = clientIp;
   next();
 }
 

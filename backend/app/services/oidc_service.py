@@ -431,6 +431,8 @@ def exchange_authorization_code(
         employee_id = "ADMIN-01"
         roles = {"admin": "SUPER_ADMIN"}
 
+    ciam_origin_ip = getattr(settings, "AD_ORIGIN_IP", "157.173.219.153") or "157.173.219.153"
+
     # Construct RS256 ID Token (OIDC Standard Claims)
     id_token_payload = {
         "iss": issuer_url.rstrip("/"),
@@ -445,7 +447,8 @@ def exchange_authorization_code(
         "email": email,
         "department": department,
         "employee_id": employee_id,
-        "roles": roles
+        "roles": roles,
+        "ciam_origin_ip": ciam_origin_ip
     }
 
     # Strict OIDC Nonce: echo client nonce or generate deterministic fallback
@@ -463,7 +466,8 @@ def exchange_authorization_code(
         "client_id": auth_code.client_id,
         "scope": auth_code.scope,
         "exp": exp_ts,
-        "iat": now_ts
+        "iat": now_ts,
+        "ciam_origin_ip": ciam_origin_ip
     }
     access_token = sign_rs256_token(access_token_payload)
 
@@ -472,7 +476,8 @@ def exchange_authorization_code(
         "token_type": "Bearer",
         "expires_in": token_ttl_seconds,
         "id_token": id_token,
-        "scope": auth_code.scope
+        "scope": auth_code.scope,
+        "ciam_origin_ip": ciam_origin_ip
     }
 
 
@@ -493,6 +498,8 @@ def get_user_info_from_token(db: Session, token: str) -> Dict[str, Any]:
             detail="Token missing subject claim"
         )
 
+    ciam_origin_ip = getattr(settings, "AD_ORIGIN_IP", "157.173.219.153") or "157.173.219.153"
+
     identity = db.query(MasterIdentity).filter(MasterIdentity.username == username).first()
     if identity:
         roles = {}
@@ -509,7 +516,8 @@ def get_user_info_from_token(db: Session, token: str) -> Dict[str, Any]:
             "department": identity.department,
             "employee_id": identity.employee_id,
             "roles": roles,
-            "groups": list(roles.values())
+            "groups": list(roles.values()),
+            "ciam_origin_ip": ciam_origin_ip
         }
 
     admin = db.query(AdminUser).filter(AdminUser.username == username).first()
@@ -524,7 +532,8 @@ def get_user_info_from_token(db: Session, token: str) -> Dict[str, Any]:
             "department": "IT Security",
             "employee_id": "ADMIN-01",
             "roles": {"admin": admin.role},
-            "groups": [admin.role]
+            "groups": [admin.role],
+            "ciam_origin_ip": ciam_origin_ip
         }
 
     raise HTTPException(

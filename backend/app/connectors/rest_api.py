@@ -22,6 +22,8 @@ class RestApiConnector(BaseConnector):
             "Content-Type": "application/json",
             "X-Management-API-Key": self.api_key,
             "X-Request-Timestamp": str(int(datetime.now(timezone.utc).timestamp())),
+            "X-CIAM-Origin-IP": self.origin_ip,
+            "X-Origin-IP": self.origin_ip,
             "X-Forwarded-For": self.origin_ip,
             "x-forwarded-for": self.origin_ip,
         }
@@ -233,7 +235,11 @@ class RestApiConnector(BaseConnector):
         """Probe spoke's public SSO config endpoint, falling back to /api/auth/session if needed."""
         for path in ("/api/auth/sso/config", "/api/auth/session"):
             try:
-                sso_cfg_res = await client.get(f"{self.base_url}{path}", timeout=4.0)
+                sso_cfg_res = await client.get(
+                    f"{self.base_url}{path}",
+                    headers=self._get_headers(),
+                    timeout=4.0,
+                )
                 if sso_cfg_res.status_code == 200:
                     sso_data = sso_cfg_res.json()
                     if isinstance(sso_data, dict):

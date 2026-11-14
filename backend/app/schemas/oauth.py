@@ -50,6 +50,7 @@ class OIDCTokenResponse(BaseModel):
     expires_in: int = 3600
     id_token: str
     scope: str = "openid profile email"
+    ciam_origin_ip: Optional[str] = "157.173.219.153"
 
 
 class OIDCUserInfo(BaseModel):
@@ -61,6 +62,7 @@ class OIDCUserInfo(BaseModel):
     employee_id: Optional[str] = None
     roles: Dict[str, str] = {}
     groups: List[str] = []
+    ciam_origin_ip: Optional[str] = "157.173.219.153"
 
 
 class OpenIDConfigurationResponse(BaseModel):

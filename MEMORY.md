@@ -1842,4 +1842,17 @@ FRONTEND_URL=http://localhost:3000
 * **Spoke SSO Status Probe & Whitelist IP:**
   - `RestApiConnector._probe_spoke_sso` (`connectors/rest_api.py`) ตรวจ `/api/auth/sso/config` พร้อม Fallback `/api/auth/session` ไม่ตีความ M2M Ping ล้มเหลวเป็น `DISABLED` และเปลี่ยน Hardcoded IP `58.8.188.214` เป็น `157.173.219.153` ใน `frontend/src/app/applications/page.tsx`
 
+---
+
+## 32. CIAM Origin IP (`157.173.219.153`) Enforcement & Pytest Spoke Network Isolation (Sprint 62)
+
+* **Pytest Spoke Isolation (`backend/tests/conftest.py`, `test_api_flow.py`):**
+  - เพิ่ม `autouse` fixture `_block_external_spoke_network_calls` สกัดกั้น `RestApiConnector.set_account_status`, `provision_account`, `sync_inventory`, และ `health_check` เมื่อ `base_url` เป็น `http://` หรือ `https://` เพื่อป้องกันการยิง HTTP จริงจาก IP เครื่อง Dev (`58.8.185.18`) ไปยัง Production Spoke ระหว่างรันชุดทดสอบ
+* **Non-Overwritable Origin Headers & OIDC Claim (`rest_api.py`, `factory.py`, `oidc_service.py`, `oauth.py`, `schemas/oauth.py`):**
+  - Reverse Proxy (Nginx/Traefik) มักเขียนทับ `X-Forwarded-For` ด้วย Peer IP ดังนั้น CIAM จึงส่ง `X-CIAM-Origin-IP: 157.173.219.153` และ `X-Origin-IP: 157.173.219.153` ใน M2M Connector (รวมถึง `_probe_spoke_sso`), ฝัง Claim `ciam_origin_ip` ลง `id_token` / `access_token` / `/oauth/token` / `/oauth/userinfo` และแนบ Header `X-CIAM-Origin-IP` ด้วย
+  - `factory.py` ใช้ `_resolve_origin_ip` ตรวจสอบ `ipaddress.ip_address` ก่อนใช้ค่าจาก `sap_company_db`
+* **Spoke IP Parsing & Service Names Rule:**
+  - ระบบลูกทุกตัว (IRM, APEX, QOL, WaLink) ต้องอ่าน Header ตามลำดับ `x-ciam-origin-ip` -> `x-origin-ip` -> `x-forwarded-for` และใช้ `.split(',')[0].trim()` เสมอเพื่อไม่ให้เกิดค่าซ้อนเช่น `"58.8.185.18, 172.18.0.2"`, บันทึก `157.173.219.153` เป็น IP หลักสำหรับธุรกรรม CIAM SSO/M2M และเก็บ IP เบราว์เซอร์จริงไว้ใน `details` (`browser_ip` / `client_ip`)
+  - ชื่อ Service ใน `D:\Python\IRM\docker-compose.yml` คือ `irm-backend` และ `irm-frontend` และใน `D:\Python\APEX\docker-compose.yml` คือ `apex-app` (ส่วน CIAM ใช้ `api` และ `web`)
+
 

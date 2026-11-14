@@ -154,3 +154,118 @@ def test_spoke_sdk_authenticate_with_fallback(monkeypatch):
     res_bg = client.authenticate_with_fallback("admin", "ad_pass_123", force_break_glass=True)
     assert res_bg["auth_mode"] == "BREAK_GLASS_AD_FALLBACK"
     assert res_bg["success"] is True
+
+
+def test_rest_connector_sends_ciam_origin_ip_headers():
+    """RestApiConnector must always emit CIAM Origin IP headers and factory must reject non-IP overrides."""
+    from types import SimpleNamespace
+    from app.connectors.factory import get_connector_for_app
+    from app.connectors.rest_api import RestApiConnector
+
+    connector = RestApiConnector(
+        app_code="irm",
+        base_url="https://irm.windowasia.com",
+        api_key="sec_test_key",
+    )
+    headers = connector._get_headers()
+    assert headers["X-CIAM-Origin-IP"] == "157.173.219.153"
+    assert headers["X-Origin-IP"] == "157.173.219.153"
+    assert headers["X-Forwarded-For"] == "157.173.219.153"
+    assert headers["x-forwarded-for"] == "157.173.219.153"
+
+    # Non-IP values in sap_company_db must never corrupt origin_ip
+    dummy_app = SimpleNamespace(
+        app_code="apex",
+        connector_type="REST_API",
+        base_url="https://apex.windowasia.com",
+        api_key="sec_apex_key",
+        sap_company_db="WA_PROD_INVALID_IP",
+        client_id=None,
+        client_secret=None,
+    )
+    built = get_connector_for_app(dummy_app)
+    assert isinstance(built, RestApiConnector)
+    assert built.origin_ip == "157.173.219.153"
+
+
+def test_probe_spoke_sso_sends_ciam_origin_ip_headers():
+    """_probe_spoke_sso must include X-CIAM-Origin-IP, X-Origin-IP, and X-Forwarded-For headers."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+    from app.connectors.rest_api import RestApiConnector
+
+    connector = RestApiConnector(
+        app_code="irm",
+        base_url="https://irm.windowasia.com",
+        api_key="sec_test_key",
+    )
+    mock_res = MagicMock()
+    mock_res.status_code = 200
+    mock_res.json.return_value = {"sso_enabled": True}
+
+    mock_client = MagicMock()
+    mock_client.get = AsyncMock(return_value=mock_res)
+
+    result = asyncio.run(connector._probe_spoke_sso(mock_client))
+    assert result is True
+    assert mock_client.get.call_count == 1
+    _, kwargs = mock_client.get.call_args
+    sent_headers = kwargs["headers"]
+    assert sent_headers["X-CIAM-Origin-IP"] == "157.173.219.153"
+    assert sent_headers["X-Origin-IP"] == "157.173.219.153"
+    assert sent_headers["X-Forwarded-For"] == "157.173.219.153"
+
+
+def test_oidc_token_and_userinfo_include_ciam_origin_ip():
+    """OIDC ID Token, /token JSON, /userinfo JSON, and HTTP response headers must carry ciam_origin_ip."""
+    sso_client = CiamSsoClient(
+        ciam_base_url="http://127.0.0.1:8001",
+        client_id="irm-spoke-client",
+        client_secret="sec_irm_oauth_secret_2026",
+        http_client=test_client,
+    )
+    code_verifier, code_challenge = sso_client.generate_pkce()
+    redirect_uri = "http://localhost:3000/portal/callback"
+
+    auth_resp = test_client.post(
+        "/api/v1/oauth/authorize",
+        json={
+            "username": "admin",
+            "password": "admin123",
+            "client_id": "irm-spoke-client",
+            "redirect_uri": redirect_uri,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+            "state": "origin_ip_state_1",
+        },
+    )
+    assert auth_resp.status_code == 200
+    code = auth_resp.json()["code"]
+
+    token_resp = test_client.post(
+        "/api/v1/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "client_id": "irm-spoke-client",
+            "client_secret": "sec_irm_oauth_secret_2026",
+            "code_verifier": code_verifier,
+        },
+    )
+    assert token_resp.status_code == 200
+    assert token_resp.headers.get("X-CIAM-Origin-IP") == "157.173.219.153"
+    token_data = token_resp.json()
+    assert token_data["ciam_origin_ip"] == "157.173.219.153"
+
+    claims = sso_client.verify_id_token(token_data["id_token"])
+    assert claims["ciam_origin_ip"] == "157.173.219.153"
+
+    userinfo_resp = test_client.get(
+        "/api/v1/oauth/userinfo",
+        headers={"Authorization": f"Bearer {token_data['access_token']}"},
+    )
+    assert userinfo_resp.status_code == 200
+    assert userinfo_resp.headers.get("X-CIAM-Origin-IP") == "157.173.219.153"
+    userinfo_data = userinfo_resp.json()
+    assert userinfo_data["ciam_origin_ip"] == "157.173.219.153"

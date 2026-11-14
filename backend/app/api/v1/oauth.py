@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.oauth import (
     AuthorizeParams,
@@ -251,6 +252,7 @@ def authorize_seamless(
 @router.post("/token", response_model=OIDCTokenResponse)
 async def token_endpoint(
     request: Request,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
@@ -308,12 +310,17 @@ async def token_endpoint(
         issuer_url=base_url
     )
 
+    response.headers["X-CIAM-Origin-IP"] = tokens.get(
+        "ciam_origin_ip",
+        getattr(settings, "AD_ORIGIN_IP", "157.173.219.153") or "157.173.219.153"
+    )
     return OIDCTokenResponse(**tokens)
 
 
 @router.get("/userinfo", response_model=OIDCUserInfo)
 def userinfo_endpoint(
     request: Request,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
@@ -329,6 +336,10 @@ def userinfo_endpoint(
 
     token = auth_header.split(" ", 1)[1].strip()
     user_info = get_user_info_from_token(db=db, token=token)
+    response.headers["X-CIAM-Origin-IP"] = user_info.get(
+        "ciam_origin_ip",
+        getattr(settings, "AD_ORIGIN_IP", "157.173.219.153") or "157.173.219.153"
+    )
     return OIDCUserInfo(**user_info)
 
 

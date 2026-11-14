@@ -1,13 +1,13 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 14 พฤศจิกายน 2026 (Local Time: ~13:52 ICT)  
+> **Date Updated:** 14 พฤศจิกายน 2026 (Local Time: ~16:00 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 98/98 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
-> **Git Status:** Production Ready — Latest Commit on `origin/main`: `b2bb697` (Sprint 61: Redundant AD Cluster, Portal Drag-Drop & Dark/Light Mode, Zero-System Orphan Cleanup, Spoke SSO Probe Fallback & Whitelist IP `157.173.219.153`)
+> **Test Integrity:** Backend Pytest: 101/101 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%)  
+> **Git Status:** Production Ready — Sprint 62 Complete (CIAM Origin IP `157.173.219.153` Enforcement, `X-CIAM-Origin-IP` / `ciam_origin_ip` Propagation & Pytest Spoke Network Isolation; built on `b2bb697` / `aa554a8`)
 
 ---
 
@@ -15,7 +15,20 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
-0. **Redundant AD Gateway Cluster, Portal Personalization, Zero-System Orphan Cleanup & APEX SSO Probe Fix (Sprint 61):**
+0. **CIAM Origin IP (`157.173.219.153`) End-to-End Enforcement & Pytest Network Isolation (Sprint 62):**
+   - **Test Isolation (อุดรอยรั่ว `58.8.185.18` จากเครื่อง Dev ระหว่างรัน `pytest`):**
+     - เพิ่ม `autouse` fixture `_block_external_spoke_network_calls` ใน [`backend/tests/conftest.py`](file:///d:/Python/Central-IAM/backend/tests/conftest.py) เพื่อดักจับเมธอดของ `RestApiConnector` (`set_account_status`, `provision_account`, `sync_inventory`, `health_check`) เมื่อ `base_url` เป็น `http://` หรือ `https://` และ Mock `set_account_status` ใน [`backend/tests/test_api_flow.py`](file:///d:/Python/Central-IAM/backend/tests/test_api_flow.py) (`test_granular_spoke_status_toggle_and_alphabetical_sorting`) เพื่อไม่ให้ `pytest` ยิงจริงไปยัง Production Spoke (`irm.windowasia.com` ฯลฯ) จนเกิด `ip_forbidden`
+   - **M2M Connector Headers & IP Validation (`RestApiConnector` & `factory.py`):**
+     - เพิ่ม Header `X-CIAM-Origin-IP: 157.173.219.153` และ `X-Origin-IP: 157.173.219.153` ควบคู่กับ `X-Forwarded-For` ใน [`backend/app/connectors/rest_api.py`](file:///d:/Python/Central-IAM/backend/app/connectors/rest_api.py) (`_get_headers`) และส่ง `headers=self._get_headers()` ใน `_probe_spoke_sso` ด้วย
+     - เพิ่มตัวช่วย `_resolve_origin_ip` ใน [`backend/app/connectors/factory.py`](file:///d:/Python/Central-IAM/backend/app/connectors/factory.py) เพื่อกันไม่ให้ค่าที่ไม่ใช่ IP ใน `sap_company_db` ทับ `157.173.219.153`
+   - **OIDC Claim & HTTP Header Propagation:**
+     - เพิ่มฟิลด์ `ciam_origin_ip` (`"157.173.219.153"`) ใน `id_token`, `access_token`, `OIDCTokenResponse` และ `OIDCUserInfo` (`backend/app/schemas/oauth.py`, `backend/app/services/oidc_service.py`) พร้อม Response Header `X-CIAM-Origin-IP` บน `/oauth/token` และ `/oauth/userinfo` (`backend/app/api/v1/oauth.py`) และเพิ่ม Unit Test ยืนยันใน `backend/tests/test_spoke_sso_integration.py`
+   - **Spoke Audit Trail & Whitelist Alignment (IRM, APEX, Specification v2.12.0):**
+     - **IRM (`D:\Python\IRM`):** ปรับ `central_management.py`, `sso.py`, `init_db.py` ให้อ่าน `x-ciam-origin-ip` -> `x-origin-ip` -> `x-forwarded-for` (`.split(",")[0].strip()`), อนุญาต `157.173.219.153` เสมอ, และบันทึก `ip: ciam_origin_ip` ใน Log SSO พร้อมเก็บ `browser_ip` ไว้ใน `details`
+     - **APEX (`D:\Python\APEX`):** ปรับ `app/src/security/ciam.js` เพิ่ม `getCiamOriginIp(req)`, อนุญาต `157.173.219.153` และ `172.18.0.1` เสมอ, และบันทึก `ipAddress: '157.173.219.153'` พร้อมเก็บ `client_ip` ไว้ใน `details` สำหรับธุรกรรม SSO และ Group C M2M
+     - **Spec Integration (`SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` & `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`):** อัปเดตข้อกำหนด `X-CIAM-Origin-IP`, `ciam_origin_ip`, และกฎ `.split(',')[0].trim()` (แก้ปัญหา Header ซ้อนเช่น `"58.8.185.18, 172.18.0.2"` ในระบบลูกอย่าง QOL)
+
+1. **Redundant AD Gateway Cluster, Portal Personalization, Zero-System Orphan Cleanup & APEX SSO Probe Fix (Sprint 61):**
    - **Zero-System Orphan Identity Prevention & Cleanup (`Thanasit.C` Fix):**
      - ปรับ `directory.py` (`list_users`) ให้ไม่แสดงบัญชีที่ไม่มีระบบใดเชื่อมโยง (`not effective_ad_active`, `len(app_summaries) == 0`, `not is_approved_exception`) เพื่อรับประกันว่าบัญชีใน Directory ต้องสังกัดอย่างน้อย 1 ระบบ (แม้ถูก Disable แล้วก็ตาม)
      - เพิ่ม `cleanup_orphan_identities(db)` ใน `scheduler.py` + เรียกตอน Startup (`initial_data.py`), ล้าง Orphan ทันทีเมื่อ Direct Infra ลบ Stale Mapping และบันทึก `ad_guid` ใน `ad_proxy.py` / `scheduler.py`
@@ -1838,10 +1851,26 @@ docker compose up -d api web
   ```
 
 ### กรณี Deploy ฝั่ง IRM (Hostinger VPS: `/var/www/Irm`):
-- เมื่อมีการอัปเดตระบบลูก IRM:
+- เมื่อมีการอัปเดต Backend ของระบบลูก IRM:
   ```bash
   cd /var/www/Irm
   git pull
-  docker compose build frontend
-  docker compose up -d frontend
+  docker compose build irm-backend
+  docker compose up -d irm-backend
+  ```
+- เมื่อมีการอัปเดต Frontend ของระบบลูก IRM:
+  ```bash
+  cd /var/www/Irm
+  git pull
+  docker compose build irm-frontend
+  docker compose up -d irm-frontend
+  ```
+
+### กรณี Deploy ฝั่ง APEX (Hostinger VPS: `/var/www/Apex`):
+- เมื่อมีการ Merge PR จาก `Sec1` เข้า `main` และต้องการ Deploy ระบบลูก APEX:
+  ```bash
+  cd /var/www/Apex
+  git pull
+  docker compose build apex-app
+  docker compose up -d apex-app
   ```
