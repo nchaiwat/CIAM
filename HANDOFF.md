@@ -1,13 +1,15 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 14 พฤศจิกายน 2026 (Local Time: ~18:50 ICT)  
+> **Date Updated:** 14 พฤศจิกายน 2026 (Local Time: 21:21 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
+> **Repository (APEX):** [https://github.com/ITWA-PCL/apex](https://github.com/ITWA-PCL/apex)  
 > **Workspace Local:** `D:\Python\Central-IAM` และ `D:\Python\IRM` และ `D:\Python\APEX`  
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 101/101 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%), APEX `node scripts/verify-local.js`: 10/10 passed  
-> **Git Status:** Production Ready — Sprint 63 Complete (APEX CIAM SSO Identity Resolution `Chaiwat.N`, Portal Direct Launch & Logout Redirect + CIAM `/oauth2/*` Compatibility Rewrites; built on `051a7ac` / `393efef`)
+> **Production VPS (APEX):** `/var/www/Apex` (Hostinger VPS)  
+> **Test Integrity:** Backend Pytest: 101/101 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
+> **Git Status:** Production Ready — Sprints 62–63 Complete (`a10638c` on Central-IAM `origin/main`, `8477d45` on APEX `origin/Sec1`; ready for VPS Deployment & Live Verification)
 
 ---
 
@@ -334,32 +336,27 @@
 ---
 
 ### 0.2 รายการ Git Commits ล่าสุดและแผนงานสำหรับการพัฒนาต่อในรอบหน้า (Next Session Roadmap)
-- **Git Commits ล่าสุดบน `origin/main`:**
-  - `0e681cb`: `feat(directory): default sort by employee name with genuine identity priority` (Sprint 57)
-  - `3125bf5`: `fix(identity): unify Natcha.S & Nattcha.S (Samrongsap) and separate from Natcha.R (Ratsameeruengdet)` (Sprint 56)
-  - `f285c45`: `feat(directory): real-time debounced search, resilient keyword matching and ghost-filter unblock` (Sprint 55)
-  - `bdd1f8e`: `feat(governance): direct infra isolation, timestamp reconciliation and ciam authority lock standard v2.11.0` (Sprint 54)
-  - `aa9aae3`: `feat(bot-defense): enterprise in-app 3-layer bot defense and spoke framework specification v2.10.0` (Sprint 53)
-  - `02fbe2a`: `feat(sap-monitor): real-time sap b1 downtime monitoring with configurable 5m interval and telegram alerts` (Sprint 52)
-  - `6788f19`: `fix(daily-digest): isolate scheduled date, decouple scheduler worker and add activity log filter` (Sprint 51.3)
-  - `2626ab8`: `docs(handoff): record complete Sprint 51 Daily Email Digest and bugfix history`
-  - `86fb843`: `fix(directory): resolve Hermes.N AD status discrepancy and add local account auto-heal` (Sprint 50)
-  - `0a4b0c3`: `feat(sync): implement true 2-way status sync with origin tracking and update spoke spec to v2.9.0` (Sprint 49)
-  - `e81f248`: `feat: add WA-RDT2 Remote Desktop spoke app with SAP B1 RBAC and dynamic RDP generation` (Sprint 48)
-  - `5027f34`: `feat(ai-copilot): enforce Zero-Training, DLP privacy scrubber, and No-External-Data-Use governance across CIAM and Spoke Framework` (Sprint 47)
-  - `a4688ff`: `feat(ai-copilot): enforce 100% read-only analytical parity, RBAC scoping, and Spoke Framework governance` (Sprint 47)
-  - `b23c3e9`: `fix(mcp): route /mcp and /api/v1/mcp directly to FastAPI backend so SSE returns 401 instead of 500` (Sprint 46)
-  - `db5b8c3`: `fix(auth): suppress session expired notice when user manually logs out` (Sprint 46)
-  - `b9a5ec0`: `feat(portal): pause SSO Portal 30-min idle timer while in Spoke App and return directly to /portal on App Client logout` (Sprint 46)
-  - `a0d9fb1`: `feat(session): add proactive zero-action session auto-logoff watchdog and OIDC single logout return flow` (Sprint 46)
+- **Git Commits ล่าสุดบน `origin/main` (Central-IAM):**
+  - `a10638c`: `fix(sso): add /oauth2/* compatibility rewrites and document APEX SSO fixes` (Sprint 63)
+  - `051a7ac`: `fix(security): enforce CIAM origin IP 157.173.219.153 across M2M, OIDC, and isolate pytest from live spokes` (Sprint 62)
+  - `aa554a8`: `docs(handoff): record Sprint 61 commit b2bb697 and next steps`
+  - `b2bb697`: `feat(ciam): redundant AD gateway cluster, portal drag-drop & dark mode, orphan cleanup, and spoke sso probe fallback` (Sprint 61)
+  - `de3db00` / `bfe2fa0`: Sprints 59–60 (`ck`<->`k` transliteration, 90-day local password rotation & Spoke Spec v2.12.0)
+- **Git Commits ล่าสุดบน `origin/Sec1` (APEX — `D:\Python\APEX`):**
+  - `8477d45`: `fix(sso): clear stale U01 session, resolve Chaiwat.N via CIAM OIDC/JIT, and redirect logout to CIAM Portal` (Sprint 63)
+  - `393efef`: `fix(security): log verified CIAM origin IP 157.173.219.153 on SSO/M2M events and honor X-CIAM-Origin-IP` (Sprint 62)
+  - (`main` ปัจจุบันอยู่ที่ `4a92ab1` — รอเปิด/Merge PR จาก `Sec1` เข้า `main` หรือดึง `origin/Sec1` บน `/var/www/Apex`)
 - **แนวทางเมื่อกลับมาพัฒนาต่อรอบหน้า (Pending Issues & Next Session Roadmap):**
-  1. **[ตรวจสอบ Production Deployment บน VPS]:**
-     - ดำเนินการรันคำสั่ง Deploy บน `/var/www/Ciam` (ทั้ง `web` และ `api`) เพื่อให้โค้ด Sprints 54-57 มีผลบนเซิร์ฟเวอร์จริง:
-       - No WAIT for Direct Infra (`pfSense FAC/HO`, `M365`, `SAP B1`, `AD`, `WA-RDT2`)
-       - Debounced Search 300ms + ปุ่ม `✕` และการปลดล็อก `ghostOnly` จาก `localStorage`
-       - ปรับชื่อ-นามสกุล `Natcha.S` เป็น "Natcha Samrongsap" (PD) และรวม `Nattcha.S` (SAP B1) โดยอัตโนมัติ
-       - Default Sort By Name (A-Z) จัดพนักงานจริงขึ้นก่อนบัญชีเราเตอร์ช็อป
-  2. **[สื่อสาร Spoke Specification v2.11.0 ให้ทีม Dev ระบบลูก]:**
+  1. **[Deploy & Verify บน Production VPS (`/var/www/Ciam` & `/var/www/Apex`)]:**
+     - ฝั่ง Central-IAM (`/var/www/Ciam`): Deploy ทั้ง **`api`** (จาก Sprint 62 `051a7ac`) และ **`web`** (จาก `a10638c`) ตาม Section 5
+     - ฝั่ง APEX (`/var/www/Apex`): เปิด & Merge PR `Sec1` (`8477d45`) เข้า `main` (`https://github.com/ITWA-PCL/apex/pull/new/Sec1`) หรือดึง `origin Sec1` แล้ว Build/Restart Service `apex-app`
+     - ทดสอบบนเบราว์เซอร์หลัง Deploy (กด `Ctrl + Shift + R` / Unregister Service Worker เก่า `apex-pwa-v1` ให้ใช้ `apex-pwa-v2`):
+       - เข้าจาก `https://ciam.windowasia.com/portal` -> เปิด **APEX**: ต้องเข้าสู่ระบบด้วย **`Chaiwat.N`** (ไม่ใช่ `U01` / `u01@windowasia.co.th`)
+       - กด Logout ใน APEX: ต้องเด้งกลับ **`https://ciam.windowasia.com/portal`**
+       - ตรวจ Audit Logs ของ Spoke (**IRM**, **APEX**, **QOL**) ว่าธุรกรรม M2M / SSO จาก CIAM บันทึก IP ต้นทางเป็น **`157.173.219.153`** ไม่ติด `ip_forbidden` หรือ Header ซ้อน
+  2. **[ตั้งค่า Redundant AD Gateway / VPN Channel สำรองบน `/settings`]:**
+     - เพิ่ม Channel สำรองในแผง Redundant AD Gateway Cluster เมื่อ On-Prem Server ตัวที่ 2 พร้อม
+  3. **[สื่อสาร & ซิงก์ Spoke Specification v2.12.0 ให้ทีม Dev ระบบลูก (QOL / MTPulse / ทีมภายใน)]:**
      - นำข้อกำหนดมาตรฐานใน `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` เวอร์ชัน **2.11.0** (หมวด D.7: Least Privilege Auto-Provisioning, Timestamp Reconciliation & CIAM Authority Lock Standard) ส่งต่อให้ Developer ของแต่ละระบบลูก (MTPulse, IRM, QMS, QTOnline)
      - เน้นย้ำ: หากแอดมิน CIAM กดล็อคสิทธิ์ (`is_status_locked`) ระบบลูกต้องเคารพสิทธิ์และไม่ส่งสถานะมาทับในรอบ Sync หรือ Heartbeat อีก
   3. **[Windows Domain Controller - ADUC]:**
@@ -1797,36 +1794,42 @@ docker compose up -d api web
 
 ## 4. สถานะระบบปัจจุบัน และ แผนงานที่จะปรับปรุงต่อในรอบถัดไป (Current Status & Next Steps Roadmap)
 
-> **ปรับปรุงล่าสุด:** 14 พฤศจิกายน 2026 (Local Time: ~14:00 ICT)  
-> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (Commit ล่าสุด `b2bb697` Push สู่ `origin/main` เรียบร้อยแล้ว)
+> **ปรับปรุงล่าสุด:** 14 พฤศจิกายน 2026 (Local Time: 21:21 ICT)  
+> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (`a10638c`) และ APEX `Sec1` (`8477d45`) พร้อม Deploy ขึ้น VPS และทดสอบ Live End-to-End
 
 ### 4.1 สถานะระบบที่ตรวจสอบและส่งมอบแล้ว (Verified & Production Ready)
-* **Git Commits ล่าสุดบน `origin/main`:**
+* **Git Commits ล่าสุดบน `origin/main` (Central-IAM):**
+  - `a10638c` — `fix(sso): add /oauth2/* compatibility rewrites and document APEX SSO fixes` (Sprint 63)
+  - `051a7ac` — `fix(security): enforce CIAM origin IP 157.173.219.153 across M2M, OIDC, and isolate pytest from live spokes` (Sprint 62)
+  - `aa554a8` — `docs(handoff): record Sprint 61 commit b2bb697 and next steps`
   - `b2bb697` — `feat(ciam): redundant AD gateway cluster, portal drag-drop & dark mode, orphan cleanup, and spoke sso probe fallback` (Sprint 61)
-  - `de3db00` / `bfe2fa0` — Sprints 59–60 (`ck`<->`k` transliteration, 90-day password policy & Spoke Spec v2.12.0)
+* **Git Commits ล่าสุดบน `origin/Sec1` (APEX — `D:\Python\APEX`):**
+  - `8477d45` — `fix(sso): clear stale U01 session, resolve Chaiwat.N via CIAM OIDC/JIT, and redirect logout to CIAM Portal` (Sprint 63)
+  - `393efef` — `fix(security): log verified CIAM origin IP 157.173.219.153 on SSO/M2M events and honor X-CIAM-Origin-IP` (Sprint 62)
 
-* **ผลการตรวจสอบคุณภาพและความถูกต้องล่าสุด (Sprint 61 Verification):**
-  - **Backend Test Suite (`pytest`):** ผ่านครบถ้วน **98/98 tests (100% Passed)**
-  - **Frontend Type Check:** รัน `npx tsc --noEmit` ผ่านสมบูรณ์ **0 TypeScript Errors**
-  - **FastAPI OpenAPI & Route Registration:** ตรวจพบ `/api/v1/auth/portal-preferences`, `/api/v1/applications/ad-cluster/config`, `/api/v1/applications/ad-cluster/ping` ครบถ้วน
+* **ผลการตรวจสอบคุณภาพและความถูกต้องล่าสุด (Sprint 62–63 Verification):**
+  - **Central-IAM Backend Test Suite (`pytest backend`):** ผ่านครบถ้วน **101/101 tests (100% Passed)**
+  - **Central-IAM Frontend Type Check (`npx tsc --noEmit`):** ผ่านสมบูรณ์ **0 TypeScript Errors**
+  - **APEX Pre-Push Suite (`node scripts/verify-local.js`):** ผ่านครบถ้วน **13 Syntax + 10 Security/Finance checks (0 Errors)**
+  - **APEX Isolated HTTP SSO Verification:** ผ่าน (`ALL_INLINE_SSO_CHECKS_PASSED`) ยืนยันการล้างคุกกี้ `U01`, Callback `ciam_launch_*`, JIT Auto-Provision **`Chaiwat.N`**, `/api/auth/session` แสดง `Chaiwat.N`, และ `POST/GET /api/auth/sso/logout` เด้งกลับ `https://ciam.windowasia.com/portal`
 
 ### 4.2 แผนงานและข้อสังเกตสำหรับการปรับปรุงในรอบถัดไป (Next Iteration Roadmap)
 เมื่อกลับมาทำงานต่อในรอบถัดไป ให้ดำเนินการตามลำดับความสำคัญดังต่อไปนี้:
 
-1. **Deploy Central-IAM บน Production VPS (`/var/www/Ciam`) และตรวจสอบหลัง Deploy:**
-   - รันคำสั่ง Deploy `api` และ `web` บน `/var/www/Ciam` ตาม Section 5 ด้านล่าง
-   - ตรวจสอบหน้า `/directory` ว่าไม่มีบัญชี 0 ระบบตกค้าง (`Thanasit.C` ฯลฯ ถูกล้างและคัดกรองเรียบร้อย)
-   - ทดสอบหน้า `/portal`: ลากวางเรียงลำดับการ์ด + สลับโหมด Dark / Light และยืนยันว่าการ์ด **Apex** กลับมามีสถานะพร้อมใช้งาน
-
+1. **Deploy การแก้ไขล่าสุดขึ้น Production VPS และทดสอบ Live Flow (`a10638c` / `8477d45`):**
+   - **Central-IAM (`/var/www/Ciam`):** Deploy **`api`** และ **`web`** เพื่อให้ทั้งแพตช์ Origin IP `157.173.219.153` (`051a7ac`) และ Rewrites `/oauth2/*` (`a10638c`) ทำงานบน VPS
+   - **APEX (`/var/www/Apex`):** เปิด/Merge Pull Request จาก `Sec1` (`8477d45`) เข้า `main` ที่ `https://github.com/ITWA-PCL/apex/pull/new/Sec1` (หรือดึง `origin Sec1` ชั่วคราว) แล้ว Build & Restart Service **`apex-app`** (`docker compose -p apex build apex-app` และ `docker compose -p apex up -d apex-app`)
+   - **ล้าง Service Worker เก่าฝั่งเบราว์เซอร์:** กด `Ctrl + Shift + R` หรือ Unregister `apex-pwa-v1` เพื่อให้เบราว์เซอร์โหลด `ciam-admin-panel.js` และ `apex-pwa-v2` ใหม่
+   - **ทดสอบจริงบน Production:**
+     - เข้า `https://ciam.windowasia.com/portal` -> กดเปิด **APEX** (`https://apex.windowasia.com`): ต้องแสดงชื่อผู้ใช้งานเป็น **`Chaiwat.N`** (ไม่ใช่ `U01` / `u01@windowasia.co.th`)
+     - กด Logout จาก APEX -> ต้อง Redirect กลับ **`https://ciam.windowasia.com/portal`**
+     - ตรวจสอบ Transaction/Security Logs บน **IRM**, **APEX**, และ **QOL** ว่าธุรกรรมจาก CIAM แสดง IP เป็น **`157.173.219.153`** ไม่ติด `ip_forbidden` หรือ Header ซ้อน
 2. **ตั้งค่า Redundant AD Gateway / VPN Channel สำรองบน `/settings`:**
    - เมื่อเตรียม On-Prem Server สำหรับเปิด VPN Channel ที่ 2 พร้อมแล้ว ให้เพิ่ม URL ของ Channel สำรองในแผง **Redundant AD Gateway & Multi-VPN Cluster** หน้า `/settings` แล้วกด **"ทดสอบทุกเครื่อง"** และ **"บันทึกการตั้งค่า AD Cluster"**
-
-3. **ประสานงานฝั่ง APEX (`D:\Python\APEX`):**
-   - ติดตามการ Push ไฟล์ `rbac.js`, `ciam.js`, และ `postgres.js` โดยทีม Dev ของ APEX ขึ้น Git และ Deploy ขึ้น Production (`/var/www/Apex`) เพื่อเปิดใช้งาน `GET /api/auth/sso/config` อย่างสมบูรณ์
-
+3. **ตรวจสอบหน้า `/directory` และ `/portal` หลัง Deploy:**
+   - ยืนยันหน้า `/directory` ไม่มีบัญชี 0 ระบบตกค้าง (`Thanasit.C` ฯลฯ) และทดสอบ Drag-and-Drop / Dark Mode บน `/portal`
 4. **รายการระยะยาวเดิมจาก Sprint ก่อน:**
-   - ทดสอบ Offboarding Flow & การออกใบรับรองการเพิกถอนสิทธิ์ บน `/offboarding`
-   - เตรียม Starter Template ภาษา Native PHP + MySQL สำหรับระบบ On-Premise เดิมของบริษัท
+   - เพิ่ม IRM Real-time Outbound Webhook, สำรวจ SAP B1 Web Client / Apache Guacamole, ทดสอบ Offboarding Flow & Certificate, และ Starter Template ภาษา Native PHP + MySQL สำหรับระบบ On-Premise เดิมของบริษัท
 
 ---
 
@@ -1878,10 +1881,17 @@ docker compose up -d api web
   ```
 
 ### กรณี Deploy ฝั่ง APEX (Hostinger VPS: `/var/www/Apex`):
-- เมื่อมีการ Merge PR จาก `Sec1` เข้า `main` และต้องการ Deploy ระบบลูก APEX:
+- เมื่อมีการ Merge PR จาก `Sec1` เข้า `main` แล้ว ต้องการ Deploy ระบบลูก APEX:
   ```bash
   cd /var/www/Apex
   git pull
-  docker compose build apex-app
-  docker compose up -d apex-app
+  docker compose -p apex build apex-app
+  docker compose -p apex up -d apex-app
+  ```
+- หากต้องการดึง Branch `Sec1` (`8477d45`) ทดสอบบน VPS ทันทีก่อน Merge PR:
+  ```bash
+  cd /var/www/Apex
+  git pull origin Sec1
+  docker compose -p apex build apex-app
+  docker compose -p apex up -d apex-app
   ```
