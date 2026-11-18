@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 18 พฤศจิกายน 2026 (Local Time: 13:30 ICT)  
+> **Date Updated:** 18 พฤศจิกายน 2026 (Local Time: 13:50 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Repository (APEX):** [https://github.com/ITWA-PCL/apex](https://github.com/ITWA-PCL/apex)  
@@ -9,7 +9,7 @@
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Production VPS (APEX):** `/var/www/Apex` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 103/103 passed (`.\.venv\Scripts\pytest.exe`), Frontend TypeScript: 0 errors (`npx tsc --noEmit`), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
-> **Git Status:** Production Ready — Sprint 64 + Spoke Spec v2.13.0 + Framework Version Handshake (`97e2bc0` + latest commit on Central-IAM `origin/main`, `8477d45` on APEX `origin/Sec1`)
+> **Git Status:** Production Ready — Sprint 64 + Spoke Spec v2.13.0 + Framework Version Handshake (`9eabf35`, `97e2bc0`, `26882e2` on Central-IAM `origin/main`, `8477d45` on APEX `origin/Sec1`)
 
 ---
 
@@ -1810,16 +1810,50 @@ docker compose up -d api web
      - เพิ่มฟิลด์ `client_vpn_verified: bool` ในสคีมา `PortalLaunchRequest`
      - ใน `/oauth/portal/launch`: อนุญาตให้ผู้ใช้ที่ผ่าน Client Reachability Probe ทำการ Launch และรับ SSO Authorization Code เพื่อนำทางต่อไปยัง `https://wa-mtpulse.wa.net/auth/start` ได้อย่างปลอดภัยและราบรื่น
 
+### ลำดับที่ 15: บังคับใช้ AD แบบ One-Way, รหัสผ่านเริ่มต้น Local Account, แก้ไข Mode A/C Provisioning Sync, อัปเกรด Spoke Spec v2.13.0 และระบบตรวจสอบเวอร์ชัน Framework (Sprint 64)
+- **สาเหตุปัญหาและข้อกำหนดจากผู้ใช้:**
+  1. ต้องการให้ Active Directory (AD) เป็นแบบ **One-Way 100%** (CIAM ต้องไม่สร้างบัญชีใหม่ขึ้น AD; พนักงานต้องมีบัญชี AD อยู่ก่อนแล้วจึงซิงก์เข้ามาเพิ่มสิทธิ์ใน Spoke App ส่วนบัญชีที่สร้างบน Spoke App โดยตรงแล้ว Admin ติ๊กให้ Login ด้วย AD ได้จะเชื่อมกับ AD ตอน Sync)
+  2. เมื่อสร้าง Local Account จาก CIAM ต้องมีรหัสผ่านเริ่มต้นที่ Admin กำหนด/สุ่มได้ และต้องชี้แจง Matrix การ Login ทั้ง 4 กรณี (AD vs Local Account, สร้างที่ CIAM vs สร้างที่ Spoke) ให้ชัดเจน
+  3. พบเคสสร้างบัญชี Local Account (`Test.1` บน `PETTYCASH`, Mode A) แล้วบัญชีไม่ลงไปที่ Spoke App แม้ผ่านไปกว่า 30 นาที และยังติดป้าย `บัญชีผี` ผิดพลาด
+  4. ต้องการอัปเกรดสเปกและโค้ดตัวอย่างสำหรับทีม Dev ระบบลูกให้ครบถ้วน พร้อมระบบตรวจสอบ **Framework Version Handshake** ตอน Sync/Ping/Heartbeat เพื่อให้ทราบว่าแต่ละ Spoke App อัปเดตโค้ดตรงกับสเปกล่าสุดของ CIAM แล้วจริงหรือไม่
+- **การแก้ไขทั้ง 5 ส่วนหลัก (Commits `26882e2`, `97e2bc0`, `9eabf35`):**
+  1. **One-Way AD Policy ([provisioning.py](file:///d:/Python/Central-IAM/backend/app/services/provisioning.py), [directory/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/directory/page.tsx), [api.ts](file:///d:/Python/Central-IAM/frontend/src/lib/api.ts)):**
+     - ถอดการเรียก `AdProxyConnector.provision_account` ออกจาก `execute_user_creation` เพื่อไม่ให้ CIAM สร้างบัญชีขึ้น AD โดยตรงอีกต่อไป; บัญชี AD ต้องมีอยู่บน Domain Controller แล้วจึงนำมาจ่ายสิทธิ์เข้า Spoke App (ส่วนบัญชีที่สร้างบน Spoke App แล้วติ๊ก `use_ad_auth: true` จะถูกจับคู่กับ AD ตอน Sync)
+     - ปรับ Modal สร้างผู้ใช้บน `/directory` แยกเป็น 2 แท็บชัดเจน: **`เพิ่มผู้ใช้ AD เข้า Spoke App`** vs **`สร้าง Local Account ใหม่`**
+  2. **Local Account Initial Password & 4-Case Login Matrix ([schemas/directory.py](file:///d:/Python/Central-IAM/backend/app/schemas/directory.py), [provisioning.py](file:///d:/Python/Central-IAM/backend/app/services/provisioning.py)):**
+     - Admin กำหนดหรือสุ่มรหัสผ่านเริ่มต้น (8–16 ตัวอักษร) พร้อมตัวเลือก `must_change_password` สำหรับ Local Account ใหม่; CIAM สร้าง `AdminUser` (`role="PORTAL_USER"`) เพื่อให้เข้าผ่าน CIAM SSO ได้ และส่งฟิลด์ `password` + `must_change_password` ไปใน `POST /api/v1/directory/accounts` เพื่อให้ Spoke App บันทึกแฮชรหัสผ่านสำหรับการเข้าสู่ระบบตรงบน Spoke
+     - กำหนด **4-Case Login Matrix** (AD vs Local, สร้างจาก CIAM vs สร้างจาก Spoke):
+       - **AD จาก CIAM:** เข้าด้วย AD SSO และรหัสผ่าน AD Domain บนทั้ง CIAM/Spoke
+       - **AD จาก Spoke (ติ๊ก Login ด้วย AD):** เมื่อ Spoke ส่ง `use_ad_auth: true` มาใน Sync จะจับคู่กับบัญชี AD เพื่อทำ AD SSO ได้
+       - **Local จาก CIAM:** เข้าได้ทั้ง CIAM SSO (ใช้ `AdminUser` / รหัสผ่านเริ่มต้น) และเข้าตรงบน Spoke (หาก Spoke รองรับการรับ `password` ใน `POST /api/v1/directory/accounts` ตาม Spec v2.13.0)
+       - **Local จาก Spoke:** เข้าตรงบน Spoke ด้วยรหัสผ่านของแอปได้ และเข้าผ่าน CIAM SSO ได้เมื่อ Spoke ส่งข้อมูลขึ้น CIAM + ผูก SSO ตาม Spec
+  3. **PettyCash (`Test.1`) Anti-Ghost & Mode A/C Provisioning Sync Fix ([rest_api.py](file:///d:/Python/Central-IAM/backend/app/connectors/rest_api.py), [base.py](file:///d:/Python/Central-IAM/backend/app/connectors/base.py), [directory.py](file:///d:/Python/Central-IAM/backend/app/api/v1/directory.py), [agent.py](file:///d:/Python/Central-IAM/backend/app/api/v1/agent.py), [scheduler.py](file:///d:/Python/Central-IAM/backend/app/services/scheduler.py), [initial_data.py](file:///d:/Python/Central-IAM/backend/app/initial_data.py)):**
+     - ยกเลิกการปลอมผลลัพธ์ `Simulated 201 Created` เมื่อ HTTP ปลายทางตอบ 403/404/405 และรองรับ Fallback `/api/directory/accounts`
+     - แก้บั๊ก `assign_spoke_app_to_user` จาก `connector.provision(...)` เป็น `provision_account({...})` พร้อมตั้ง `PENDING_PROVISION` และคิว `PROVISION_USER` เมื่อยิงไม่ผ่านทันที
+     - เพิ่ม `push_pending_provisions_to_spoke` และ `retry_pending_provisions` ใน Background Loop ทุก 2 นาที รวมถึงระหว่าง Sync เพื่อผลักบัญชี `PENDING_PROVISION` ลง Mode A Spoke
+     - ปลดล็อก Mode C `/api/v1/agent/heartbeat` ให้ส่ง `assigned_accounts` (พร้อม `use_ad_auth`) และ `PROVISION_USER` สำหรับ Local Account / `CIAM_ADMIN` ที่ไม่ใช่ AD
+     - แก้ไข `list_users`/`get_user_detail` และ `init_db()` ไม่ให้บัญชี Local Account ที่ไม่มี `ad_guid`/`employee_id`/`ad` mapping ถูกตีความเป็น `บัญชีผี` รวมถึง Auto-heal บัญชี `Test.1` เป็น `LOCAL_ACCOUNT` พร้อมเข้าคิว Provision
+  4. **Spoke Enterprise Integration Specification `v2.13.0` ([SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md) & [backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md](file:///d:/Python/Central-IAM/backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md)):**
+     - เพิ่มฟิลด์ `password` และ `must_change_password` ในหมวด **C.2** พร้อมข้อบังคับให้ทำการ `INSERT`/`UPSERT` ลง DB จริงก่อนตอบ `201 Created`
+     - เพิ่ม **4-Case Login Matrix** ในหมวด **C.4**
+     - อัปเดต `ciam_agent.py` ในหมวด **D.2 / D.5** ให้รองรับ `PROVISION_USER`, `assigned_accounts` (`use_ad_auth`) และส่ง `CIAM_FRAMEWORK_VERSION = "2.13.0"`
+     - เปลี่ยนตัวอย่างโค้ดใน **Section 10.1 (Python FastAPI)** และ **Section 10.2 (Node.js Express)** จาก Stub ให้เป็นโค้ด `INSERT`/`bcrypt` ลง DB จริง พร้อมคืน `"framework_version": "2.13.0"`
+  5. **Spoke Framework Version Handshake ([models/application.py](file:///d:/Python/Central-IAM/backend/app/models/application.py), [schemas/application.py](file:///d:/Python/Central-IAM/backend/app/schemas/application.py), [rest_api.py](file:///d:/Python/Central-IAM/backend/app/connectors/rest_api.py), [applications.py](file:///d:/Python/Central-IAM/backend/app/api/v1/applications.py), [agent.py](file:///d:/Python/Central-IAM/backend/app/api/v1/agent.py), [scheduler.py](file:///d:/Python/Central-IAM/backend/app/services/scheduler.py), [applications/page.tsx](file:///d:/Python/Central-IAM/frontend/src/app/applications/page.tsx)):**
+     - เพิ่มคอลัมน์ `spoke_framework_version` (`VARCHAR(50)`) บน `ConnectedApplication` และสคริปต์ Migration ใน `initial_data.py` พร้อมกำหนด `CURRENT_SPOKE_FRAMEWORK_VERSION = "2.13.0"`
+     - สกัด `framework_version` / `spec_version` อัตโนมัติ across **Mode A** (`GET /api/v1/directory/accounts`, `/api/auth/sso/config`, Header `X-CIAM-Framework-Version`), **Mode B** (`GET /api/auth/sso/config`), และ **Mode C** (`POST /api/v1/agent/heartbeat` พร้อมส่งกลับ `latest_framework_version`)
+     - แสดงป้ายสถานะ Compliance บนการ์ดแอปหน้า `/applications`: `✓ v2.13.0 (ตรงสเปกล่าสุด)`, `⚠️ v2.x.x (ควรอัปเดตเป็น v2.13.0)`, `❔ ยังไม่ระบุเวอร์ชัน (< v2.13.0)` และ `🛠️ Native Infra Connector`
+     - เพิ่มชุดทดสอบ `test_spoke_framework_version_handshake_across_sync_ping_and_heartbeat` ใน [test_local_portal_account.py](file:///d:/Python/Central-IAM/backend/tests/test_local_portal_account.py)
+
 ---
 
 ## 4. สถานะระบบปัจจุบัน และ แผนงานที่จะปรับปรุงต่อในรอบถัดไป (Current Status & Next Steps Roadmap)
 
-> **ปรับปรุงล่าสุด:** 18 พฤศจิกายน 2026 (Local Time: 13:38 ICT)  
+> **ปรับปรุงล่าสุด:** 18 พฤศจิกายน 2026 (Local Time: 13:50 ICT)  
 > **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (Sprint 64 + Spoke Spec v2.13.0 + Framework Version Handshake) และ APEX `Sec1` (`8477d45`) พร้อม Deploy ขึ้น VPS และทดสอบ Live End-to-End
 
 ### 4.1 สถานะระบบที่ตรวจสอบและส่งมอบแล้ว (Verified & Production Ready)
 * **Git Commits ล่าสุดบน `origin/main` (Central-IAM):**
-  - `HEAD` (`feat(applications): track Spoke framework_version during Sync, Ping, and Heartbeat`) — เพิ่ม Spoke Framework Version Handshake (`spoke_framework_version` / `v2.13.0`) ครบทั้ง DB, Mode A Sync/Ping, Mode B Config Probe, Mode C Heartbeat และ UI Badge บน `/applications`
+  - `9eabf35` — `feat(applications): track Spoke framework_version during Sync, Ping, and Heartbeat` (Spoke Framework Version Handshake `v2.13.0` ครบทั้ง DB, Mode A Sync/Ping, Mode B Config Probe, Mode C Heartbeat และ UI Badge บน `/applications`)
   - `97e2bc0` — `docs(spec): upgrade Spoke Integration Spec and developer boilerplate to v2.13.0` (One-Way AD, Local Initial Password, 4-Case Login Matrix, `PROVISION_USER` ใน Agent)
   - `26882e2` — `feat(directory): enforce one-way AD, local initial password, and two-way spoke provisioning sync` (Sprint 64)
   - `a10638c` — `fix(sso): add /oauth2/* compatibility rewrites and document APEX SSO fixes` (Sprint 63)
@@ -1839,8 +1873,12 @@ docker compose up -d api web
 ### 4.2 แผนงานและข้อสังเกตสำหรับการปรับปรุงในรอบถัดไป (Next Iteration Roadmap)
 เมื่อกลับมาทำงานต่อในรอบถัดไป ให้ดำเนินการตามลำดับความสำคัญดังต่อไปนี้:
 
-1. **Deploy การแก้ไขล่าสุดขึ้น Production VPS และทดสอบ Live Flow (`a10638c` / `8477d45`):**
-   - **Central-IAM (`/var/www/Ciam`):** Deploy **`api`** และ **`web`** เพื่อให้ทั้งแพตช์ Origin IP `157.173.219.153` (`051a7ac`) และ Rewrites `/oauth2/*` (`a10638c`) ทำงานบน VPS
+1. **Deploy Sprint 64 (`9eabf35`, `97e2bc0`, `26882e2`) ขึ้น Production VPS และอัปเกรด Spoke Apps ตาม Spec `v2.13.0`:**
+   - **Central-IAM (`/var/www/Ciam`):** Deploy **`api`** และ **`web`** จาก Branch `main` แล้วตรวจสอบ:
+     - หน้า `/applications`: ทดสอบกด **Ping** / **Sync** เพื่อดูแถว **`เวอร์ชัน Framework:`** (`✓ v2.13.0 (ตรงสเปกล่าสุด)`, `⚠️`, `❔ ยังไม่ระบุเวอร์ชัน`) และทดสอบดาวน์โหลด **`CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.13.0.md`**
+     - หน้า `/directory`: ตรวจสอบบัญชี `Test.1` (`PETTYCASH`) ว่าไม่ติดป้าย `บัญชีผี` และทดสอบ Modal สร้างผู้ใช้แบบ 2 แท็บ (`เพิ่มผู้ใช้ AD เข้า Spoke App` vs `สร้าง Local Account ใหม่`)
+   - **ส่งมอบสเปก `v2.13.0` ให้ทีม Dev ระบบลูก (PettyCash, IRM, APEX, MTPulse, QOL):**
+     - ให้ `POST /api/v1/directory/accounts` (Mode A) หรือ `PROVISION_USER` (Mode C) ทำ `INSERT`/`UPSERT` ลง DB จริงพร้อมรับ `password`/`must_change_password` และคืน `"framework_version": "2.13.0"` ตาม Spec (`GET /api/v1/directory/accounts`, `GET /api/auth/sso/config`, หรือ `POST /api/v1/agent/heartbeat`)
    - **APEX (`/var/www/Apex`):** เปิด/Merge Pull Request จาก `Sec1` (`8477d45`) เข้า `main` ที่ `https://github.com/ITWA-PCL/apex/pull/new/Sec1` (หรือดึง `origin Sec1` ชั่วคราว) แล้ว Build & Restart Service **`apex-app`** (`docker compose -p apex build apex-app` และ `docker compose -p apex up -d apex-app`)
    - **ล้าง Service Worker เก่าฝั่งเบราว์เซอร์:** กด `Ctrl + Shift + R` หรือ Unregister `apex-pwa-v1` เพื่อให้เบราว์เซอร์โหลด `ciam-admin-panel.js` และ `apex-pwa-v2` ใหม่
    - **ทดสอบจริงบน Production:**
