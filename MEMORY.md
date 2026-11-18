@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-11-18  
 
-**Version:** 2.12.0 (Enterprise Local Password Policy, 90-Day Forced Rotation & Complexity Framework Standard)  
+**Version:** 2.13.0 (One-Way AD Governance, Local Account Password Provisioning & Real DB Persistence Framework Standard)  
 
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 
@@ -1879,6 +1879,9 @@ FRONTEND_URL=http://localhost:3000
   - `rest_api.py` (`provision_account`): เลิกจำลอง `Simulated 201 Created` สำหรับเป้าหมาย `http(s)://` ที่ตอบ 403/404/405 และรองรับ Fallback `/api/directory/accounts`
   - `directory.py` (`assign_spoke_app_to_user`, `list_users`, `get_user_detail`) และ `base.py`: แก้ `connector.provision(...)` เป็น `provision_account({...})`, ตั้ง `PENDING_PROVISION` + คิว `PROVISION_USER` เมื่อยิงไม่ผ่าน, และป้องกันการตีความบัญชี Local Account ที่ไม่มี `ad_guid`/`employee_id`/`ad` mapping ว่าเป็น `บัญชีผี`
   - `agent.py` (`handle_agent_heartbeat`), `scheduler.py` (`push_pending_provisions_to_spoke`, `retry_pending_provisions`), `applications.py`, และ `initial_data.py`: ให้ Mode C ส่ง `PROVISION_USER` สำหรับ Local Account / `CIAM_ADMIN` ด้วย, ให้ Mode A ผลักบัญชี `PENDING_PROVISION` ลง Spoke ระหว่าง Sync และทุกๆ 2 นาที, และ Auto-heal บัญชี `Test.1`
+* **Spoke Specification & Framework Upgrade (`v2.13.0`):**
+  - อัปเกรด `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` และ `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` เป็น **`v2.13.0`** พร้อมปุ่มดาวน์โหลดและ Revision Changelog Modal บน `frontend/src/app/applications/page.tsx` และ `backend/app/api/v1/applications.py`
+  - เพิ่ม `password` + `must_change_password` ใน `POST /api/v1/directory/accounts` (C.2), 4-Case Login Matrix (C.4), โค้ด DB `INSERT`/`bcrypt` จริงใน Section 10.1 (Python) และ 10.2 (Node.js) แทน Mock/Stub, และรองรับ `PROVISION_USER` + `assigned_accounts` (`use_ad_auth`) ใน `ciam_agent.py` (D.2/D.5)
 
 
 

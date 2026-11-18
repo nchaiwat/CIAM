@@ -1,9 +1,9 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Current Version:** 2.12.0 (Enterprise Local Password Policy, 90-Day Forced Rotation & Complexity Framework Standard)  
-**Effective Date:** 12 พฤศจิกายน 2026 (12/11/2026)  
+**Current Version:** 2.13.0 (One-Way AD Governance, Local Account Password Provisioning & Real DB Persistence Framework Standard)  
+**Effective Date:** 18 พฤศจิกายน 2026 (18/11/2026)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
-**Target Systems:** IRM, QMS, QOL (QT-Online), SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
+**Target Systems:** IRM, QMS, QOL (QT-Online), PettyCash, APEX, SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
 **Compliance:** ISO 27001 / OpenID Connect (OIDC) / OAuth 2.0 with PKCE (RFC 7636) / OAuth 2.0 Security BCP (RFC 9700) / Model Context Protocol (MCP)
 
 ---
@@ -14,7 +14,8 @@
 
 | เวอร์ชัน (Version) | วันที่มีผล (Date) | สถานะ (Status) | สรุปรายการปรับปรุงจากเวอร์ชันก่อนหน้า (Change Summary & Key Differences) |
 | :---: | :---: | :---: | :--- |
-| **v2.12.0** | 12/11/2026 | **Current Active** | • **หมวด G (ข้อกำหนดที่ 13): Enterprise Local Password Policy & 90-Day Rotation Framework Standard (มาตรฐานความปลอดภัยรหัสผ่านบัญชีท้องถิ่น และการบังคับเปลี่ยนรหัสผ่านทุก 90 วัน สำหรับระบบลูก):**<br/>1) **90-Day Forced Password Rotation:** บัญชีท้องถิ่น (Local Accounts), บัญชีฉุกเฉิน (Break-Glass Local Admin), และบัญชีเฉพาะระบบที่ไม่ได้ยืนยันตัวตนผ่าน Active Directory ในระบบลูกทุกระบบ ต้องมีคอลัมน์ `password_changed_at` และมีกลไกบังคับเปลี่ยนรหัสผ่านทุกๆ 90 วันโดยเด็ดขาด<br/>2) **Strict Password Complexity Requirements:** ความยาว 8 - 16 ตัวอักษร, มีตัวพิมพ์ใหญ่ (A-Z) &ge; 1, ตัวพิมพ์เล็ก (a-z) &ge; 1, ตัวเลข (0-9) &ge; 1, อักขระพิเศษ (!@#$%^&*...) &ge; 1 และห้ามมี Username ปะปนอยู่ในรหัสผ่าน<br/>3) **Forced Password Change Interception:** เมื่อรหัสผ่านครบ 90 วัน หรือ `must_change_password = true` ระบบลูกต้องบล็อกการเข้าสู่หน้าระบบงาน และบังคับเปิด Modal เปลี่ยนรหัสผ่านทันที (ห้ามข้าม)<br/>4) **Ready-to-Use Framework Implementation:** โค้ดตัวอย่างสำเร็จรูปสำหรับ Python (FastAPI/SQLAlchemy), Node.js (Express/TypeScript), PHP (PDO/Native) และ React Form |
+| **v2.13.0** | 18/11/2026 | **Current Active** | • **One-Way Active Directory, Local Account Initial Password & Real DB Persistence Framework Standard (หมวด C.2, C.4, D.2, D.5, 10.1, 10.2):**<br/>1) **One-Way AD Enforcement:** Central IAM ไม่สร้างบัญชีขึ้นบน Active Directory (AD เป็นแหล่งข้อมูลหลักแบบทางเดียว) พนักงาน AD ต้องสร้างบน AD ก่อน แล้ว CIAM จึงนำบัญชีมาจ่ายสิทธิ์เข้า Spoke App หรือหากสร้างที่หน้า Spoke App และติ๊ก `use_ad_auth: true` ระบบจะจับคู่เข้ากับตัวตน AD ให้อัตโนมัติตอน Sync<br/>2) **Local Account Password Provisioning (`password`, `must_change_password`):** เมื่อ CIAM สร้างบัญชี Local Account (`use_ad_auth: false`) พร้อมมอบสิทธิ์ให้ Spoke App CIAM จะแนบฟิลด์ `password` และ `must_change_password` ไปใน Payload `POST /api/v1/directory/accounts` เพื่อให้ Spoke App นำไป Hash ด้วย `bcrypt` ลงฐานข้อมูล (รองรับการ Login ตรงที่ Spoke App คู่กับ SSO)<br/>3) **Strict Real DB Persistence (ห้ามใช้ Mock/Stub Response):** ระบบลูก Mode A ต้องทำการ `INSERT`/`UPSERT` ลงตาราง `users` และ `COMMIT` จริงก่อนตอบ `201 Created` (รองรับ Endpoint `/api/v1/directory/accounts` และ Fallback `/api/directory/accounts`) รวมถึงปรับ `ciam_agent.py` (Mode C) ให้ประมวลผล `PROVISION_USER` และ `assigned_accounts` (พร้อม `use_ad_auth`) สำหรับทั้งบัญชี AD และ Local Account ครบถ้วน<br/>4) **Complete 4-Case Login Matrix (หมวด C.4):** ระบุแนวทาง Login ผ่าน SSO และ Login ตรงบน Spoke App สำหรับทั้งบัญชีที่สร้างจาก CIAM และบัญชีที่สร้างจาก Spoke App โดยตรง |
+| **v2.12.0** | 12/11/2026 | Superseded | • **หมวด G (ข้อกำหนดที่ 13): Enterprise Local Password Policy & 90-Day Rotation Framework Standard (มาตรฐานความปลอดภัยรหัสผ่านบัญชีท้องถิ่น และการบังคับเปลี่ยนรหัสผ่านทุก 90 วัน สำหรับระบบลูก):**<br/>1) **90-Day Forced Password Rotation:** บัญชีท้องถิ่น (Local Accounts), บัญชีฉุกเฉิน (Break-Glass Local Admin), และบัญชีเฉพาะระบบที่ไม่ได้ยืนยันตัวตนผ่าน Active Directory ในระบบลูกทุกระบบ ต้องมีคอลัมน์ `password_changed_at` และมีกลไกบังคับเปลี่ยนรหัสผ่านทุกๆ 90 วันโดยเด็ดขาด<br/>2) **Strict Password Complexity Requirements:** ความยาว 8 - 16 ตัวอักษร, มีตัวพิมพ์ใหญ่ (A-Z) &ge; 1, ตัวพิมพ์เล็ก (a-z) &ge; 1, ตัวเลข (0-9) &ge; 1, อักขระพิเศษ (!@#$%^&*...) &ge; 1 และห้ามมี Username ปะปนอยู่ในรหัสผ่าน<br/>3) **Forced Password Change Interception:** เมื่อรหัสผ่านครบ 90 วัน หรือ `must_change_password = true` ระบบลูกต้องบล็อกการเข้าสู่หน้าระบบงาน และบังคับเปิด Modal เปลี่ยนรหัสผ่านทันที (ห้ามข้าม)<br/>4) **Ready-to-Use Framework Implementation:** โค้ดตัวอย่างสำเร็จรูปสำหรับ Python (FastAPI/SQLAlchemy), Node.js (Express/TypeScript), PHP (PDO/Native) และ React Form |
 | **v2.11.0** | 10/11/2026 | Superseded | • **หมวด D.7: มาตรฐานการแบ่งแยกระบบ Direct Infra vs SSO Spoke, สิทธิ์ต่ำสุด (Least Privilege), การเทียบเวลา (Timestamp Reconciliation) และการล็อคสิทธิ์เด็ดขาด (CIAM Authority Lock):**<br/>1) **Direct Infrastructure Isolation:** แยกความแตกต่างระหว่างระบบโครงสร้างพื้นฐานระดับ Network/Directory (pfSense, M365, SAP B1, AD) ที่เป็น Read-Only Inventory กับระบบลูก SSO แบบสมบูรณ์ (IRM, QMS, MTPulse) อย่างเด็ดขาด โดยระบบ Direct Infra จะไม่มีสถานะ `WAIT` (`PENDING_PROVISION`) ค้าง หากไม่พบบัญชีในระบบจริงจะถูกตัดออกจากรายการทันที<br/>2) **Least Privilege Auto-Provisioning:** การสร้างบัญชีผู้ใช้ใหม่จาก CIAM หรือเมื่อระบบลูกดึงบัญชีไปสร้าง ต้องกำหนดสิทธิ์เริ่มต้นเป็นบทบาทต่ำสุดเสมอ (`Standard User` / `Viewer`) ตาม `ciam_auto_provision_group` ห้ามตั้งสิทธิ์ Admin โดยพลการ<br/>3) **Timestamp Reconciliation:** ใช้เวลาการเปลี่ยนแปลงล่าสุด (`status_updated_at` เทียบกับ `spoke_status_updated_at`) เป็นเกณฑ์ตัดสินสถานะจริง (Latest Update Wins)<br/>4) **CIAM Authority Lock Standard (`is_status_locked`):** แอดมิน CIAM สามารถกดล็อคสิทธิ์เด็ดขาดเพื่อตรึงสถานะ ป้องกันไม่ให้ระบบลูกส่งสถานะมาทับหรือเปิดใช้งานคืนโดยพลการ |
 | **v2.10.0** | 09/11/2026 | Superseded | • **หมวด F: Enterprise In-App Bot Defense & Anti-Brute-Force Framework Standard:** กำหนดมาตรฐานการป้องกันบอทและ Brute-Force ภายในแอปพลิเคชัน 3 ชั้น (3-Layer Defense) สำหรับ Spoke ทุกระบบ ได้แก่ 1) Sliding-Window IP Rate Limiting 10 req/min, 2) Decoy Honeypot Trap ฟิลด์หลอก `corporate_fax` / `security_honey`, 3) Form Submission Velocity & Timing Guard (< 400ms rejection) เพื่อความปลอดภัยสูงสุดโดยไม่ต้องพึ่งพาบริการภายนอกหรือย้าย DNS |
 | **v2.9.0** | 22/10/2026 | Superseded | • **หมวด D.6: True 2-Way Bi-directional Status Sync & Origin Tracking (มาตรฐานการซิงก์สถานะสองทางแบบใครเริ่มก่อนมีผลทันที):** กำหนดให้การเปลี่ยนแปลงสถานะบัญชี (เปิดใช้งาน / ระงับสิทธิ์) ที่เริ่มต้นจากฝั่งใด (ไม่ว่าจะเริ่มที่หน้าเว็บ CIAM หรือเริ่มที่หลังบ้านของ App Client) ต้องส่งผลไปยังอีกฝั่งโดยตรง (First-Action Wins with Origin Tracking)<br/>• **Status Origin Tracking (`status_origin`, `status_updated_at`, `status_reason`):** ระบบ CIAM จะบันทึกที่มาของการเปลี่ยนสถานะอย่างโปร่งใส (`CIAM_ADMIN`, `SPOKE_APP`, `AD_INHERITED`) หากระบบลูกส่งสถานะ Inactive มา CIAM จะยอมรับสถานะและไม่ส่งคำสั่ง `PROVISION_USER` หรือ `ENABLE_USER` ไปบังคับเปิดคืนให้ Spoke โดยเด็ดขาด<br/>• **Account Preservation (No Blind Deletion):** ป้องกันปัญหาบัญชีหาย โดยกำหนดให้ CIAM ไม่ลบการผูกสิทธิ์ (`AppAccountMapping`) ที่สร้างจากระบบกลางทิ้งแบบเงียบๆ หาก Spoke ยังไม่ได้สร้างในระบบตนเอง ให้คงสถานะเป็น `PENDING_PROVISION` เพื่อรอการซิงก์<br/>• **SSO Callback Inactive Guard (หมวด B.3):** กำหนดให้ Spoke ตรวจสอบสถานะบัญชีในระบบตนเอง หากบัญชีถูกระงับสิทธิ์จากฝั่ง Spoke เอง หรือถูกระงับสิทธิ์จาก CIAM ต้องปฏิเสธการล็อกอิน และห้ามปลดล็อก Active คืนอัตโนมัติเด็ดขาด |
@@ -477,8 +478,9 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 ---
 
 #### C.2 `POST /api/v1/directory/accounts` (Remote User Provisioning)
-* **วัตถุประสงค์:** เรียกใช้เมื่อ Super Admin สร้างหรือแจกจ่ายบัญชีผู้ใช้ใหม่จาก Central IAM ไปยังระบบลูก
-* **Request Body:**
+* **วัตถุประสงค์:** เรียกใช้เมื่อ Super Admin จ่ายสิทธิ์บัญชีพนักงาน AD หรือสร้าง Local Account ใหม่จาก Central IAM ไปยังระบบลูก (รองรับทั้ง Path มาตรฐาน `/api/v1/directory/accounts` และ Fallback `/api/directory/accounts`)
+* **ความปลอดภัยต้นทาง:** ระบบลูกต้องอนุญาต IP `157.173.219.153` โดยอ่านจาก Header `x-ciam-origin-ip` → `x-origin-ip` → `x-forwarded-for` (`.split(',')[0].trim()`) พร้อมตรวจสอบ `X-Management-API-Key`
+* **Request Body (กรณีบัญชี AD — `use_ad_auth: true`):**
 ```json
 {
   "username": "somchai.p",
@@ -490,11 +492,30 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
   "created_by": "Central-IAM-Service"
 }
 ```
-* **พฤติกรรมระบบลูก:**
-  1. ค้นหา `username` ในตาราง `users`
-  2. หากยังไม่มี ให้บันทึกสร้างบัญชีใหม่ โดยกำหนดกลุ่มสิทธิ์ตาม `group_name` และตั้ง `is_active = true`
-  3. หากมีอยู่แล้ว ให้คืนสถานะ `409 Conflict` (Central IAM จะถือว่ามีบัญชีอยู่แล้วและทำการ Link เข้าสู่ระบบ)
-  4. บันทึกเหตุการณ์ลงใน `transaction_logs`
+* **Request Body (กรณี Local Account จาก CIAM — `use_ad_auth: false`):**
+```json
+{
+  "username": "supplier.01",
+  "full_name": "ผู้ใช้งานภายนอก 01",
+  "email": "supplier01@partner.com",
+  "department": "External Partner",
+  "group_name": "Standard User",
+  "use_ad_auth": false,
+  "password": "Wa@Local2026!",
+  "must_change_password": true,
+  "created_by": "Central-IAM-Service"
+}
+```
+* **คำอธิบายฟิลด์เพิ่มเติมสำหรับ Local Account:**
+  * `use_ad_auth`: `true` = ยืนยันตัวตนผ่าน AD/SSO (ไม่ส่ง `password`), `false` = Local Account ที่ไม่ได้อยู่ใน AD
+  * `password` *(Optional, ส่งเฉพาะเมื่อสร้าง Local Account จาก CIAM)*: รหัสผ่านเริ่มต้นที่แอดมินกำหนด/ระบบสุ่มบน CIAM (8–16 ตัวอักษร) หาก Spoke App รองรับการ Login ด้วยฟอร์ม Local คู่กับ SSO ให้นำค่านี้ไป Hash ด้วย `bcrypt` เก็บลงฐานข้อมูล
+  * `must_change_password` *(Optional boolean, default `true`)*: บังคับให้ผู้ใช้เปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรกตามหมวด G
+* **พฤติกรรมระบบลูก (CRITICAL):**
+  1. ค้นหา `username` (แบบ Case-insensitive) ในตาราง `users`
+  2. หากยังไม่มี **ต้องทำการ `INSERT` สร้างบัญชีจริงลงฐานข้อมูลของระบบลูกและ `COMMIT` ให้เสร็จสมบูรณ์ก่อนส่ง `201 Created`** (**ห้ามคืนค่า Stub/Mock Response โดยไม่บันทึกลง DB เด็ดขาด**) โดยกำหนดกลุ่มสิทธิ์ตาม `group_name`, ตั้ง `is_active = true`, และบันทึก `use_ad_auth`
+  3. หาก `use_ad_auth == false` และมีฟิลด์ `password` แนบมา ให้ Hash รหัสผ่านด้วย `bcrypt` บันทึกลง `hashed_password` พร้อมตั้ง `must_change_password` และ `password_changed_at = CURRENT_TIMESTAMP` (หากไม่มี `password` และเป็นการใช้ผ่าน SSO ให้ตั้ง Dummy Random Hash หรืออนุญาตให้เข้าผ่าน SSO Callback ได้)
+  4. หากมีบัญชีอยู่แล้ว ให้คืนสถานะ `409 Conflict` (Central IAM จะถือว่ามีบัญชีอยู่แล้วและทำการ Link เข้าสู่ระบบอย่างถูกต้อง)
+  5. บันทึกเหตุการณ์ลงใน `transaction_logs`
 * **Response Example (201 Created):**
 ```json
 {
@@ -503,8 +524,9 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
   "username": "somchai.p",
   "message": "Account 'somchai.p' created successfully.",
   "group_name": "PU User",
+  "use_ad_auth": true,
   "is_active": true,
-  "created_at": "2026-09-30T22:00:00Z"
+  "created_at": "2026-11-18T12:00:00Z"
 }
 ```
 
@@ -538,18 +560,24 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 
 ---
 
-#### C.4 การจัดการผู้ใช้ Local Account (Non-AD Users) และข้อยกเว้นการใช้งาน App Portal
-* **ที่มาและความจำเป็น:**
-  * ในองค์กรจริง อาจมีผู้ใช้บางกลุ่มที่**ไม่ได้อยู่ใน Active Directory** แต่ถูกสร้างขึ้นโดยตรงในระบบลูก เช่น ผู้ใช้งานชั่วคราว, ช่างภายนอก หรือ Supplier ในระบบ IRM
-  * บัญชีเหล่านี้จะมีแฟล็ก `use_ad_auth: false` ในตาราง `users`
-* **มาตรฐานการเชื่อมต่อ:**
-  1. เมื่อ Central IAM สั่ง Sync ผ่าน `GET /api/v1/directory/accounts` ระบบลูกจะส่งฟิลด์ `use_ad_auth: false` กลับมาในรายการบัญชี
-  2. ฝั่ง Central IAM จะระบุบัญชีนี้เป็น **"Local Account ใน Spoke"** โดยอัตโนมัติ
-  3. ผู้ดูแลระบบสามารถตั้งรหัสผ่าน Portal Password หรือสร้าง **"ข้อยกเว้นการเชื่อมโยงตัวตน (Identity Exception)"** ในหน้า Portal & Directory ให้กับผู้ใช้รายนี้ได้
-  4. เมื่อผู้ใช้ดังกล่าวล็อกอินเข้า Central IAM Portal ด้วยรหัสผ่าน Portal:
-     * **หน้า App Portal จะแสดงเฉพาะแอปที่เขามีสิทธิ์ (เช่น IRM) เท่านั้น** และซ่อนระบบอื่นที่ไม่มีสิทธิ์ออกไปโดยอัตโนมัติ
-     * ผู้ใช้สามารถคลิกเข้าสู่ระบบลูกผ่าน Single Sign-On ได้อย่างราบรื่น
-  5. หากผู้ใช้รายเดียวกันมีบัญชีใน 2 ระบบลูกที่ไม่ได้ใช้ AD ทั้งคู่ และรหัสผ่านไม่ตรงกัน ผู้ดูแลระบบสามารถใช้ฟังก์ชัน **"รวมตัวตน (Unified Identity Link)"** ในหน้าบัญชีผู้ใช้ Central IAM เพื่อผูกบัญชีทั้งสองเข้ากับ Portal Identity เดียวกันได้อย่างปลอดภัย
+#### C.4 การจัดการผู้ใช้ AD Account (One-Way AD) vs Local Account ตลอดวงจรชีวิตทั้ง 2 ทิศทาง
+* **หลักการสำคัญ (One-Way Active Directory Governance):**
+  * **Active Directory เป็นแบบ One-Way 100%:** ระบบ Central IAM **ไม่สร้างบัญชีใหม่ขึ้นบน Active Directory** พนักงานใหม่จะต้องถูกสร้างบน AD Domain Controller ก่อน จากนั้น CIAM จึงซิงก์รายชื่อเข้ามาเพื่อจ่ายสิทธิ์เข้าสู่ระบบลูก (`use_ad_auth: true`)
+  * หากผู้ดูแลระบบของ Spoke App สร้างบัญชีขึ้นที่หน้าเว็บ Spoke App โดยตรง และติ๊กเปิด **"Login ด้วย AD (`use_ad_auth: true`)"** ด้วย Username ที่ตรงกับ AD เมื่อ CIAM ทำการ Sync ข้อมูล ระบบจะจับคู่บัญชีนั้นเข้ากับตัวตนหลักใน AD ให้อัตโนมัติ
+
+* **ตารางสรุปแนวทางการสร้างบัญชีและการ Login (4 กรณีมาตรฐาน):**
+
+| แหล่งที่สร้างบัญชี | ประเภทบัญชี (`use_ad_auth`) | รหัสผ่านที่ใช้ Login | เข้าผ่าน Central IAM SSO ได้ไหม? | Login ตรงหน้าเว็บ Spoke App ได้ไหม? |
+| :--- | :---: | :--- | :--- | :--- |
+| **1. ดึงบัญชี AD จาก CIAM จ่ายให้ Spoke App** | `true` (AD Account) | ใช้รหัสผ่าน Windows / AD (`wa.net`) เดิมของพนักงาน | **ได้ทันที 100%** (CIAM ยืนยันกับ AD Gateway) | **ได้เฉพาะกรณีระบบลูกเปิดหน้า AD/Break-Glass Login** (แนะนำให้เข้าผ่านปุ่ม SSO) |
+| **2. สร้างบัญชี Local Account จาก CIAM** | `false` (`LOCAL_ACCOUNT`) | ใช้รหัสผ่านเริ่มต้นที่แอดมินกำหนด/สุ่มตอนสร้างใน CIAM (ส่งต่อฟิลด์ `password` ให้ Spoke ใน `POST /accounts`) | **ได้ทันที 100%** (CIAM สร้าง `PORTAL_USER` ให้ทันที) | **ได้** หาก Spoke App นำฟิลด์ `password` จาก API ไป Hash เก็บใน DB และเปิดฟอร์ม Local Login คู่ขนาน |
+| **3. สร้างบัญชีที่ Spoke App แล้วติ๊ก Login ด้วย AD** | `true` (AD Account) | ใช้รหัสผ่าน Windows / AD (`wa.net`) ของพนักงาน | **ได้ทันที 100%** หลัง Sync หรือ JIT ผูกกับตัวตน AD | **ได้** หาก Spoke App รองรับ AD/Break-Glass Login |
+| **4. สร้าง Local Account ที่ Spoke App โดยตรง** | `false` (Spoke Local) | ใช้รหัสผ่านที่ตั้งไว้ในหน้า Admin ของ Spoke App เอง | **ได้ 100%** เมื่อ Sync ขึ้นมา CIAM แล้วให้แอดมินกด **`[ 🔑 อนุมัติเป็น Local Portal Account ]`** ตั้งรหัสผ่านกลางบน CIAM | **ได้ทันที** ด้วยรหัสผ่าน Local ของ Spoke App |
+
+* **มาตรฐานการเชื่อมต่อเพิ่มเติมสำหรับ Local Account:**
+  1. เมื่อ Central IAM สั่ง Sync ผ่าน `GET /api/v1/directory/accounts` หรือ Heartbeat ระบบลูกต้องส่งฟิลด์ `use_ad_auth: false` กลับมาในรายการบัญชีให้ถูกต้องเสมอ
+  2. เมื่อผู้ดูแลระบบตั้งค่า Local Portal Account ในหน้า `/directory` ของ CIAM ระบบจะอนุญาตให้ผู้ใช้ล็อกอินที่หน้า `https://ciam.windowasia.com/login` และหน้า App Portal จะแสดงเฉพาะแอปที่เขามีสิทธิ์เท่านั้น
+  3. หากผู้ใช้รายเดียวกันมีบัญชีใน 2 ระบบลูกที่ไม่ได้ใช้ AD ทั้งคู่ ผู้ดูแลระบบสามารถใช้ฟังก์ชัน **"รวมตัวตน (Unified Identity Link)"** บน Central IAM เพื่อผูกเข้ากับ Portal Identity เดียวกันได้
 
 ### หมวด D: Reverse Heartbeat & Outbound Sync Channel (สำหรับ Mode C: On-Premise Spoke Applications)
 
@@ -646,14 +674,16 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
       "email": "chaiwat.n@windowasia.com",
       "department": "Purchasing",
       "role": "System Admin",
+      "use_ad_auth": true,
       "is_active": true
     },
     {
-      "username": "ronnakorn.p",
-      "full_name": "Ronnakorn Pattarakrittanon",
-      "email": "ronnakorn.p@windowasia.com",
-      "department": "Supply Chain Analysis",
+      "username": "supplier.01",
+      "full_name": "External Supplier 01",
+      "email": null,
+      "department": "External Partner",
       "role": "Viewer",
+      "use_ad_auth": false,
       "is_active": true
     }
   ],
@@ -763,15 +793,27 @@ SPOKE_CLIENT_ID = "mtpulse-spoke-client"        # Client ID ที่ลงท�
 SPOKE_API_KEY = "sec_mtpulse_mgmt_xxxxxxxxx"   # M2M API Key หรือ Client Secret
 HEARTBEAT_INTERVAL = 120                       # วินาที (2 นาที)
 
-def execute_local_command(action: str, username: str) -> tuple[bool, str]:
-    \"\"\"
+def execute_local_command(action: str, username: str, account_meta: dict = None) -> tuple[bool, str]:
+    """
     ฟังก์ชันสำหรับจัดการฐานข้อมูลภายในระบบลูกเมื่อได้รับคำสั่งจาก CIAM
-    * แก้ไขฟังก์ชันนี้ให้ปรับปรุงสถานะผู้ใช้ในตาราง users หรือฐานข้อมูลจริงของระบบคุณ *
-    \"\"\"
+    * แก้ไขฟังก์ชันนี้ให้ปรับปรุงหรือสร้างผู้ใช้ในตาราง users หรือฐานข้อมูลจริงของระบบคุณ *
+    """
     try:
         logger.info(f"⚡ กำลังดำเนินการคำสั่ง '{action}' สำหรับผู้ใช้ '{username}' ในระบบภายใน...")
-        
-        if action == "DISABLE_USER":
+
+        if action == "PROVISION_USER":
+            meta = account_meta or {}
+            full_name = meta.get("full_name") or username
+            role = meta.get("role") or "Viewer"
+            use_ad_auth = bool(meta.get("use_ad_auth", True))
+            # ตัวอย่าง SQL / ORM สำหรับสร้างบัญชีหรืออัปเดตสิทธิ์จริงในระบบลูก (Idempotent):
+            # existing = db.query(User).filter(func.lower(User.username) == username.lower()).first()
+            # if not existing:
+            #     db.add(User(username=username, full_name=full_name, role=role, use_ad_auth=use_ad_auth, is_active=True))
+            #     db.commit()
+            return True, f"User '{username}' provisioned locally (role={role}, use_ad_auth={use_ad_auth})."
+
+        elif action == "DISABLE_USER":
             # 🛡️ Local Admin & Safety Protection: ป้องกันการปิดบัญชีผู้ดูแลระบบฉุกเฉิน
             PROTECTED_ACCOUNTS = {"admin", "superadmin", "emergency_admin", "local_admin"}
             if username.lower() in PROTECTED_ACCOUNTS:
@@ -793,22 +835,22 @@ def execute_local_command(action: str, username: str) -> tuple[bool, str]:
         return False, str(exc)
 
 def fetch_local_accounts() -> list[dict]:
-    \"\"\"
+    """
     ฟังก์ชันดึงรายชื่อผู้ใช้ทั้งหมดจากฐานข้อมูลภายใน เพื่อส่งขึ้นไปกวาด Sync บน CIAM
     (เรียกเฉพาะเมื่อต้องการทำ Full Directory Sync)
-    \"\"\"
+    """
     # ตัวอย่างคืนค่าบัญชี:
     return [
-        # {"username": "somchai", "full_name": "สมชาย ใจดี", "email": "somchai@wa.com", "role": "Staff", "is_active": True}
+        # {"username": "somchai", "full_name": "สมชาย ใจดี", "email": "somchai@wa.com", "role": "Staff", "use_ad_auth": True, "is_active": True}
     ]
 
-def run_agent_cycle(is_full_sync: bool = False, previous_results: list = None) -> list:
-    \"\"\"
+def run_agent_cycle(is_full_sync: bool = False, previous_results: list = None) -> tuple[list, bool]:
+    """
     ยิง Outbound POST 1 รอบไปยัง Central IAM:
     1. ส่ง Heartbeat
     2. ส่งผลลัพธ์คำสั่งรอบก่อนหน้า (ถ้ามี)
-    3. รับคำสั่งใหม่ไปประมวลผล
-    \"\"\"
+    3. สร้างบัญชีที่ได้รับมอบสิทธิ์จาก assigned_accounts และประมวลผลคำสั่งใหม่
+    """
     endpoint = f"{CIAM_BASE_URL}/api/v1/agent/heartbeat"
     headers = {
         "Content-Type": "application/json",
@@ -831,7 +873,14 @@ def run_agent_cycle(is_full_sync: bool = False, previous_results: list = None) -
         if res.status_code == 200:
             data = res.json()
             logger.info(f"✅ Heartbeat สำเร็จ: ตอบรับจาก CIAM ({data.get('server_time')})")
-            
+
+            # สร้างแผนที่ metadata ของบัญชีที่ CIAM มอบหมาย (รองรับทั้ง AD และ Local Account)
+            assigned_map = {
+                (a.get("username") or "").strip().lower(): a
+                for a in (data.get("assigned_accounts") or [])
+                if a.get("username")
+            }
+
             # ตรวจสอบและประมวลผลคำสั่งที่ส่งมาจาก CIAM
             pending_commands = data.get("pending_commands", [])
             new_results = []
@@ -853,7 +902,8 @@ def run_agent_cycle(is_full_sync: bool = False, previous_results: list = None) -
                         "message": "Full sync command acknowledged. Directory inventory will be pushed."
                     })
                 else:
-                    success, msg = execute_local_command(action, target_user)
+                    meta = assigned_map.get(target_user.strip().lower())
+                    success, msg = execute_local_command(action, target_user, account_meta=meta)
                     new_results.append({
                         "command_id": cmd_id,
                         "action": action,
@@ -1306,10 +1356,8 @@ def verify_ciam_management_access(
         or (request.client.host if request.client else "unknown")
     )
     client_ip = raw_ip.split(",")[0].strip() if raw_ip else "unknown"
-    # ใน Local/Dev ให้ยกเว้น localhost
-    if client_ip not in [ALLOWED_CIAM_IP, "127.0.0.1", "localhost", "::1"]:
-        # raise HTTPException(status_code=403, detail=f"IP {client_ip} not allowed")
-        pass
+    if client_ip not in [ALLOWED_CIAM_IP, "127.0.0.1", "localhost", "::1", "172.18.0.1"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"IP {client_ip} not allowed")
     return {"client_ip": client_ip}
 
 class CreateAccountRequest(BaseModel):
@@ -1319,6 +1367,8 @@ class CreateAccountRequest(BaseModel):
     department: Optional[str] = None
     group_name: Optional[str] = None
     use_ad_auth: bool = True
+    password: Optional[str] = None
+    must_change_password: Optional[bool] = True
     created_by: Optional[str] = "Central-IAM-Service"
 
 class UpdateStatusRequest(BaseModel):
@@ -1353,16 +1403,45 @@ def list_accounts_for_ciam(status: str = "all", department: Optional[str] = None
     }
 
 @router.post("/accounts", status_code=status.HTTP_201_CREATED, dependencies=[Depends(verify_ciam_management_access)])
-def create_account_from_ciam(payload: CreateAccountRequest):
-    """สร้างหรือ Provision บัญชีผู้ใช้ใหม่จาก Central IAM"""
-    # TODO: ตรวจสอบว่ามีอยู่แล้วหรือไม่ ถ้ามีให้ raise HTTPException(409, detail="User exists")
-    # TODO: สร้าง User ใหม่ และบันทึกลงฐานข้อมูล
+def create_account_from_ciam(payload: CreateAccountRequest, db = Depends(get_db)):
+    """
+    สร้างหรือ Provision บัญชีผู้ใช้ใหม่จาก Central IAM ลงฐานข้อมูลจริง
+    - หาก use_ad_auth=True: สร้างบัญชีที่ยืนยันตัวตนผ่าน AD/SSO
+    - หาก use_ad_auth=False และมี payload.password: Hash ด้วย bcrypt เพื่อให้ Login ตรงได้ด้วย
+    """
+    import bcrypt, secrets
+    from sqlalchemy import func
+
+    existing = db.query(User).filter(func.lower(User.username) == payload.username.strip().lower()).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"User '{payload.username}' already exists")
+
+    raw_pwd = payload.password if (not payload.use_ad_auth and payload.password) else secrets.token_urlsafe(24)
+    hashed_pwd = bcrypt.hashpw(raw_pwd.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    new_user = User(
+        username=payload.username.strip(),
+        full_name=payload.full_name.strip(),
+        email=payload.email,
+        department=payload.department,
+        role=payload.group_name or "Standard User",
+        use_ad_auth=bool(payload.use_ad_auth),
+        hashed_password=hashed_pwd,
+        must_change_password=bool(payload.must_change_password) if not payload.use_ad_auth else False,
+        password_changed_at=datetime.now(),
+        is_active=True,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
     return {
         "success": True,
-        "id": 99,
-        "username": payload.username,
-        "message": f"Account '{payload.username}' created successfully.",
-        "group_name": payload.group_name,
+        "id": new_user.id,
+        "username": new_user.username,
+        "message": f"Account '{new_user.username}' created successfully.",
+        "group_name": new_user.role,
+        "use_ad_auth": new_user.use_ad_auth,
         "is_active": True,
         "created_at": datetime.now()
     }
@@ -1438,15 +1517,43 @@ router.get('/api/v1/directory/accounts', verifyCiamManagementAccess, async (req,
   });
 });
 
-// 2. Remote User Provisioning
+// 2. Remote User Provisioning (ต้องบันทึกลง DB จริงก่อนตอบ 201 Created)
 router.post('/api/v1/directory/accounts', verifyCiamManagementAccess, async (req, res) => {
-  const { username, full_name, email, department, group_name, use_ad_auth } = req.body;
-  // TODO: Insert user หรือตอบกลับ 409 Conflict หากมีอยู่แล้ว
+  const { username, full_name, email, department, group_name, use_ad_auth = true, password, must_change_password = true } = req.body || {};
+  const cleanUsername = String(username || '').trim();
+  if (!cleanUsername) {
+    return res.status(400).json({ error: 'username_required' });
+  }
+
+  // ตรวจสอบบัญชีซ้ำใน DB (Case-insensitive) -> หากมีอยู่แล้วให้ตอบ 409 Conflict
+  const existing = await db.findUserByUsername(cleanUsername);
+  if (existing) {
+    return res.status(409).json({ error: 'account_exists', username: existing.username });
+  }
+
+  // หากเป็น Local Account และมีรหัสผ่านเริ่มต้นส่งมาจาก CIAM ให้ Hash ด้วย bcrypt
+  const rawPwd = (!use_ad_auth && password) ? String(password) : crypto.randomBytes(24).toString('hex');
+  const passwordHash = await bcrypt.hash(rawPwd, 10);
+
+  const created = await db.insertUser({
+    username: cleanUsername,
+    full_name: full_name || cleanUsername,
+    email: email || null,
+    department: department || null,
+    role: group_name || 'Standard User',
+    use_ad_auth: Boolean(use_ad_auth),
+    password_hash: passwordHash,
+    must_change_password: !use_ad_auth ? Boolean(must_change_password) : false,
+    password_changed_at: new Date(),
+    is_active: true
+  });
+
   res.status(201).json({
     success: true,
-    id: 100,
-    username,
-    message: `Account '${username}' provisioned successfully`,
+    id: created.id,
+    username: created.username,
+    message: `Account '${created.username}' provisioned successfully`,
+    use_ad_auth: created.use_ad_auth,
     is_active: true,
     created_at: new Date()
   });

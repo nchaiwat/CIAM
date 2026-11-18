@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 18 พฤศจิกายน 2026 (Local Time: 12:59 ICT)  
+> **Date Updated:** 18 พฤศจิกายน 2026 (Local Time: 13:16 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Repository (APEX):** [https://github.com/ITWA-PCL/apex](https://github.com/ITWA-PCL/apex)  
@@ -9,7 +9,7 @@
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Production VPS (APEX):** `/var/www/Apex` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 102/102 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
-> **Git Status:** Production Ready — Sprint 64 Complete (pending commit/push on Central-IAM `origin/main`, `8477d45` on APEX `origin/Sec1`)
+> **Git Status:** Production Ready — Sprint 64 + Spoke Spec v2.13.0 (`26882e2` + pending Spec v2.13.0 commit on Central-IAM `origin/main`, `8477d45` on APEX `origin/Sec1`)
 
 ---
 
@@ -29,6 +29,10 @@
      - [`backend/app/connectors/base.py`](file:///d:/Python/Central-IAM/backend/app/connectors/base.py) & [`backend/app/api/v1/directory.py`](file:///d:/Python/Central-IAM/backend/app/api/v1/directory.py): แก้บั๊ก `assign_spoke_app_to_user` ที่เรียก `connector.provision(...)` เป็น `provision_account({...})` พร้อมตั้ง `PENDING_PROVISION` และคิว `PROVISION_USER` เมื่อส่งไม่สำเร็จทันที
      - [`backend/app/api/v1/agent.py`](file:///d:/Python/Central-IAM/backend/app/api/v1/agent.py): ปลดล็อกให้ `/api/v1/agent/heartbeat` ส่ง `assigned_accounts` (พร้อม `use_ad_auth`) และ `PROVISION_USER` สำหรับ Local Account / `CIAM_ADMIN` ด้วย ไม่จำกัดเฉพาะ `is_active_in_ad == True`
      - [`backend/app/services/scheduler.py`](file:///d:/Python/Central-IAM/backend/app/services/scheduler.py) & [`backend/app/api/v1/applications.py`](file:///d:/Python/Central-IAM/backend/app/api/v1/applications.py): เพิ่ม `push_pending_provisions_to_spoke` และ `retry_pending_provisions` ใน Loop ทุก 2 นาที รวมถึงระหว่าง Sync เพื่อให้ Mode A ผลักบัญชีที่ค้าง `PENDING_PROVISION` ลง Spoke App อัตโนมัติ
+   - **อัปเกรดสเปกและ Framework กลางสำหรับทีม Dev ระบบลูกเป็น `v2.13.0` (`SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` & `frontend/src/app/applications/page.tsx`):**
+     - เพิ่มฟิลด์ `password` และ `must_change_password` ใน Group C.2 (`POST /api/v1/directory/accounts`) พร้อมข้อบังคับให้ทำการ `INSERT`/`UPSERT` ลง DB จริงก่อนตอบ `201 Created` (เปลี่ยนโค้ดตัวอย่าง Python 10.1 และ Node.js 10.2 จาก `# TODO` Stub เป็นโค้ดบันทึกลง DB จริง + `bcrypt`)
+     - อัปเดตตารางความสัมพันธ์และการ Login ทั้ง 4 กรณี (AD vs Local Account, สร้างจาก CIAM vs สร้างจาก Spoke App) ในหมวด C.4 และอัปเดต `ciam_agent.py` (Mode C) ให้รองรับ `PROVISION_USER` และ `assigned_accounts` (พร้อม `use_ad_auth`)
+     - ปรับ Version ลิงก์ดาวน์โหลดและ Revision Changelog Modal เป็น **`v2.13.0`**
 
 0a. **APEX CIAM SSO Identity Resolution (`Chaiwat.N`), Portal Direct Launch & Logout Redirect Fix (Sprint 63):**
    - **สาเหตุปัญหาฝั่ง APEX (`D:\Python\APEX`):**
@@ -1807,12 +1811,13 @@ docker compose up -d api web
 
 ## 4. สถานะระบบปัจจุบัน และ แผนงานที่จะปรับปรุงต่อในรอบถัดไป (Current Status & Next Steps Roadmap)
 
-> **ปรับปรุงล่าสุด:** 18 พฤศจิกายน 2026 (Local Time: 12:59 ICT)  
-> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (Sprint 64) และ APEX `Sec1` (`8477d45`) พร้อม Deploy ขึ้น VPS และทดสอบ Live End-to-End
+> **ปรับปรุงล่าสุด:** 18 พฤศจิกายน 2026 (Local Time: 13:16 ICT)  
+> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (Sprint 64 + Spoke Spec v2.13.0) และ APEX `Sec1` (`8477d45`) พร้อม Deploy ขึ้น VPS และทดสอบ Live End-to-End
 
 ### 4.1 สถานะระบบที่ตรวจสอบและส่งมอบแล้ว (Verified & Production Ready)
 * **Git Commits ล่าสุดบน `origin/main` (Central-IAM):**
-  - `Sprint 64` (กำลัง Commit & Push) — One-Way AD enforcement, Local Account initial password, and Mode A/C Spoke provisioning sync & retry fixes
+  - `Spoke Spec v2.13.0` (กำลัง Commit & Push) — Upgrade Spoke Enterprise Integration Specification & Developer Boilerplate to v2.13.0
+  - `26882e2` — `feat(directory): enforce one-way AD, local initial password, and two-way spoke provisioning sync` (Sprint 64)
   - `a10638c` — `fix(sso): add /oauth2/* compatibility rewrites and document APEX SSO fixes` (Sprint 63)
   - `051a7ac` — `fix(security): enforce CIAM origin IP 157.173.219.153 across M2M, OIDC, and isolate pytest from live spokes` (Sprint 62)
   - `aa554a8` — `docs(handoff): record Sprint 61 commit b2bb697 and next steps`
