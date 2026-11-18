@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 18 พฤศจิกายน 2026 (Local Time: 13:50 ICT)  
+> **Date Updated:** 18 พฤศจิกายน 2026 (Local Time: 22:25 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Repository (APEX):** [https://github.com/ITWA-PCL/apex](https://github.com/ITWA-PCL/apex)  
@@ -8,8 +8,8 @@
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Production VPS (APEX):** `/var/www/Apex` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 103/103 passed (`.\.venv\Scripts\pytest.exe`), Frontend TypeScript: 0 errors (`npx tsc --noEmit`), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
-> **Git Status:** Production Ready — Sprint 64 + Spoke Spec v2.13.0 + Framework Version Handshake (`9eabf35`, `97e2bc0`, `26882e2` on Central-IAM `origin/main`, `8477d45` on APEX `origin/Sec1`)
+> **Test Integrity:** Backend Pytest: 104/104 passed (`.\backend\.venv\Scripts\pytest.exe`), Frontend TypeScript: 0 errors (`npx tsc --noEmit`), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
+> **Git Status:** Production Ready — Sprint 65 (Mode C Agent Inactive Deleted Account Pruning & Sync Parity)
 
 ---
 
@@ -17,6 +17,14 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
+0c. **Mode C Agent Inactive Deleted Account Pruning & Real-Time Sync Parity (Sprint 65):**
+   - **แก้ไขปัญหาบัญชีที่ถูกลบใน Spoke ไม่หายไปจาก CIAM เมื่อซิงก์ผ่าน Mode C Agent:**
+     - สาเหตุเดิม: ใน `backend/app/api/v1/agent.py` (`handle_agent_heartbeat`) มีเพียงโค้ดวนลูป Update/Insert สำหรับบัญชีที่ส่งมาใน `payload.accounts` แต่ไม่มีบล็อกโค้ดสำหรับตรวจจับและลบ Stale Account Mapping ที่หายไปจาก Payload ส่งผลให้เกิดพฤติกรรมสองมาตรฐาน (Inconsistent Behavior) ระหว่างการกดซิงก์จากหน้า Spoke กับการกดซิงก์จากหน้าเว็บ CIAM
+     - การแก้ไข: เพิ่มบล็อก Prune Stale Mappings for Mode C Full Sync ใน `backend/app/api/v1/agent.py` หลังจบลูป `for acc in payload.accounts` โดยตรวจหาบัญชีที่ไม่อยู่ใน `live_usernames`
+     - หากเป็นบัญชีที่ถูกปิดใช้งาน (Inactive) ในระบบลูกแล้ว (`is_active_in_app == False` และ `status_origin != "CIAM_ADMIN"`) ให้สั่ง `db.delete(stale)` ออกจาก CIAM ทันที พร้อมเรียก `cleanup_orphan_identities(db)` เพื่อกวาดตัวตนที่ไม่มีระบบใดใช้งานแล้วออกจากหน้า Directory
+     - หากเป็นบัญชีที่สั่งสร้างจาก CIAM (`status_origin == "CIAM_ADMIN"`) หรือยังมีสถานะ Active อยู่ ให้คงไว้เป็น `PENDING_PROVISION` ตามสเปก D.6.3
+     - เพิ่ม Unit Test `test_mode_c_agent_full_sync_prunes_deleted_inactive_accounts` ใน `backend/tests/test_agent_deduplication.py` ครอบคลุมทั้งกรณีลบ Inactive stale, เก็บ Active/CIAM_ADMIN เป็น PENDING_PROVISION, และการกวาด Orphan MasterIdentity ผ่านการทดสอบ 104/104 tests (100%)
+
 0b. **One-Way AD Enforcement, Local Account Initial Password & Spoke Mode A/C Provisioning Sync Fix (Sprint 64):**
    - **บังคับใช้ AD แบบ One-Way 100% (No AD Creation from CIAM):**
      - ถอดการเรียก `AdProxyConnector.provision_account` ออกจาก [`backend/app/services/provisioning.py`](file:///d:/Python/Central-IAM/backend/app/services/provisioning.py) เพื่อไม่ให้ CIAM สร้างบัญชีขึ้น Active Directory โดยตรงอีกต่อไป รองรับการดึงบัญชี AD ที่มีอยู่แล้วมาเพิ่มสิทธิ์ใน Spoke App ควบคู่กับการสร้างบัญชี Local Account ใหม่

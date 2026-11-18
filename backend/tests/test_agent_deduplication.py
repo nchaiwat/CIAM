@@ -393,4 +393,162 @@ def test_two_way_status_sync_and_origin_tracking():
         db.close()
 
 
+def test_mode_c_agent_full_sync_prunes_deleted_inactive_accounts():
+    """
+    Verify Mode C Full Sync via /api/v1/agent/heartbeat prunes stale inactive accounts:
+    1. Account is inactive in Spoke (is_active_in_app = False, status_origin = SPOKE_APP).
+    2. Account is deleted in Spoke and excluded from payload.accounts.
+    3. Heartbeat full sync deletes the inactive stale mapping and cleans up orphan MasterIdentity.
+    4. Active / CIAM_ADMIN accounts missing from payload are preserved as PENDING_PROVISION.
+    """
+    from app.core.database import SessionLocal
+    from datetime import datetime, timezone
+
+    db = SessionLocal()
+    app_code = "mode_c_prune_spoke"
+    api_key = "sec_mode_c_prune_key_999"
+
+    try:
+        # 1. Setup spoke application
+        app = db.query(ConnectedApplication).filter_by(app_code=app_code).first()
+        if not app:
+            app = ConnectedApplication(
+                app_code=app_code,
+                app_name="Mode C Prune Spoke",
+                connector_type="OUTBOUND_AGENT",
+                api_key=api_key,
+            )
+            db.add(app)
+            db.commit()
+            db.refresh(app)
+
+        # 2. Setup user 1: Inactive user deleted from Spoke
+        uname_del = "deleted.inactive.user"
+        ident_del = MasterIdentity(
+            username=uname_del,
+            full_name="Deleted Inactive User",
+            is_active_in_ad=False,
+            is_approved_exception=False,
+        )
+        db.add(ident_del)
+        db.flush()
+
+        mapping_del = AppAccountMapping(
+            identity_id=ident_del.id,
+            application_id=app.id,
+            app_username=uname_del,
+            app_group_name="Staff",
+            is_active_in_app=False,  # Already inactive
+            status_origin="SPOKE_APP",
+            last_sync_status="IN_SYNC",
+        )
+        db.add(mapping_del)
+
+        # 3. Setup user 2: Active user missing from Spoke (should become PENDING_PROVISION)
+        uname_active = "active.pending.user"
+        ident_active = MasterIdentity(
+            username=uname_active,
+            full_name="Active Pending User",
+            is_active_in_ad=False,
+            is_approved_exception=True,
+        )
+        db.add(ident_active)
+        db.flush()
+
+        mapping_active = AppAccountMapping(
+            identity_id=ident_active.id,
+            application_id=app.id,
+            app_username=uname_active,
+            app_group_name="Staff",
+            is_active_in_app=True,  # Active on CIAM
+            status_origin="CIAM_ADMIN",
+            last_sync_status="IN_SYNC",
+        )
+        db.add(mapping_active)
+
+        # 4. Setup user 3: Live user that remains in Spoke
+        uname_live = "live.remains.user"
+        ident_live = MasterIdentity(
+            username=uname_live,
+            full_name="Live Remains User",
+            is_active_in_ad=False,
+        )
+        db.add(ident_live)
+        db.flush()
+
+        mapping_live = AppAccountMapping(
+            identity_id=ident_live.id,
+            application_id=app.id,
+            app_username=uname_live,
+            app_group_name="Staff",
+            is_active_in_app=True,
+            status_origin="SPOKE_APP",
+            last_sync_status="IN_SYNC",
+        )
+        db.add(mapping_live)
+        db.commit()
+
+        # 5. Agent sends Full Sync with ONLY user 3 (uname_live)
+        agent_headers = {"X-Spoke-API-Key": api_key}
+        payload = {
+            "app_code": app_code,
+            "sync_type": "FULL_SYNC",
+            "accounts": [
+                {
+                    "username": uname_live,
+                    "full_name": "Live Remains User",
+                    "role": "Staff",
+                    "is_active": True,
+                }
+            ],
+        }
+
+        resp = client.post("/api/v1/agent/heartbeat", json=payload, headers=agent_headers)
+        assert resp.status_code == 200
+
+        # 6. Verify assertions
+        # A) Deleted inactive mapping must be PRUNED (deleted from DB)
+        del_check = db.query(AppAccountMapping).filter(
+            AppAccountMapping.application_id == app.id,
+            AppAccountMapping.app_username == uname_del,
+        ).first()
+        assert del_check is None, "Inactive account deleted from Spoke must be pruned from AppAccountMapping"
+
+        # B) Orphan MasterIdentity for deleted user must be cleaned up
+        orphan_check = db.query(MasterIdentity).filter(
+            MasterIdentity.username == uname_del
+        ).first()
+        assert orphan_check is None, "Orphan MasterIdentity must be cleaned up"
+
+        # C) Active / CIAM_ADMIN mapping missing from Spoke must be preserved as PENDING_PROVISION
+        active_check = db.query(AppAccountMapping).filter(
+            AppAccountMapping.application_id == app.id,
+            AppAccountMapping.app_username == uname_active,
+        ).first()
+        assert active_check is not None, "Active account missing from Spoke must NOT be deleted"
+        assert active_check.last_sync_status == "PENDING_PROVISION"
+
+        # D) Live account mapping must remain IN_SYNC
+        live_check = db.query(AppAccountMapping).filter(
+            AppAccountMapping.application_id == app.id,
+            AppAccountMapping.app_username == uname_live,
+        ).first()
+        assert live_check is not None
+        assert live_check.last_sync_status == "IN_SYNC"
+
+    finally:
+        db.query(AppAccountMapping).filter(
+            AppAccountMapping.app_username.in_([uname_del, uname_active, uname_live])
+        ).delete()
+        db.query(MasterIdentity).filter(
+            MasterIdentity.username.in_([uname_del, uname_active, uname_live])
+        ).delete()
+        sp = db.query(ConnectedApplication).filter_by(app_code=app_code).first()
+        if sp:
+            db.delete(sp)
+        db.commit()
+        db.close()
+
+
+
 

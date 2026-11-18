@@ -227,6 +227,41 @@ def handle_agent_heartbeat(
 
             synced_count += 1
 
+        # -------------------------------------------------------------------------
+        # [เพิ่มใหม่] Prune Stale Mappings for Mode C Full Sync (เหมือนใน scheduler.py)
+        # -------------------------------------------------------------------------
+        live_usernames = {
+            acc.username.strip().lower() 
+            for acc in payload.accounts 
+            if acc.username
+        }
+        
+        if live_usernames:
+            stale_mappings = (
+                db.query(AppAccountMapping)
+                .filter(
+                    AppAccountMapping.application_id == app.id,
+                    ~func.trim(func.lower(AppAccountMapping.app_username)).in_(live_usernames)
+                )
+                .all()
+            )
+            for stale in stale_mappings:
+                # 🛡️ Protection against disappearing accounts (ตามสเปกหมวด D.6.3):
+                # หากเป็นบัญชีที่สั่งสร้างจาก CIAM หรือยังมีสถานะ Active อยู่ ให้คงไว้เป็น PENDING_PROVISION
+                if getattr(stale, "status_origin", None) == "CIAM_ADMIN" or stale.is_active_in_app:
+                    logger.info("Agent Full Sync: User '%s' missing from %s; keeping as PENDING_PROVISION", stale.app_username, app.app_code)
+                    stale.last_sync_status = "PENDING_PROVISION"
+                    stale.status_reason = f"ยังไม่พบบัญชีใน {app.app_name} (รอการสร้างหรือเข้าใช้งานครั้งแรก)"
+                else:
+                    # ✅ หากเป็นบัญชีที่ถูกปิดใช้งาน (Inactive) แล้ว และถูกลบออกจากระบบลูกแล้วจริง ให้ลบ Mapping ออกจาก CIAM ทันที
+                    logger.info("Agent Full Sync: Pruning deleted inactive account '%s' from %s", stale.app_username, app.app_code)
+                    db.delete(stale)
+            db.flush()
+            # กวาด MasterIdentity ที่ไม่มีระบบใดใช้งานแล้ว (Orphan Identity Cleanup)
+            from app.services.scheduler import cleanup_orphan_identities
+            cleanup_orphan_identities(db)
+        # -------------------------------------------------------------------------
+
         app.total_linked_accounts = db.query(AppAccountMapping).filter(
             AppAccountMapping.application_id == app.id
         ).count()

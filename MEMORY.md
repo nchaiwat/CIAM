@@ -605,6 +605,8 @@ FRONTEND_URL=http://localhost:3000
 
   - เมื่อ Agent ยิง Heartbeat เข้ามาจะดึงคำสั่งไปส่งข้อมูล Full Sync ในรอบถัดไป
 
+  - **Mode C Stale Mapping Pruning & Sync Parity (Sprint 65):** ใน `handle_agent_heartbeat` (`/api/v1/agent/heartbeat`) เมื่อได้รับ `payload.accounts` ระบบจะเปรียบเทียบกับ `AppAccountMapping` หากพบบัญชีที่เคย Inactive (`is_active_in_app == False`, `status_origin == "SPOKE_APP"`) แต่ปัจจุบันถูกลบออกจาก Spoke แล้ว (ไม่อยู่ใน `live_usernames`) ระบบ CIAM จะลบ Mapping นั้นออกทันที และเรียก `cleanup_orphan_identities(db)` เพื่อล้าง Orphan Identity ทำให้พฤติกรรมการกดซิงก์จากหน้า Spoke ทำงานได้ผลลัพธ์เทียบเท่ากับการกดซิงก์บนหน้า CIAM (Mode A parity) 100% ส่วนบัญชีที่เป็น `CIAM_ADMIN` หรือยังมีสถานะ Active อยู่ จะคงไว้เป็น `PENDING_PROVISION` ตามสเปก D.6.3
+
 * **Asynchronous Deprovisioning Lifecycle & Local Admin Protection:**
 
   - สถานะคำสั่ง: `PENDING` ➔ `SENT` ➔ `COMPLETED` / `FAILED`
