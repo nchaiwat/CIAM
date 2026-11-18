@@ -86,7 +86,8 @@ def persist_spoke_inventory(
     app: ConnectedApplication,
     raw_accounts: list,
     db: Session,
-    actor_username: str = "System-Scheduler"
+    actor_username: str = "System-Scheduler",
+    framework_version: Optional[str] = None
 ) -> int:
     """
     Persist account inventory from spoke system into Central IAM database:
@@ -456,6 +457,10 @@ def persist_spoke_inventory(
     app.last_sync_at = now
     app.health_status = "ONLINE"
     app.total_linked_accounts = synced_count
+    if framework_version and str(framework_version).strip():
+        clean_fw = str(framework_version).strip().lstrip("vV").strip()[:50]
+        if clean_fw:
+            app.spoke_framework_version = clean_fw
 
     db.add(IamAuditLog(
         actor_username=actor_username,
@@ -672,14 +677,18 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
         try:
             inv = await connector.sync_inventory()
             raw_accounts = list(inv.get("accounts", []))
+            fw_ver = inv.get("framework_version") or inv.get("spec_version") or inv.get("ciam_framework_version")
             await push_pending_provisions_to_spoke(app, raw_accounts, db, actor_username=actor_username)
-            synced_for_app = persist_spoke_inventory(app, raw_accounts, db, actor_username=actor_username)
+            synced_for_app = persist_spoke_inventory(
+                app, raw_accounts, db, actor_username=actor_username, framework_version=fw_ver
+            )
 
             results.append({
                 "app_code": app.app_code,
                 "app_name": app.app_name,
                 "success": True,
                 "accounts_synced": synced_for_app,
+                "spoke_framework_version": getattr(app, "spoke_framework_version", None),
                 "error": None
             })
             success_count += 1
@@ -690,6 +699,7 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
                 "app_name": app.app_name,
                 "success": False,
                 "accounts_synced": 0,
+                "spoke_framework_version": getattr(app, "spoke_framework_version", None),
                 "error": str(exc)[:150]
             })
             fail_count += 1

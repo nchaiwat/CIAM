@@ -12,6 +12,7 @@ from app.models.application import ConnectedApplication, SpokePendingCommand
 from app.models.mapping import AppAccountMapping
 from app.models.identity import MasterIdentity
 from app.models.audit import IamAuditLog
+from app.schemas.application import CURRENT_SPOKE_FRAMEWORK_VERSION
 
 logger = logging.getLogger("ciam.agent")
 router = APIRouter(prefix="/agent", tags=["On-Premise Spoke Agent"])
@@ -36,6 +37,8 @@ class AgentHeartbeatRequest(BaseModel):
     app_code: str
     status: Optional[str] = "HEALTHY"
     app_version: Optional[str] = None
+    framework_version: Optional[str] = None
+    spec_version: Optional[str] = None
     sync_type: Optional[str] = "HEARTBEAT"  # 'HEARTBEAT', 'FULL_SYNC'
     command_results: Optional[List[CommandResultItem]] = None
     accounts: Optional[List[HeartbeatAccountItem]] = None
@@ -61,6 +64,8 @@ class AgentHeartbeatResponse(BaseModel):
     app_code: str
     server_time: str
     next_heartbeat_seconds: int = 120
+    latest_framework_version: str = CURRENT_SPOKE_FRAMEWORK_VERSION
+    detected_framework_version: Optional[str] = None
     pending_commands: List[PendingCommandItem] = []
     assigned_accounts: Optional[List[AssignedAccountItem]] = None
     message: Optional[str] = None
@@ -116,6 +121,11 @@ def handle_agent_heartbeat(
     app.latency_ms = 1
     app.last_health_check_at = now
     app.spoke_sso_status = "ACTIVE"
+    raw_fw = payload.framework_version or payload.spec_version or payload.app_version
+    if raw_fw and str(raw_fw).strip():
+        clean_fw = str(raw_fw).strip().lstrip("vV").strip()[:50]
+        if clean_fw:
+            app.spoke_framework_version = clean_fw
 
     # 3. Process execution results of previous commands
     if payload.command_results:
@@ -333,6 +343,8 @@ def handle_agent_heartbeat(
         app_code=app.app_code,
         server_time=now.isoformat(),
         next_heartbeat_seconds=120,
+        latest_framework_version=CURRENT_SPOKE_FRAMEWORK_VERSION,
+        detected_framework_version=getattr(app, "spoke_framework_version", None),
         pending_commands=outgoing_cmds,
         assigned_accounts=assigned_accounts_list,
         message=f"Heartbeat received for {app.app_name}. {len(outgoing_cmds)} pending command(s) dispatched."

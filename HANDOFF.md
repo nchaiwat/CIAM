@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 18 พฤศจิกายน 2026 (Local Time: 13:16 ICT)  
+> **Date Updated:** 18 พฤศจิกายน 2026 (Local Time: 13:30 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Repository (APEX):** [https://github.com/ITWA-PCL/apex](https://github.com/ITWA-PCL/apex)  
@@ -8,8 +8,8 @@
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Production VPS (APEX):** `/var/www/Apex` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 102/102 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
-> **Git Status:** Production Ready — Sprint 64 + Spoke Spec v2.13.0 (`26882e2` + pending Spec v2.13.0 commit on Central-IAM `origin/main`, `8477d45` on APEX `origin/Sec1`)
+> **Test Integrity:** Backend Pytest: 103/103 passed (`.\.venv\Scripts\pytest.exe`), Frontend TypeScript: 0 errors (`npx tsc --noEmit`), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
+> **Git Status:** Production Ready — Sprint 64 + Spoke Spec v2.13.0 + Framework Version Handshake (`97e2bc0` + latest commit on Central-IAM `origin/main`, `8477d45` on APEX `origin/Sec1`)
 
 ---
 
@@ -33,6 +33,9 @@
      - เพิ่มฟิลด์ `password` และ `must_change_password` ใน Group C.2 (`POST /api/v1/directory/accounts`) พร้อมข้อบังคับให้ทำการ `INSERT`/`UPSERT` ลง DB จริงก่อนตอบ `201 Created` (เปลี่ยนโค้ดตัวอย่าง Python 10.1 และ Node.js 10.2 จาก `# TODO` Stub เป็นโค้ดบันทึกลง DB จริง + `bcrypt`)
      - อัปเดตตารางความสัมพันธ์และการ Login ทั้ง 4 กรณี (AD vs Local Account, สร้างจาก CIAM vs สร้างจาก Spoke App) ในหมวด C.4 และอัปเดต `ciam_agent.py` (Mode C) ให้รองรับ `PROVISION_USER` และ `assigned_accounts` (พร้อม `use_ad_auth`)
      - ปรับ Version ลิงก์ดาวน์โหลดและ Revision Changelog Modal เป็น **`v2.13.0`**
+   - **Spoke Framework Version Handshake & Compliance Tracking (`spoke_framework_version`):**
+     - เพิ่มคอลัมน์ `spoke_framework_version` บน `ConnectedApplication` (`models/application.py`, `initial_data.py`), ให้ `RestApiConnector` สกัดเวอร์ชันจาก `GET /api/v1/directory/accounts`, `/api/auth/sso/config`, หรือ Header `X-CIAM-Framework-Version`, ให้ `/api/v1/agent/heartbeat` รับ `framework_version` จาก Mode C Agent และตอบกลับ `latest_framework_version`
+     - แสดงป้ายสถานะเวอร์ชัน Framework บนการ์ดแอปหน้า `/applications` (`✓ v2.13.0 (ตรงสเปกล่าสุด)`, `⚠️ v2.x.x (ควรอัปเดต)`, `❔ ยังไม่ระบุเวอร์ชัน`, และ `🛠️ Native Infra Connector`)
 
 0a. **APEX CIAM SSO Identity Resolution (`Chaiwat.N`), Portal Direct Launch & Logout Redirect Fix (Sprint 63):**
    - **สาเหตุปัญหาฝั่ง APEX (`D:\Python\APEX`):**
@@ -1811,12 +1814,13 @@ docker compose up -d api web
 
 ## 4. สถานะระบบปัจจุบัน และ แผนงานที่จะปรับปรุงต่อในรอบถัดไป (Current Status & Next Steps Roadmap)
 
-> **ปรับปรุงล่าสุด:** 18 พฤศจิกายน 2026 (Local Time: 13:16 ICT)  
-> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (Sprint 64 + Spoke Spec v2.13.0) และ APEX `Sec1` (`8477d45`) พร้อม Deploy ขึ้น VPS และทดสอบ Live End-to-End
+> **ปรับปรุงล่าสุด:** 18 พฤศจิกายน 2026 (Local Time: 13:38 ICT)  
+> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (Sprint 64 + Spoke Spec v2.13.0 + Framework Version Handshake) และ APEX `Sec1` (`8477d45`) พร้อม Deploy ขึ้น VPS และทดสอบ Live End-to-End
 
 ### 4.1 สถานะระบบที่ตรวจสอบและส่งมอบแล้ว (Verified & Production Ready)
 * **Git Commits ล่าสุดบน `origin/main` (Central-IAM):**
-  - `Spoke Spec v2.13.0` (กำลัง Commit & Push) — Upgrade Spoke Enterprise Integration Specification & Developer Boilerplate to v2.13.0
+  - `HEAD` (`feat(applications): track Spoke framework_version during Sync, Ping, and Heartbeat`) — เพิ่ม Spoke Framework Version Handshake (`spoke_framework_version` / `v2.13.0`) ครบทั้ง DB, Mode A Sync/Ping, Mode B Config Probe, Mode C Heartbeat และ UI Badge บน `/applications`
+  - `97e2bc0` — `docs(spec): upgrade Spoke Integration Spec and developer boilerplate to v2.13.0` (One-Way AD, Local Initial Password, 4-Case Login Matrix, `PROVISION_USER` ใน Agent)
   - `26882e2` — `feat(directory): enforce one-way AD, local initial password, and two-way spoke provisioning sync` (Sprint 64)
   - `a10638c` — `fix(sso): add /oauth2/* compatibility rewrites and document APEX SSO fixes` (Sprint 63)
   - `051a7ac` — `fix(security): enforce CIAM origin IP 157.173.219.153 across M2M, OIDC, and isolate pytest from live spokes` (Sprint 62)
@@ -1826,8 +1830,8 @@ docker compose up -d api web
   - `8477d45` — `fix(sso): clear stale U01 session, resolve Chaiwat.N via CIAM OIDC/JIT, and redirect logout to CIAM Portal` (Sprint 63)
   - `393efef` — `fix(security): log verified CIAM origin IP 157.173.219.153 on SSO/M2M events and honor X-CIAM-Origin-IP` (Sprint 62)
 
-* **ผลการตรวจสอบคุณภาพและความถูกต้องล่าสุด (Sprint 64 Verification):**
-  - **Central-IAM Backend Test Suite (`cd backend; .\.venv\Scripts\pytest.exe`):** ผ่านครบถ้วน **102/102 tests (100% Passed)** (รวม `test_one_way_ad_and_local_account_creation_with_spoke_sync`)
+* **ผลการตรวจสอบคุณภาพและความถูกต้องล่าสุด (Sprint 64 + Framework Version Handshake Verification):**
+  - **Central-IAM Backend Test Suite (`cd backend; .\.venv\Scripts\pytest.exe`):** ผ่านครบถ้วน **103/103 tests (100% Passed in 328.13s)** (รวม `test_one_way_ad_and_local_account_creation_with_spoke_sync` และ `test_spoke_framework_version_handshake_across_sync_ping_and_heartbeat`)
   - **Central-IAM Frontend Type Check (`cd frontend; npx tsc --noEmit`):** ผ่านสมบูรณ์ **0 TypeScript Errors**
   - **APEX Pre-Push Suite (`node scripts/verify-local.js`):** ผ่านครบถ้วน **13 Syntax + 10 Security/Finance checks (0 Errors)**
   - **APEX Isolated HTTP SSO Verification:** ผ่าน (`ALL_INLINE_SSO_CHECKS_PASSED`) ยืนยันการล้างคุกกี้ `U01`, Callback `ciam_launch_*`, JIT Auto-Provision **`Chaiwat.N`**, `/api/auth/session` แสดง `Chaiwat.N`, และ `POST/GET /api/auth/sso/logout` เด้งกลับ `https://ciam.windowasia.com/portal`

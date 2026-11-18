@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 
+CURRENT_SPOKE_FRAMEWORK_VERSION = "2.13.0"
+
 class AppCreate(BaseModel):
     app_code: str
     app_name: str
@@ -65,6 +67,8 @@ class AppOut(BaseModel):
     portal_launch_url: Optional[str] = None
     sso_enabled: bool = True
     spoke_sso_status: Optional[str] = "UNKNOWN"
+    spoke_framework_version: Optional[str] = None
+    latest_framework_version: str = CURRENT_SPOKE_FRAMEWORK_VERSION
     sap_company_db: Optional[str] = None
     sap_username: Optional[str] = None
     ad_allow_status_patch: Optional[bool] = False
@@ -81,6 +85,8 @@ class PingResult(BaseModel):
     latency_ms: int
     message: str
     spoke_sso_status: Optional[str] = "UNKNOWN"
+    spoke_framework_version: Optional[str] = None
+    latest_framework_version: str = CURRENT_SPOKE_FRAMEWORK_VERSION
 
 class AppCredentialOut(BaseModel):
     id: int
@@ -120,6 +126,8 @@ class SyncAppResult(BaseModel):
     app_name: str
     success: bool
     accounts_synced: int
+    spoke_framework_version: Optional[str] = None
+    latest_framework_version: str = CURRENT_SPOKE_FRAMEWORK_VERSION
     error: Optional[str] = None
 
 class SyncAllResult(BaseModel):

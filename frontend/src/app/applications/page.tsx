@@ -790,6 +790,53 @@ export default function ApplicationsPage() {
                     </div>
                   )}
 
+                  {/* Framework / Spec Version Compliance Row */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 font-medium">เวอร์ชัน Framework:</span>
+                    {(() => {
+                      const isDirectInfra =
+                        ["ad", "m365", "pfsense_ho", "pfsense_fac", "sap_b1", "wa_rdt2"].includes(app.app_code.toLowerCase()) ||
+                        ["AD_PROXY", "SAP_B1", "M365", "PFSENSE", "RDP"].includes(app.connector_type);
+                      if (isDirectInfra) {
+                        return (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                            🛠️ Native Infra Connector
+                          </span>
+                        );
+                      }
+                      const latestVer = (app.latest_framework_version || "2.13.0").replace(/^v/i, "");
+                      const rawFw = app.spoke_framework_version ? app.spoke_framework_version.replace(/^v/i, "").trim() : "";
+                      if (!rawFw) {
+                        return (
+                          <span
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-300"
+                            title={`ระบบลูกยังไม่ได้ส่งค่า framework_version กลับมาใน Sync/Ping/Heartbeat (มาตรฐานล่าสุด v${latestVer})`}
+                          >
+                            ❔ ยังไม่ระบุเวอร์ชัน (&lt; v{latestVer})
+                          </span>
+                        );
+                      }
+                      if (rawFw === latestVer) {
+                        return (
+                          <span
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300"
+                            title={`อัปเดตตรงตามมาตรฐาน Central IAM Spoke Framework v${latestVer} แล้ว`}
+                          >
+                            ✓ v{rawFw} (ตรงสเปกล่าสุด)
+                          </span>
+                        );
+                      }
+                      return (
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300"
+                          title={`Spoke ใช้ Framework v${rawFw} — ควรอัปเดตให้ตรงกับ v${latestVer}`}
+                        >
+                          ⚠️ v{rawFw} (ควรอัปเดตเป็น v{latestVer})
+                        </span>
+                      );
+                    })()}
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <span className="text-slate-600 font-medium">นโยบายเครือข่าย:</span>
                     {app.network_policy === "VPN_ONLY" ? (
@@ -3085,6 +3132,7 @@ export default function ApplicationsPage() {
                       <li><strong>One-Way Active Directory:</strong> CIAM ไม่สร้างบัญชีขึ้นบน AD; ใช้การดึงบัญชี AD ที่มีอยู่แล้วไปจ่ายสิทธิ์ให้ Spoke App หรือหากสร้างที่ Spoke App แล้วติ๊ก <code>use_ad_auth: true</code> ระบบจะจับคู่กับ AD อัตโนมัติตอน Sync</li>
                       <li><strong>Local Account Password Provisioning:</strong> เมื่อสร้าง Local Account จาก CIAM (<code>use_ad_auth: false</code>) ระบบจะส่งฟิลด์ <code>password</code> และ <code>must_change_password</code> ไปยัง <code>POST /api/v1/directory/accounts</code> เพื่อให้ Spoke App นำไป Hash ด้วย <code>bcrypt</code> รองรับการ Login ตรงคู่กับ SSO</li>
                       <li><strong>Strict Real DB Persistence (No Stubs):</strong> ระบบลูก Mode A ต้อง <code>INSERT</code>/<code>UPSERT</code> ลงฐานข้อมูลจริงก่อนตอบ <code>201 Created</code> และ Mode C (<code>ciam_agent.py</code>) ต้องประมวลผลคำสั่ง <code>PROVISION_USER</code> และ <code>assigned_accounts</code> ครบถ้วน</li>
+                      <li><strong>Framework Version Compliance Handshake:</strong> ระบบลูกส่ง <code>framework_version: &quot;2.13.0&quot;</code> ใน <code>GET /api/v1/directory/accounts</code>, <code>GET /api/auth/sso/config</code> และ <code>POST /api/v1/agent/heartbeat</code> เพื่อให้หน้า <code>/applications</code> แสดงสถานะเวอร์ชันของแต่ละแอปแบบเรียลไทม์</li>
                       <li><strong>4-Case Login Matrix (หมวด C.4):</strong> คู่มือชัดเจนสำหรับการ Login ผ่าน SSO และหน้าเว็บตรงสำหรับทั้งบัญชี AD และ Local Account</li>
                     </ul>
                   </div>

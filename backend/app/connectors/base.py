@@ -15,6 +15,7 @@ class ConnectorHealth(BaseModel):
     latency_ms: int
     message: str
     spoke_sso_active: Optional[bool] = None
+    spoke_framework_version: Optional[str] = None
 
 class BaseConnector(ABC):
     @abstractmethod

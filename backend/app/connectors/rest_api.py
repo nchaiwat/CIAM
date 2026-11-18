@@ -16,6 +16,27 @@ class RestApiConnector(BaseConnector):
         # The central identity server IP (VPS 157.173.219.153) must always be sent as X-Forwarded-For
         # so target Spoke systems (IRM, QMS, etc.) verify against CIAM server IP, not the end user's personal IP.
         self.origin_ip = origin_ip or getattr(settings, "AD_ORIGIN_IP", "157.173.219.153") or "157.173.219.153"
+        self._last_detected_framework_version: Optional[str] = None
+
+    @staticmethod
+    def _extract_framework_version(data: Optional[Dict[str, Any]], headers: Any = None) -> Optional[str]:
+        """Extract normalized Spoke framework/spec version from JSON body or HTTP headers."""
+        candidates = []
+        if isinstance(data, dict):
+            for key in ("framework_version", "spec_version", "ciam_framework_version", "ciam_spec_version"):
+                val = data.get(key)
+                if val:
+                    candidates.append(str(val))
+        if headers:
+            for hdr in ("x-ciam-framework-version", "x-ciam-spec-version", "x-framework-version"):
+                val = headers.get(hdr)
+                if val:
+                    candidates.append(str(val))
+        for raw in candidates:
+            cleaned = raw.strip().lstrip("vV").strip()
+            if cleaned:
+                return cleaned[:50]
+        return None
 
     def _get_headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         headers = {
@@ -223,11 +244,17 @@ class RestApiConnector(BaseConnector):
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(endpoint, headers=headers, params=params)
             if response.status_code == 200:
-                return response.json()
+                data = response.json()
+                if isinstance(data, dict):
+                    fw_ver = self._extract_framework_version(data, response.headers)
+                    if fw_ver:
+                        data["framework_version"] = fw_ver
+                return data
             raise Exception(f"Failed to fetch inventory from {self.app_code.upper()}: HTTP {response.status_code} - {response.text[:200]}")
 
     async def _probe_spoke_sso(self, client: httpx.AsyncClient) -> Optional[bool]:
         """Probe spoke's public SSO config endpoint, falling back to /api/auth/session if needed."""
+        self._last_detected_framework_version = None
         for path in ("/api/auth/sso/config", "/api/auth/session"):
             try:
                 sso_cfg_res = await client.get(
@@ -238,6 +265,9 @@ class RestApiConnector(BaseConnector):
                 if sso_cfg_res.status_code == 200:
                     sso_data = sso_cfg_res.json()
                     if isinstance(sso_data, dict):
+                        fw_ver = self._extract_framework_version(sso_data, sso_cfg_res.headers)
+                        if fw_ver and not self._last_detected_framework_version:
+                            self._last_detected_framework_version = fw_ver
                         has_sso_flags = any(
                             k in sso_data
                             for k in ("sso_enabled", "ciam_enabled", "break_glass_active", "break_glass_enabled")
@@ -261,11 +291,14 @@ class RestApiConnector(BaseConnector):
                 response = await client.get(endpoint, headers=headers)
                 elapsed = int((time.time() - start_time) * 1000)
                 spoke_sso_active = await self._probe_spoke_sso(client)
+                sso_fw_ver = self._last_detected_framework_version
 
                 if response.status_code == 200:
                     data = response.json()
                     app_name = data.get("application_name", self.app_code.upper())
                     total = data.get("total_accounts", len(data.get("accounts", [])))
+                    inv_fw_ver = self._extract_framework_version(data, response.headers)
+                    detected_fw = inv_fw_ver or sso_fw_ver
 
                     msg = f"M2M REST API Active ({app_name}, {total} accounts)"
                     if spoke_sso_active is False:
@@ -275,13 +308,15 @@ class RestApiConnector(BaseConnector):
                         is_online=True,
                         latency_ms=elapsed,
                         message=msg,
-                        spoke_sso_active=spoke_sso_active
+                        spoke_sso_active=spoke_sso_active,
+                        spoke_framework_version=detected_fw
                     )
                 return ConnectorHealth(
                     is_online=False,
                     latency_ms=elapsed,
                     message=f"HTTP {response.status_code}: {response.text[:100]}",
-                    spoke_sso_active=spoke_sso_active
+                    spoke_sso_active=spoke_sso_active,
+                    spoke_framework_version=sso_fw_ver
                 )
         except Exception as exc:
             elapsed = int((time.time() - start_time) * 1000)
@@ -289,5 +324,6 @@ class RestApiConnector(BaseConnector):
                 is_online=False,
                 latency_ms=elapsed,
                 message=f"Unreachable: {str(exc)[:60]}",
-                spoke_sso_active=None
+                spoke_sso_active=None,
+                spoke_framework_version=None
             )

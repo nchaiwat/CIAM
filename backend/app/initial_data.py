@@ -105,6 +105,8 @@ def init_db():
                 conn.execute(text("ALTER TABLE connected_applications ADD COLUMN allowed_network_cidrs VARCHAR(500);"))
             if "portal_launch_url" not in app_columns:
                 conn.execute(text("ALTER TABLE connected_applications ADD COLUMN portal_launch_url VARCHAR(500);"))
+            if "spoke_framework_version" not in app_columns:
+                conn.execute(text("ALTER TABLE connected_applications ADD COLUMN spoke_framework_version VARCHAR(50);"))
 
             # Safe auto-migration for oauth_authorization_codes
             if inspector.has_table("oauth_authorization_codes"):

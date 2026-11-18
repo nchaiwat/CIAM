@@ -369,3 +369,96 @@ def test_one_way_ad_and_local_account_creation_with_spoke_sync():
                 db.delete(app_row)
         db.commit()
         db.close()
+
+
+def test_spoke_framework_version_handshake_across_sync_ping_and_heartbeat():
+    """
+    Verify that CIAM extracts, normalizes, persists, and returns Spoke Framework
+    version (`spoke_framework_version`) during Mode A Sync, Ping, and Mode C Heartbeat.
+    """
+    from unittest.mock import patch, AsyncMock
+    from app.connectors.base import ConnectorHealth
+    from app.connectors.rest_api import RestApiConnector
+
+    assert RestApiConnector._extract_framework_version({"spec_version": "v2.13.0"}, {}) == "2.13.0"
+    assert RestApiConnector._extract_framework_version({}, {"x-ciam-framework-version": "v2.13.0"}) == "2.13.0"
+
+    admin_headers = get_admin_auth_header()
+    db = SessionLocal()
+    try:
+        for code in ("petty_fw_a", "petty_fw_c"):
+            old_app = db.query(ConnectedApplication).filter_by(app_code=code).first()
+            if old_app:
+                db.delete(old_app)
+        db.commit()
+
+        mode_a_app = ConnectedApplication(
+            app_code="petty_fw_a",
+            app_name="PettyCash FW Mode A",
+            connector_type="REST_API",
+            base_url="http://pettycash-fw.internal",
+            api_key="sec_fw_a",
+            sso_enabled=True,
+            is_active=True,
+        )
+        mode_c_app = ConnectedApplication(
+            app_code="petty_fw_c",
+            app_name="PettyCash FW Mode C",
+            connector_type="SSO_ONLY",
+            base_url="https://pettycash-fw-c.internal",
+            api_key="sec_fw_c",
+            client_id="petty-fw-c-client",
+            sso_enabled=True,
+            is_active=True,
+        )
+        db.add_all([mode_a_app, mode_c_app])
+        db.commit()
+        db.refresh(mode_a_app)
+        db.refresh(mode_c_app)
+
+        # 1. Mode A Sync extracts framework_version
+        with patch("app.connectors.rest_api.RestApiConnector.sync_inventory", new_callable=AsyncMock) as mock_sync:
+            mock_sync.return_value = {"framework_version": "2.13.0", "accounts": []}
+            sync_res = client.post(f"/api/v1/applications/{mode_a_app.id}/sync", headers=admin_headers)
+            assert sync_res.status_code == 200, sync_res.text
+            assert sync_res.json()["spoke_framework_version"] == "2.13.0"
+
+        # 2. Mode A Ping extracts and normalizes 'v'-prefixed framework_version
+        with patch("app.connectors.rest_api.RestApiConnector.health_check", new_callable=AsyncMock) as mock_health:
+            mock_health.return_value = ConnectorHealth(
+                is_online=True,
+                latency_ms=15,
+                message="OK",
+                spoke_sso_active=True,
+                spoke_framework_version="v2.12.0",
+            )
+            ping_res = client.post(f"/api/v1/applications/{mode_a_app.id}/ping", headers=admin_headers)
+            assert ping_res.status_code == 200, ping_res.text
+            assert ping_res.json()["spoke_framework_version"] == "2.12.0"
+            assert ping_res.json()["latest_framework_version"] == "2.13.0"
+
+        # 3. Mode C Heartbeat updates spoke_framework_version
+        hb_res = client.post(
+            "/api/v1/agent/heartbeat",
+            json={"app_code": "petty_fw_c", "framework_version": "v2.13.0", "sync_type": "HEARTBEAT"},
+            headers={"X-Spoke-API-Key": "sec_fw_c"},
+        )
+        assert hb_res.status_code == 200, hb_res.text
+        hb_data = hb_res.json()
+        assert hb_data["latest_framework_version"] == "2.13.0"
+        assert hb_data["detected_framework_version"] == "2.13.0"
+
+        # 4. GET /api/v1/applications exposes spoke_framework_version for UI badges
+        apps_res = client.get("/api/v1/applications", headers=admin_headers)
+        assert apps_res.status_code == 200
+        apps_by_code = {a["app_code"]: a for a in apps_res.json()}
+        assert apps_by_code["petty_fw_a"]["spoke_framework_version"] == "2.12.0"
+        assert apps_by_code["petty_fw_c"]["spoke_framework_version"] == "2.13.0"
+        assert apps_by_code["petty_fw_c"]["latest_framework_version"] == "2.13.0"
+    finally:
+        for code in ("petty_fw_a", "petty_fw_c"):
+            app_row = db.query(ConnectedApplication).filter_by(app_code=code).first()
+            if app_row:
+                db.delete(app_row)
+        db.commit()
+        db.close()

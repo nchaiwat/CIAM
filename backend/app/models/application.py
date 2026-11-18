@@ -27,6 +27,7 @@ class ConnectedApplication(Base):
     portal_launch_url = Column(String(500), nullable=True) # Specific initiation URL for Employee Portal Launch (e.g. /auth/start)
     sso_enabled = Column(Boolean, default=True, nullable=False)
     spoke_sso_status = Column(String(50), default="UNKNOWN", nullable=True) # 'ACTIVE', 'DISABLED', 'UNKNOWN'
+    spoke_framework_version = Column(String(50), nullable=True) # Detected Spoke Framework/Spec version (e.g. '2.13.0')
 
     # SAP Business One Service Layer Credentials (Zero-Trust Session Auth)
     sap_company_db = Column(String(100), nullable=True)

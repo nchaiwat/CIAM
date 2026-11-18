@@ -205,6 +205,8 @@ export interface ConnectedApp {
   portal_launch_url?: string | null;
   sso_enabled?: boolean;
   spoke_sso_status?: "ACTIVE" | "DISABLED" | "UNKNOWN" | string;
+  spoke_framework_version?: string | null;
+  latest_framework_version?: string;
   sap_company_db?: string | null;
   sap_username?: string | null;
   sap_password?: string | null;
@@ -235,6 +237,8 @@ export interface SyncAppResult {
   app_name: string;
   success: boolean;
   accounts_synced: number;
+  spoke_framework_version?: string | null;
+  latest_framework_version?: string;
   error: string | null;
 }
 
@@ -563,7 +567,7 @@ export const ciamApi = {
     }),
 
   pingApplication: (id: number) =>
-    fetchApi<{ app_code: string; status: string; latency_ms: number; message: string }>(`/applications/${id}/ping`, {
+    fetchApi<{ app_code: string; status: string; latency_ms: number; message: string; spoke_framework_version?: string | null; latest_framework_version?: string }>(`/applications/${id}/ping`, {
       method: "POST",
     }),
 
@@ -580,7 +584,7 @@ export const ciamApi = {
     }>(`/applications/${id}/inventory`),
 
   syncApplicationInventory: (id: number) =>
-    fetchApi<{ success: boolean; app_code: string; total_accounts_fetched: number; synced_count: number; synced_at: string }>(
+    fetchApi<{ success: boolean; app_code: string; total_accounts_fetched: number; synced_count: number; spoke_framework_version?: string | null; synced_at: string }>(
       `/applications/${id}/sync`,
       { method: "POST" }
     ),

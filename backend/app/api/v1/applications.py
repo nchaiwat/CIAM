@@ -139,6 +139,7 @@ def list_applications(
             redirect_uris=app.redirect_uris,
             sso_enabled=app.sso_enabled,
             spoke_sso_status=getattr(app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN",
+            spoke_framework_version=getattr(app, "spoke_framework_version", None),
             sap_company_db=app.sap_company_db,
             sap_username=app.sap_username,
             ad_allow_status_patch=app.ad_allow_status_patch,
@@ -215,6 +216,7 @@ def register_application(
         portal_launch_url=new_app.portal_launch_url,
         sso_enabled=new_app.sso_enabled,
         spoke_sso_status=getattr(new_app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN",
+        spoke_framework_version=getattr(new_app, "spoke_framework_version", None),
         sap_company_db=new_app.sap_company_db,
         sap_username=new_app.sap_username,
         ad_allow_status_patch=new_app.ad_allow_status_patch,
@@ -442,6 +444,7 @@ def update_application(
         portal_launch_url=app.portal_launch_url,
         sso_enabled=app.sso_enabled,
         spoke_sso_status=getattr(app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN",
+        spoke_framework_version=getattr(app, "spoke_framework_version", None),
         sap_company_db=app.sap_company_db,
         sap_username=app.sap_username,
         ad_allow_status_patch=app.ad_allow_status_patch,
@@ -477,6 +480,10 @@ async def ping_application(
         # Preserve ACTIVE / existing SSO status on transient M2M ping failure unless explicitly reported disabled
         if getattr(app, "spoke_sso_status", None) not in ("ACTIVE", "DISABLED"):
             app.spoke_sso_status = "UNKNOWN"
+    if getattr(health, "spoke_framework_version", None):
+        clean_fw = str(health.spoke_framework_version).strip().lstrip("vV").strip()[:50]
+        if clean_fw:
+            app.spoke_framework_version = clean_fw
     db.commit()
 
     return PingResult(
@@ -484,7 +491,8 @@ async def ping_application(
         status="ONLINE" if health.is_online else "OFFLINE",
         latency_ms=health.latency_ms,
         message=health.message,
-        spoke_sso_status=getattr(app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN"
+        spoke_sso_status=getattr(app, "spoke_sso_status", "UNKNOWN") or "UNKNOWN",
+        spoke_framework_version=getattr(app, "spoke_framework_version", None),
     )
 
 @router.get("/{app_id}/inventory")
@@ -545,6 +553,7 @@ async def get_application_inventory(
     try:
         data = await connector.sync_inventory()
         raw_accounts = list(data.get("accounts", []))
+        fw_ver = data.get("framework_version") or data.get("spec_version") or data.get("ciam_framework_version")
         try:
             pushed = await push_pending_provisions_to_spoke(
                 app, raw_accounts, db, actor_username=current_admin.username
@@ -553,7 +562,18 @@ async def get_application_inventory(
                 data["accounts"] = raw_accounts
                 data["total_accounts"] = len(raw_accounts)
             if raw_accounts:
-                _persist_inventory(app, raw_accounts, db, actor_username=current_admin.username)
+                _persist_inventory(
+                    app,
+                    raw_accounts,
+                    db,
+                    actor_username=current_admin.username,
+                    framework_version=fw_ver,
+                )
+            elif fw_ver and str(fw_ver).strip():
+                clean_fw = str(fw_ver).strip().lstrip("vV").strip()[:50]
+                if clean_fw:
+                    app.spoke_framework_version = clean_fw
+                    db.commit()
         except Exception as pe:
             logger.warning("Auto-persist inventory failed during inspection of %s: %s", app.app_code, pe)
             db.rollback()
@@ -632,12 +652,15 @@ async def sync_application_inventory(
         raise HTTPException(status_code=502, detail=f"Sync failed: {err_msg}")
 
     raw_accounts = list(inventory.get("accounts", []))
+    fw_ver = inventory.get("framework_version") or inventory.get("spec_version") or inventory.get("ciam_framework_version")
 
     try:
         await push_pending_provisions_to_spoke(
             app, raw_accounts, db, actor_username=current_admin.username
         )
-        synced_count = _persist_inventory(app, raw_accounts, db, actor_username=current_admin.username)
+        synced_count = _persist_inventory(
+            app, raw_accounts, db, actor_username=current_admin.username, framework_version=fw_ver
+        )
     except Exception as exc:
         db.rollback()
         logger.exception("Sync database operation failed for %s (%s): %s", app.app_code, app.id, exc)
@@ -651,6 +674,7 @@ async def sync_application_inventory(
         "app_code": app.app_code,
         "total_accounts_fetched": len(raw_accounts),
         "synced_count": synced_count,
+        "spoke_framework_version": getattr(app, "spoke_framework_version", None),
         "synced_at": now.isoformat()
     }
 

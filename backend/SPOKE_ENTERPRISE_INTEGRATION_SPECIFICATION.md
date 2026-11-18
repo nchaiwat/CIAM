@@ -14,7 +14,7 @@
 
 | เวอร์ชัน (Version) | วันที่มีผล (Date) | สถานะ (Status) | สรุปรายการปรับปรุงจากเวอร์ชันก่อนหน้า (Change Summary & Key Differences) |
 | :---: | :---: | :---: | :--- |
-| **v2.13.0** | 18/11/2026 | **Current Active** | • **One-Way Active Directory, Local Account Initial Password & Real DB Persistence Framework Standard (หมวด C.2, C.4, D.2, D.5, 10.1, 10.2):**<br/>1) **One-Way AD Enforcement:** Central IAM ไม่สร้างบัญชีขึ้นบน Active Directory (AD เป็นแหล่งข้อมูลหลักแบบทางเดียว) พนักงาน AD ต้องสร้างบน AD ก่อน แล้ว CIAM จึงนำบัญชีมาจ่ายสิทธิ์เข้า Spoke App หรือหากสร้างที่หน้า Spoke App และติ๊ก `use_ad_auth: true` ระบบจะจับคู่เข้ากับตัวตน AD ให้อัตโนมัติตอน Sync<br/>2) **Local Account Password Provisioning (`password`, `must_change_password`):** เมื่อ CIAM สร้างบัญชี Local Account (`use_ad_auth: false`) พร้อมมอบสิทธิ์ให้ Spoke App CIAM จะแนบฟิลด์ `password` และ `must_change_password` ไปใน Payload `POST /api/v1/directory/accounts` เพื่อให้ Spoke App นำไป Hash ด้วย `bcrypt` ลงฐานข้อมูล (รองรับการ Login ตรงที่ Spoke App คู่กับ SSO)<br/>3) **Strict Real DB Persistence (ห้ามใช้ Mock/Stub Response):** ระบบลูก Mode A ต้องทำการ `INSERT`/`UPSERT` ลงตาราง `users` และ `COMMIT` จริงก่อนตอบ `201 Created` (รองรับ Endpoint `/api/v1/directory/accounts` และ Fallback `/api/directory/accounts`) รวมถึงปรับ `ciam_agent.py` (Mode C) ให้ประมวลผล `PROVISION_USER` และ `assigned_accounts` (พร้อม `use_ad_auth`) สำหรับทั้งบัญชี AD และ Local Account ครบถ้วน<br/>4) **Complete 4-Case Login Matrix (หมวด C.4):** ระบุแนวทาง Login ผ่าน SSO และ Login ตรงบน Spoke App สำหรับทั้งบัญชีที่สร้างจาก CIAM และบัญชีที่สร้างจาก Spoke App โดยตรง |
+| **v2.13.0** | 18/11/2026 | **Current Active** | • **One-Way Active Directory, Local Account Initial Password, Real DB Persistence & Framework Version Handshake (หมวด B.1, C.1, C.2, C.4, D.2, D.5, 10.1, 10.2):**<br/>1) **One-Way AD Enforcement:** Central IAM ไม่สร้างบัญชีขึ้นบน Active Directory (AD เป็นแหล่งข้อมูลหลักแบบทางเดียว) พนักงาน AD ต้องสร้างบน AD ก่อน แล้ว CIAM จึงนำบัญชีมาจ่ายสิทธิ์เข้า Spoke App หรือหากสร้างที่หน้า Spoke App และติ๊ก `use_ad_auth: true` ระบบจะจับคู่เข้ากับตัวตน AD ให้อัตโนมัติตอน Sync<br/>2) **Local Account Password Provisioning (`password`, `must_change_password`):** เมื่อ CIAM สร้างบัญชี Local Account (`use_ad_auth: false`) พร้อมมอบสิทธิ์ให้ Spoke App CIAM จะแนบฟิลด์ `password` และ `must_change_password` ไปใน Payload `POST /api/v1/directory/accounts` เพื่อให้ Spoke App นำไป Hash ด้วย `bcrypt` ลงฐานข้อมูล (รองรับการ Login ตรงที่ Spoke App คู่กับ SSO)<br/>3) **Strict Real DB Persistence (ห้ามใช้ Mock/Stub Response):** ระบบลูก Mode A ต้องทำการ `INSERT`/`UPSERT` ลงตาราง `users` และ `COMMIT` จริงก่อนตอบ `201 Created` (รองรับ Endpoint `/api/v1/directory/accounts` และ Fallback `/api/directory/accounts`) รวมถึงปรับ `ciam_agent.py` (Mode C) ให้ประมวลผล `PROVISION_USER` และ `assigned_accounts` (พร้อม `use_ad_auth`) สำหรับทั้งบัญชี AD และ Local Account ครบถ้วน<br/>4) **Framework Version Compliance Handshake (`framework_version`):** ทุกระบบลูกต้องส่งฟิลด์ `"framework_version": "2.13.0"` กลับมายัง CIAM ใน `GET /api/v1/directory/accounts` (หรือ Header `X-CIAM-Framework-Version`), `GET /api/auth/sso/config`, และ `POST /api/v1/agent/heartbeat` เพื่อให้ CIAM ตรวจสอบและแสดงเวอร์ชันปัจจุบันของแต่ละแอปบนหน้า `/applications` ได้แบบเรียลไทม์<br/>5) **Complete 4-Case Login Matrix (หมวด C.4):** ระบุแนวทาง Login ผ่าน SSO และ Login ตรงบน Spoke App สำหรับทั้งบัญชีที่สร้างจาก CIAM และบัญชีที่สร้างจาก Spoke App โดยตรง |
 | **v2.12.0** | 12/11/2026 | Superseded | • **หมวด G (ข้อกำหนดที่ 13): Enterprise Local Password Policy & 90-Day Rotation Framework Standard (มาตรฐานความปลอดภัยรหัสผ่านบัญชีท้องถิ่น และการบังคับเปลี่ยนรหัสผ่านทุก 90 วัน สำหรับระบบลูก):**<br/>1) **90-Day Forced Password Rotation:** บัญชีท้องถิ่น (Local Accounts), บัญชีฉุกเฉิน (Break-Glass Local Admin), และบัญชีเฉพาะระบบที่ไม่ได้ยืนยันตัวตนผ่าน Active Directory ในระบบลูกทุกระบบ ต้องมีคอลัมน์ `password_changed_at` และมีกลไกบังคับเปลี่ยนรหัสผ่านทุกๆ 90 วันโดยเด็ดขาด<br/>2) **Strict Password Complexity Requirements:** ความยาว 8 - 16 ตัวอักษร, มีตัวพิมพ์ใหญ่ (A-Z) &ge; 1, ตัวพิมพ์เล็ก (a-z) &ge; 1, ตัวเลข (0-9) &ge; 1, อักขระพิเศษ (!@#$%^&*...) &ge; 1 และห้ามมี Username ปะปนอยู่ในรหัสผ่าน<br/>3) **Forced Password Change Interception:** เมื่อรหัสผ่านครบ 90 วัน หรือ `must_change_password = true` ระบบลูกต้องบล็อกการเข้าสู่หน้าระบบงาน และบังคับเปิด Modal เปลี่ยนรหัสผ่านทันที (ห้ามข้าม)<br/>4) **Ready-to-Use Framework Implementation:** โค้ดตัวอย่างสำเร็จรูปสำหรับ Python (FastAPI/SQLAlchemy), Node.js (Express/TypeScript), PHP (PDO/Native) และ React Form |
 | **v2.11.0** | 10/11/2026 | Superseded | • **หมวด D.7: มาตรฐานการแบ่งแยกระบบ Direct Infra vs SSO Spoke, สิทธิ์ต่ำสุด (Least Privilege), การเทียบเวลา (Timestamp Reconciliation) และการล็อคสิทธิ์เด็ดขาด (CIAM Authority Lock):**<br/>1) **Direct Infrastructure Isolation:** แยกความแตกต่างระหว่างระบบโครงสร้างพื้นฐานระดับ Network/Directory (pfSense, M365, SAP B1, AD) ที่เป็น Read-Only Inventory กับระบบลูก SSO แบบสมบูรณ์ (IRM, QMS, MTPulse) อย่างเด็ดขาด โดยระบบ Direct Infra จะไม่มีสถานะ `WAIT` (`PENDING_PROVISION`) ค้าง หากไม่พบบัญชีในระบบจริงจะถูกตัดออกจากรายการทันที<br/>2) **Least Privilege Auto-Provisioning:** การสร้างบัญชีผู้ใช้ใหม่จาก CIAM หรือเมื่อระบบลูกดึงบัญชีไปสร้าง ต้องกำหนดสิทธิ์เริ่มต้นเป็นบทบาทต่ำสุดเสมอ (`Standard User` / `Viewer`) ตาม `ciam_auto_provision_group` ห้ามตั้งสิทธิ์ Admin โดยพลการ<br/>3) **Timestamp Reconciliation:** ใช้เวลาการเปลี่ยนแปลงล่าสุด (`status_updated_at` เทียบกับ `spoke_status_updated_at`) เป็นเกณฑ์ตัดสินสถานะจริง (Latest Update Wins)<br/>4) **CIAM Authority Lock Standard (`is_status_locked`):** แอดมิน CIAM สามารถกดล็อคสิทธิ์เด็ดขาดเพื่อตรึงสถานะ ป้องกันไม่ให้ระบบลูกส่งสถานะมาทับหรือเปิดใช้งานคืนโดยพลการ |
 | **v2.10.0** | 09/11/2026 | Superseded | • **หมวด F: Enterprise In-App Bot Defense & Anti-Brute-Force Framework Standard:** กำหนดมาตรฐานการป้องกันบอทและ Brute-Force ภายในแอปพลิเคชัน 3 ชั้น (3-Layer Defense) สำหรับ Spoke ทุกระบบ ได้แก่ 1) Sliding-Window IP Rate Limiting 10 req/min, 2) Decoy Honeypot Trap ฟิลด์หลอก `corporate_fax` / `security_honey`, 3) Form Submission Velocity & Timing Guard (< 400ms rejection) เพื่อความปลอดภัยสูงสุดโดยไม่ต้องพึ่งพาบริการภายนอกหรือย้าย DNS |
@@ -281,6 +281,7 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
   "break_glass_active": false,
   "ciam_base_url": "https://ciam.windowasia.com",
   "client_id": "irm-spoke-client",
+  "framework_version": "2.13.0",
   "login_button_label": "เข้าสู่ระบบด้วย Central IAM (SSO)",
   "fallback_ad_available": true
 }
@@ -435,10 +436,13 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
   * `status`: กรองสถานะ เช่น `all` (ค่าเริ่มต้น), `active`, `inactive`
   * `department`: กรองตามแผนก (Optional)
   * `search`: ค้นหาชื่อหรือ username (Optional)
+* **Response Header / Payload สำหรับตรวจเวอร์ชัน Framework (MANDATORY v2.13.0):**
+  * ระบบลูกต้องแนบ `"framework_version": "2.13.0"` ใน Root JSON ของ Response (และสามารถส่ง HTTP Header `X-CIAM-Framework-Version: 2.13.0` ควบคู่กันได้) เพื่อให้ Central IAM บันทึกและแสดงสถานะความสอดคล้องของโค้ดบนหน้า `/applications` เมื่อกด Sync หรือ Ping
 * **Response Example (200 OK):**
 ```json
 {
   "application_name": "IRM (Incoming Raw Material)",
+  "framework_version": "2.13.0",
   "total_accounts": 2,
   "active_accounts": 2,
   "inactive_accounts": 0,
@@ -613,6 +617,7 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
   "app_code": "mtpulse",
   "status": "HEALTHY",
   "app_version": "1.0.4",
+  "framework_version": "2.13.0",
   "sync_type": "HEARTBEAT",
   "command_results": [
     {
@@ -644,6 +649,8 @@ CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
   "app_code": "mtpulse",
   "server_time": "2026-10-08T10:00:00Z",
   "next_heartbeat_seconds": 120,
+  "latest_framework_version": "2.13.0",
+  "detected_framework_version": "2.13.0",
   "pending_commands": [
     {
       "command_id": "cmd_prov_9a8b",
@@ -791,6 +798,7 @@ CIAM_BASE_URL = "https://ciam.windowasia.com"
 APP_CODE = "mtpulse"                            # รหัสระบบลูกตัวพิมพ์เล็ก
 SPOKE_CLIENT_ID = "mtpulse-spoke-client"        # Client ID ที่ลงทะเบียนไว้บน CIAM
 SPOKE_API_KEY = "sec_mtpulse_mgmt_xxxxxxxxx"   # M2M API Key หรือ Client Secret
+CIAM_FRAMEWORK_VERSION = "2.13.0"              # เวอร์ชัน Framework ที่ติดตั้งในระบบลูกนี้
 HEARTBEAT_INTERVAL = 120                       # วินาที (2 นาที)
 
 def execute_local_command(action: str, username: str, account_meta: dict = None) -> tuple[bool, str]:
@@ -861,6 +869,7 @@ def run_agent_cycle(is_full_sync: bool = False, previous_results: list = None) -
     payload = {
         "app_code": APP_CODE,
         "status": "HEALTHY",
+        "framework_version": CIAM_FRAMEWORK_VERSION,
         "sync_type": "FULL_SYNC" if is_full_sync else "HEARTBEAT",
         "command_results": previous_results or []
     }
@@ -1382,6 +1391,7 @@ def list_accounts_for_ciam(status: str = "all", department: Optional[str] = None
     # TODO: Query จากตาราง users ในฐานข้อมูลของระบบลูก
     return {
         "application_name": "My Spoke Application",
+        "framework_version": "2.13.0",
         "total_accounts": 1,
         "active_accounts": 1,
         "inactive_accounts": 0,
@@ -1498,6 +1508,7 @@ router.get('/api/v1/directory/accounts', verifyCiamManagementAccess, async (req,
   // TODO: Query users จากฐานข้อมูล
   res.json({
     application_name: "Node Spoke App",
+    framework_version: "2.13.0",
     total_accounts: 1,
     active_accounts: 1,
     inactive_accounts: 0,

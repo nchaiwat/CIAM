@@ -1882,6 +1882,8 @@ FRONTEND_URL=http://localhost:3000
 * **Spoke Specification & Framework Upgrade (`v2.13.0`):**
   - อัปเกรด `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` และ `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` เป็น **`v2.13.0`** พร้อมปุ่มดาวน์โหลดและ Revision Changelog Modal บน `frontend/src/app/applications/page.tsx` และ `backend/app/api/v1/applications.py`
   - เพิ่ม `password` + `must_change_password` ใน `POST /api/v1/directory/accounts` (C.2), 4-Case Login Matrix (C.4), โค้ด DB `INSERT`/`bcrypt` จริงใน Section 10.1 (Python) และ 10.2 (Node.js) แทน Mock/Stub, และรองรับ `PROVISION_USER` + `assigned_accounts` (`use_ad_auth`) ใน `ciam_agent.py` (D.2/D.5)
+* **Spoke Framework Version Handshake (`spoke_framework_version`):**
+  - เพิ่มคอลัมน์ `spoke_framework_version` ใน `ConnectedApplication` (`models/application.py`, `initial_data.py`), ให้ `RestApiConnector` สกัด `framework_version`/`spec_version` (JSON & `X-CIAM-Framework-Version`) ระหว่าง Sync/Ping, ให้ `/api/v1/agent/heartbeat` รับ `framework_version` จาก Mode C และส่งกลับ `latest_framework_version`, พร้อมป้ายตรวจสอบความสอดคล้องเวอร์ชันบน `/applications`
 
 
 
