@@ -148,3 +148,224 @@ def test_non_ad_local_portal_account_lifecycle():
             db.delete(to_clean_ident)
         db.commit()
         db.close()
+
+
+def test_one_way_ad_and_local_account_creation_with_spoke_sync():
+    """
+    Verify:
+    1. Creating a Local Account via POST /api/v1/directory/users (create_in_ad=False, dept='IT')
+       sets LOCAL_ACCOUNT exception, returns temporary_password, never calls AD Proxy provision,
+       never triggers false-positive Ghost Account (บัญชีผี), and allows immediate Portal login.
+    2. Spoke Mode A provision payload includes password and use_ad_auth=False.
+    3. Assigning an existing AD user or Local Account via /assign-app invokes provision_account
+       without AttributeError, sets PENDING_PROVISION on failure, and recovers via Mode A sync push.
+    4. Mode C /agent/heartbeat pushes PROVISION_USER for non-AD Local Accounts too.
+    """
+    import asyncio
+    from unittest.mock import patch, AsyncMock
+    from sqlalchemy import func
+    from app.connectors.base import ConnectorResult
+    from app.models.application import SpokePendingCommand
+    from app.services.scheduler import push_pending_provisions_to_spoke
+
+    admin_headers = get_admin_auth_header()
+    db = SessionLocal()
+    local_uname = "test.local.petty"
+    ad_uname = "ad.existing.tester"
+
+    try:
+        # Pre-cleanup
+        for u in (local_uname, ad_uname):
+            db.query(SpokePendingCommand).filter(func.lower(SpokePendingCommand.username) == u).delete()
+            old_adm = db.query(AdminUser).filter(func.lower(AdminUser.username) == u).first()
+            if old_adm:
+                db.delete(old_adm)
+            old_id = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == u).first()
+            if old_id:
+                db.delete(old_id)
+        for code in ("petty_mode_a", "petty_mode_c"):
+            old_app = db.query(ConnectedApplication).filter_by(app_code=code).first()
+            if old_app:
+                db.delete(old_app)
+        db.commit()
+
+        # Setup Mode A & Mode C test spokes
+        mode_a_app = ConnectedApplication(
+            app_code="petty_mode_a",
+            app_name="PettyCash Mode A",
+            connector_type="REST_API",
+            base_url="http://pettycash.internal",
+            api_key="sec_petty_a",
+            sso_enabled=True,
+            is_active=True,
+        )
+        mode_c_app = ConnectedApplication(
+            app_code="petty_mode_c",
+            app_name="PettyCash Mode C",
+            connector_type="SSO_ONLY",
+            base_url="https://pettycash-c.internal",
+            api_key="sec_petty_c",
+            client_id="petty-c-client",
+            sso_enabled=True,
+            is_active=True,
+        )
+        db.add_all([mode_a_app, mode_c_app])
+        db.commit()
+        db.refresh(mode_a_app)
+        db.refresh(mode_c_app)
+
+        captured_payloads = []
+
+        async def _capture_provision(self, account_data: dict) -> ConnectorResult:
+            captured_payloads.append({"app_code": self.app_code, **account_data})
+            return ConnectorResult(
+                success=True,
+                status_code=201,
+                execution_mode="SYNC_REST",
+                message=f"Created {account_data.get('username')}",
+                execution_time_ms=5,
+            )
+
+        with patch("app.connectors.ad_proxy.AdProxyConnector.provision_account", new_callable=AsyncMock) as mock_ad_prov, \
+             patch("app.connectors.rest_api.RestApiConnector.provision_account", new=_capture_provision):
+            # 1. Create Local Account with department='IT' and initial password
+            create_res = client.post(
+                "/api/v1/directory/users",
+                json={
+                    "username": local_uname,
+                    "full_name": "ทดสอบ ระบบPettycash",
+                    "department": "IT",
+                    "create_in_ad": False,
+                    "password": "Wa@Local2026!",
+                    "must_change_password": False,
+                    "target_spokes": [
+                        {"application_id": mode_a_app.id, "group_name": "Standard User"},
+                        {"application_id": mode_c_app.id, "group_name": "Viewer"},
+                    ],
+                },
+                headers=admin_headers,
+            )
+            assert create_res.status_code == 201, create_res.text
+            cdata = create_res.json()
+            assert cdata["ad_status"] == "LOCAL_ACCOUNT"
+            assert cdata["temporary_password"] == "Wa@Local2026!"
+            assert len(cdata["spoke_results"]) == 2
+            mock_ad_prov.assert_not_called()
+
+        # Verify password & use_ad_auth=False sent to Mode A Spoke
+        assert len(captured_payloads) == 1
+        assert captured_payloads[0]["username"] == local_uname
+        assert captured_payloads[0]["use_ad_auth"] is False
+        assert captured_payloads[0]["password"] == "Wa@Local2026!"
+
+        # Verify Local Account can log into CIAM immediately with initial password
+        login_res = client.post("/api/v1/auth/login", json={"username": local_uname, "password": "Wa@Local2026!"})
+        assert login_res.status_code == 200
+
+        # Verify NOT flagged as Ghost Account (บัญชีผี) in Directory API or reconciliation
+        dir_res = client.get(f"/api/v1/directory/users?search={local_uname}&status=all", headers=admin_headers)
+        assert dir_res.status_code == 200
+        items = dir_res.json()
+        assert len(items) == 1
+        assert items[0]["is_ad_account"] is False
+        assert items[0]["has_discrepancy"] is False
+        assert items[0]["is_approved_exception"] is True
+        assert items[0]["exception_type"] == "LOCAL_ACCOUNT"
+
+        discrepancies = find_account_discrepancies(db)
+        assert all(d.username.lower() != local_uname for d in discrepancies)
+
+        # Verify Mode C Heartbeat includes non-AD Local Account in assigned_accounts & issues PROVISION_USER
+        hb_res = client.post(
+            "/api/v1/agent/heartbeat",
+            json={"app_code": "petty_mode_c", "sync_type": "FULL_SYNC", "accounts": []},
+            headers={"X-Spoke-API-Key": "sec_petty_c"},
+        )
+        assert hb_res.status_code == 200
+        hb_data = hb_res.json()
+        assigned_names = [a["username"].lower() for a in (hb_data.get("assigned_accounts") or [])]
+        assert local_uname in assigned_names
+        prov_cmds = [
+            c for c in hb_data.get("pending_commands", [])
+            if c["action"] == "PROVISION_USER" and c["username"].lower() == local_uname
+        ]
+        assert len(prov_cmds) == 1
+
+        # 2. Test assign-app failure -> PENDING_PROVISION -> Mode A two-way sync push recovery
+        ad_ident = MasterIdentity(
+            username=ad_uname,
+            full_name="Existing AD Tester",
+            department="IT",
+            email="ad.existing@windowasia.com",
+            ad_guid="guid-existing-ad-1",
+            is_active_in_ad=True,
+        )
+        db.add(ad_ident)
+        db.commit()
+        db.refresh(ad_ident)
+
+        async def _fail_provision(self, account_data: dict) -> ConnectorResult:
+            return ConnectorResult(
+                success=False,
+                status_code=503,
+                execution_mode="SYNC_REST",
+                message="Connection timeout",
+                execution_time_ms=10,
+            )
+
+        with patch("app.connectors.rest_api.RestApiConnector.provision_account", new=_fail_provision):
+            assign_res = client.post(
+                f"/api/v1/directory/users/{ad_ident.id}/assign-app",
+                json={"application_id": mode_a_app.id, "app_group_name": "Standard User"},
+                headers=admin_headers,
+            )
+            assert assign_res.status_code == 200
+
+        db.expire_all()
+        pending_map = db.query(AppAccountMapping).filter_by(
+            identity_id=ad_ident.id, application_id=mode_a_app.id
+        ).first()
+        assert pending_map is not None
+        assert pending_map.last_sync_status == "PENDING_PROVISION"
+
+        # Now Mode A Spoke comes back online and push_pending_provisions_to_spoke runs during sync
+        pushed_list = []
+
+        async def _recover_provision(self, account_data: dict) -> ConnectorResult:
+            pushed_list.append(account_data["username"])
+            return ConnectorResult(
+                success=True,
+                status_code=201,
+                execution_mode="SYNC_REST",
+                message="Created on retry",
+                execution_time_ms=5,
+            )
+
+        raw_accounts = [{"username": local_uname, "is_active": True}]
+        with patch("app.connectors.rest_api.RestApiConnector.provision_account", new=_recover_provision):
+            pushed_count = asyncio.run(
+                push_pending_provisions_to_spoke(mode_a_app, raw_accounts, db, actor_username="admin")
+            )
+            db.commit()
+
+        assert pushed_count == 1
+        assert pushed_list == [ad_uname]
+        assert any(a["username"] == ad_uname for a in raw_accounts)
+        db.refresh(pending_map)
+        assert pending_map.last_sync_status == "IN_SYNC"
+
+    finally:
+        for u in (local_uname, ad_uname):
+            db.query(SpokePendingCommand).filter(func.lower(SpokePendingCommand.username) == u).delete()
+            adm = db.query(AdminUser).filter(func.lower(AdminUser.username) == u).first()
+            if adm:
+                db.delete(adm)
+            ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == u).first()
+            if ident:
+                db.delete(ident)
+        for code in ("petty_mode_a", "petty_mode_c"):
+            app_row = db.query(ConnectedApplication).filter_by(app_code=code).first()
+            if app_row:
+                db.delete(app_row)
+        db.commit()
+        db.close()

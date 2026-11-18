@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 14 พฤศจิกายน 2026 (Local Time: 21:21 ICT)  
+> **Date Updated:** 18 พฤศจิกายน 2026 (Local Time: 12:59 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Repository (APEX):** [https://github.com/ITWA-PCL/apex](https://github.com/ITWA-PCL/apex)  
@@ -8,8 +8,8 @@
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Production VPS (APEX):** `/var/www/Apex` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 101/101 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
-> **Git Status:** Production Ready — Sprints 62–63 Complete (`a10638c` on Central-IAM `origin/main`, `8477d45` on APEX `origin/Sec1`; ready for VPS Deployment & Live Verification)
+> **Test Integrity:** Backend Pytest: 102/102 passed (100%), Frontend TypeScript: `npx tsc --noEmit` 0 errors (100%), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
+> **Git Status:** Production Ready — Sprint 64 Complete (pending commit/push on Central-IAM `origin/main`, `8477d45` on APEX `origin/Sec1`)
 
 ---
 
@@ -17,6 +17,19 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
+0b. **One-Way AD Enforcement, Local Account Initial Password & Spoke Mode A/C Provisioning Sync Fix (Sprint 64):**
+   - **บังคับใช้ AD แบบ One-Way 100% (No AD Creation from CIAM):**
+     - ถอดการเรียก `AdProxyConnector.provision_account` ออกจาก [`backend/app/services/provisioning.py`](file:///d:/Python/Central-IAM/backend/app/services/provisioning.py) เพื่อไม่ให้ CIAM สร้างบัญชีขึ้น Active Directory โดยตรงอีกต่อไป รองรับการดึงบัญชี AD ที่มีอยู่แล้วมาเพิ่มสิทธิ์ใน Spoke App ควบคู่กับการสร้างบัญชี Local Account ใหม่
+     - ปรับปรุงหน้าต่าง Modal บน [`frontend/src/app/directory/page.tsx`](file:///d:/Python/Central-IAM/frontend/src/app/directory/page.tsx) และ [`frontend/src/lib/api.ts`](file:///d:/Python/Central-IAM/frontend/src/lib/api.ts) แยกเป็น 2 แท็บชัดเจน: **1) เพิ่มผู้ใช้ AD เข้า Spoke App** (ค้นหาพนักงานที่มีบัญชีใน AD แล้วส่งสิทธิ์เข้า Spoke) และ **2) สร้าง Local Account ใหม่** (กำหนดรหัสผ่านเริ่มต้น 8–16 ตัวอักษรหรือให้ระบบสุ่ม + ตัวเลือกบังคับเปลี่ยนรหัสผ่านเมื่อล็อกอินครั้งแรก + แสดงรหัสผ่านพร้อมปุ่มคัดลอกและผลลัพธ์การสร้างราย Spoke App ทันที)
+   - **Local Account Initial Password & Anti-Ghost Classification:**
+     - ปรับ [`backend/app/schemas/directory.py`](file:///d:/Python/Central-IAM/backend/app/schemas/directory.py) และ [`backend/app/services/provisioning.py`](file:///d:/Python/Central-IAM/backend/app/services/provisioning.py) ให้สร้าง `AdminUser` (`role="PORTAL_USER"`) และติด `is_approved_exception=True`, `exception_type="LOCAL_ACCOUNT"` ตั้งแต่ตอนสร้าง Local Account รวมถึงส่งฟิลด์ `password` และ `must_change_password` ไปยัง Spoke App ด้วย
+     - ปรับ [`backend/app/api/v1/directory.py`](file:///d:/Python/Central-IAM/backend/app/api/v1/directory.py) (`list_users`, `get_user_detail`) ไม่ให้ตีความบัญชี Local Account ที่ไม่มี `ad_guid`/`employee_id`/`ad` mapping ว่าเป็น `บัญชีผี` เพียงเพราะมีแผนกองค์กร (เช่น `IT`) และเพิ่ม Auto-heal ใน [`backend/app/initial_data.py`](file:///d:/Python/Central-IAM/backend/app/initial_data.py) แก้ไขบัญชี `Test.1` ให้เป็น `LOCAL_ACCOUNT` พร้อมเข้าคิว Provision
+   - **แก้ไขปัญหาสร้างบัญชีแล้วไม่ลง Spoke App (Mode A / Mode C / PettyCash `Test.1`):**
+     - [`backend/app/connectors/rest_api.py`](file:///d:/Python/Central-IAM/backend/app/connectors/rest_api.py): ยกเลิกการปลอมผลลัพธ์ `Simulated 201 Created` เมื่อเป้าหมาย `http(s)://` ตอบกลับ HTTP 403/404/405 และเพิ่ม Fallback ไปยัง `/api/directory/accounts` รวมถึงส่ง `password`/`must_change_password` ใน `provision_account`
+     - [`backend/app/connectors/base.py`](file:///d:/Python/Central-IAM/backend/app/connectors/base.py) & [`backend/app/api/v1/directory.py`](file:///d:/Python/Central-IAM/backend/app/api/v1/directory.py): แก้บั๊ก `assign_spoke_app_to_user` ที่เรียก `connector.provision(...)` เป็น `provision_account({...})` พร้อมตั้ง `PENDING_PROVISION` และคิว `PROVISION_USER` เมื่อส่งไม่สำเร็จทันที
+     - [`backend/app/api/v1/agent.py`](file:///d:/Python/Central-IAM/backend/app/api/v1/agent.py): ปลดล็อกให้ `/api/v1/agent/heartbeat` ส่ง `assigned_accounts` (พร้อม `use_ad_auth`) และ `PROVISION_USER` สำหรับ Local Account / `CIAM_ADMIN` ด้วย ไม่จำกัดเฉพาะ `is_active_in_ad == True`
+     - [`backend/app/services/scheduler.py`](file:///d:/Python/Central-IAM/backend/app/services/scheduler.py) & [`backend/app/api/v1/applications.py`](file:///d:/Python/Central-IAM/backend/app/api/v1/applications.py): เพิ่ม `push_pending_provisions_to_spoke` และ `retry_pending_provisions` ใน Loop ทุก 2 นาที รวมถึงระหว่าง Sync เพื่อให้ Mode A ผลักบัญชีที่ค้าง `PENDING_PROVISION` ลง Spoke App อัตโนมัติ
+
 0a. **APEX CIAM SSO Identity Resolution (`Chaiwat.N`), Portal Direct Launch & Logout Redirect Fix (Sprint 63):**
    - **สาเหตุปัญหาฝั่ง APEX (`D:\Python\APEX`):**
      1) **ไม่ได้ล็อกอินเป็น `Chaiwat.N` (ค้างบัญชี `U01` / `u01@windowasia.co.th`):** `ciam.js` เรียก endpoint `/oauth2/authorize`, `/oauth2/token`, `/oauth2/userinfo` แทน `/oauth/authorize`, `/api/v1/oauth/token`, `/api/v1/oauth/userinfo`, ไม่ได้ล้างคุกกี้ `apex_session` เก่าของ `U01`, `app/index.js` (`express.static`) ดักเสิร์ฟ `index.html` ทันทีเมื่อถูก Redirect กลับมาที่ `/?code=...&state=...` จึงไม่เข้า Callback, และ `ciam.js` ยังปฏิเสธ Direct Launch (`state=ciam_launch_*`) จาก CIAM Portal รวมถึงยังไม่มี JIT Auto-Provisioning สำหรับผู้ใช้ CIAM/AD ใหม่
@@ -1794,11 +1807,12 @@ docker compose up -d api web
 
 ## 4. สถานะระบบปัจจุบัน และ แผนงานที่จะปรับปรุงต่อในรอบถัดไป (Current Status & Next Steps Roadmap)
 
-> **ปรับปรุงล่าสุด:** 14 พฤศจิกายน 2026 (Local Time: 21:21 ICT)  
-> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (`a10638c`) และ APEX `Sec1` (`8477d45`) พร้อม Deploy ขึ้น VPS และทดสอบ Live End-to-End
+> **ปรับปรุงล่าสุด:** 18 พฤศจิกายน 2026 (Local Time: 12:59 ICT)  
+> **สถานะภาพรวม:** Production Ready 100% บน Git Branch `main` (Sprint 64) และ APEX `Sec1` (`8477d45`) พร้อม Deploy ขึ้น VPS และทดสอบ Live End-to-End
 
 ### 4.1 สถานะระบบที่ตรวจสอบและส่งมอบแล้ว (Verified & Production Ready)
 * **Git Commits ล่าสุดบน `origin/main` (Central-IAM):**
+  - `Sprint 64` (กำลัง Commit & Push) — One-Way AD enforcement, Local Account initial password, and Mode A/C Spoke provisioning sync & retry fixes
   - `a10638c` — `fix(sso): add /oauth2/* compatibility rewrites and document APEX SSO fixes` (Sprint 63)
   - `051a7ac` — `fix(security): enforce CIAM origin IP 157.173.219.153 across M2M, OIDC, and isolate pytest from live spokes` (Sprint 62)
   - `aa554a8` — `docs(handoff): record Sprint 61 commit b2bb697 and next steps`
@@ -1807,9 +1821,9 @@ docker compose up -d api web
   - `8477d45` — `fix(sso): clear stale U01 session, resolve Chaiwat.N via CIAM OIDC/JIT, and redirect logout to CIAM Portal` (Sprint 63)
   - `393efef` — `fix(security): log verified CIAM origin IP 157.173.219.153 on SSO/M2M events and honor X-CIAM-Origin-IP` (Sprint 62)
 
-* **ผลการตรวจสอบคุณภาพและความถูกต้องล่าสุด (Sprint 62–63 Verification):**
-  - **Central-IAM Backend Test Suite (`pytest backend`):** ผ่านครบถ้วน **101/101 tests (100% Passed)**
-  - **Central-IAM Frontend Type Check (`npx tsc --noEmit`):** ผ่านสมบูรณ์ **0 TypeScript Errors**
+* **ผลการตรวจสอบคุณภาพและความถูกต้องล่าสุด (Sprint 64 Verification):**
+  - **Central-IAM Backend Test Suite (`cd backend; .\.venv\Scripts\pytest.exe`):** ผ่านครบถ้วน **102/102 tests (100% Passed)** (รวม `test_one_way_ad_and_local_account_creation_with_spoke_sync`)
+  - **Central-IAM Frontend Type Check (`cd frontend; npx tsc --noEmit`):** ผ่านสมบูรณ์ **0 TypeScript Errors**
   - **APEX Pre-Push Suite (`node scripts/verify-local.js`):** ผ่านครบถ้วน **13 Syntax + 10 Security/Finance checks (0 Errors)**
   - **APEX Isolated HTTP SSO Verification:** ผ่าน (`ALL_INLINE_SSO_CHECKS_PASSED`) ยืนยันการล้างคุกกี้ `U01`, Callback `ciam_launch_*`, JIT Auto-Provision **`Chaiwat.N`**, `/api/auth/session` แสดง `Chaiwat.N`, และ `POST/GET /api/auth/sso/logout` เด้งกลับ `https://ciam.windowasia.com/portal`
 

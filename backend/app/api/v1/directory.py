@@ -282,24 +282,31 @@ def list_users(
         )
 
         # Shop accounts and explicitly designated local accounts are never AD accounts
-        is_local_acc = is_shop_acc or (identity.exception_type == "LOCAL_ACCOUNT") or (u_clean in ("pinyada.s", "winmonpan.p", "hermes.n"))
+        is_local_acc = (
+            is_shop_acc
+            or (identity.exception_type == "LOCAL_ACCOUNT")
+            or (u_clean in ("pinyada.s", "winmonpan.p", "hermes.n"))
+        )
         if is_local_acc:
             mappings = [m_pair for m_pair in mappings if m_pair[1].app_code.lower() != "ad"]
 
-        # AD users have ad_guid, employee_id, AD login history, AD mapping, corporate email, or corporate AD department
+        # AD users have ad_guid, employee_id, AD login history, AD mapping, or active AD presence.
+        # Do NOT classify an inactive non-AD local account as AD solely from department/email keywords.
         has_ad_mapping = (not is_local_acc) and any(app.app_code.lower() == "ad" for _, app in mappings)
+        has_direct_ad = bool(has_ad_mapping or identity.ad_guid or identity.last_login_ad_at)
+        has_ad_attributes = bool(has_direct_ad or identity.employee_id or identity.is_active_in_ad)
         dept_lower = (identity.department or "").strip().lower()
         corporate_keywords = ("it", "pu", "purchasing", "accounting", "hr", "executive", "management", "general", "qa", "warehouse", "m365", "administration", "ธุรการ")
         is_corp_dept = any(kw in dept_lower for kw in corporate_keywords) if dept_lower else False
         has_corp_email = bool(identity.email and "@windowasia.com" in identity.email.lower())
-        is_ad_username_fmt = len(u_clean.split(".")) == 2 and len(u_clean.split(".")[1]) <= 2
 
         is_ad = bool(
             not is_local_acc
+            and has_ad_attributes
             and (
-                identity.ad_guid 
-                or identity.employee_id 
-                or identity.last_login_ad_at 
+                identity.ad_guid
+                or identity.employee_id
+                or identity.last_login_ad_at
                 or has_ad_mapping
                 or is_corp_dept
                 or (has_corp_email and not is_shop_acc)
@@ -308,7 +315,6 @@ def list_users(
         )
 
         # An identity is genuinely active in AD only if it is an AD identity, has AD presence, and identity.is_active_in_ad is True
-        has_direct_ad = bool(has_ad_mapping or identity.ad_guid or identity.last_login_ad_at)
         effective_ad_active = bool(is_ad and identity.is_active_in_ad and has_direct_ad)
         if identity.is_active_in_ad and (not has_direct_ad or is_shop_acc) and not getattr(identity, "is_approved_exception", False):
             # Auto-heal: If an identity has no AD presence at all or is a shop account, it is not in AD
@@ -438,7 +444,7 @@ def get_user_detail(
 
     has_ad_mapping = (not is_local_acc) and any(app.app_code.lower() == "ad" for _, app in mappings)
     has_direct_ad = bool(has_ad_mapping or identity.ad_guid or identity.last_login_ad_at)
-    is_ad = bool((not is_local_acc) and (identity.ad_guid or has_ad_mapping))
+    is_ad = bool((not is_local_acc) and (has_direct_ad or identity.employee_id or identity.is_active_in_ad))
     effective_ad_active = bool(is_ad and identity.is_active_in_ad and has_direct_ad)
     if identity.is_active_in_ad and (not has_direct_ad or is_local_acc) and not getattr(identity, "is_approved_exception", False):
         identity.is_active_in_ad = False
@@ -446,8 +452,14 @@ def get_user_detail(
 
     app_summaries = _build_app_summaries(mappings, identity_is_active_in_ad=effective_ad_active)
     created_at, last_access, days_since_access = _get_identity_activity(identity, mappings)
-    has_disc = (not effective_ad_active) and any(m.is_active_in_app for m, _ in mappings)
-    is_ad = bool(effective_ad_active or identity.ad_guid or any(app.app_code.lower() == "ad" for _, app in mappings))
+    has_active_spoke = any(m.is_active_in_app for m, _ in mappings)
+    is_identity_exception = bool(getattr(identity, "is_approved_exception", False))
+    has_approved_mapping_exception = any(getattr(m, "is_approved_exception", False) for m, _ in mappings)
+    is_exception = is_identity_exception or has_approved_mapping_exception
+    has_disc = is_ad and (not effective_ad_active) and has_active_spoke and not is_exception
+    exc_type = getattr(identity, "exception_type", None) or next((getattr(m, "exception_type", None) for m, _ in mappings if getattr(m, "is_approved_exception", False)), None)
+    exc_reason = getattr(identity, "exception_reason", None) or next((getattr(m, "exception_reason", None) for m, _ in mappings if getattr(m, "is_approved_exception", False)), None)
+    exc_approved_by = getattr(identity, "exception_approved_by", None) or next((getattr(m, "exception_approved_by", None) for m, _ in mappings if getattr(m, "is_approved_exception", False)), None)
     clean_email, clean_dept = _clean_directory_attributes(identity, mappings, is_ad)
 
     user_item = UserListItem(
@@ -460,12 +472,17 @@ def get_user_detail(
         telephone=identity.telephone,
         telegram_id=identity.telegram_id,
         is_active_in_ad=effective_ad_active if is_ad else False,
-        last_login_ad_at=identity.last_login_ad_at,
+        last_login_ad_at=identity.last_login_ad_at if is_ad else None,
         created_at=created_at,
         last_access_at=last_access,
         days_since_last_access=days_since_access,
         connected_apps=app_summaries,
-        has_discrepancy=has_disc
+        has_discrepancy=has_disc,
+        is_ad_account=is_ad,
+        is_approved_exception=is_exception,
+        exception_type=exc_type,
+        exception_reason=exc_reason,
+        exception_approved_by=exc_approved_by
     )
 
     return UserDetailResponse(user=user_item, accounts=app_summaries)
@@ -540,6 +557,9 @@ async def assign_spoke_app_to_user(
     Assign an existing Master Identity to a Connected Application (Spoke).
     Creates or re-activates AppAccountMapping and dispatches provisioning if applicable.
     """
+    import secrets
+    from app.models.application import SpokePendingCommand
+
     identity = db.query(MasterIdentity).filter_by(id=identity_id).first()
     if not identity:
         raise HTTPException(status_code=404, detail="ไม่พบตัวตนที่ระบุ (MasterIdentity not found)")
@@ -552,23 +572,61 @@ async def assign_spoke_app_to_user(
     target_group = (payload.app_group_name or "Standard User").strip()
 
     now = datetime.now(timezone.utc)
-    existing_mapping = db.query(AppAccountMapping).filter_by(
-        identity_id=identity.id,
-        application_id=app.id
-    ).first()
+    existing_mapping = (
+        db.query(AppAccountMapping)
+        .filter(
+            AppAccountMapping.application_id == app.id,
+            or_(
+                AppAccountMapping.identity_id == identity.id,
+                func.lower(AppAccountMapping.app_username) == target_username.lower(),
+            )
+        )
+        .first()
+    )
 
+    is_local_exc = bool(getattr(identity, "exception_type", None) == "LOCAL_ACCOUNT")
     connector_msg = ""
     connector_success = True
 
+    def _queue_spoke_provision_cmd() -> None:
+        existing_cmd = (
+            db.query(SpokePendingCommand)
+            .filter(
+                SpokePendingCommand.app_code == app.app_code,
+                SpokePendingCommand.action == "PROVISION_USER",
+                func.lower(SpokePendingCommand.username) == target_username.lower(),
+                SpokePendingCommand.status.in_(["PENDING", "SENT"]),
+            )
+            .first()
+        )
+        if not existing_cmd:
+            db.add(SpokePendingCommand(
+                command_id=f"cmd_prov_{secrets.token_hex(4)}",
+                app_code=app.app_code,
+                action="PROVISION_USER",
+                username=target_username,
+                reason=f"มอบสิทธิ์ระบบ '{app.app_name}' โดย {current_admin.username}",
+                status="PENDING",
+                issued_by=current_admin.username,
+                created_at=now,
+            ))
+
     if existing_mapping:
+        existing_mapping.identity_id = identity.id
         existing_mapping.is_active_in_app = True
         existing_mapping.status_origin = "CIAM_ADMIN"
         existing_mapping.status_updated_at = now
         existing_mapping.status_reason = f"มอบสิทธิ์ระบบ {app.app_name} โดย {current_admin.username}"
         existing_mapping.app_username = target_username
         existing_mapping.app_group_name = target_group
-        existing_mapping.last_sync_status = "IN_SYNC" if identity.is_active_in_ad else "DISCREPANCY"
+        existing_mapping.last_sync_status = "IN_SYNC" if (identity.is_active_in_ad or is_local_exc) else "DISCREPANCY"
         existing_mapping.updated_at = now
+        if is_local_exc:
+            existing_mapping.is_approved_exception = True
+            existing_mapping.exception_type = "LOCAL_ACCOUNT"
+            existing_mapping.exception_reason = identity.exception_reason
+            existing_mapping.exception_approved_by = current_admin.username
+            existing_mapping.exception_approved_at = now
         mapping = existing_mapping
     else:
         mapping = AppAccountMapping(
@@ -580,28 +638,48 @@ async def assign_spoke_app_to_user(
             status_origin="CIAM_ADMIN",
             status_updated_at=now,
             status_reason=f"มอบสิทธิ์ระบบ {app.app_name} โดย {current_admin.username}",
-            last_sync_status="IN_SYNC" if identity.is_active_in_ad else "DISCREPANCY",
+            last_sync_status="IN_SYNC" if (identity.is_active_in_ad or is_local_exc) else "DISCREPANCY",
+            is_approved_exception=is_local_exc,
+            exception_type="LOCAL_ACCOUNT" if is_local_exc else None,
+            exception_reason=identity.exception_reason if is_local_exc else None,
+            exception_approved_by=current_admin.username if is_local_exc else None,
+            exception_approved_at=now if is_local_exc else None,
             created_at=now,
             updated_at=now
         )
         db.add(mapping)
 
-    # If Mode A (REST API), attempt provisioning to child system
+    # If Mode A (REST API), attempt immediate provisioning to child system
     if app.connector_type == "REST_API":
         try:
             connector = get_connector_for_app(app)
-            conn_res = await connector.provision(
-                username=target_username,
-                full_name=identity.full_name,
-                email=identity.email,
-                department=identity.department,
-                group_name=target_group
-            )
+            conn_res = await connector.provision_account({
+                "username": target_username,
+                "full_name": identity.full_name,
+                "email": identity.email,
+                "department": identity.department,
+                "group_name": target_group,
+                "use_ad_auth": bool(identity.is_active_in_ad),
+                "created_by": current_admin.username,
+            })
             connector_msg = conn_res.message
             connector_success = conn_res.success
+            if conn_res.success:
+                mapping.last_sync_status = "IN_SYNC" if (identity.is_active_in_ad or identity.is_approved_exception) else "DISCREPANCY"
+            else:
+                mapping.last_sync_status = "PENDING_PROVISION"
+                _queue_spoke_provision_cmd()
         except Exception as exc:
             logger.warning("Spoke connector provision for %s (%s) threw: %s", app.app_code, target_username, exc)
+            connector_success = False
+            mapping.last_sync_status = "PENDING_PROVISION"
+            _queue_spoke_provision_cmd()
             connector_msg = f"มอบสิทธิ์ในระบบกลางสำเร็จ แต่ส่งคำสั่งไปยัง {app.app_name} มีข้อความ: {str(exc)[:120]}"
+    elif app.connector_type == "SSO_ONLY":
+        mapping.last_sync_status = "PENDING_PROVISION"
+        _queue_spoke_provision_cmd()
+        connector_msg = f"ส่งคิวคำสั่ง PROVISION_USER ไปยัง Agent ของ {app.app_name} แล้ว"
+        connector_success = True
 
     db.add(IamAuditLog(
         actor_username=current_admin.username,
@@ -1214,7 +1292,8 @@ def create_or_update_local_portal_account(
         m.exception_reason = exception_reason
         m.exception_approved_by = current_admin.username
         m.exception_approved_at = now
-        m.last_sync_status = "APPROVED_EXCEPTION"
+        if m.last_sync_status != "PENDING_PROVISION":
+            m.last_sync_status = "APPROVED_EXCEPTION"
 
     # 4. Audit Log
     db.add(IamAuditLog(

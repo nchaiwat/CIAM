@@ -42,6 +42,10 @@ class BaseConnector(ABC):
         """Create/provision a new user account in target application according to Spec Section 3.3."""
         raise NotImplementedError("Provisioning not implemented for this connector.")
 
+    async def provision(self, **kwargs) -> ConnectorResult:
+        """Convenience wrapper delegating keyword arguments to provision_account."""
+        return await self.provision_account(kwargs)
+
     @abstractmethod
     async def health_check(self) -> ConnectorHealth:
         """Check availability and response time of target system."""

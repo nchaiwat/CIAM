@@ -36,6 +36,7 @@ import {
   Lock,
   Unlock,
   X,
+  Clock,
 } from "lucide-react";
 import {
   ciamApi,
@@ -138,8 +139,12 @@ export default function DirectoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // Create User Modal State
+  // Create User Modal State (One-Way AD Assignment vs New Local Account)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<"ad_assign" | "local_create">("ad_assign");
+  const [adPoolUsers, setAdPoolUsers] = useState<UserListItem[]>([]);
+  const [adSearchQuery, setAdSearchQuery] = useState("");
+  const [selectedAdUser, setSelectedAdUser] = useState<UserListItem | null>(null);
   const [createForm, setCreateForm] = useState({
     employee_id: "",
     username: "",
@@ -148,12 +153,14 @@ export default function DirectoryPage() {
     department: "",
     telephone: "",
     telegram_id: "",
-    create_in_ad: true,
+    password: "",
+    must_change_password: true,
   });
   const [selectedSpokes, setSelectedSpokes] = useState<Record<number, { selected: boolean; group_name: string }>>({});
   const [createLoading, setCreateLoading] = useState(false);
   const [createResult, setCreateResult] = useState<UserCreateResponse | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [copiedCreatePwd, setCopiedCreatePwd] = useState(false);
 
   // Activate User Modal State
   const [isActivateModalOpen, setIsActivateModalOpen] = useState(false);
@@ -474,9 +481,46 @@ export default function DirectoryPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleOpenCreateModal = () => {
+  const provisionableApps = useMemo(() => {
+    const directInfraCodes = new Set(["ad", "m365", "pfsense_ho", "pfsense_fac", "sap_b1", "wa_rdt2"]);
+    return apps.filter((a) => a.is_active && !directInfraCodes.has(a.app_code.toLowerCase()));
+  }, [apps]);
+
+  const adCandidatesForModal = useMemo(() => {
+    const source = adPoolUsers.length > 0 ? adPoolUsers : users;
+    const q = adSearchQuery.trim().toLowerCase();
+    return source
+      .filter((u) => u.is_ad_account !== false && u.is_active_in_ad)
+      .filter((u) => {
+        if (!q) return true;
+        return (
+          u.username.toLowerCase().includes(q) ||
+          u.full_name.toLowerCase().includes(q) ||
+          (u.department && u.department.toLowerCase().includes(q)) ||
+          (u.employee_id && u.employee_id.toLowerCase().includes(q))
+        );
+      });
+  }, [adPoolUsers, users, adSearchQuery]);
+
+  const resetSelectedSpokes = () => {
+    const resetMap: Record<number, { selected: boolean; group_name: string }> = {};
+    apps.forEach((app) => {
+      let defaultRole = "Standard User";
+      if (app.app_code === "irm") defaultRole = "PU User";
+      else if (app.app_code === "qms") defaultRole = "QA Inspector";
+      resetMap[app.id] = { selected: false, group_name: defaultRole };
+    });
+    setSelectedSpokes(resetMap);
+  };
+
+  const handleOpenCreateModal = async () => {
     setCreateResult(null);
     setCreateError(null);
+    setCreateMode("ad_assign");
+    setAdSearchQuery("");
+    setSelectedAdUser(null);
+    setCopiedCreatePwd(false);
+    resetSelectedSpokes();
     setCreateForm({
       employee_id: "",
       username: "",
@@ -485,13 +529,64 @@ export default function DirectoryPage() {
       department: "",
       telephone: "",
       telegram_id: "",
-      create_in_ad: true,
+      password: "",
+      must_change_password: true,
     });
     setIsCreateModalOpen(true);
+    try {
+      const adList = await ciamApi.getUsers({ status: "ad_active" });
+      setAdPoolUsers(adList);
+    } catch {
+      // Fallback to currently loaded users list
+    }
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const target_spokes = Object.entries(selectedSpokes)
+      .filter(([_, val]) => val.selected)
+      .map(([appId, val]) => ({
+        application_id: Number(appId),
+        group_name: val.group_name || "Standard User",
+      }));
+
+    if (createMode === "ad_assign") {
+      if (!selectedAdUser) {
+        setCreateError("กรุณาค้นหาและเลือกพนักงานที่มีบัญชีใน Active Directory ก่อน");
+        return;
+      }
+      if (target_spokes.length === 0) {
+        setCreateError("กรุณาเลือกอย่างน้อย 1 ระบบลูก (Spoke App) ที่ต้องการเพิ่มสิทธิ์");
+        return;
+      }
+
+      try {
+        setCreateLoading(true);
+        setCreateError(null);
+        const res = await ciamApi.createUser({
+          employee_id: selectedAdUser.employee_id || undefined,
+          username: selectedAdUser.username,
+          full_name: selectedAdUser.full_name,
+          email: selectedAdUser.email || undefined,
+          department: selectedAdUser.department || undefined,
+          telephone: selectedAdUser.telephone || undefined,
+          telegram_id: selectedAdUser.telegram_id || undefined,
+          create_in_ad: true,
+          target_spokes,
+        });
+        setCreateResult(res);
+        await fetchUsers();
+        await fetchAdminUsers();
+      } catch (err: any) {
+        setCreateError(err.message || "เกิดข้อผิดพลาดในการเพิ่มผู้ใช้ AD เข้า Spoke App");
+      } finally {
+        setCreateLoading(false);
+      }
+      return;
+    }
+
+    // Local Account creation mode (create_in_ad = false)
     if (!createForm.username.trim() || !createForm.full_name.trim()) {
       setCreateError("กรุณากรอก Username และชื่อ-นามสกุล");
       return;
@@ -501,13 +596,6 @@ export default function DirectoryPage() {
       setCreateLoading(true);
       setCreateError(null);
 
-      const target_spokes = Object.entries(selectedSpokes)
-        .filter(([_, val]) => val.selected)
-        .map(([appId, val]) => ({
-          application_id: Number(appId),
-          group_name: val.group_name || "Standard User",
-        }));
-
       const res = await ciamApi.createUser({
         employee_id: createForm.employee_id.trim() || undefined,
         username: createForm.username.trim(),
@@ -516,7 +604,9 @@ export default function DirectoryPage() {
         department: createForm.department.trim() || undefined,
         telephone: createForm.telephone.trim() || undefined,
         telegram_id: createForm.telegram_id.trim() || undefined,
-        create_in_ad: createForm.create_in_ad,
+        create_in_ad: false,
+        password: createForm.password.trim() || undefined,
+        must_change_password: createForm.must_change_password,
         target_spokes,
       });
 
@@ -524,7 +614,7 @@ export default function DirectoryPage() {
       await fetchUsers();
       await fetchAdminUsers();
     } catch (err: any) {
-      setCreateError(err.message || "เกิดข้อผิดพลาดในการสร้างบัญชีผู้ใช้");
+      setCreateError(err.message || "เกิดข้อผิดพลาดในการสร้างบัญชี Local Account");
     } finally {
       setCreateLoading(false);
     }
@@ -1011,7 +1101,7 @@ export default function DirectoryPage() {
             className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span>+ เพิ่มผู้ใช้</span>
+            <span>+ เพิ่มผู้ใช้เข้า Spoke / Local</span>
           </button>
 
           <Link
@@ -2190,7 +2280,7 @@ export default function DirectoryPage() {
         </div>
       )}
 
-      {/* Create User Modal */}
+      {/* Create / Assign User Modal (One-Way AD Assignment & Local Account Provisioning) */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white max-w-xl w-full p-6 space-y-4 rounded-lg border-2 border-slate-300 shadow-2xl relative max-h-[90vh] overflow-y-auto">
@@ -2200,16 +2290,16 @@ export default function DirectoryPage() {
                   <UserPlus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">เพิ่มและแจกจ่ายสิทธิ์ผู้ใช้ใหม่</h3>
+                  <h3 className="text-base font-bold text-slate-900">เพิ่มสิทธิ์ผู้ใช้เข้า Spoke App / สร้าง Local Account</h3>
                   <p className="text-xs text-slate-600 font-medium">
-                    สร้างบัญชีใน Active Directory และส่งคำขอสร้างไปยังระบบลูก
+                    AD เป็นแบบ One-Way (ดึงบัญชีที่มีอยู่แล้วใน AD) หรือสร้างบัญชี Local พร้อมรหัสผ่านเริ่มต้น
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold text-xs"
+                className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold text-xs cursor-pointer"
               >
                 ✕
               </button>
@@ -2217,19 +2307,107 @@ export default function DirectoryPage() {
 
             {createResult ? (
               <div className="space-y-4">
-                <div className="p-4 rounded-md bg-emerald-50 border-2 border-emerald-300 text-emerald-950 text-xs">
-                  <div className="font-bold flex items-center space-x-1.5 mb-2 text-sm">
+                <div className="p-4 rounded-md bg-emerald-50 border-2 border-emerald-300 text-emerald-950 text-xs space-y-1.5">
+                  <div className="font-bold flex items-center space-x-1.5 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>สร้างบัญชีผู้ใช้สำเร็จเรียบร้อย</span>
+                    <span>ดำเนินการบันทึกและส่งข้อมูลไปยังระบบลูกเรียบร้อย</span>
                   </div>
-                  <div>Username: <strong className="font-mono text-emerald-900">{createResult.username}</strong></div>
-                  <div>สถานะใน AD: <strong>{createResult.ad_status}</strong></div>
+                  <div>
+                    Username: <strong className="font-mono text-emerald-900">{createResult.username}</strong> ({createResult.full_name})
+                  </div>
+                  <div>
+                    ประเภทตัวตน:{" "}
+                    <strong>
+                      {createResult.ad_status === "LOCAL_ACCOUNT"
+                        ? "Local Account (Non-AD • ยืนยันตัวตนผ่าน CIAM)"
+                        : "Active Directory Account (One-Way Sync)"}
+                    </strong>
+                  </div>
                 </div>
+
+                {createResult.temporary_password && (
+                  <div className="p-3.5 rounded-md bg-white border-2 border-emerald-400 text-xs space-y-2 shadow-2xs">
+                    <div className="font-bold text-emerald-900 flex items-center space-x-1.5">
+                      <Key className="w-4 h-4 text-emerald-600" />
+                      <span>รหัสผ่านเริ่มต้นสำหรับ Local Account (กรุณาส่งมอบให้ผู้ใช้งาน)</span>
+                    </div>
+                    <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded border border-slate-200">
+                      <span className="font-mono font-bold text-sm text-emerald-700 select-all">
+                        {createResult.temporary_password}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(createResult.temporary_password || "");
+                          setCopiedCreatePwd(true);
+                          setTimeout(() => setCopiedCreatePwd(false), 2500);
+                        }}
+                        className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer"
+                      >
+                        {copiedCreatePwd ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedCreatePwd ? "คัดลอกแล้ว" : "คัดลอกรหัสผ่าน"}</span>
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      • ใช้รหัสผ่านนี้เข้าสู่ระบบที่หน้า <strong>CIAM Portal (SSO)</strong> เพื่อเข้าใช้งานระบบลูกที่ได้รับสิทธิ์
+                      {createResult.must_change_password ? " (ระบบจะบังคับให้เปลี่ยนรหัสผ่านเมื่อล็อกอินครั้งแรก)" : ""}
+                    </p>
+                  </div>
+                )}
+
+                {createResult.spoke_results && createResult.spoke_results.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      ผลการส่งคำสั่งไปยังระบบลูก (Spoke Provisioning Status)
+                    </div>
+                    <div className="space-y-1.5">
+                      {createResult.spoke_results.map((sr) => {
+                        const isQueuedOrPending = !sr.success || sr.status_code === 202;
+                        return (
+                          <div
+                            key={sr.application_id}
+                            className={`p-2.5 rounded-md border text-xs flex items-start justify-between gap-2 ${
+                              sr.success && sr.status_code !== 202
+                                ? "bg-emerald-50/70 border-emerald-300 text-emerald-950"
+                                : "bg-amber-50 border-amber-300 text-amber-950"
+                            }`}
+                          >
+                            <div className="space-y-0.5">
+                              <div className="font-bold flex items-center space-x-1.5">
+                                {sr.success && sr.status_code !== 202 ? (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                ) : (
+                                  <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                )}
+                                <span>{sr.app_name}</span>
+                                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white border border-slate-200 text-slate-700">
+                                  {sr.connector_type}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-700 pl-5">{sr.message}</div>
+                            </div>
+                            <span
+                              className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${
+                                sr.success && sr.status_code !== 202
+                                  ? "bg-emerald-200 text-emerald-900"
+                                  : isQueuedOrPending
+                                  ? "bg-amber-200 text-amber-950"
+                                  : "bg-rose-200 text-rose-900"
+                              }`}
+                            >
+                              {sr.success && sr.status_code !== 202 ? "สร้างสำเร็จ" : "รอซิงก์ / WAIT"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="pt-2 flex justify-end">
                   <button
                     onClick={() => setIsCreateModalOpen(false)}
-                    className="px-5 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm"
+                    className="px-5 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm cursor-pointer"
                   >
                     เสร็จสิ้น
                   </button>
@@ -2237,111 +2415,237 @@ export default function DirectoryPage() {
               </div>
             ) : (
               <form onSubmit={handleCreateSubmit} className="space-y-4">
+                {/* Mode Tabs */}
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreateMode("ad_assign");
+                      setCreateError(null);
+                    }}
+                    className={`py-2 px-3 rounded-md font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                      createMode === "ad_assign"
+                        ? "bg-white text-blue-700 shadow-xs border border-blue-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>เพิ่มผู้ใช้ AD เข้า Spoke App</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreateMode("local_create");
+                      setCreateError(null);
+                    }}
+                    className={`py-2 px-3 rounded-md font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                      createMode === "local_create"
+                        ? "bg-white text-emerald-700 shadow-xs border border-emerald-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                    <span>สร้าง Local Account ใหม่</span>
+                  </button>
+                </div>
+
                 {createError && (
                   <div className="p-3 rounded-md bg-rose-50 border-2 border-rose-400 text-rose-900 text-xs font-bold">
                     {createError}
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <label className="block text-slate-700 mb-1 font-bold">Username (sAMAccountName) *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="เช่น patcha.s"
-                      value={createForm.username}
-                      onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-blue-600"
-                    />
-                  </div>
+                {createMode === "ad_assign" ? (
+                  <div className="space-y-3 text-xs">
+                    <div className="p-3 rounded-lg bg-blue-50/70 border border-blue-200 text-[11px] text-blue-950 leading-relaxed">
+                      <strong>One-Way AD Sync:</strong> ระบบ Central IAM จะไม่สร้างบัญชีใหม่บน Active Directory — กรุณาเลือกพนักงานที่มีบัญชีใน AD อยู่แล้วเพื่อส่งสิทธิ์เข้า Spoke App (ล็อกอินด้วยรหัสผ่าน Windows/AD เดิม)
+                    </div>
 
-                  <div>
-                    <label className="block text-slate-700 mb-1 font-bold">ชื่อ-นามสกุล *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="เช่น พัชรา สุขใจ"
-                      value={createForm.full_name}
-                      onChange={(e) => setCreateForm({ ...createForm, full_name: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-blue-600"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 mb-1 font-bold">รหัสพนักงาน</label>
-                    <input
-                      type="text"
-                      placeholder="เช่น WA-10492"
-                      value={createForm.employee_id}
-                      onChange={(e) => setCreateForm({ ...createForm, employee_id: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-blue-600"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 mb-1 font-bold">อีเมลบริษัท</label>
-                    <input
-                      type="email"
-                      placeholder="เช่น patcha.s@windowasia.com"
-                      value={createForm.email}
-                      onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-blue-600"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 mb-1 font-bold">แผนก</label>
-                    <input
-                      type="text"
-                      placeholder="เช่น บัญชี, จัดซื้อ, IT"
-                      value={createForm.department}
-                      onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-blue-600"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 mb-1 font-bold">เบอร์โทรศัพท์</label>
-                    <input
-                      type="text"
-                      placeholder="เช่น 081-234-5678"
-                      value={createForm.telephone}
-                      onChange={(e) => setCreateForm({ ...createForm, telephone: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-blue-600"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 mb-1 font-bold">Telegram ID</label>
-                    <input
-                      type="text"
-                      placeholder="เช่น @somchai หรือ 123456789"
-                      value={createForm.telegram_id}
-                      onChange={(e) => setCreateForm({ ...createForm, telegram_id: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-blue-600"
-                    />
-                  </div>
-                </div>
-
-                {/* AD Toggle */}
-                <div className="p-3.5 rounded-lg bg-slate-50 border-2 border-slate-300 flex items-center justify-between">
-                  <div className="flex items-center space-x-2.5">
-                    <Shield className="w-5 h-5 text-blue-600" />
                     <div>
-                      <div className="text-xs font-bold text-slate-900">สร้างบัญชีใน Active Directory (ผ่าน AD Proxy)</div>
-                      <div className="text-[11px] text-slate-600 font-medium">
-                        ส่งคำขอไปยัง AD Sync Agent เพื่อสร้างบัญชีใน Domain Controller
+                      <label className="block text-slate-700 mb-1 font-bold">
+                        ค้นหาพนักงานจาก Active Directory *
+                      </label>
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="พิมพ์ชื่อ, Username หรือแผนก (เช่น Chaiwat.N)..."
+                          value={adSearchQuery}
+                          onChange={(e) => setAdSearchQuery(e.target.value)}
+                          className="w-full pl-8 pr-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-medium focus:outline-none focus:border-blue-600"
+                        />
                       </div>
                     </div>
+
+                    <div className="max-h-44 overflow-y-auto border-2 border-slate-300 rounded-md divide-y divide-slate-200 bg-white">
+                      {adCandidatesForModal.length === 0 ? (
+                        <div className="p-3 text-center text-xs text-slate-500">
+                          ไม่พบบัญชี Active Directory ที่ตรงกับคำค้นหา (กรุณากดปุ่ม &ldquo;ซิงก์จาก AD&rdquo; หากเพิ่งสร้างใน AD)
+                        </div>
+                      ) : (
+                        adCandidatesForModal.slice(0, 50).map((cand) => {
+                          const isSelected = selectedAdUser?.id === cand.id;
+                          return (
+                            <div
+                              key={cand.id}
+                              onClick={() => setSelectedAdUser(cand)}
+                              className={`p-2.5 flex items-center justify-between cursor-pointer transition-colors text-xs ${
+                                isSelected
+                                  ? "bg-blue-50 border-l-4 border-l-blue-600 font-bold"
+                                  : "hover:bg-slate-50"
+                              }`}
+                            >
+                              <div>
+                                <div className="text-slate-900 font-bold">{cand.full_name}</div>
+                                <div className="text-[11px] text-slate-600 flex items-center space-x-2">
+                                  <span className="font-mono text-blue-700 font-bold">{cand.username}</span>
+                                  {cand.department && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{cand.department}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              {isSelected && (
+                                <span className="bg-blue-600 text-white p-1 rounded-full shrink-0">
+                                  <Check className="w-3 h-3" />
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {selectedAdUser && (
+                      <div className="p-2.5 rounded-md bg-slate-50 border border-slate-300 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="text-slate-500">ผู้ที่เลือก:</span>{" "}
+                          <strong className="text-slate-900">{selectedAdUser.full_name}</strong>{" "}
+                          <span className="font-mono text-blue-700 font-bold">({selectedAdUser.username})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAdUser(null)}
+                          className="text-[11px] text-rose-600 hover:underline font-bold cursor-pointer"
+                        >
+                          เปลี่ยนคน
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={createForm.create_in_ad}
-                    onChange={(e) => setCreateForm({ ...createForm, create_in_ad: e.target.checked })}
-                    className="w-5 h-5 rounded text-blue-600 border-2 border-slate-300 focus:ring-blue-500 cursor-pointer"
-                  />
-                </div>
+                ) : (
+                  <div className="space-y-3 text-xs">
+                    <div className="p-3 rounded-lg bg-emerald-50/70 border border-emerald-200 text-[11px] text-emerald-950 leading-relaxed">
+                      <strong>Local Account (Non-AD):</strong> สำหรับผู้ใช้งานภายนอก/เฉพาะกิจที่ไม่มีบัญชีใน Active Directory — ระบบจะตั้งรหัสผ่านให้ใช้เข้าสู่ระบบผ่าน CIAM SSO และส่งให้ Spoke App ทันที
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-700 mb-1 font-bold">Username *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="เช่น supplier.01 หรือ test.1"
+                          value={createForm.username}
+                          onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-emerald-600"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-700 mb-1 font-bold">ชื่อ-นามสกุล *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="เช่น สมชาย ภายนอก"
+                          value={createForm.full_name}
+                          onChange={(e) => setCreateForm({ ...createForm, full_name: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-emerald-600"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-700 mb-1 font-bold">แผนก / หน่วยงาน</label>
+                        <input
+                          type="text"
+                          placeholder="เช่น Outsource, จัดซื้อ, IT"
+                          value={createForm.department}
+                          onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-emerald-600"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-700 mb-1 font-bold">อีเมลติดต่อ</label>
+                        <input
+                          type="email"
+                          placeholder="เช่น partner@company.com"
+                          value={createForm.email}
+                          onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-emerald-600"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-700 mb-1 font-bold">เบอร์โทรศัพท์</label>
+                        <input
+                          type="text"
+                          placeholder="เช่น 081-234-5678"
+                          value={createForm.telephone}
+                          onChange={(e) => setCreateForm({ ...createForm, telephone: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-emerald-600"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-700 mb-1 font-bold">Telegram ID</label>
+                        <input
+                          type="text"
+                          placeholder="เช่น @somchai หรือ 123456789"
+                          value={createForm.telegram_id}
+                          onChange={(e) => setCreateForm({ ...createForm, telegram_id: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-medium focus:outline-none focus:border-emerald-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Initial Password for Local Account */}
+                    <div className="p-3.5 rounded-lg bg-emerald-50/70 border-2 border-emerald-300 space-y-2.5">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 mb-1">
+                          รหัสผ่านเริ่มต้น (Initial Password)
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={16}
+                          value={createForm.password}
+                          onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                          placeholder="ปล่อยว่างไว้เพื่อให้ระบบสุ่มรหัสผ่านให้อัตโนมัติ (8-16 ตัวอักษร)"
+                          className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-xs text-slate-900 font-mono focus:outline-none focus:border-emerald-600"
+                        />
+                        <p className="text-[11px] text-slate-600 mt-1">
+                          นโยบายความปลอดภัย: ความยาว 8-16 ตัวอักษร มีตัวพิมพ์ใหญ่, พิมพ์เล็ก, ตัวเลข และอักขระพิเศษ (ห้ามมี Username)
+                        </p>
+                      </div>
+
+                      <label className="flex items-start gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={createForm.must_change_password}
+                          onChange={(e) =>
+                            setCreateForm({ ...createForm, must_change_password: e.target.checked })
+                          }
+                          className="w-4 h-4 mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-slate-800">
+                          บังคับให้ผู้ใช้เปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก (90-Day Rotation Policy)
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                )}
 
                 {/* Spoke Systems */}
                 <div className="space-y-2">
@@ -2349,9 +2653,14 @@ export default function DirectoryPage() {
                     เลือกระบบลูกที่ต้องการสร้างบัญชีและกำหนดบทบาท
                   </label>
 
-                  <div className="space-y-2">
-                    {apps.map((app) => {
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {provisionableApps.map((app) => {
                       const spokeState = selectedSpokes[app.id] || { selected: false, group_name: "Standard User" };
+                      const alreadyAssigned =
+                        createMode === "ad_assign" &&
+                        selectedAdUser?.connected_apps.some(
+                          (ca) => ca.application_id === app.id || ca.app_code.toLowerCase() === app.app_code.toLowerCase()
+                        );
                       return (
                         <div
                           key={app.id}
@@ -2375,8 +2684,13 @@ export default function DirectoryPage() {
                             />
                             <span className="font-bold text-slate-900">{app.app_name}</span>
                             <span className="text-[10px] px-1.5 py-0.2 bg-slate-100 text-slate-700 border border-slate-200 rounded font-bold">
-                              REST API
+                              {app.connector_type === "SSO_ONLY" ? "Mode C (Agent)" : app.connector_type}
                             </span>
+                            {alreadyAssigned && (
+                              <span className="text-[10px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded font-bold">
+                                มีสิทธิ์แล้ว (ซิงก์ซ้ำได้)
+                              </span>
+                            )}
                           </label>
 
                           {spokeState.selected && (
@@ -2422,7 +2736,9 @@ export default function DirectoryPage() {
                     ) : (
                       <>
                         <Check className="w-4 h-4" />
-                        <span>บันทึกและสร้างบัญชี</span>
+                        <span>
+                          {createMode === "ad_assign" ? "ส่งสิทธิ์ผู้ใช้ AD เข้า Spoke App" : "สร้างบัญชี Local Account"}
+                        </span>
                       </>
                     )}
                   </button>

@@ -3,7 +3,7 @@ import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.models.setting import SystemSetting
@@ -500,6 +500,161 @@ def cleanup_orphan_identities(db: Session) -> int:
     return removed
 
 
+async def push_pending_provisions_to_spoke(
+    app: ConnectedApplication,
+    raw_accounts: list,
+    db: Session,
+    actor_username: str = "System-Scheduler"
+) -> int:
+    """
+    Two-way Mode A sync reconciliation:
+    Push any active CIAM_ADMIN / PENDING_PROVISION mappings missing from the Spoke's
+    live inventory by calling connector.provision_account().
+    """
+    DIRECT_INFRA_CODES = {"pfsense_fac", "pfsense_ho", "m365", "sap_b1", "ad", "wa_rdt2"}
+    if app.connector_type != "REST_API" or (app.app_code or "").lower() in DIRECT_INFRA_CODES:
+        return 0
+
+    live_usernames = {
+        (item.get("username") or "").strip().lower()
+        for item in raw_accounts
+        if (item.get("username") or "").strip()
+    }
+
+    pending_mappings = (
+        db.query(AppAccountMapping, MasterIdentity)
+        .join(MasterIdentity, AppAccountMapping.identity_id == MasterIdentity.id)
+        .filter(
+            AppAccountMapping.application_id == app.id,
+            AppAccountMapping.is_active_in_app == True,
+            or_(
+                AppAccountMapping.status_origin == "CIAM_ADMIN",
+                AppAccountMapping.last_sync_status == "PENDING_PROVISION",
+            ),
+        )
+        .all()
+    )
+
+    if not pending_mappings:
+        return 0
+
+    connector = get_connector_for_app(app)
+    pushed_count = 0
+
+    for mapping, ident in pending_mappings:
+        uname = (mapping.app_username or ident.username or "").strip()
+        if not uname:
+            continue
+        if uname.lower() in live_usernames:
+            if mapping.last_sync_status == "PENDING_PROVISION":
+                mapping.last_sync_status = (
+                    "APPROVED_EXCEPTION"
+                    if (mapping.is_approved_exception or ident.is_approved_exception)
+                    else "IN_SYNC"
+                )
+            continue
+
+        payload = {
+            "username": uname,
+            "full_name": ident.full_name or uname,
+            "email": ident.email,
+            "department": ident.department,
+            "group_name": mapping.app_group_name or "Standard User",
+            "use_ad_auth": bool(ident.is_active_in_ad),
+            "created_by": actor_username,
+        }
+        try:
+            conn_res = await connector.provision_account(payload)
+            if conn_res.success:
+                mapping.last_sync_status = (
+                    "APPROVED_EXCEPTION"
+                    if (mapping.is_approved_exception or ident.is_approved_exception)
+                    else "IN_SYNC"
+                )
+                mapping.status_reason = f"ซิงก์และสร้างบัญชีไปยัง {app.app_name} สำเร็จ ({actor_username})"
+                raw_accounts.append({
+                    "username": uname,
+                    "full_name": ident.full_name or uname,
+                    "email": ident.email,
+                    "department": ident.department,
+                    "group_name": mapping.app_group_name or "Standard User",
+                    "use_ad_auth": bool(ident.is_active_in_ad),
+                    "is_active": True,
+                })
+                live_usernames.add(uname.lower())
+                db.add(IamAuditLog(
+                    actor_username=actor_username,
+                    action_type="PROVISION_USER",
+                    target_username=uname,
+                    affected_app_code=app.app_code,
+                    previous_status="PENDING_PROVISION",
+                    new_status="ACTIVE",
+                    execution_mode=conn_res.execution_mode,
+                    reason=f"Two-way sync pushed missing account '{uname}' to {app.app_name}",
+                    status="SUCCESS",
+                ))
+                pushed_count += 1
+            else:
+                mapping.last_sync_status = "PENDING_PROVISION"
+                logger.warning(
+                    "Pending provision push for %s in %s failed: %s",
+                    uname,
+                    app.app_code,
+                    conn_res.message,
+                )
+        except Exception as exc:
+            mapping.last_sync_status = "PENDING_PROVISION"
+            logger.warning("Pending provision push error for %s in %s: %s", uname, app.app_code, exc)
+
+    if pushed_count:
+        db.flush()
+
+    return pushed_count
+
+
+async def retry_pending_provisions(db: Session) -> int:
+    """Retry provisioning for any active Mode A (REST_API) apps with PENDING_PROVISION mappings."""
+    DIRECT_INFRA_CODES = {"pfsense_fac", "pfsense_ho", "m365", "sap_b1", "ad", "wa_rdt2"}
+    pending_app_ids = [
+        row[0]
+        for row in (
+            db.query(AppAccountMapping.application_id)
+            .join(ConnectedApplication, AppAccountMapping.application_id == ConnectedApplication.id)
+            .filter(
+                ConnectedApplication.is_active == True,
+                ConnectedApplication.connector_type == "REST_API",
+                AppAccountMapping.is_active_in_app == True,
+                AppAccountMapping.last_sync_status == "PENDING_PROVISION",
+            )
+            .distinct()
+            .all()
+        )
+    ]
+    if not pending_app_ids:
+        return 0
+
+    total_pushed = 0
+    for app_id in pending_app_ids:
+        app = db.query(ConnectedApplication).filter(ConnectedApplication.id == app_id).first()
+        if not app or (app.app_code or "").lower() in DIRECT_INFRA_CODES:
+            continue
+        connector = get_connector_for_app(app)
+        raw_accounts: list = []
+        try:
+            inv = await connector.sync_inventory()
+            raw_accounts = list(inv.get("accounts", []))
+        except Exception:
+            raw_accounts = []
+        pushed = await push_pending_provisions_to_spoke(
+            app, raw_accounts, db, actor_username="Auto-Retry-2m"
+        )
+        if pushed > 0:
+            total_pushed += pushed
+            db.commit()
+
+    return total_pushed
+
+
 async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler") -> Dict[str, Any]:
     """
     Execute inventory synchronization across all active connected applications.
@@ -516,7 +671,8 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
         connector = get_connector_for_app(app)
         try:
             inv = await connector.sync_inventory()
-            raw_accounts = inv.get("accounts", [])
+            raw_accounts = list(inv.get("accounts", []))
+            await push_pending_provisions_to_spoke(app, raw_accounts, db, actor_username=actor_username)
             synced_for_app = persist_spoke_inventory(app, raw_accounts, db, actor_username=actor_username)
 
             results.append({
@@ -594,6 +750,7 @@ async def run_scheduler_worker():
     Runs in Asia/Bangkok timezone.
     """
     logger.info("Central IAM Daily Scheduler worker initialized (Timezone: Asia/Bangkok)")
+    last_pending_retry_at: Optional[datetime] = None
     while True:
         try:
             await asyncio.sleep(15)
@@ -672,6 +829,14 @@ async def run_scheduler_worker():
                     await check_and_notify_sap_status(db)
                 except Exception as sap_mon_err:
                     logger.warning("Error running real-time SAP B1 health monitor: %s", sap_mon_err)
+
+                # 6. Retry PENDING_PROVISION mappings on Mode A (REST_API) apps every 2 minutes
+                try:
+                    if last_pending_retry_at is None or (now_bkk - last_pending_retry_at).total_seconds() >= 120:
+                        last_pending_retry_at = now_bkk
+                        await retry_pending_provisions(db)
+                except Exception as retry_err:
+                    logger.warning("Error retrying pending Mode A provisions: %s", retry_err)
             finally:
                 db.close()
         except asyncio.CancelledError:

@@ -838,6 +838,73 @@ def init_db():
             ConnectedApplication.spoke_sso_status == "DISABLED"
         ).update({"spoke_sso_status": "ACTIVE"}, synchronize_session=False)
 
+        # Auto-heal: Convert CIAM-created non-AD accounts (such as Test.1) into LOCAL_ACCOUNT
+        # so they are never flagged as Ghost Accounts and are queued for Spoke provisioning.
+        import secrets as _secrets
+        from app.models.application import SpokePendingCommand
+        heal_now = datetime.now(timezone.utc)
+        direct_infra_codes = {"pfsense_fac", "pfsense_ho", "m365", "sap_b1", "ad", "wa_rdt2"}
+        non_ad_candidates = (
+            db.query(MasterIdentity)
+            .filter(
+                MasterIdentity.is_active_in_ad == False,
+                MasterIdentity.ad_guid.is_(None),
+                MasterIdentity.last_login_ad_at.is_(None),
+                MasterIdentity.employee_id.is_(None),
+            )
+            .all()
+        )
+        for ident in non_ad_candidates:
+            ident_maps = db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == ident.id).all()
+            if not ident_maps:
+                continue
+            is_test_1 = (ident.username or "").strip().lower() == "test.1"
+            all_ciam_created = all(m.status_origin == "CIAM_ADMIN" for m in ident_maps)
+            if not (is_test_1 or all_ciam_created):
+                continue
+
+            if not ident.is_approved_exception or ident.exception_type != "LOCAL_ACCOUNT":
+                ident.is_approved_exception = True
+                ident.exception_type = "LOCAL_ACCOUNT"
+                ident.exception_reason = ident.exception_reason or "บัญชี Local Account ที่สร้างผ่าน Central IAM"
+                ident.exception_approved_by = ident.exception_approved_by or "System-AutoHeal"
+                ident.exception_approved_at = ident.exception_approved_at or heal_now
+
+            for m in ident_maps:
+                m.is_approved_exception = True
+                m.exception_type = "LOCAL_ACCOUNT"
+                m.exception_reason = m.exception_reason or ident.exception_reason
+                m.exception_approved_by = m.exception_approved_by or "System-AutoHeal"
+                m.exception_approved_at = m.exception_approved_at or heal_now
+                app_obj = db.query(ConnectedApplication).filter(ConnectedApplication.id == m.application_id).first()
+                is_sso_spoke = bool(app_obj and app_obj.sso_enabled and (app_obj.app_code or "").lower() not in direct_infra_codes)
+                if is_sso_spoke and m.is_active_in_app and (is_test_1 or m.last_sync_status in ("DISCREPANCY", "PENDING_PROVISION")):
+                    m.last_sync_status = "PENDING_PROVISION"
+                    existing_cmd = (
+                        db.query(SpokePendingCommand)
+                        .filter(
+                            SpokePendingCommand.app_code == app_obj.app_code,
+                            SpokePendingCommand.action == "PROVISION_USER",
+                            func.lower(SpokePendingCommand.username) == (m.app_username or ident.username).lower(),
+                            SpokePendingCommand.status.in_(["PENDING", "SENT"]),
+                        )
+                        .first()
+                    )
+                    if not existing_cmd:
+                        db.add(SpokePendingCommand(
+                            command_id=f"cmd_prov_{_secrets.token_hex(4)}",
+                            app_code=app_obj.app_code,
+                            action="PROVISION_USER",
+                            username=m.app_username or ident.username,
+                            reason="Auto-Heal: Re-queue provisioning to Spoke App",
+                            status="PENDING",
+                            issued_by="System-AutoHeal",
+                            created_at=heal_now,
+                        ))
+                elif m.last_sync_status == "DISCREPANCY":
+                    m.last_sync_status = "APPROVED_EXCEPTION"
+        db.flush()
+
         # Auto-clean: Remove zero-system orphaned identities (e.g., accounts removed from all spokes & AD)
         from app.services.scheduler import cleanup_orphan_identities
         cleanup_orphan_identities(db)

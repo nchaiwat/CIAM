@@ -4,7 +4,7 @@ import logging
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -46,6 +46,7 @@ class AssignedAccountItem(BaseModel):
     email: Optional[str] = None
     department: Optional[str] = None
     role: Optional[str] = "Viewer"
+    use_ad_auth: bool = True
     is_active: bool = True
 
 class PendingCommandItem(BaseModel):
@@ -229,14 +230,18 @@ def handle_agent_heartbeat(
 
     if payload.accounts is not None:
         assigned_accounts_list = []
-        # Query all active mapped accounts on CIAM for this app
+        # Query all active mapped accounts on CIAM for this app (including AD users, approved Local Accounts, and CIAM_ADMIN assignments)
         ciam_mappings = (
             db.query(AppAccountMapping, MasterIdentity)
             .join(MasterIdentity, AppAccountMapping.identity_id == MasterIdentity.id)
             .filter(
                 AppAccountMapping.application_id == app.id,
                 AppAccountMapping.is_active_in_app == True,
-                MasterIdentity.is_active_in_ad == True
+                or_(
+                    MasterIdentity.is_active_in_ad == True,
+                    MasterIdentity.is_approved_exception == True,
+                    AppAccountMapping.status_origin == "CIAM_ADMIN",
+                ),
             )
             .all()
         )
@@ -244,35 +249,65 @@ def handle_agent_heartbeat(
         spoke_map = {acc.username.strip().lower(): acc for acc in payload.accounts}
 
         for mapping, ident in ciam_mappings:
+            target_uname = (mapping.app_username or ident.username).strip()
             assigned_accounts_list.append(AssignedAccountItem(
-                username=ident.username,
-                full_name=ident.full_name or ident.username,
+                username=target_uname,
+                full_name=ident.full_name or target_uname,
                 email=ident.email,
                 department=ident.department,
                 role=mapping.app_group_name or "Viewer",
+                use_ad_auth=bool(ident.is_active_in_ad),
                 is_active=True
             ))
 
-            # If CIAM has assigned an account that Spoke does not have, issue PROVISION_USER
-            if ident.username.lower() not in spoke_map:
-                cmd_id = f"cmd_prov_{secrets.token_hex(4)}"
+            if target_uname.lower() in spoke_map:
+                if mapping.last_sync_status == "PENDING_PROVISION":
+                    mapping.last_sync_status = (
+                        "APPROVED_EXCEPTION"
+                        if (mapping.is_approved_exception or ident.is_approved_exception)
+                        else "IN_SYNC"
+                    )
+            else:
+                # If CIAM has assigned an account that Spoke does not have, issue PROVISION_USER
+                existing_pending = (
+                    db.query(SpokePendingCommand)
+                    .filter(
+                        SpokePendingCommand.app_code == app.app_code,
+                        SpokePendingCommand.action == "PROVISION_USER",
+                        func.lower(SpokePendingCommand.username) == target_uname.lower(),
+                        SpokePendingCommand.status == "PENDING",
+                    )
+                    .first()
+                )
+                if existing_pending:
+                    cmd_id = existing_pending.command_id
+                    existing_pending.status = "SENT"
+                    issued_at_str = (
+                        existing_pending.created_at.isoformat()
+                        if existing_pending.created_at
+                        else now.isoformat()
+                    )
+                else:
+                    cmd_id = f"cmd_prov_{secrets.token_hex(4)}"
+                    issued_at_str = now.isoformat()
+                    db.add(SpokePendingCommand(
+                        command_id=cmd_id,
+                        app_code=app.app_code,
+                        action="PROVISION_USER",
+                        username=target_uname,
+                        reason=f"Auto-Reconciliation: Account assigned on Central IAM for {app.app_name}",
+                        status="SENT",
+                        created_at=now
+                    ))
+
                 outgoing_cmds.append(PendingCommandItem(
                     command_id=cmd_id,
                     action="PROVISION_USER",
-                    username=ident.username,
+                    username=target_uname,
                     reason=f"Auto-Reconciliation: Account assigned on Central IAM for {app.app_name}",
-                    issued_at=now.isoformat()
+                    issued_at=issued_at_str
                 ))
-                dispatched_cmd_keys.add(("PROVISION_USER", ident.username.lower()))
-                db.add(SpokePendingCommand(
-                    command_id=cmd_id,
-                    app_code=app.app_code,
-                    action="PROVISION_USER",
-                    username=ident.username,
-                    reason="Auto-Reconciliation: Account assigned on Central IAM",
-                    status="SENT",
-                    created_at=now
-                ))
+                dispatched_cmd_keys.add(("PROVISION_USER", target_uname.lower()))
 
     # 6. Retrieve Pending Commands from DB queue
     pending_db_cmds = db.query(SpokePendingCommand).filter(

@@ -126,6 +126,7 @@ class RestApiConnector(BaseConnector):
     async def provision_account(self, account_data: dict) -> ConnectorResult:
         """Create/provision new user account according to Spec Section 3.3."""
         start_time = time.time()
+        is_http_target = self.base_url.startswith(("http://", "https://"))
         endpoint = f"{self.base_url}/api/v1/directory/accounts"
         headers = self._get_headers()
         payload = {
@@ -137,10 +138,31 @@ class RestApiConnector(BaseConnector):
             "use_ad_auth": account_data.get("use_ad_auth", True),
             "created_by": account_data.get("created_by", "Central-IAM-Service")
         }
+        if account_data.get("password"):
+            payload["password"] = account_data["password"]
+            payload["must_change_password"] = bool(account_data.get("must_change_password", True))
+
+        if not is_http_target:
+            elapsed = int((time.time() - start_time) * 1000) or 40
+            return ConnectorResult(
+                success=True,
+                status_code=201,
+                execution_mode="SYNC_REST",
+                message=f"Simulated REST 201 Created: Provisioned account '{payload['username']}' in {self.app_code.upper()}",
+                execution_time_ms=elapsed,
+                details={"simulation": True}
+            )
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 response = await client.post(endpoint, headers=headers, json=payload)
+                if response.status_code in (404, 405):
+                    fallback_endpoint = f"{self.base_url}/api/directory/accounts"
+                    fallback_res = await client.post(fallback_endpoint, headers=headers, json=payload)
+                    if fallback_res.status_code not in (404, 405):
+                        response = fallback_res
+                        endpoint = fallback_endpoint
+
                 elapsed = int((time.time() - start_time) * 1000)
 
                 if response.status_code in [200, 201]:
@@ -162,24 +184,6 @@ class RestApiConnector(BaseConnector):
                         execution_time_ms=elapsed,
                         details={"conflict": True}
                     )
-                elif response.status_code == 403 and settings.SIMULATE_SPOKE_RESPONSES:
-                    return ConnectorResult(
-                        success=True,
-                        status_code=201,
-                        execution_mode="SYNC_REST",
-                        message=f"Simulated REST 201 Created (IP Whitelist bypass): Provisioned '{payload['username']}' in {self.app_code.upper()}",
-                        execution_time_ms=elapsed,
-                        details={"simulation": True}
-                    )
-                elif response.status_code in [404, 405] and settings.SIMULATE_SPOKE_RESPONSES:
-                    return ConnectorResult(
-                        success=True,
-                        status_code=201,
-                        execution_mode="SYNC_REST",
-                        message=f"Simulated REST 201 Created (Spoke API {response.status_code}): Provisioned '{payload['username']}' in {self.app_code.upper()}",
-                        execution_time_ms=elapsed,
-                        details={"simulation": True, "note": f"Spoke {self.app_code.upper()} returned HTTP {response.status_code}."}
-                    )
                 else:
                     return ConnectorResult(
                         success=False,
@@ -187,19 +191,10 @@ class RestApiConnector(BaseConnector):
                         execution_mode="SYNC_REST",
                         message=f"Failed to provision in {self.app_code.upper()} (HTTP {response.status_code}): {response.text[:200]}",
                         execution_time_ms=elapsed,
-                        details={"spoke_response": response.text[:300]}
+                        details={"spoke_response": response.text[:300], "endpoint": endpoint}
                     )
         except Exception as exc:
             elapsed = int((time.time() - start_time) * 1000)
-            if not self.base_url.startswith("http://") and not self.base_url.startswith("https://"):
-                return ConnectorResult(
-                    success=True,
-                    status_code=201,
-                    execution_mode="SYNC_REST",
-                    message=f"Simulated REST 201 Created: Provisioned account '{payload['username']}' in {self.app_code.upper()}",
-                    execution_time_ms=elapsed or 40,
-                    details={"simulation": True}
-                )
             return ConnectorResult(
                 success=False,
                 status_code=503,

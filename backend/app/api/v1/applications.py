@@ -27,7 +27,13 @@ from app.schemas.application import (
     SyncAllResult
 )
 from app.connectors.factory import get_connector_for_app
-from app.services.scheduler import get_sync_schedule, update_sync_schedule, execute_sync_all, persist_spoke_inventory as _persist_inventory
+from app.services.scheduler import (
+    get_sync_schedule,
+    update_sync_schedule,
+    execute_sync_all,
+    persist_spoke_inventory as _persist_inventory,
+    push_pending_provisions_to_spoke,
+)
 
 router = APIRouter(prefix="/applications", tags=["Connected Applications"])
 
@@ -538,13 +544,19 @@ async def get_application_inventory(
     connector = get_connector_for_app(app)
     try:
         data = await connector.sync_inventory()
-        raw_accounts = data.get("accounts", [])
-        if raw_accounts:
-            try:
+        raw_accounts = list(data.get("accounts", []))
+        try:
+            pushed = await push_pending_provisions_to_spoke(
+                app, raw_accounts, db, actor_username=current_admin.username
+            )
+            if pushed > 0:
+                data["accounts"] = raw_accounts
+                data["total_accounts"] = len(raw_accounts)
+            if raw_accounts:
                 _persist_inventory(app, raw_accounts, db, actor_username=current_admin.username)
-            except Exception as pe:
-                logger.warning("Auto-persist inventory failed during inspection of %s: %s", app.app_code, pe)
-                db.rollback()
+        except Exception as pe:
+            logger.warning("Auto-persist inventory failed during inspection of %s: %s", app.app_code, pe)
+            db.rollback()
         return data
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Failed to fetch inventory from {app.app_code}: {str(exc)}")
@@ -619,9 +631,12 @@ async def sync_application_inventory(
             )
         raise HTTPException(status_code=502, detail=f"Sync failed: {err_msg}")
 
-    raw_accounts = inventory.get("accounts", [])
+    raw_accounts = list(inventory.get("accounts", []))
 
     try:
+        await push_pending_provisions_to_spoke(
+            app, raw_accounts, db, actor_username=current_admin.username
+        )
         synced_count = _persist_inventory(app, raw_accounts, db, actor_username=current_admin.username)
     except Exception as exc:
         db.rollback()

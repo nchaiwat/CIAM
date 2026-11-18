@@ -78,7 +78,9 @@ export interface UserCreatePayload {
   department?: string;
   telephone?: string;
   telegram_id?: string;
-  create_in_ad: boolean;
+  create_in_ad?: boolean;
+  password?: string;
+  must_change_password?: boolean;
   target_spokes: SpokeProvisionTarget[];
 }
 
@@ -102,6 +104,8 @@ export interface UserCreateResponse {
   department?: string;
   ad_status: string;
   overall_status: string;
+  temporary_password?: string | null;
+  must_change_password?: boolean | null;
   spoke_results: SpokeProvisionResult[];
 }
 

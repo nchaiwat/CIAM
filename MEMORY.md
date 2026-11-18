@@ -1,6 +1,6 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 
-**Last Updated:** 2026-11-14  
+**Last Updated:** 2026-11-18  
 
 **Version:** 2.12.0 (Enterprise Local Password Policy, 90-Day Forced Rotation & Complexity Framework Standard)  
 
@@ -1865,6 +1865,21 @@ FRONTEND_URL=http://localhost:3000
   - `app/public/js/ciam-admin-panel.js` & `app/public/sw.js`: แก้ปุ่ม Logout (`#btnTopLogout`) ให้นำทางไปยัง `out.redirect_uri` (CIAM Portal) แทนการรีโหลดหน้า Login ของ APEX และอัปเดต Service Worker เป็น `apex-pwa-v2` (ไม่แคช `?code=`)
 * **Central-IAM (`d:\Python\Central-IAM`):**
   - `frontend/next.config.ts`: เพิ่ม Next.js Rewrites รองรับ `/oauth2/authorize`, `/oauth2/logout`, `/oauth2/token`, `/oauth2/userinfo` สำหรับ Spoke ที่เรียก Path รูปแบบ `/oauth2/*` ให้แมปเข้า `/oauth/*` และ `${backendUrl}/api/v1/oauth/*` โดยอัตโนมัติ
+
+---
+
+## 34. One-Way AD Enforcement, Local Account Initial Password & Spoke Mode A/C Sync Reconciliation (Sprint 64)
+
+* **One-Way Active Directory Policy:**
+  - `provisioning.py` (`execute_user_creation`) ไม่เรียก `AdProxyConnector.provision_account` เพื่อสร้างบัญชีใน AD อีกต่อไป; พนักงาน AD ต้องมีอยู่บน Domain Controller แล้วจึงซิงก์เข้ามาเพื่อจ่ายสิทธิ์เข้า Spoke App (ส่วนบัญชีที่สร้างบน Spoke แล้วติ๊ก `use_ad_auth: true` จะจับคู่เข้ากับตัวตน AD ให้อัตโนมัติตอน Sync)
+  - `frontend/src/app/directory/page.tsx` ปรับ Modal เพิ่มผู้ใช้เป็น 2 แท็บ: `เพิ่มผู้ใช้ AD เข้า Spoke App` (ค้นหาบัญชี AD ที่มีอยู่แล้ว) และ `สร้าง Local Account ใหม่` (กำหนด/สุ่มรหัสผ่านเริ่มต้น 8–16 ตัวอักษร + บังคับเปลี่ยนรหัสผ่านเมื่อล็อกอินครั้งแรก + แสดงรหัสผ่านและผลลัพธ์ราย Spoke)
+* **Local Account Login & Spoke Password Dispatch:**
+  - การสร้าง Local Account ใน CIAM สร้าง `AdminUser` (`PORTAL_USER`), ตั้ง `exception_type="LOCAL_ACCOUNT"`, และส่ง `password` + `must_change_password` ไปใน Payload `POST /api/v1/directory/accounts` เพื่อให้ Spoke App ที่รองรับ Local Login นำไปเก็บ Hash ได้ด้วย
+* **Mode A / Mode C Provisioning & Anti-Ghost Fixes:**
+  - `rest_api.py` (`provision_account`): เลิกจำลอง `Simulated 201 Created` สำหรับเป้าหมาย `http(s)://` ที่ตอบ 403/404/405 และรองรับ Fallback `/api/directory/accounts`
+  - `directory.py` (`assign_spoke_app_to_user`, `list_users`, `get_user_detail`) และ `base.py`: แก้ `connector.provision(...)` เป็น `provision_account({...})`, ตั้ง `PENDING_PROVISION` + คิว `PROVISION_USER` เมื่อยิงไม่ผ่าน, และป้องกันการตีความบัญชี Local Account ที่ไม่มี `ad_guid`/`employee_id`/`ad` mapping ว่าเป็น `บัญชีผี`
+  - `agent.py` (`handle_agent_heartbeat`), `scheduler.py` (`push_pending_provisions_to_spoke`, `retry_pending_provisions`), `applications.py`, และ `initial_data.py`: ให้ Mode C ส่ง `PROVISION_USER` สำหรับ Local Account / `CIAM_ADMIN` ด้วย, ให้ Mode A ผลักบัญชี `PENDING_PROVISION` ลง Spoke ระหว่าง Sync และทุกๆ 2 นาที, และ Auto-heal บัญชี `Test.1`
+
 
 
 

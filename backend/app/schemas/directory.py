@@ -98,7 +98,9 @@ class UserCreateRequest(BaseModel):
     department: Optional[str] = None
     telephone: Optional[str] = None
     telegram_id: Optional[str] = None
-    create_in_ad: bool = True
+    create_in_ad: bool = False
+    password: Optional[str] = None
+    must_change_password: bool = True
     target_spokes: List[SpokeProvisionTarget] = []
 
 class SpokeProvisionResult(BaseModel):
@@ -120,6 +122,8 @@ class UserCreateResponse(BaseModel):
     department: Optional[str] = None
     ad_status: str
     overall_status: str
+    temporary_password: Optional[str] = None
+    must_change_password: Optional[bool] = None
     spoke_results: List[SpokeProvisionResult] = []
 
 class UserActivateRequest(BaseModel):
