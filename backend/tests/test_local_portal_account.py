@@ -462,3 +462,105 @@ def test_spoke_framework_version_handshake_across_sync_ping_and_heartbeat():
                 db.delete(app_row)
         db.commit()
         db.close()
+
+
+def test_auto_heal_reverts_false_exceptions_for_former_ad_corporate_accounts():
+    """Sprint 66: Auto-heal must NOT mask former AD corporate employees (e.g., siriporn.r) as local exceptions."""
+    from app.initial_data import init_db
+    admin_headers = get_admin_auth_header()
+    db = SessionLocal()
+    try:
+        # Setup corporate M365 app
+        m365_app = db.query(ConnectedApplication).filter_by(app_code="m365").first()
+        if not m365_app:
+            m365_app = ConnectedApplication(
+                app_code="m365",
+                app_name="Microsoft 365",
+                connector_type="M365",
+                is_active=True,
+            )
+            db.add(m365_app)
+            db.commit()
+            db.refresh(m365_app)
+
+        # Setup former corporate employee who is inactive in AD and has M365 account
+        test_uname = "siriporn.test_heal"
+        ident = db.query(MasterIdentity).filter_by(username=test_uname).first()
+        if not ident:
+            ident = MasterIdentity(
+                username=test_uname,
+                full_name="Siriporn Test Healed",
+                email="siriporn.test_heal@windowasia.com",
+                department="Management",
+                is_active_in_ad=False,
+                is_approved_exception=True,
+                exception_type="LOCAL_ACCOUNT",
+                exception_reason="บัญชี Local Account ที่สร้างผ่าน Central IAM",
+                exception_approved_by="System-AutoHeal",
+            )
+            db.add(ident)
+            db.commit()
+            db.refresh(ident)
+        else:
+            ident.is_active_in_ad = False
+            ident.is_approved_exception = True
+            ident.exception_type = "LOCAL_ACCOUNT"
+            ident.exception_reason = "บัญชี Local Account ที่สร้างผ่าน Central IAM"
+            ident.exception_approved_by = "System-AutoHeal"
+            db.commit()
+
+        # Add active mapping in M365
+        mapping = db.query(AppAccountMapping).filter_by(identity_id=ident.id, application_id=m365_app.id).first()
+        if not mapping:
+            mapping = AppAccountMapping(
+                identity_id=ident.id,
+                application_id=m365_app.id,
+                app_username=test_uname,
+                is_active_in_app=True,
+                status_origin="CIAM_ADMIN",
+                is_approved_exception=True,
+                exception_type="LOCAL_ACCOUNT",
+                last_sync_status="APPROVED_EXCEPTION",
+            )
+            db.add(mapping)
+            db.commit()
+        else:
+            mapping.is_active_in_app = True
+            mapping.is_approved_exception = True
+            mapping.last_sync_status = "APPROVED_EXCEPTION"
+            db.commit()
+
+        # Run init_db which should rollback the false exception
+        init_db()
+
+        # Verify identity exception was revoked
+        db.refresh(ident)
+        assert ident.is_approved_exception is False
+        assert ident.exception_type is None
+        assert ident.exception_approved_by is None
+
+        # Verify mapping was restored to DISCREPANCY
+        db.refresh(mapping)
+        assert mapping.is_approved_exception is False
+        assert mapping.last_sync_status == "DISCREPANCY"
+
+        # Verify Directory API flags it as a Ghost Account
+        dir_res = client.get(f"/api/v1/directory/users?search={test_uname}&status=all", headers=admin_headers)
+        assert dir_res.status_code == 200
+        items = dir_res.json()
+        assert len(items) == 1
+        assert items[0]["is_ad_account"] is True
+        assert items[0]["has_discrepancy"] is True
+        assert items[0]["is_approved_exception"] is False
+
+        # Verify reconciliation flags it in ghost accounts list
+        discrepancies = find_account_discrepancies(db)
+        ghost_unames = [d.username.lower() for d in discrepancies]
+        assert test_uname.lower() in ghost_unames
+    finally:
+        ident_row = db.query(MasterIdentity).filter_by(username="siriporn.test_heal").first()
+        if ident_row:
+            db.query(AppAccountMapping).filter_by(identity_id=ident_row.id).delete()
+            db.delete(ident_row)
+        db.commit()
+        db.close()

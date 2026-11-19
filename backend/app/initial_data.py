@@ -840,54 +840,90 @@ def init_db():
             ConnectedApplication.spoke_sso_status == "DISABLED"
         ).update({"spoke_sso_status": "ACTIVE"}, synchronize_session=False)
 
-        # Auto-heal: Convert CIAM-created non-AD accounts (such as Test.1) into LOCAL_ACCOUNT
-        # so they are never flagged as Ghost Accounts and are queued for Spoke provisioning.
-        import secrets as _secrets
-        from app.models.application import SpokePendingCommand
-        heal_now = datetime.now(timezone.utc)
-        direct_infra_codes = {"pfsense_fac", "pfsense_ho", "m365", "sap_b1", "ad", "wa_rdt2"}
-        non_ad_candidates = (
+        # Auto-heal Rollback: Revert falsely marked exceptions caused by blanket System-AutoHeal.
+        # Corporate identities (e.g. M365 accounts, @windowasia.com emails, corporate departments)
+        # that are not legitimate local users must NOT be exceptions, and must be tracked as Ghost Accounts.
+        from sqlalchemy import or_
+        known_local_whitelist = {"test.1", "hermes.n", "pinyada.s", "winmonpan.p"}
+        autoheal_candidates = (
             db.query(MasterIdentity)
             .filter(
-                MasterIdentity.is_active_in_ad == False,
-                MasterIdentity.ad_guid.is_(None),
-                MasterIdentity.last_login_ad_at.is_(None),
-                MasterIdentity.employee_id.is_(None),
+                MasterIdentity.is_approved_exception == True,
+                or_(
+                    MasterIdentity.exception_approved_by == "System-AutoHeal",
+                    MasterIdentity.exception_reason == "บัญชี Local Account ที่สร้างผ่าน Central IAM",
+                )
             )
             .all()
         )
-        for ident in non_ad_candidates:
-            ident_maps = db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == ident.id).all()
-            if not ident_maps:
-                continue
-            is_test_1 = (ident.username or "").strip().lower() == "test.1"
-            all_ciam_created = all(m.status_origin == "CIAM_ADMIN" for m in ident_maps)
-            if not (is_test_1 or all_ciam_created):
+        reverted_count = 0
+        for ident in autoheal_candidates:
+            u_clean = (ident.username or "").strip().lower()
+            if u_clean in known_local_whitelist:
                 continue
 
-            if not ident.is_approved_exception or ident.exception_type != "LOCAL_ACCOUNT":
-                ident.is_approved_exception = True
-                ident.exception_type = "LOCAL_ACCOUNT"
-                ident.exception_reason = ident.exception_reason or "บัญชี Local Account ที่สร้างผ่าน Central IAM"
-                ident.exception_approved_by = ident.exception_approved_by or "System-AutoHeal"
-                ident.exception_approved_at = ident.exception_approved_at or heal_now
+            # Check if this user was explicitly created via AdminUser as a genuine portal local user
+            admin_user = (
+                db.query(AdminUser)
+                .filter(func.lower(AdminUser.username) == u_clean)
+                .first()
+            )
+            has_corp_email = bool(ident.email and ("@windowasia.com" in ident.email.lower() or "@wa.net" in ident.email.lower()))
+            if admin_user and admin_user.role == "PORTAL_USER" and not has_corp_email:
+                continue
 
-            for m in ident_maps:
+            # Revert false exception on MasterIdentity
+            ident.is_approved_exception = False
+            ident.exception_type = None
+            ident.exception_reason = None
+            ident.exception_approved_by = None
+            ident.exception_approved_at = None
+
+            # Revert associated mappings
+            for m in db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == ident.id).all():
+                m.is_approved_exception = False
+                m.exception_type = None
+                m.exception_reason = None
+                m.exception_approved_by = None
+                m.exception_approved_at = None
+                if m.last_sync_status == "APPROVED_EXCEPTION":
+                    m.last_sync_status = "DISCREPANCY"
+            reverted_count += 1
+
+        if reverted_count > 0:
+            logger.info("Auto-heal rollback: Reverted %d falsely marked exceptions back to normal Ghost Account tracking", reverted_count)
+
+        # Auto-heal: Ensure ONLY designated test account 'Test.1' is marked as LOCAL_ACCOUNT
+        # and queued for Spoke provisioning.
+        import secrets as _secrets
+        from app.models.application import SpokePendingCommand
+        test_ident = db.query(MasterIdentity).filter(func.lower(MasterIdentity.username) == "test.1").first()
+        if test_ident:
+            heal_now = datetime.now(timezone.utc)
+            direct_infra_codes = {"pfsense_fac", "pfsense_ho", "m365", "sap_b1", "ad", "wa_rdt2"}
+            if not test_ident.is_approved_exception or test_ident.exception_type != "LOCAL_ACCOUNT":
+                test_ident.is_approved_exception = True
+                test_ident.exception_type = "LOCAL_ACCOUNT"
+                test_ident.exception_reason = "บัญชี Local Account ทดสอบ (Test.1)"
+                test_ident.exception_approved_by = "System-AutoHeal"
+                test_ident.exception_approved_at = heal_now
+
+            for m in db.query(AppAccountMapping).filter(AppAccountMapping.identity_id == test_ident.id).all():
                 m.is_approved_exception = True
                 m.exception_type = "LOCAL_ACCOUNT"
-                m.exception_reason = m.exception_reason or ident.exception_reason
+                m.exception_reason = m.exception_reason or "บัญชี Local Account ทดสอบ (Test.1)"
                 m.exception_approved_by = m.exception_approved_by or "System-AutoHeal"
                 m.exception_approved_at = m.exception_approved_at or heal_now
                 app_obj = db.query(ConnectedApplication).filter(ConnectedApplication.id == m.application_id).first()
                 is_sso_spoke = bool(app_obj and app_obj.sso_enabled and (app_obj.app_code or "").lower() not in direct_infra_codes)
-                if is_sso_spoke and m.is_active_in_app and (is_test_1 or m.last_sync_status in ("DISCREPANCY", "PENDING_PROVISION")):
+                if is_sso_spoke and m.is_active_in_app:
                     m.last_sync_status = "PENDING_PROVISION"
                     existing_cmd = (
                         db.query(SpokePendingCommand)
                         .filter(
                             SpokePendingCommand.app_code == app_obj.app_code,
                             SpokePendingCommand.action == "PROVISION_USER",
-                            func.lower(SpokePendingCommand.username) == (m.app_username or ident.username).lower(),
+                            func.lower(SpokePendingCommand.username) == (m.app_username or test_ident.username).lower(),
                             SpokePendingCommand.status.in_(["PENDING", "SENT"]),
                         )
                         .first()
@@ -897,14 +933,12 @@ def init_db():
                             command_id=f"cmd_prov_{_secrets.token_hex(4)}",
                             app_code=app_obj.app_code,
                             action="PROVISION_USER",
-                            username=m.app_username or ident.username,
+                            username=m.app_username or test_ident.username,
                             reason="Auto-Heal: Re-queue provisioning to Spoke App",
                             status="PENDING",
                             issued_by="System-AutoHeal",
                             created_at=heal_now,
                         ))
-                elif m.last_sync_status == "DISCREPANCY":
-                    m.last_sync_status = "APPROVED_EXCEPTION"
         db.flush()
 
         # Auto-clean: Remove zero-system orphaned identities (e.g., accounts removed from all spokes & AD)

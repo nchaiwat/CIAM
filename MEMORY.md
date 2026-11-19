@@ -1,8 +1,8 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 
-**Last Updated:** 2026-11-18  
+**Last Updated:** 2026-11-19  
 
-**Version:** 2.13.0 (One-Way AD Governance, Local Account Password Provisioning & Real DB Persistence Framework Standard)  
+**Version:** 2.13.1 (Former AD Corporate Ghost Accounts Auto-Heal Rollback & Accurate Classification)  
 
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 

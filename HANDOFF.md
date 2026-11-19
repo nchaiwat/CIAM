@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 18 พฤศจิกายน 2026 (Local Time: 22:25 ICT)  
+> **Date Updated:** 19 พฤศจิกายน 2026 (Local Time: 11:05 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Repository (APEX):** [https://github.com/ITWA-PCL/apex](https://github.com/ITWA-PCL/apex)  
@@ -8,8 +8,8 @@
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Production VPS (APEX):** `/var/www/Apex` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 104/104 passed (`.\backend\.venv\Scripts\pytest.exe`), Frontend TypeScript: 0 errors (`npx tsc --noEmit`), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
-> **Git Status:** Production Ready — Sprint 65 (Mode C Agent Inactive Deleted Account Pruning & Sync Parity)
+> **Test Integrity:** Backend Pytest: 105/105 passed (`.\backend\.venv\Scripts\pytest.exe`), Frontend TypeScript: 0 errors (`npx tsc --noEmit`), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
+> **Git Status:** Production Ready — Sprint 66 (Former AD Corporate Ghost Accounts Auto-Heal Rollback & Accurate Classification)
 
 ---
 
@@ -17,6 +17,16 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
+0d. **Former AD Corporate Ghost Accounts Auto-Heal Rollback & Accurate Classification (Sprint 66):**
+   - **วิเคราะห์และแก้ไขปัญหาบัญชีผีเดิม ~12 บัญชี (เช่น `siriporn.r`) ถูกตั้งเป็นข้อยกเว้นอัตโนมัติและหายไปจาก Dashboard:**
+     - สาเหตุ: ใน Sprint 64 สคริปต์ `initial_data.py` เพิ่มบล็อก Auto-Heal สำหรับบัญชีที่ไม่มีใน AD โดยใช้เงื่อนไข `all_ciam_created = all(m.status_origin == "CIAM_ADMIN" for m in ident_maps)`. เนื่องจากคอลัมน์ `status_origin` มีค่า default เป็น `'CIAM_ADMIN'` ทำให้บัญชีพนักงานเก่าที่ไม่มีใน AD แต่ค้างอยู่ใน M365 (เช่น `siriporn.r@windowasia.com`) ถูกมองเป็น Local Account ที่สร้างจาก CIAM ทั้งหมด และถูก System-AutoHeal ตั้งเป็น `is_approved_exception = True`, `exception_type = "LOCAL_ACCOUNT"`
+     - นอกจากนี้ ใน `directory.py` เงื่อนไข `has_ad_attributes` กำหนดให้ต้องมี `has_direct_ad or identity.employee_id or identity.is_active_in_ad` ส่งผลให้พนักงานเก่าที่ถูกถอดจาก AD ทั้งหมดเสียสถานะ `is_ad = True` และกลายเป็น `Local Acc`
+     - การแก้ไข:
+       1) เพิ่ม Auto-heal Rollback ใน `backend/app/initial_data.py` ถอนข้อยกเว้นที่เกิดจาก `System-AutoHeal` คืนให้บัญชีพนักงานองค์กร (มีอีเมล `@windowasia.com`, ฟอร์แมตชื่อพนักงาน, หรือไม่มี AdminUser portal role) กลับมาเป็น `is_approved_exception = False` และ `mapping.last_sync_status = "DISCREPANCY"`
+       2) จำกัด Auto-heal สำหรับ `LOCAL_ACCOUNT` เฉพาะบัญชีทดสอบ `Test.1` อย่างชัดเจน
+       3) ปรับปรุง `is_ad` ใน `backend/app/api/v1/directory.py` (`list_users`, `get_user_detail`) ให้จำแนกพนักงานองค์กรจากอีเมล `@windowasia.com` และฟอร์แมต `Firstname.L` อย่างแม่นยำ ทำให้บัญชีผีอย่าง `siriporn.r` กลับมาแสดงป้าย `[บัญชีผี]` บน Directory และยอด KPI บน Dashboard กลับมาถูกต้องครบถ้วน
+       4) เพิ่ม Unit Test `test_auto_heal_reverts_false_exceptions_for_former_ad_corporate_accounts` ใน `backend/tests/test_local_portal_account.py` ผ่าน 100%
+
 0c. **Mode C Agent Inactive Deleted Account Pruning & Real-Time Sync Parity (Sprint 65):**
    - **แก้ไขปัญหาบัญชีที่ถูกลบใน Spoke ไม่หายไปจาก CIAM เมื่อซิงก์ผ่าน Mode C Agent:**
      - สาเหตุเดิม: ใน `backend/app/api/v1/agent.py` (`handle_agent_heartbeat`) มีเพียงโค้ดวนลูป Update/Insert สำหรับบัญชีที่ส่งมาใน `payload.accounts` แต่ไม่มีบล็อกโค้ดสำหรับตรวจจับและลบ Stale Account Mapping ที่หายไปจาก Payload ส่งผลให้เกิดพฤติกรรมสองมาตรฐาน (Inconsistent Behavior) ระหว่างการกดซิงก์จากหน้า Spoke กับการกดซิงก์จากหน้าเว็บ CIAM
