@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 
-CURRENT_SPOKE_FRAMEWORK_VERSION = "2.13.0"
+CURRENT_SPOKE_FRAMEWORK_VERSION = "2.14.0"
 
 class AppCreate(BaseModel):
     app_code: str

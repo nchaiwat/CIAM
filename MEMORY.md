@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-11-19  
 
-**Version:** 2.13.1 (Former AD Corporate Ghost Accounts Auto-Heal Rollback & Accurate Classification)  
+**Version:** 2.14.0 (Enterprise 30-Minute Idle Session Timeout & Automatic Invalidation Framework Standard)  
 
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 
@@ -1881,6 +1881,18 @@ FRONTEND_URL=http://localhost:3000
   - `rest_api.py` (`provision_account`): เลิกจำลอง `Simulated 201 Created` สำหรับเป้าหมาย `http(s)://` ที่ตอบ 403/404/405 และรองรับ Fallback `/api/directory/accounts`
   - `directory.py` (`assign_spoke_app_to_user`, `list_users`, `get_user_detail`) และ `base.py`: แก้ `connector.provision(...)` เป็น `provision_account({...})`, ตั้ง `PENDING_PROVISION` + คิว `PROVISION_USER` เมื่อยิงไม่ผ่าน, และป้องกันการตีความบัญชี Local Account ที่ไม่มี `ad_guid`/`employee_id`/`ad` mapping ว่าเป็น `บัญชีผี`
   - `agent.py` (`handle_agent_heartbeat`), `scheduler.py` (`push_pending_provisions_to_spoke`, `retry_pending_provisions`), `applications.py`, และ `initial_data.py`: ให้ Mode C ส่ง `PROVISION_USER` สำหรับ Local Account / `CIAM_ADMIN` ด้วย, ให้ Mode A ผลักบัญชี `PENDING_PROVISION` ลง Spoke ระหว่าง Sync และทุกๆ 2 นาที, และ Auto-heal บัญชี `Test.1`
+* **Spoke Specification & Framework Upgrade (`v2.14.0` - หมวด H: Enterprise 30-Minute Idle Session Timeout & Automatic Invalidation):**
+  - ตรวจสอบ Security Framework ตามข้อกำหนดผู้ใช้: เดิมมีเพียง Absolute TTL 480 นาที (8 ชั่วโมง) และหน้าเว็บ Central IAM มี Idle 30 นาที แต่ใน Spoke Framework ยังไม่มีข้อกำหนดบังคับเรื่อง Inactivity Timeout 30 นาที สำหรับระบบลูก
+  - อัปเกรด `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` และ `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` เป็น **`v2.14.0`** (Effective Date: 19 พฤศจิกายน 2026)
+  - บรรจุข้อกำหนดมาตรฐาน **## 14. หมวด H: ข้อกำหนดมาตรฐานการจัดการเซสชันและการตัดเซสชันเมื่อไม่มีการใช้งาน 30 นาที (Enterprise 30-Minute Idle Session Timeout & Automatic Invalidation Framework Standard)** สอดคล้องตามมาตรฐาน ISO 27001 (Control A.9.4.2), NIST SP 800-63B (Section 7.2) และ OWASP Session Management
+  - เพิ่มคีย์ `ciam_idle_timeout_minutes: 30` และ `ciam_idle_warning_seconds: 60` ในตาราง `system_settings` (Section 2.1)
+  - กำหนดหลักการสำคัญ:
+    1. **Dual-Timer Warning & Grace Period (Client-side):** หน้าบ้านต้องตรวจจับ Mouse, Keyboard, Touch, Scroll และมี Modal แจ้งเตือนนับถอยหลัง 60 วินาทีก่อนตัดการเชื่อมต่อ ให้ผู้ใช้กด "ต่อเวลาการใช้งาน (Stay Logged In)" ได้
+    2. **Server-side Session & Token Guard:** Spoke Backend ต้องตรวจสอบ `last_activity_at` ทุก API Request ที่มี Auth Token หากเกิน 30 นาที ต้องตอบกลับ `401 Unauthorized` (`SESSION_IDLE_TIMEOUT`) ทันที ห้ามพึ่งพาเฉพาะ Client-side
+    3. **Automatic Invalidation & State Clearing:** Invalidate Token/Session ทั้งบน Server และ Client Storage พร้อม Redirect ไปหน้า Login ด้วย `reason=idle_timeout`
+    4. **Audit Logging:** บันทึกประวัติ `USER_SESSION_IDLE_TIMEOUT` ลง Audit Log ของ Spoke App เพื่อการตรวจสอบย้อนกลับ (Traceability)
+    5. **Production Code Examples:** บรรจุโค้ดตัวอย่างครบถ้วนทั้ง React Idle Hook (`useIdleTimeout`), Python FastAPI Middleware (`IdleSessionMiddleware`), และ Node.js Express Guard Middleware (`idleTimeoutGuard`)
+  - อัปเดต `backend/app/schemas/application.py` (`CURRENT_SPOKE_FRAMEWORK_VERSION = "2.14.0"`), `backend/app/api/v1/applications.py`, และ `frontend/src/app/applications/page.tsx` (ปุ่มดาวน์โหลด, Revision Changelog Banner และการ์ด v2.14.0)
 * **Spoke Specification & Framework Upgrade (`v2.13.0`):**
   - อัปเกรด `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` และ `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md` เป็น **`v2.13.0`** พร้อมปุ่มดาวน์โหลดและ Revision Changelog Modal บน `frontend/src/app/applications/page.tsx` และ `backend/app/api/v1/applications.py`
   - เพิ่ม `password` + `must_change_password` ใน `POST /api/v1/directory/accounts` (C.2), 4-Case Login Matrix (C.4), โค้ด DB `INSERT`/`bcrypt` จริงใน Section 10.1 (Python) และ 10.2 (Node.js) แทน Mock/Stub, และรองรับ `PROVISION_USER` + `assigned_accounts` (`use_ad_auth`) ใน `ciam_agent.py` (D.2/D.5)

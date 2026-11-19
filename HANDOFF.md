@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 19 พฤศจิกายน 2026 (Local Time: 11:05 ICT)  
+> **Date Updated:** 19 พฤศจิกายน 2026 (Local Time: 14:30 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Repository (APEX):** [https://github.com/ITWA-PCL/apex](https://github.com/ITWA-PCL/apex)  
@@ -9,7 +9,7 @@
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Production VPS (APEX):** `/var/www/Apex` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 105/105 passed (`.\backend\.venv\Scripts\pytest.exe`), Frontend TypeScript: 0 errors (`npx tsc --noEmit`), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
-> **Git Status:** Production Ready — Sprint 66 (Former AD Corporate Ghost Accounts Auto-Heal Rollback & Accurate Classification)
+> **Git Status:** Production Ready — Sprint 67 (Enterprise 30-Minute Idle Session Timeout & Spoke Framework v2.14.0)
 
 ---
 
@@ -17,6 +17,17 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
+0e. **Enterprise 30-Minute Idle Session Timeout & Spoke Framework v2.14.0 (Sprint 67):**
+   - **ตรวจสอบและบรรจุข้อกำหนด Security Framework เรื่อง Idle Timeout 30 นาที สำหรับแต่ละ Account:**
+     - ผลการตรวจสอบ: เดิมในระบบ Spoke Integration Specification มีเฉพาะ `ciam_session_ttl_minutes: 480` (Absolute Session Limit 8 ชั่วโมง) และหน้าเว็บ Central IAM มี Idle Timeout 30 นาที แต่ใน Spoke Framework ยังไม่มีข้อกำหนดบังคับเรื่อง Inactivity Timeout 30 นาที สำหรับระบบลูก (Spoke Applications)
+     - ยกระดับมาตรฐานความปลอดภัยและอัปเกรดสเปกกลางเป็น **`v2.14.0`** (Effective Date: 19 พฤศจิกายน 2026):
+       1) บรรจุข้อกำหนดมาตรฐาน **## 14. หมวด H: ข้อกำหนดมาตรฐานการจัดการเซสชันและการตัดเซสชันเมื่อไม่มีการใช้งาน 30 นาที (Enterprise 30-Minute Idle Session Timeout & Automatic Invalidation Framework Standard)** ตามมาตรฐาน ISO 27001 (Control A.9.4.2), NIST SP 800-63B (Section 7.2), และ OWASP Session Management
+       2) เพิ่มคีย์คอนฟิกกลางใน `system_settings` (Section 2.1): `ciam_idle_timeout_minutes: 30` และ `ciam_idle_warning_seconds: 60`
+       3) กำหนด 5 หลักการภาคบังคับ: 30-Minute Inactivity Timeout, Dual-Timer Warning & Grace Period (แจ้งเตือนนับถอยหลัง 60s), Server-side Session & Token Guard (ตรวจสอบ `last_activity_at` ทุก API call เกิน 30 นาทีตอบ 401 `SESSION_IDLE_TIMEOUT`), Automatic Invalidation & State Clearing (ล้าง Session/Tokens ทั้งสองฝั่ง), และ Audit Logging (`USER_SESSION_IDLE_TIMEOUT`)
+       4) เพิ่ม Reference Implementation โค้ดตัวอย่างพร้อมใช้สำหรับนักพัฒนาระบบลูก: React Hook (`useIdleTimeout`), Python FastAPI Middleware (`IdleSessionMiddleware`), และ Node.js Express Middleware (`idleTimeoutGuard`)
+       5) ซิงก์ `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`, อัปเดต `CURRENT_SPOKE_FRAMEWORK_VERSION = "2.14.0"` ใน `backend/app/schemas/application.py`, `backend/app/api/v1/applications.py`, และหน้าจัดการระบบลูก `frontend/src/app/applications/page.tsx` (ปุ่มดาวน์โหลด .md v2.14.0 และการ์ดประวัติ Revision Changelog)
+       6) อัปเดต Test Suite ใน `backend/tests/test_api_flow.py` และ `backend/tests/test_local_portal_account.py` ผ่าน 105/105 tests (100%) และ Frontend TypeScript 0 errors
+
 0d. **Former AD Corporate Ghost Accounts Auto-Heal Rollback & Accurate Classification (Sprint 66):**
    - **วิเคราะห์และแก้ไขปัญหาบัญชีผีเดิม ~12 บัญชี (เช่น `siriporn.r`) ถูกตั้งเป็นข้อยกเว้นอัตโนมัติและหายไปจาก Dashboard:**
      - สาเหตุ: ใน Sprint 64 สคริปต์ `initial_data.py` เพิ่มบล็อก Auto-Heal สำหรับบัญชีที่ไม่มีใน AD โดยใช้เงื่อนไข `all_ciam_created = all(m.status_origin == "CIAM_ADMIN" for m in ident_maps)`. เนื่องจากคอลัมน์ `status_origin` มีค่า default เป็น `'CIAM_ADMIN'` ทำให้บัญชีพนักงานเก่าที่ไม่มีใน AD แต่ค้างอยู่ใน M365 (เช่น `siriporn.r@windowasia.com`) ถูกมองเป็น Local Account ที่สร้างจาก CIAM ทั้งหมด และถูก System-AutoHeal ตั้งเป็น `is_approved_exception = True`, `exception_type = "LOCAL_ACCOUNT"`

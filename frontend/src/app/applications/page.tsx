@@ -96,7 +96,7 @@ export default function ApplicationsPage() {
       });
       if (!res.ok) throw new Error(`Download failed with status ${res.status}`);
       // Try to parse filename from Content-Disposition header if available
-      let filename = "CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.13.0.md";
+      let filename = "CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.14.0.md";
       const disposition = res.headers.get("content-disposition");
       if (disposition && disposition.includes("filename=")) {
         const match = disposition.match(/filename=["']?([^"']+)["']?/);
@@ -607,12 +607,12 @@ export default function ApplicationsPage() {
             {isDownloadingSpec ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
-                <span>กำลังเตรียมไฟล์ (v2.13.0)...</span>
+                <span>กำลังเตรียมไฟล์ (v2.14.0)...</span>
               </>
             ) : (
               <>
                 <Download className="w-4 h-4 text-emerald-600" />
-                <span>📥 สเปกเชื่อมต่อ (.md v2.13.0)</span>
+                <span>📥 สเปกเชื่อมต่อ (.md v2.14.0)</span>
               </>
             )}
           </button>
@@ -804,7 +804,7 @@ export default function ApplicationsPage() {
                           </span>
                         );
                       }
-                      const latestVer = (app.latest_framework_version || "2.13.0").replace(/^v/i, "");
+                      const latestVer = (app.latest_framework_version || "2.14.0").replace(/^v/i, "");
                       const rawFw = app.spoke_framework_version ? app.spoke_framework_version.replace(/^v/i, "").trim() : "";
                       if (!rawFw) {
                         return (
@@ -3087,7 +3087,7 @@ export default function ApplicationsPage() {
                 <Clock className="w-3.5 h-3.5" />
                 <span>📜 ประวัติการปรับปรุงสเปก (Revision Changelog)</span>
                 <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1">
-                  v2.13.0
+                  v2.14.0
                 </span>
               </button>
             </div>
@@ -3099,14 +3099,14 @@ export default function ApplicationsPage() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center space-x-2.5">
                       <span className="px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-500 text-slate-950">
-                        v2.13.0 ล่าสุด
+                        v2.14.0 ล่าสุด
                       </span>
                       <h4 className="font-extrabold text-sm text-white">
                         Enterprise Spoke Integration Standard
                       </h4>
                     </div>
                     <div className="text-[11px] text-slate-300 font-medium">
-                      วันที่มีผล: <span className="font-bold text-white">18 พฤศจิกายน 2026</span> • มาตรฐานความปลอดภัย ISO 27001
+                      วันที่มีผล: <span className="font-bold text-white">19 พฤศจิกายน 2026</span> • มาตรฐานความปลอดภัย ISO 27001
                     </div>
                   </div>
                   <p className="text-xs text-slate-300 leading-relaxed">
@@ -3116,15 +3116,33 @@ export default function ApplicationsPage() {
 
                 {/* Changelog Timeline */}
                 <div className="space-y-3">
-                  {/* v2.13.0 */}
+                  {/* v2.14.0 */}
                   <div className="p-3.5 rounded-lg border-2 border-emerald-300 bg-emerald-50/40 space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center space-x-2">
-                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.13.0</span>
-                        <span className="font-bold text-emerald-950">One-Way AD Governance, Local Account Password Provisioning &amp; Real DB Persistence</span>
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.14.0</span>
+                        <span className="font-bold text-emerald-950">หมวด H: Enterprise 30-Minute Idle Session Timeout &amp; Automatic Invalidation Framework Standard</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                           Active Current
                         </span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">19/11/2026</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-700 text-[11.5px] leading-relaxed">
+                      <li><strong>30-Minute Inactivity Timeout:</strong> บังคับระบบลูกทุกโหมด (Mode A, B, C) ต้องมีกลไกตรวจจับ Idle Timeout ไม่เกิน 30 นาที หากไม่มีการโต้ตอบจากผู้ใช้ (User Activity) สอดคล้องตามมาตรฐาน ISO 27001 (Control A.9.4.2) และ NIST SP 800-63B</li>
+                      <li><strong>Dual-Timer Warning &amp; Grace Period:</strong> ระบบหน้าบ้าน (Client) ต้องมี Modal แจ้งเตือนล่วงหน้า 60 วินาทีก่อนตัดการเชื่อมต่อ เพื่อให้ผู้ใช้สามารถกด &quot;ต่อเวลาการใช้งาน (Stay Logged In)&quot; ได้ทันท่วงที</li>
+                      <li><strong>Server-side Session &amp; Token Guard:</strong> Spoke Backend ต้องตรวจสอบ <code>last_activity_at</code> ในตารางเซสชันหรือ Redis ทุก API Request ที่มี Auth Token หากเกิน 30 นาที ต้องตอบกลับ <code>401 Unauthorized</code> (<code>SESSION_IDLE_TIMEOUT</code>) ทันที ห้ามพึ่งพาเฉพาะ Client-side</li>
+                      <li><strong>Automatic Invalidation &amp; State Clearing:</strong> เมื่อหมดเวลา ต้อง Invalidate Session/Refresh Token ทั้งบนเซิร์ฟเวอร์และเคลียร์ State/Storage หน้าบ้าน พร้อม Redirect ไปหน้า Login ด้วย Parameter <code>reason=idle_timeout</code></li>
+                      <li><strong>Audit Logging:</strong> บันทึกประวัติ <code>USER_SESSION_IDLE_TIMEOUT</code> ลง Audit Log ของ Spoke App เพื่อการตรวจสอบย้อนกลับ (Traceability)</li>
+                    </ul>
+                  </div>
+
+                  {/* v2.13.0 */}
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded font-bold text-xs bg-slate-600 text-white">v2.13.0</span>
+                        <span className="font-bold text-slate-800">One-Way AD Governance, Local Account Password Provisioning &amp; Real DB Persistence</span>
                       </div>
                       <span className="text-[11px] text-slate-500 font-medium">18/11/2026</span>
                     </div>
