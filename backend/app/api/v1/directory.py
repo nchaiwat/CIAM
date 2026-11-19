@@ -32,6 +32,7 @@ from app.schemas.directory import (
 from app.services.provisioning import execute_user_creation
 from app.services.deprovisioning import execute_user_activation
 from app.connectors.factory import get_connector_for_app
+from app.services.network_service import get_client_ip
 
 logger = logging.getLogger("ciam.directory")
 
@@ -709,7 +710,7 @@ async def assign_spoke_app_to_user(
         affected_app_code=app.app_code,
         execution_mode="PORTAL_ADMIN",
         reason=f"มอบสิทธิ์ระบบ '{app.app_name}' ให้กับ '{identity.username}' ({identity.full_name}): {payload.reason}",
-        ip_address=req.client.host if req.client else "127.0.0.1",
+        ip_address=get_client_ip(req),
         status="SUCCESS" if connector_success else "WARNING"
     ))
 
@@ -733,6 +734,7 @@ async def assign_spoke_app_to_user(
 def link_account_to_identity(
     mapping_id: int,
     payload: AccountLinkRequest,
+    req: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -794,6 +796,7 @@ def link_account_to_identity(
         target_username=target_identity.username,
         affected_app_code=mapping.application.app_code if mapping.application else "SPOKE",
         execution_mode="PORTAL_ADMIN",
+        ip_address=get_client_ip(req),
         reason=audit_reason,
         status="SUCCESS"
     ))
@@ -817,6 +820,7 @@ def merge_and_link_identity(
     source_identity_id: int,
     target_identity_id: int,
     payload: AccountLinkRequest,
+    req: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -877,6 +881,7 @@ def merge_and_link_identity(
         target_username=target_identity.username,
         affected_app_code="ALL_SPOKES",
         execution_mode="PORTAL_ADMIN",
+        ip_address=get_client_ip(req),
         reason=audit_reason,
         status="SUCCESS"
     ))
@@ -898,6 +903,7 @@ def merge_and_link_identity(
 def approve_account_exception(
     mapping_id: int,
     payload: AccountExceptionRequest,
+    req: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -933,6 +939,7 @@ def approve_account_exception(
         target_username=mapping.app_username,
         affected_app_code=mapping.application.app_code if mapping.application else "SPOKE",
         execution_mode="PORTAL_ADMIN",
+        ip_address=get_client_ip(req),
         reason=audit_msg,
         status="SUCCESS"
     ))
@@ -1025,7 +1032,7 @@ async def update_account_status(
         new_status="ACTIVE" if payload.is_active else "DISABLED",
         execution_mode="PORTAL_ADMIN",
         reason=audit_reason,
-        ip_address=req.client.host if req.client else "127.0.0.1",
+        ip_address=get_client_ip(req),
         status="SUCCESS" if connector_success else "WARNING",
         details=json.dumps({"mapping_id": mapping_id, "identity_username": identity.username if identity else None, "connector_msg": connector_msg})
     ))
@@ -1083,6 +1090,7 @@ async def toggle_account_lock(
         previous_status="LOCKED" if prev_locked else "UNLOCKED",
         new_status="LOCKED" if payload.is_status_locked else "UNLOCKED",
         execution_mode="CIAM_CONSOLE",
+        ip_address=get_client_ip(req),
         reason=f"{lock_label} ระบบ '{app_name}' ({app_code.upper()}) สำหรับบัญชี '{target_username}': {payload.reason}",
         status="SUCCESS"
     ))
@@ -1098,6 +1106,7 @@ async def toggle_account_lock(
 @router.delete("/accounts/{mapping_id}/exception", response_model=AccountActionResponse)
 def revoke_account_exception(
     mapping_id: int,
+    req: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -1129,6 +1138,7 @@ def revoke_account_exception(
         target_username=mapping.app_username,
         affected_app_code=mapping.application.app_code if mapping.application else "SPOKE",
         execution_mode="PORTAL_ADMIN",
+        ip_address=get_client_ip(req),
         reason=f"ยกเลิกข้อยกเว้นสำหรับบัญชี '{mapping.app_username}'",
         status="SUCCESS"
     ))
@@ -1145,6 +1155,7 @@ def revoke_account_exception(
 def approve_user_exception(
     identity_id: int,
     payload: AccountExceptionRequest,
+    req: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -1176,6 +1187,7 @@ def approve_user_exception(
         target_username=identity.username,
         affected_app_code="ALL_SPOKES",
         execution_mode="PORTAL_ADMIN",
+        ip_address=get_client_ip(req),
         reason=f"อนุมัติข้อยกเว้นตัวตน '{identity.username}' ({payload.exception_type}): {payload.reason}",
         status="SUCCESS"
     ))
@@ -1191,6 +1203,7 @@ def approve_user_exception(
 @router.delete("/users/{identity_id}/exception", response_model=AccountActionResponse)
 def revoke_user_exception(
     identity_id: int,
+    req: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -1221,6 +1234,7 @@ def revoke_user_exception(
         target_username=identity.username,
         affected_app_code="ALL_SPOKES",
         execution_mode="PORTAL_ADMIN",
+        ip_address=get_client_ip(req),
         reason=f"ยกเลิกข้อยกเว้นสำหรับตัวตน '{identity.username}'",
         status="SUCCESS"
     ))
@@ -1237,6 +1251,7 @@ def revoke_user_exception(
 def create_or_update_local_portal_account(
     identity_id: int,
     payload: LocalPortalAccountRequest,
+    req: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -1323,6 +1338,7 @@ def create_or_update_local_portal_account(
         target_username=identity.username,
         affected_app_code="PORTAL",
         execution_mode="PORTAL_ADMIN",
+        ip_address=get_client_ip(req),
         reason=f"สร้าง/รีเซ็ตรหัสผ่าน Local Portal Account สำหรับ {identity.username} (Role: {admin_user.role})",
         status="SUCCESS"
     ))
@@ -1346,6 +1362,7 @@ def create_or_update_local_portal_account(
 @router.post("/users/{user_id}/test-telegram")
 async def test_user_telegram_dm(
     user_id: int,
+    req: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -1403,6 +1420,7 @@ async def test_user_telegram_dm(
         action_type="TEST_TELEGRAM_DM",
         target_username=identity.username,
         execution_mode="TELEGRAM_API",
+        ip_address=get_client_ip(req),
         reason=f"ทดสอบส่งข้อความ DM ไปยัง Telegram ID: {telegram_id}",
         status="SUCCESS",
         details=json.dumps({"telegram_id": telegram_id, "recipient": identity.full_name})
@@ -1418,6 +1436,7 @@ async def test_user_telegram_dm(
 
 @router.post("/sync-ad")
 async def sync_active_directory_users(
+    req: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -1491,6 +1510,7 @@ async def sync_active_directory_users(
             target_username="ACTIVE_DIRECTORY_ALL",
             affected_app_code="AD",
             execution_mode="MANUAL_TRIGGER",
+            ip_address=get_client_ip(req),
             reason=f"สั่งซิงก์ข้อมูลสดจาก Active Directory โดยตรง ({synced_count} บัญชี)",
             status="SUCCESS"
         ))

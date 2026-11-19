@@ -4,7 +4,7 @@ import os
 import secrets
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Request
 from fastapi.responses import FileResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -16,6 +16,7 @@ from app.models.user import AdminUser
 from app.models.application import ConnectedApplication
 from app.models.mapping import AppAccountMapping
 from app.models.audit import IamAuditLog
+from app.services.network_service import get_client_ip
 from app.schemas.application import (
     AppCreate,
     AppUpdate,
@@ -146,6 +147,7 @@ def list_applications(
             network_policy=getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
             vpn_restriction_mode=getattr(app, "vpn_restriction_mode", "HIDE") or "HIDE",
             allowed_network_cidrs=getattr(app, "allowed_network_cidrs", None),
+            idle_timeout_minutes=getattr(app, "idle_timeout_minutes", 30) or 30,
             total_linked_accounts=s["total"],
             active_accounts_count=act_count,
             inactive_accounts_count=inact_count,
@@ -160,6 +162,7 @@ def list_applications(
 @router.post("", response_model=AppOut)
 def register_application(
     data: AppCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -172,6 +175,7 @@ def register_application(
     api_key = data.api_key or f"sec_{data.app_code}_{secrets.token_hex(16)}"
     client_id = data.client_id or f"{data.app_code}-spoke-client"
     client_secret = data.client_secret or f"sec_{data.app_code}_oauth_{secrets.token_hex(12)}"
+    idle_mins = data.idle_timeout_minutes if data.idle_timeout_minutes and data.idle_timeout_minutes > 0 else 30
 
     new_app = ConnectedApplication(
         app_code=data.app_code.lower().strip(),
@@ -191,11 +195,26 @@ def register_application(
         ad_allow_status_patch=data.ad_allow_status_patch or False,
         network_policy=data.network_policy or "ANYWHERE",
         vpn_restriction_mode=data.vpn_restriction_mode or "HIDE",
+        allowed_network_cidrs=data.allowed_network_cidrs.strip() if data.allowed_network_cidrs else None,
+        idle_timeout_minutes=idle_mins,
         health_status="ONLINE" if data.connector_type in ["RPA_WORKER", "SSO_ONLY", "SSO_CLIENT", "CLIENT_MODE", "ON_PREM_SSO"] else "UNKNOWN",
         latency_ms=1 if data.connector_type in ["SSO_ONLY", "SSO_CLIENT", "CLIENT_MODE", "ON_PREM_SSO"] else None,
         spoke_sso_status="ACTIVE" if data.connector_type in ["SSO_ONLY", "SSO_CLIENT", "CLIENT_MODE", "ON_PREM_SSO"] else "UNKNOWN"
     )
     db.add(new_app)
+
+    client_ip = get_client_ip(request)
+    db.add(IamAuditLog(
+        actor_username=current_admin.username,
+        action_type="CREATE_APP",
+        target_username=f"APP_{new_app.app_code.upper()}",
+        affected_app_code=new_app.app_code,
+        execution_mode=new_app.connector_type,
+        ip_address=client_ip,
+        reason=f"Registered child application '{new_app.app_name}' (Code: {new_app.app_code}, Idle: {idle_mins}m)",
+        status="SUCCESS"
+    ))
+
     db.commit()
     db.refresh(new_app)
 
@@ -223,6 +242,7 @@ def register_application(
         network_policy=new_app.network_policy,
         vpn_restriction_mode=new_app.vpn_restriction_mode,
         allowed_network_cidrs=new_app.allowed_network_cidrs,
+        idle_timeout_minutes=new_app.idle_timeout_minutes,
         total_linked_accounts=0,
         created_at=new_app.created_at
     )
@@ -266,6 +286,7 @@ def get_ad_cluster_config_endpoint(
 
 @router.put("/ad-cluster/config")
 def update_ad_cluster_config_endpoint(
+    request: Request,
     payload: Dict[str, Any] = Body(...),
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
@@ -283,6 +304,7 @@ def update_ad_cluster_config_endpoint(
         target_username="AD_GATEWAY_CLUSTER",
         affected_app_code="AD",
         execution_mode="SYSTEM_SETTING",
+        ip_address=get_client_ip(request),
         reason=f"อัปเดตการตั้งค่า AD Gateway Cluster ({len(cfg.get('servers', []))} servers, Allow PATCH={cfg.get('allow_status_patch')})",
         status="SUCCESS"
     ))
@@ -355,13 +377,15 @@ def get_application_credentials(
         sap_password=app.sap_password,
         network_policy=getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
         vpn_restriction_mode=getattr(app, "vpn_restriction_mode", "HIDE") or "HIDE",
-        allowed_network_cidrs=getattr(app, "allowed_network_cidrs", None)
+        allowed_network_cidrs=getattr(app, "allowed_network_cidrs", None),
+        idle_timeout_minutes=getattr(app, "idle_timeout_minutes", 30) or 30
     )
 
 @router.patch("/{app_id}", response_model=AppOut)
 def update_application(
     app_id: int,
     data: AppUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -412,14 +436,18 @@ def update_application(
         app.vpn_restriction_mode = data.vpn_restriction_mode
     if data.allowed_network_cidrs is not None:
         app.allowed_network_cidrs = data.allowed_network_cidrs.strip() or None
+    if data.idle_timeout_minutes is not None:
+        app.idle_timeout_minutes = max(1, data.idle_timeout_minutes)
 
+    client_ip = get_client_ip(request)
     db.add(IamAuditLog(
         actor_username=current_admin.username,
         action_type="UPDATE_APP",
         target_username=f"APP_{app.app_code.upper()}",
         affected_app_code=app.app_code,
         execution_mode=app.connector_type,
-        reason=f"Updated application configuration for {app.app_name}",
+        ip_address=client_ip,
+        reason=f"Updated application configuration for {app.app_name} (Idle Timeout: {app.idle_timeout_minutes}m)",
         status="SUCCESS"
     ))
 
@@ -451,6 +479,7 @@ def update_application(
         network_policy=getattr(app, "network_policy", "ANYWHERE") or "ANYWHERE",
         vpn_restriction_mode=getattr(app, "vpn_restriction_mode", "HIDE") or "HIDE",
         allowed_network_cidrs=getattr(app, "allowed_network_cidrs", None),
+        idle_timeout_minutes=getattr(app, "idle_timeout_minutes", 30) or 30,
         total_linked_accounts=total_accounts,
         created_at=app.created_at
     )
@@ -585,6 +614,7 @@ async def get_application_inventory(
 @router.post("/{app_id}/sync")
 async def sync_application_inventory(
     app_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -600,6 +630,7 @@ async def sync_application_inventory(
         raise HTTPException(status_code=404, detail="Application not found")
 
     now = datetime.now(timezone.utc)
+    client_ip = get_client_ip(request)
 
     if app.connector_type == "SSO_ONLY":
         current_mapped_count = db.query(AppAccountMapping).filter(AppAccountMapping.application_id == app.id).count()
@@ -626,6 +657,7 @@ async def sync_application_inventory(
             target_username=f"INVENTORY_{app.app_code.upper()}",
             affected_app_code=app.app_code,
             execution_mode="SSO_ONLY",
+            ip_address=client_ip,
             reason=f"ตรวจสอบบัญชีปัจจุบัน ({current_mapped_count} บัญชี) และส่งคำสั่ง REQUEST_FULL_SYNC ({cmd_id}) ไปยัง Outbound Agent",
             status="SUCCESS"
         ))
@@ -681,6 +713,7 @@ async def sync_application_inventory(
 @router.delete("/{app_id}")
 def delete_application(
     app_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(get_current_admin)
 ):
@@ -703,12 +736,14 @@ def delete_application(
     # Delete application record
     db.delete(app)
 
+    client_ip = get_client_ip(request)
     db.add(IamAuditLog(
         actor_username=current_admin.username,
         action_type="DELETE_APP",
         target_username=f"APP_{app_code.upper()}",
         affected_app_code=app_code,
         execution_mode="REST_API",
+        ip_address=client_ip,
         reason=f"Decommissioned application '{app_name}' ({app_code.upper()}) - Removed {total_mappings} linked accounts",
         status="SUCCESS"
     ))
@@ -740,7 +775,7 @@ def download_spoke_spec():
     for p in possible_paths:
         if os.path.exists(p) and os.path.isfile(p):
             import re
-            version_str = "v2.14.0"
+            version_str = "v2.15.0"
             try:
                 with open(p, "r", encoding="utf-8") as f:
                     header_sample = f.read(600)

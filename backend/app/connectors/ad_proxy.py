@@ -438,8 +438,8 @@ class AdProxyConnector(BaseConnector):
     async def deprovision(self, username: str, reason: str) -> ConnectorResult:
         return await self.set_account_status(username=username, is_active=False, reason=reason)
 
-    async def activate(self, username: str, reason: str) -> ConnectorResult:
-        return await self.set_account_status(username=username, is_active=True, reason=reason)
+    async def activate(self, username: str, reason: str, updated_by: str = "Central-IAM-Service") -> ConnectorResult:
+        return await self.set_account_status(username=username, is_active=True, reason=reason, updated_by=updated_by)
 
     async def provision_account(self, account_data: dict) -> ConnectorResult:
         start_time = time.time()

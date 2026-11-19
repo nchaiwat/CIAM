@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-11-19  
 
-**Version:** 2.14.0 (Enterprise 30-Minute Idle Session Timeout & Automatic Invalidation Framework Standard)  
+**Version:** 2.15.0 (Configurable Per-App Idle Timeout, Honeypot Verification & Mandatory Audit Transaction IP Logging Standard)  
 
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 

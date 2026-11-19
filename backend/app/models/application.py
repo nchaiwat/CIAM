@@ -42,6 +42,9 @@ class ConnectedApplication(Base):
     vpn_restriction_mode = Column(String(50), default="HIDE", nullable=False) # 'HIDE', 'LOCK_WITH_BANNER'
     allowed_network_cidrs = Column(String(500), nullable=True) # Optional comma-separated CIDRs override
 
+    # Idle Session Timeout (Configurable per application, in minutes, e.g. 15, 30, 60, 120)
+    idle_timeout_minutes = Column(Integer, default=30, nullable=False)
+
     # Relationships
     accounts = relationship("AppAccountMapping", back_populates="application", cascade="all, delete-orphan")
 

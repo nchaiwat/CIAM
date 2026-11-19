@@ -96,7 +96,7 @@ export default function ApplicationsPage() {
       });
       if (!res.ok) throw new Error(`Download failed with status ${res.status}`);
       // Try to parse filename from Content-Disposition header if available
-      let filename = "CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.14.0.md";
+      let filename = "CIAM_SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION_v2.15.0.md";
       const disposition = res.headers.get("content-disposition");
       if (disposition && disposition.includes("filename=")) {
         const match = disposition.match(/filename=["']?([^"']+)["']?/);
@@ -158,6 +158,7 @@ export default function ApplicationsPage() {
   const [editNetworkPolicy, setEditNetworkPolicy] = useState<string>("ANYWHERE");
   const [editVpnRestrictionMode, setEditVpnRestrictionMode] = useState<string>("HIDE");
   const [editAllowedNetworkCidrs, setEditAllowedNetworkCidrs] = useState<string>("");
+  const [editIdleTimeoutMinutes, setEditIdleTimeoutMinutes] = useState<number>(30);
   const [editAppName, setEditAppName] = useState("");
 
   const [editBaseUrl, setEditBaseUrl] = useState("");
@@ -240,6 +241,7 @@ export default function ApplicationsPage() {
     setEditNetworkPolicy(app.network_policy || "ANYWHERE");
     setEditVpnRestrictionMode(app.vpn_restriction_mode || "HIDE");
     setEditAllowedNetworkCidrs(app.allowed_network_cidrs || "");
+    setEditIdleTimeoutMinutes(app.idle_timeout_minutes || 30);
     setShowSecret(false);
     setShowClientSecret(false);
     setShowEditSapPassword(false);
@@ -313,6 +315,7 @@ export default function ApplicationsPage() {
         network_policy: editNetworkPolicy,
         vpn_restriction_mode: editVpnRestrictionMode,
         allowed_network_cidrs: editAllowedNetworkCidrs.trim() || undefined,
+        idle_timeout_minutes: Number(editIdleTimeoutMinutes) || 30,
       });
       alert("บันทึกการตั้งค่าระบบ, M2M Key และ Active Directory สำเร็จ");
       setEditApp(null);
@@ -607,12 +610,12 @@ export default function ApplicationsPage() {
             {isDownloadingSpec ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
-                <span>กำลังเตรียมไฟล์ (v2.14.0)...</span>
+                <span>กำลังเตรียมไฟล์ (v2.15.0)...</span>
               </>
             ) : (
               <>
                 <Download className="w-4 h-4 text-emerald-600" />
-                <span>📥 สเปกเชื่อมต่อ (.md v2.14.0)</span>
+                <span>📥 สเปกเชื่อมต่อ (.md v2.15.0)</span>
               </>
             )}
           </button>
@@ -804,7 +807,7 @@ export default function ApplicationsPage() {
                           </span>
                         );
                       }
-                      const latestVer = (app.latest_framework_version || "2.14.0").replace(/^v/i, "");
+                      const latestVer = (app.latest_framework_version || "2.15.0").replace(/^v/i, "");
                       const rawFw = app.spoke_framework_version ? app.spoke_framework_version.replace(/^v/i, "").trim() : "";
                       if (!rawFw) {
                         return (
@@ -866,6 +869,17 @@ export default function ApplicationsPage() {
                         เข้าได้ทุกที่ (Anywhere)
                       </span>
                     )}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 font-medium">Idle Timeout:</span>
+                    <span
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-1"
+                      title={`ตัดเซสชันเมื่อไม่มีการใช้งานติดต่อกัน ${app.idle_timeout_minutes || 30} นาที (ตามมาตรฐาน ISO 27001 / NIST)`}
+                    >
+                      <Clock className="w-3 h-3 text-amber-700" />
+                      ⏱️ {app.idle_timeout_minutes || 30} นาที
+                    </span>
                   </div>
 
                   <div className="flex items-center justify-between">
@@ -1113,8 +1127,8 @@ export default function ApplicationsPage() {
 
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
-              {/* Common Details: Name, Base URL & Connector Type */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Common Details: Name, Base URL, Connector Type & Idle Timeout */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">ชื่อระบบเต็ม</label>
                   <input
@@ -1151,6 +1165,27 @@ export default function ApplicationsPage() {
                     <option value="M365">Microsoft 365</option>
                     <option value="RPA_WORKER">RPA Worker</option>
                   </select>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">Idle Timeout</label>
+                    <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                      นาที
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1440"
+                    value={editIdleTimeoutMinutes}
+                    onChange={(e) => setEditIdleTimeoutMinutes(parseInt(e.target.value) || 30)}
+                    placeholder="30"
+                    className="w-full px-3 py-2 bg-white border-2 border-slate-300 rounded-md text-slate-900 font-bold focus:outline-none focus:border-blue-600"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">
+                    เช่น 15, 30, 60, 120 (ตัดเมื่อไม่มีการใช้งาน)
+                  </span>
                 </div>
               </div>
 
@@ -3087,7 +3122,7 @@ export default function ApplicationsPage() {
                 <Clock className="w-3.5 h-3.5" />
                 <span>📜 ประวัติการปรับปรุงสเปก (Revision Changelog)</span>
                 <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1">
-                  v2.14.0
+                  v2.15.0
                 </span>
               </button>
             </div>
@@ -3099,7 +3134,7 @@ export default function ApplicationsPage() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center space-x-2.5">
                       <span className="px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-500 text-slate-950">
-                        v2.14.0 ล่าสุด
+                        v2.15.0 ล่าสุด
                       </span>
                       <h4 className="font-extrabold text-sm text-white">
                         Enterprise Spoke Integration Standard
@@ -3116,12 +3151,12 @@ export default function ApplicationsPage() {
 
                 {/* Changelog Timeline */}
                 <div className="space-y-3">
-                  {/* v2.14.0 */}
+                  {/* v2.15.0 */}
                   <div className="p-3.5 rounded-lg border-2 border-emerald-300 bg-emerald-50/40 space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center space-x-2">
-                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.14.0</span>
-                        <span className="font-bold text-emerald-950">หมวด H: Enterprise 30-Minute Idle Session Timeout &amp; Automatic Invalidation Framework Standard</span>
+                        <span className="px-2 py-0.5 rounded font-extrabold text-xs bg-emerald-600 text-white">v2.15.0</span>
+                        <span className="font-bold text-emerald-950">หมวด H &amp; Section 2.2/4: Configurable Per-App Idle Timeout &amp; Mandatory Audit Transaction IP Logging</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                           Active Current
                         </span>
@@ -3129,11 +3164,25 @@ export default function ApplicationsPage() {
                       <span className="text-[11px] text-slate-500 font-medium">19/11/2026</span>
                     </div>
                     <ul className="list-disc list-inside space-y-1 text-slate-700 text-[11.5px] leading-relaxed">
-                      <li><strong>30-Minute Inactivity Timeout:</strong> บังคับระบบลูกทุกโหมด (Mode A, B, C) ต้องมีกลไกตรวจจับ Idle Timeout ไม่เกิน 30 นาที หากไม่มีการโต้ตอบจากผู้ใช้ (User Activity) สอดคล้องตามมาตรฐาน ISO 27001 (Control A.9.4.2) และ NIST SP 800-63B</li>
-                      <li><strong>Dual-Timer Warning &amp; Grace Period:</strong> ระบบหน้าบ้าน (Client) ต้องมี Modal แจ้งเตือนล่วงหน้า 60 วินาทีก่อนตัดการเชื่อมต่อ เพื่อให้ผู้ใช้สามารถกด &quot;ต่อเวลาการใช้งาน (Stay Logged In)&quot; ได้ทันท่วงที</li>
-                      <li><strong>Server-side Session &amp; Token Guard:</strong> Spoke Backend ต้องตรวจสอบ <code>last_activity_at</code> ในตารางเซสชันหรือ Redis ทุก API Request ที่มี Auth Token หากเกิน 30 นาที ต้องตอบกลับ <code>401 Unauthorized</code> (<code>SESSION_IDLE_TIMEOUT</code>) ทันที ห้ามพึ่งพาเฉพาะ Client-side</li>
-                      <li><strong>Automatic Invalidation &amp; State Clearing:</strong> เมื่อหมดเวลา ต้อง Invalidate Session/Refresh Token ทั้งบนเซิร์ฟเวอร์และเคลียร์ State/Storage หน้าบ้าน พร้อม Redirect ไปหน้า Login ด้วย Parameter <code>reason=idle_timeout</code></li>
-                      <li><strong>Audit Logging:</strong> บันทึกประวัติ <code>USER_SESSION_IDLE_TIMEOUT</code> ลง Audit Log ของ Spoke App เพื่อการตรวจสอบย้อนกลับ (Traceability)</li>
+                      <li><strong>Configurable Per-Application Idle Timeout (นาที):</strong> กำหนด Inactivity Timeout แยกตามราย Application ได้อย่างอิสระตามความเหมาะสมในหน่วย "นาที" เช่น 30, 60, 120 ผ่านหน้า Setting บน Spoke หรือ Central IAM พร้อม Warning Countdown Modal แจ้งเตือนล่วงหน้า 60 วินาที</li>
+                      <li><strong>Mandatory Audit Transaction IP Logging:</strong> ตาราง <code>transaction_logs</code> ของระบบลูกทุกระบบต้องมีคอลัมน์ <code>ip_address VARCHAR(50) NOT NULL</code> พร้อม Index <code>idx_trans_logs_ip</code> ดึง IP จริงจาก Header <code>X-Forwarded-For</code> หรือ <code>127.0.0.1 (SYSTEM)</code> เพื่อรองรับ ISO 27001 และ พ.ร.บ. คอมพิวเตอร์ฯ</li>
+                      <li><strong>Decoy Honeypot Verification:</strong> ยืนยันมาตรฐาน In-App Bot Defense หมวด F.3 ด้วย Decoy Fields <code>corporate_fax</code> และ <code>security_honey</code> ดักจับบอทและ Reject ทันที</li>
+                    </ul>
+                  </div>
+
+                  {/* v2.14.0 */}
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded font-bold text-xs bg-slate-600 text-white">v2.14.0</span>
+                        <span className="font-bold text-slate-800">หมวด H: Enterprise 30-Minute Idle Session Timeout &amp; Automatic Invalidation Framework Standard</span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">19/11/2026</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-700 text-[11.5px] leading-relaxed">
+                      <li><strong>30-Minute Inactivity Timeout:</strong> บังคับระบบลูกทุกโหมด (Mode A, B, C) ต้องมีกลไกตรวจจับ Idle Timeout ไม่เกิน 30 นาที หากไม่มีการโต้ตอบจากผู้ใช้</li>
+                      <li><strong>Dual-Timer Warning &amp; Grace Period:</strong> ระบบหน้าบ้าน (Client) ต้องมี Modal แจ้งเตือนล่วงหน้า 60 วินาทีก่อนตัดการเชื่อมต่อ</li>
+                      <li><strong>Server-side Session &amp; Token Guard:</strong> Spoke Backend ต้องตรวจสอบ <code>last_activity_at</code> ทุก API Request เกิน 30 นาทีตอบกลับ <code>401 Unauthorized</code></li>
                     </ul>
                   </div>
 

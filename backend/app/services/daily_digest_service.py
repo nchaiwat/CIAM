@@ -696,6 +696,7 @@ def _record_digest_audit_and_setting(
             target_username=safe_target,
             affected_app_code="CIAM_MAILER",
             execution_mode="SCHEDULED_OR_MANUAL",
+            ip_address="127.0.0.1 (SYSTEM)",
             reason=safe_reason,
             details=json.dumps(details, ensure_ascii=False),
             status="SUCCESS" if success else "FAILED"

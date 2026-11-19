@@ -324,6 +324,7 @@ def persist_spoke_inventory(
                         previous_status="ACTIVE" if mapping.is_active_in_app else "DISABLED",
                         new_status="ACTIVE" if is_active else "DISABLED",
                         execution_mode=app.connector_type,
+                        ip_address="127.0.0.1 (SYSTEM)",
                         reason=f"ระบบลูก {app.app_name} พยายามเปลี่ยนสถานะเป็น {'เปิดใช้งาน' if is_active else 'ระงับสิทธิ์'} แต่ถูกปฏิเสธเนื่องจากมีคำสั่ง Lock สิทธิ์โดย CIAM Admin",
                         status="FAILED"
                     ))
@@ -358,6 +359,7 @@ def persist_spoke_inventory(
                         previous_status="ACTIVE" if old_status else "DISABLED",
                         new_status="ACTIVE" if is_active else "DISABLED",
                         execution_mode=app.connector_type,
+                        ip_address="127.0.0.1 (SYSTEM)",
                         reason=f"ระบบลูก {app.app_name} ปรับสถานะเป็น {'เปิดใช้งาน' if is_active else 'ระงับสิทธิ์'} ผ่านการซิงก์ข้อมูล",
                         status="SUCCESS"
                     ))
@@ -468,6 +470,7 @@ def persist_spoke_inventory(
         target_username=f"INVENTORY_{app.app_code.upper()}",
         affected_app_code=app.app_code,
         execution_mode=app.connector_type,
+        ip_address="127.0.0.1 (SYSTEM)",
         reason=f"Account inventory synchronized: {synced_count} accounts from {app.app_name}",
         status="SUCCESS"
     ))
@@ -595,6 +598,7 @@ async def push_pending_provisions_to_spoke(
                     previous_status="PENDING_PROVISION",
                     new_status="ACTIVE",
                     execution_mode=conn_res.execution_mode,
+                    ip_address="127.0.0.1 (SYSTEM)",
                     reason=f"Two-way sync pushed missing account '{uname}' to {app.app_name}",
                     status="SUCCESS",
                 ))
@@ -728,6 +732,7 @@ async def execute_sync_all(db: Session, actor_username: str = "System-Scheduler"
         target_username="ALL_CONNECTED_SPOKES",
         affected_app_code=affected_apps,
         execution_mode="SCHEDULED_OR_MANUAL",
+        ip_address="127.0.0.1 (SYSTEM)",
         reason=summary_text,
         details=details_payload,
         status="SUCCESS" if fail_count == 0 else ("WARNING" if success_count > 0 else "FAILED")

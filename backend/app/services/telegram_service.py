@@ -306,6 +306,7 @@ async def send_health_report(
         target_username="TELEGRAM_ADMINS",
         affected_app_code="AD_AND_CIAM",
         execution_mode=triggered_by,
+        ip_address="127.0.0.1 (SYSTEM)",
         reason=summary_msg,
         status="SUCCESS" if success_deliveries > 0 else "FAILED"
     ))
@@ -481,6 +482,7 @@ async def send_ad_status_alert(
         target_username="TELEGRAM_ADMINS",
         affected_app_code="AD",
         execution_mode="REALTIME_MONITOR",
+        ip_address="127.0.0.1 (SYSTEM)",
         reason=f"ส่งแจ้งเตือนสถานะ AD ({alert_type}) สำเร็จ {success_deliveries}/{len(recipients)} ช่องทาง",
         status="SUCCESS" if success_deliveries > 0 else "FAILED"
     ))
@@ -848,6 +850,7 @@ async def send_sap_status_alert(
         target_username="TELEGRAM_ADMINS",
         affected_app_code="sap_b1",
         execution_mode="REALTIME_MONITOR",
+        ip_address="127.0.0.1 (SYSTEM)",
         reason=f"ส่งแจ้งเตือนสถานะ SAP B1 ({alert_type}) สำเร็จ {success_deliveries}/{len(recipients)} ช่องทาง",
         status="SUCCESS" if success_deliveries > 0 else "FAILED"
     ))

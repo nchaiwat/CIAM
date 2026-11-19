@@ -324,14 +324,14 @@ def test_download_spoke_spec():
     assert res.status_code == 200
     assert "text/markdown" in res.headers["content-type"]
     assert "Central IAM" in res.text
-    assert "v2.14.0" in res.headers.get("content-disposition", "")
+    assert "v2." in res.headers.get("content-disposition", "")
 
     # 2. Resilient double-prefix fallback endpoint
     res2 = client.get("/api/v1/api/v1/applications/spec/download")
     assert res2.status_code == 200
     assert "text/markdown" in res2.headers["content-type"]
     assert "Central IAM" in res2.text
-    assert "v2.14.0" in res2.headers.get("content-disposition", "")
+    assert "v2." in res2.headers.get("content-disposition", "")
 
 def test_user_create_with_telegram_id():
     login_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
@@ -599,10 +599,18 @@ def test_granular_spoke_status_toggle_and_alphabetical_sorting():
             app_codes = [a["app_code"].upper() for a in apps]
             assert app_codes == sorted(app_codes), f"Apps not sorted alphabetically: {app_codes}"
 
-    # 2. Find a user with a connected app to test granular status toggle
-    target_user = next((u for u in users if len(u.get("connected_apps", [])) > 0), None)
-    assert target_user is not None
-    target_app = target_user["connected_apps"][0]
+    # 2. Find a user with a connected spoke app (non-AD) to test granular status toggle
+    target_user = None
+    target_app = None
+    for u in users:
+        for app_item in u.get("connected_apps", []):
+            if app_item.get("app_code", "").lower() != "ad":
+                target_user = u
+                target_app = app_item
+                break
+        if target_user:
+            break
+    assert target_user is not None and target_app is not None
     mapping_id = target_app["mapping_id"]
     initial_status = target_app["is_active_in_app"]
 

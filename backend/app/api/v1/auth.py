@@ -540,6 +540,7 @@ def update_portal_preferences(
 @router.put("/profile", response_model=AdminUserOut)
 def update_current_user_profile(
     payload: AdminProfileUpdateRequest,
+    request: Request,
     current_user: AdminUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -574,6 +575,7 @@ def update_current_user_profile(
     db.commit()
     db.refresh(current_user)
 
+    client_ip = extract_client_ip(request)
     # Audit log
     db.add(IamAuditLog(
         actor_username=current_user.username,
@@ -581,6 +583,7 @@ def update_current_user_profile(
         target_username=current_user.username,
         affected_app_code="CIAM",
         execution_mode="PORTAL_ADMIN",
+        ip_address=client_ip,
         reason=f"อัปเดตข้อมูลโปรไฟล์ผู้ดูแลระบบ (Telegram ID: {current_user.telegram_id or 'N/A'}{', เปลี่ยนรหัสผ่านใหม่' if payload.new_password else ''})",
         status="SUCCESS"
     ))
@@ -623,6 +626,7 @@ def list_admin_users(
 def update_user_role(
     username: str,
     payload: AdminRoleUpdateRequest,
+    request: Request,
     current_admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -665,11 +669,13 @@ def update_user_role(
     else:
         user.role = target_role
 
+    client_ip = extract_client_ip(request)
     db.add(IamAuditLog(
         actor_username=current_admin.username,
         action_type="USER_ROLE_UPDATED",
         target_username=user.username,
         execution_mode="ADMIN_MANAGEMENT",
+        ip_address=client_ip,
         status="SUCCESS",
         reason=f"Role updated to '{target_role}' by {current_admin.username}",
         details=f"Target: {user.username}, New Role: {target_role}"

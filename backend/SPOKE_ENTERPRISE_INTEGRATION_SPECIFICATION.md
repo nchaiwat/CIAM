@@ -1,6 +1,6 @@
 # ข้อกำหนดมาตรฐานกลาง: การเชื่อมต่อระบบลูกกับ Central IAM ผ่าน System Settings & Transaction Logs
 **Standard Specification:** Enterprise Central IAM Integration for Spoke Applications  
-**Current Version:** 2.14.0 (Enterprise 30-Minute Idle Session Timeout & Automatic Invalidation Framework Standard)  
+**Current Version:** 2.15.0 (Configurable Per-App Idle Timeout & Mandatory Audit Transaction IP Logging Standard)  
 **Effective Date:** 19 พฤศจิกายน 2026 (19/11/2026)  
 **Organization:** บริษัท วินโดว์ เอเชีย จำกัด (มหาชน) (Window Asia Public Company Limited)  
 **Target Systems:** IRM, QMS, QOL (QT-Online), PettyCash, APEX, SAP B1 Service, MTPulse, ระบบงาน On-Premise ในโรงงาน และระบบงานทั้งหมดที่จะพัฒนาขึ้นใหม่  
@@ -14,7 +14,8 @@
 
 | เวอร์ชัน (Version) | วันที่มีผล (Date) | สถานะ (Status) | สรุปรายการปรับปรุงจากเวอร์ชันก่อนหน้า (Change Summary & Key Differences) |
 | :---: | :---: | :---: | :--- |
-| **v2.14.0** | 19/11/2026 | **Current Active** | • **หมวด H (ข้อกำหนดที่ 14): Enterprise 30-Minute Idle Session Timeout & Invalidation Framework Standard (มาตรฐานความปลอดภัยการจัดการเซสชันและการตัดเซสชันเมื่อไม่มีการใช้งาน 30 นาที สำหรับระบบลูก):**<br/>1) **Mandatory 30-Minute Inactivity Limit:** ตามมาตรฐาน ISO 27001 Control A.9.4.2 และ NIST SP 800-63B กำหนดให้ทุกระบบลูกต้องมีกลไกตรวจจับการไม่มีการใช้งาน (Idle / Inactivity Timeout) ไม่เกิน 30 นาที (1,800 วินาที) หากผู้ใช้งานเปิดหน้าจอทิ้งไว้เกิน 30 นาที ระบบต้องตัดเซสชัน (Invalidate Session / Clear Token & Cookie) และบังคับออกจากระบบไปยังหน้า Login ทันที<br/>2) **Dual-Timer Session Architecture:** แยกการจัดการเวลาเซสชันเป็น 2 รูปแบบควบคู่กัน: Hard Limit สูงสุด 8 ชั่วโมง (`ciam_session_ttl_minutes = 480`) และ Sliding Inactivity Limit 30 นาที (`ciam_idle_timeout_minutes = 30`)<br/>3) **Dynamic Settings Configuration:** บันทึกค่า `ciam_idle_timeout_minutes: 30` และ `ciam_idle_warning_seconds: 60` ลงตาราง `system_settings` (Zero `.env` Dependency)<br/>4) **Full-Stack Execution & Warning Modal:** ฝั่ง Frontend มี Event Listener ดักจับ User Activity พร้อมแสดง Warning Modal นับถอยหลัง 60 วินาทีที่นาทีที่ 29 และฝั่ง Backend มี Session Middleware ตรวจสอบ `last_activity_at` ทุกคำขอ ป้องกันการปิดฝาเครื่องหรือทิ้งแท็บเบราว์เซอร์ไว้<br/>5) **Ready-to-Use Framework Implementation:** โค้ดตัวอย่างสำเร็จรูป React Hook (`useIdleTimeout`), Python FastAPI Middleware (`IdleTimeoutMiddleware`), Node.js Express Guard (`idleTimeoutGuard`) และการบันทึก `transaction_logs` หมวด `session_idle_timeout` |
+| **v2.15.0** | 19/11/2026 | **Current Active** | • **Configurable Per-Application Idle Timeout (หมวด H, 14.1, 14.2):** ปรับปรุงมาตรฐานการตัดเซสชันเมื่อไม่มีการใช้งาน (Inactivity / Idle Timeout) ให้แต่ละระบบลูกสามารถกำหนดระยะเวลาได้อย่างอิสระตามความเหมาะสมของลักษณะงานและความเสี่ยง (Risk Profile) เช่น 30, 60, 120 นาที (ระบุหน่วยเป็น "นาที" เสมอ) โดยสามารถกำหนดค่าผ่านหน้า Setting ของ Spoke App (ตาราง `system_settings` คีย์ `ciam_idle_timeout_minutes`) หรือกำหนดจากศูนย์กลางผ่านหน้า Application Management บน Central IAM (ฟิลด์ `idle_timeout_minutes`) พร้อมระบบแจ้งเตือน Warning Countdown Modal ล่วงหน้า 60 วินาทีก่อนตัดเซสชัน<br/>• **Mandatory Audit Trail Transaction IP Logging (Section 2.2, Section 4):** บังคับให้ตาราง `transaction_logs` ของระบบลูกทุกระบบต้องมีคอลัมน์ `ip_address VARCHAR(50) NOT NULL` พร้อม Index `idx_trans_logs_ip` และใน Log Matrix ทุก Event ต้องบันทึก IP Address จริงของ Client (สกัดจาก Header `X-Forwarded-For` ตัวแรกสุด หรือ `X-Real-IP`) เสมอ สำหรับการทำงานอัตโนมัติของระบบ (System Background Job) ให้บันทึกเป็น `127.0.0.1 (SYSTEM)` ห้ามปล่อยเป็น NULL หรือเว้นว่าง เพื่อให้สอดคล้องตามข้อกำหนด ISO 27001 และ พ.ร.บ. คอมพิวเตอร์ฯ |
+| **v2.14.0** | 19/11/2026 | Superseded | • **หมวด H (ข้อกำหนดที่ 14): Enterprise 30-Minute Idle Session Timeout & Invalidation Framework Standard (มาตรฐานความปลอดภัยการจัดการเซสชันและการตัดเซสชันเมื่อไม่มีการใช้งาน 30 นาที สำหรับระบบลูก):**<br/>1) **Mandatory 30-Minute Inactivity Limit:** ตามมาตรฐาน ISO 27001 Control A.9.4.2 และ NIST SP 800-63B กำหนดให้ทุกระบบลูกต้องมีกลไกตรวจจับการไม่มีการใช้งาน (Idle / Inactivity Timeout) ไม่เกิน 30 นาที (1,800 วินาที) หากผู้ใช้งานเปิดหน้าจอทิ้งไว้เกิน 30 นาที ระบบต้องตัดเซสชัน (Invalidate Session / Clear Token & Cookie) และบังคับออกจากระบบไปยังหน้า Login ทันที<br/>2) **Dual-Timer Session Architecture:** แยกการจัดการเวลาเซสชันเป็น 2 รูปแบบควบคู่กัน: Hard Limit สูงสุด 8 ชั่วโมง (`ciam_session_ttl_minutes = 480`) และ Sliding Inactivity Limit 30 นาที (`ciam_idle_timeout_minutes = 30`)<br/>3) **Dynamic Settings Configuration:** บันทึกค่า `ciam_idle_timeout_minutes: 30` และ `ciam_idle_warning_seconds: 60` ลงตาราง `system_settings` (Zero `.env` Dependency)<br/>4) **Full-Stack Execution & Warning Modal:** ฝั่ง Frontend มี Event Listener ดักจับ User Activity พร้อมแสดง Warning Modal นับถอยหลัง 60 วินาทีที่นาทีที่ 29 และฝั่ง Backend มี Session Middleware ตรวจสอบ `last_activity_at` ทุกคำขอ ป้องกันการปิดฝาเครื่องหรือทิ้งแท็บเบราว์เซอร์ไว้<br/>5) **Ready-to-Use Framework Implementation:** โค้ดตัวอย่างสำเร็จรูป React Hook (`useIdleTimeout`), Python FastAPI Middleware (`IdleTimeoutMiddleware`), Node.js Express Guard (`idleTimeoutGuard`) และการบันทึก `transaction_logs` หมวด `session_idle_timeout` |
 | **v2.13.0** | 18/11/2026 | Superseded | • **One-Way Active Directory, Local Account Initial Password, Real DB Persistence & Framework Version Handshake (หมวด B.1, C.1, C.2, C.4, D.2, D.5, 10.1, 10.2):**<br/>1) **One-Way AD Enforcement:** Central IAM ไม่สร้างบัญชีขึ้นบน Active Directory (AD เป็นแหล่งข้อมูลหลักแบบทางเดียว) พนักงาน AD ต้องสร้างบน AD ก่อน แล้ว CIAM จึงนำบัญชีมาจ่ายสิทธิ์เข้า Spoke App หรือหากสร้างที่หน้า Spoke App และติ๊ก `use_ad_auth: true` ระบบจะจับคู่เข้ากับตัวตน AD ให้อัตโนมัติตอน Sync<br/>2) **Local Account Password Provisioning (`password`, `must_change_password`):** เมื่อ CIAM สร้างบัญชี Local Account (`use_ad_auth: false`) พร้อมมอบสิทธิ์ให้ Spoke App CIAM จะแนบฟิลด์ `password` และ `must_change_password` ไปใน Payload `POST /api/v1/directory/accounts` เพื่อให้ Spoke App นำไป Hash ด้วย `bcrypt` ลงฐานข้อมูล (รองรับการ Login ตรงที่ Spoke App คู่กับ SSO)<br/>3) **Strict Real DB Persistence (ห้ามใช้ Mock/Stub Response):** ระบบลูก Mode A ต้องทำการ `INSERT`/`UPSERT` ลงตาราง `users` และ `COMMIT` จริงก่อนตอบ `201 Created` (รองรับ Endpoint `/api/v1/directory/accounts` และ Fallback `/api/directory/accounts`) รวมถึงปรับ `ciam_agent.py` (Mode C) ให้ประมวลผล `PROVISION_USER` และ `assigned_accounts` (พร้อม `use_ad_auth`) สำหรับทั้งบัญชี AD และ Local Account ครบถ้วน<br/>4) **Framework Version Compliance Handshake (`framework_version`):** ทุกระบบลูกต้องส่งฟิลด์ `"framework_version": "2.13.0"` กลับมายัง CIAM ใน `GET /api/v1/directory/accounts` (หรือ Header `X-CIAM-Framework-Version`), `GET /api/auth/sso/config`, และ `POST /api/v1/agent/heartbeat` เพื่อให้ CIAM ตรวจสอบและแสดงเวอร์ชันปัจจุบันของแต่ละแอปบนหน้า `/applications` ได้แบบเรียลไทม์<br/>5) **Complete 4-Case Login Matrix (หมวด C.4):** ระบุแนวทาง Login ผ่าน SSO และ Login ตรงบน Spoke App สำหรับทั้งบัญชีที่สร้างจาก CIAM และบัญชีที่สร้างจาก Spoke App โดยตรง |
 | **v2.12.0** | 12/11/2026 | Superseded | • **หมวด G (ข้อกำหนดที่ 13): Enterprise Local Password Policy & 90-Day Rotation Framework Standard (มาตรฐานความปลอดภัยรหัสผ่านบัญชีท้องถิ่น และการบังคับเปลี่ยนรหัสผ่านทุก 90 วัน สำหรับระบบลูก):**<br/>1) **90-Day Forced Password Rotation:** บัญชีท้องถิ่น (Local Accounts), บัญชีฉุกเฉิน (Break-Glass Local Admin), และบัญชีเฉพาะระบบที่ไม่ได้ยืนยันตัวตนผ่าน Active Directory ในระบบลูกทุกระบบ ต้องมีคอลัมน์ `password_changed_at` และมีกลไกบังคับเปลี่ยนรหัสผ่านทุกๆ 90 วันโดยเด็ดขาด<br/>2) **Strict Password Complexity Requirements:** ความยาว 8 - 16 ตัวอักษร, มีตัวพิมพ์ใหญ่ (A-Z) &ge; 1, ตัวพิมพ์เล็ก (a-z) &ge; 1, ตัวเลข (0-9) &ge; 1, อักขระพิเศษ (!@#$%^&*...) &ge; 1 และห้ามมี Username ปะปนอยู่ในรหัสผ่าน<br/>3) **Forced Password Change Interception:** เมื่อรหัสผ่านครบ 90 วัน หรือ `must_change_password = true` ระบบลูกต้องบล็อกการเข้าสู่หน้าระบบงาน และบังคับเปิด Modal เปลี่ยนรหัสผ่านทันที (ห้ามข้าม)<br/>4) **Ready-to-Use Framework Implementation:** โค้ดตัวอย่างสำเร็จรูปสำหรับ Python (FastAPI/SQLAlchemy), Node.js (Express/TypeScript), PHP (PDO/Native) และ React Form |
 | **v2.11.0** | 10/11/2026 | Superseded | • **หมวด D.7: มาตรฐานการแบ่งแยกระบบ Direct Infra vs SSO Spoke, สิทธิ์ต่ำสุด (Least Privilege), การเทียบเวลา (Timestamp Reconciliation) และการล็อคสิทธิ์เด็ดขาด (CIAM Authority Lock):**<br/>1) **Direct Infrastructure Isolation:** แยกความแตกต่างระหว่างระบบโครงสร้างพื้นฐานระดับ Network/Directory (pfSense, M365, SAP B1, AD) ที่เป็น Read-Only Inventory กับระบบลูก SSO แบบสมบูรณ์ (IRM, QMS, MTPulse) อย่างเด็ดขาด โดยระบบ Direct Infra จะไม่มีสถานะ `WAIT` (`PENDING_PROVISION`) ค้าง หากไม่พบบัญชีในระบบจริงจะถูกตัดออกจากรายการทันที<br/>2) **Least Privilege Auto-Provisioning:** การสร้างบัญชีผู้ใช้ใหม่จาก CIAM หรือเมื่อระบบลูกดึงบัญชีไปสร้าง ต้องกำหนดสิทธิ์เริ่มต้นเป็นบทบาทต่ำสุดเสมอ (`Standard User` / `Viewer`) ตาม `ciam_auto_provision_group` ห้ามตั้งสิทธิ์ Admin โดยพลการ<br/>3) **Timestamp Reconciliation:** ใช้เวลาการเปลี่ยนแปลงล่าสุด (`status_updated_at` เทียบกับ `spoke_status_updated_at`) เป็นเกณฑ์ตัดสินสถานะจริง (Latest Update Wins)<br/>4) **CIAM Authority Lock Standard (`is_status_locked`):** แอดมิน CIAM สามารถกดล็อคสิทธิ์เด็ดขาดเพื่อตรึงสถานะ ป้องกันไม่ให้ระบบลูกส่งสถานะมาทับหรือเปิดใช้งานคืนโดยพลการ |
@@ -160,8 +161,9 @@ CREATE TABLE transaction_logs (
     category VARCHAR(50) NOT NULL,          -- 'ciam_sso', 'security_break_glass', 'system_setting'
     action VARCHAR(100) NOT NULL,           -- เช่น 'login_success', 'login_failed', 'toggle_break_glass'
     status VARCHAR(20) DEFAULT 'success',   -- 'success', 'failed', 'warning', 'info'
+    ip_address VARCHAR(50) NOT NULL,        -- IP Address ของ Client หรือ '127.0.0.1 (SYSTEM)'
     message VARCHAR(500) NOT NULL,          -- ข้อความสรุปเหตุการณ์ภาษาไทยที่อ่านเข้าใจง่าย
-    details TEXT NULL,                      -- บันทึก JSON String รายละเอียด เช่น IP, Claims, Error, Diff
+    details TEXT NULL,                      -- บันทึก JSON String รายละเอียด เช่น Claims, Error, Diff
     records_count INT DEFAULT 0,
     duration_ms INT DEFAULT 0,
     triggered_by VARCHAR(100) NOT NULL,     -- 'user:<username>', 'system:ciam', 'system:emergency_admin'
@@ -169,6 +171,7 @@ CREATE TABLE transaction_logs (
 );
 
 CREATE INDEX idx_trans_logs_category ON transaction_logs(category);
+CREATE INDEX idx_trans_logs_ip ON transaction_logs(ip_address);
 CREATE INDEX idx_trans_logs_created_at ON transaction_logs(created_at DESC);
 ```
 
@@ -1075,15 +1078,22 @@ sudo systemctl start ciam-agent
 
 ระบบลูกทุกระบบต้องบันทึกเหตุการณ์ลงในตาราง `transaction_logs` ตามเงื่อนไขดังต่อไปนี้อย่างครบถ้วน:
 
-| Event Code | Category | Action | Status | Message ภาษาไทย | Triggered By | ข้อมูลในฟิลด์ Details (JSON String) |
-| :--- | :--- | :--- | :---: | :--- | :--- | :--- |
-| **SSO-01** | `ciam_sso` | `login_success` | `success` | เข้าสู่ระบบผ่าน Central IAM SSO สำเร็จ: ผู้ใช้ '{username}' | `user:{username}` | `{"username":"...", "ip":"...", "ciam_issuer":"...", "auth_method":"OIDC_PKCE_S256", "roles":{...}}` |
-| **SSO-02** | `ciam_sso` | `login_failed` | `failed` | การยืนยันตัวตน SSO ล้มเหลว: {สาเหตุ} | `user:{username}` | `{"error":"SignatureVerificationFailed", "ip":"...", "detail":"Token expired or tampered"}` |
-| **SSO-03** | `ciam_sso` | `auto_provision_user` | `info` | สร้างบัญชีผู้ใช้ใหม่อัตโนมัติจาก Central IAM: '{username}' | `system:ciam` | `{"username":"...", "email":"...", "group_assigned":"PU Staff", "claims":{...}}` |
-| **SSO-04** | `ciam_sso` | `account_deactivated` | `warning` | ปฏิเสธการเข้าสู่ระบบ: บัญชีพนักงาน '{username}' ถูกระงับสิทธิ์ในระบบนี้ | `user:{username}` | `{"username":"...", "ip":"...", "reason":"is_active is false"}` |
-| **BG-01** | `security_break_glass` | `toggle_break_glass` | `warning` / `success` | สลับสถานะระบบ Break-Glass: {ENABLED/DISABLED} | `user:{admin_user}` | `{"break_glass_active":true, "reason":"...", "ip":"...", "prev_state":false}` |
-| **BG-02** | `security_break_glass` | `fallback_ad_login` | `success` | เข้าสู่ระบบผ่าน AD Gateway สำรองในช่วง Break-Glass: '{username}' | `user:{username}` | `{"username":"...", "gateway":"http://172.18.0.1:3100", "ip":"..."}` |
-| **CFG-01**| `system_setting` | `update_ciam_settings`| `success` | แก้ไขการตั้งค่าระบบ Central IAM SSO | `user:{admin_user}` | `{"changed_fields":["ciam_base_url","ciam_session_ttl_minutes"], "ip":"..."}` |
+> [!IMPORTANT]
+> **ข้อบังคับ ISO 27001 & พ.ร.บ. ว่าด้วยการกระทำความผิดเกี่ยวกับคอมพิวเตอร์ (Mandatory Client IP Logging):**  
+> ทุกธุรกรรมและทุกเหตุการณ์ที่บันทึกลงตาราง `transaction_logs` **ต้องระบุค่าในคอลัมน์ `ip_address` เสมอ (ห้ามเป็น NULL หรือ Empty String โดยเด็ดขาด)**:
+> 1. กรณีคำขอผ่าน HTTP/Web/API: ให้สกัด IP ของผู้กระทำจริงจาก Reverse Proxy Header ตัวแรกสุด เช่น `X-Forwarded-For` (`req.headers.get("x-forwarded-for").split(",")[0].strip()`) หรือ `X-Real-IP` หากไม่มีให้ใช้ Client Remote Host
+> 2. กรณีการทำงานอัตโนมัติภายในระบบ (Cron Job, Scheduler, Background Task, CIAM Agent Outbound): ให้ระบุเป็น `'127.0.0.1 (SYSTEM)'` เพื่อให้ทราบที่มาของการทำงานอย่างโปร่งใส
+
+| Event Code | Category | Action | Status | Client IP (Mandatory) | Message ภาษาไทย | Triggered By | ข้อมูลในฟิลด์ Details (JSON String) |
+| :--- | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
+| **SSO-01** | `ciam_sso` | `login_success` | `success` | Client IP จริง | เข้าสู่ระบบผ่าน Central IAM SSO สำเร็จ: ผู้ใช้ '{username}' | `user:{username}` | `{"username":"...", "ciam_issuer":"...", "auth_method":"OIDC_PKCE_S256", "roles":{...}}` |
+| **SSO-02** | `ciam_sso` | `login_failed` | `failed` | Client IP จริง | การยืนยันตัวตน SSO ล้มเหลว: {สาเหตุ} | `user:{username}` | `{"error":"SignatureVerificationFailed", "detail":"Token expired or tampered"}` |
+| **SSO-03** | `ciam_sso` | `auto_provision_user` | `info` | `127.0.0.1 (SYSTEM)` หรือ Client IP | สร้างบัญชีผู้ใช้ใหม่อัตโนมัติจาก Central IAM: '{username}' | `system:ciam` | `{"username":"...", "email":"...", "group_assigned":"PU Staff", "claims":{...}}` |
+| **SSO-04** | `ciam_sso` | `account_deactivated` | `warning` | Client IP จริง | ปฏิเสธการเข้าสู่ระบบ: บัญชีพนักงาน '{username}' ถูกระงับสิทธิ์ในระบบนี้ | `user:{username}` | `{"username":"...", "reason":"is_active is false"}` |
+| **BG-01** | `security_break_glass` | `toggle_break_glass` | `warning` / `success` | Client IP จริง | สลับสถานะระบบ Break-Glass: {ENABLED/DISABLED} | `user:{admin_user}` | `{"break_glass_active":true, "reason":"...", "prev_state":false}` |
+| **BG-02** | `security_break_glass` | `fallback_ad_login` | `success` | Client IP จริง | เข้าสู่ระบบผ่าน AD Gateway สำรองในช่วง Break-Glass: '{username}' | `user:{username}` | `{"username":"...", "gateway":"http://172.18.0.1:3100"}` |
+| **CFG-01**| `system_setting` | `update_ciam_settings`| `success` | Client IP จริง | แก้ไขการตั้งค่าระบบ Central IAM SSO | `user:{admin_user}` | `{"changed_fields":["ciam_base_url","ciam_session_ttl_minutes"]}` |
+| **TO-01** | `ciam_sso` | `session_idle_timeout` | `info` | Client IP จริง | ระบบตัดเซสชันและออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งานเกินกำหนด (Idle Timeout) | `system:idle_timeout` | `{"idle_minutes": 30, "user": "{username}"}` |
 
 ---
 
@@ -2924,14 +2934,19 @@ export function ForcedPasswordChangeModal({ username, isExpired, onSuccess }: Pa
 
 ---
 
-## 14. หมวด H: ข้อกำหนดมาตรฐานการจัดการเซสชันและการตัดเซสชันเมื่อไม่มีการใช้งาน 30 นาที (Enterprise 30-Minute Idle Session Timeout & Automatic Invalidation Framework Standard)
+## 14. หมวด H: ข้อกำหนดมาตรฐานการจัดการเซสชันและการตัดเซสชันเมื่อไม่มีการใช้งาน กำหนดค่าได้อิสระรายแอปพลิเคชัน (Configurable Per-Application Idle Session Timeout Framework Standard)
 
 ตามมาตรฐานความปลอดภัยสารสนเทศ **ISO 27001 (Control A.9.4.2 User Authentication / Session Management)**, **NIST SP 800-63B (Section 7.2 Inactivity / Idle Timeout)** และข้อกำหนด **OWASP Session Management Cheat Sheet**:
 
 > [!IMPORTANT]
-> **กฎเหล็กด้านความปลอดภัย (Mandatory Inactivity Policy):**  
-> ทุกระบบลูก (Spoke Applications) ภายในเครือบริษัท วินโดว์ เอเชีย จำกัด (มหาชน) **ต้องมีกลไกตรวจจับการไม่มีการใช้งาน (Inactivity / Idle Timeout) ไม่เกิน 30 นาที (1,800 วินาที)**  
-> หากผู้ใช้งานเปิดหน้าจอทิ้งไว้โดยไม่มีการเคลื่อนไหวหรือไม่มีการโต้ตอบกับระบบเกิน 30 นาที ระบบต้องทำการ **Invalidate Session (ตัดเซสชัน), ล้าง Token/Cookie และบังคับให้ออกจากระบบ (Auto-Logout) ไปยังหน้า Login ทันที** เพื่อป้องกันความเสี่ยงจากการถูกสวมรอยหรือเข้าถึงข้อมูลโดยไม่ได้รับอนุญาต (Session Hijacking / Unattended Workstation Exposure)
+> **กฎเหล็กด้านความปลอดภัย (Configurable Per-App Inactivity Policy):**  
+> ทุกระบบลูก (Spoke Applications) ภายในเครือบริษัท วินโดว์ เอเชีย จำกัด (มหาชน) **ต้องมีกลไกตรวจจับการไม่มีการใช้งาน (Inactivity / Idle Timeout)** โดยสามารถกำหนดระยะเวลาแยกตามรายแอปพลิเคชันได้อย่างอิสระตามความเหมาะสมและระดับความเสี่ยงของระบบงาน (Risk Profile):  
+> * **หน่วยเวลา:** ต้องระบุเป็น **"นาที" (Minutes)** เสมอ เช่น `30`, `60`, `120` นาที  
+> * **ค่าแนะนำมาตรฐานความปลอดภัย:** `30` นาที สำหรับระบบความมั่นคงสูง เช่น ระบบการเงิน บัญชี ทะเบียน หรือระบบที่มีข้อมูลส่วนบุคคล (PDPA/Sensitive Data)  
+> * **ช่องทางการตั้งค่า:**  
+>   1. **หน้า Settings ของระบบลูก (Spoke Portal):** เก็บค่าในตาราง `system_settings` คีย์ `ciam_idle_timeout_minutes`  
+>   2. **หน้า Application Settings บน Central IAM:** สามารถระบุ `idle_timeout_minutes` รายแอปได้ เพื่อให้ระบบลูกดึงไปปรับใช้  
+> * หากผู้ใช้งานเปิดหน้าจอทิ้งไว้โดยไม่มีการเคลื่อนไหวหรือโต้ตอบเกินระยะเวลาที่ตั้งไว้ ระบบต้องทำการ **Invalidate Session (ตัดเซสชัน), ล้าง Token/Cookie และบังคับให้ออกจากระบบ (Auto-Logout) ไปยังหน้า Login ทันที** เพื่อป้องกันความเสี่ยงจากการถูกสวมรอยหรือเข้าถึงข้อมูลโดยไม่ได้รับอนุญาต (Session Hijacking / Unattended Workstation Exposure)
 
 ---
 
@@ -2946,11 +2961,12 @@ export function ForcedPasswordChangeModal({ username, isExpired, onSuccess }: Pa
 │ 1. Absolute Maximum Lifetime (Hard Limit) │ 2. Inactivity / Idle Timeout (Sliding Limit)│
 ├───────────────────────────────────────────┼────────────────────────────────────────────┤
 │ • กำหนดโดย: `ciam_session_ttl_minutes`    │ • กำหนดโดย: `ciam_idle_timeout_minutes`    │
-│ • ค่ามาตรฐาน: 480 นาที (8 ชั่วโมง)         │ • ค่ามาตรฐาน: 30 นาที (1,800 วินาที)        │
-│ • ไม่ว่าผู้ใช้จะคลิกใช้งานตลอดเวลาหรือไม่   │ • จับเวลา Inactivity ตั้งแต่คำขอ/อีเวนต์    │
-│   เซสชันจะหมดอายุแน่นอนเมื่อครบ 8 ชม.     │   สุดท้ายของผู้ใช้ หากไม่มีการใช้งานเกิน   │
-│ • ป้องกันการเปิดเซสชันทิ้งไว้ข้ามวัน       │   30 นาที ระบบจะตัดเซสชันทันที             │
-│ • ต้อง Login ใหม่ทุกรอบวันทำงาน            │ • หากผู้ใช้ขยับ/โต้ตอบ เวลานี้จะ Reset     │
+│ • ค่ามาตรฐาน: 480 นาที (8 ชั่วโมง)         │ • ตั้งค่าได้อิสระในหน่วยนาที เช่น 30, 60,  │
+│ • ไม่ว่าผู้ใช้จะคลิกใช้งานตลอดเวลาหรือไม่   │   120 นาที (ค่าแนะนำความปลอดภัย: 30 นาที)  │
+│   เซสชันจะหมดอายุแน่นอนเมื่อครบ 8 ชม.     │ • จับเวลา Inactivity ตั้งแต่คำขอ/อีเวนต์    │
+│ • ป้องกันการเปิดเซสชันทิ้งไว้ข้ามวัน       │   สุดท้ายของผู้ใช้ หากไม่มีการใช้งานเกิน   │
+│ • ต้อง Login ใหม่ทุกรอบวันทำงาน            │   เวลาที่ตั้งไว้ ระบบจะตัดเซสชันทันที      │
+│                                           │ • หากผู้ใช้ขยับ/โต้ตอบ เวลานี้จะ Reset     │
 └───────────────────────────────────────────┴────────────────────────────────────────────┘
 ```
 
@@ -2962,8 +2978,8 @@ export function ForcedPasswordChangeModal({ username, isExpired, onSuccess }: Pa
 
 | Key | Data Type | Default Value | คำอธิบาย |
 | :--- | :---: | :---: | :--- |
-| `ciam_idle_timeout_minutes` | integer | `30` | ระยะเวลาที่อนุญาตให้ผู้ใช้ไม่มีการใช้งาน (Idle Timeout) ก่อนระบบจะตัดเซสชันและบังคับออกจากระบบอัตโนมัติ (หน่วย: นาที, ค่าบังคับตาม ISO 27001: 30 นาที) |
-| `ciam_idle_warning_seconds` | integer | `60` | ระยะเวลานับถอยหลังแจ้งเตือนผู้ใช้งานบนหน้าจอก่อนตัดเซสชัน (หน่วย: วินาที, ค่าแนะนำ: 60 วินาที แสดงกล่องเตือนที่นาทีที่ 29) |
+| `ciam_idle_timeout_minutes` | integer | `30` | ระยะเวลาที่อนุญาตให้ผู้ใช้ไม่มีการใช้งาน (Idle Timeout) ก่อนระบบจะตัดเซสชันและบังคับออกจากระบบอัตโนมัติ (หน่วย: นาที, ตั้งค่าได้ตามความเหมาะสม เช่น 30, 60, 120 นาที) |
+| `ciam_idle_warning_seconds` | integer | `60` | ระยะเวลานับถอยหลังแจ้งเตือนผู้ใช้งานบนหน้าจอก่อนตัดเซสชัน (หน่วย: วินาที, ค่าแนะนำ: 60 วินาที แสดงกล่องเตือนล่วงหน้า 1 นาทีก่อนครบกำหนด) |
 | `ciam_session_ttl_minutes`  | integer | `480` | อายุสูงสุดของเซสชันหรือ Access Token (Hard Limit 8 ชั่วโมง) |
 
 ---
@@ -2976,17 +2992,17 @@ export function ForcedPasswordChangeModal({ username, isExpired, onSuccess }: Pa
    - ต้องทำ **Throttling / Debouncing (1 - 2 วินาที)** เพื่อประหยัด CPU ของเบราว์เซอร์
    - เมื่อมี Event ให้บันทึก `last_activity_timestamp = Date.now()`
 2. **การแจ้งเตือนล่วงหน้า (Warning Countdown Modal):**
-   - เมื่อเวลาผ่านไปถึงนาทีที่ 29 (เหลือ 60 วินาทีก่อนครบ 30 นาที):
+   - เมื่อเวลาผ่านไปจนเหลือ 60 วินาทีก่อนครบกำหนดเวลา Idle Timeout (เช่น ที่นาทีที่ 29 หากตั้ง 30 นาที, หรือนาทีที่ 59 หากตั้ง 60 นาที):
    - แสดง Modal ป๊อปอัปแจ้งเตือนพร้อมเวลานับถอยหลัง:
-     *"⚠️ คุณไม่มีการใช้งานระบบเป็นเวลา 29 นาที ระบบจะออกจากระบบอัตโนมัติเพื่อความปลอดภัยในอีก {seconds} วินาที [ขยายเวลาใช้งาน]"*
+     *"⚠️ คุณไม่มีการใช้งานระบบมาระยะหนึ่ง ระบบจะออกจากระบบอัตโนมัติเพื่อความปลอดภัยในอีก {seconds} วินาที [ขยายเวลาใช้งาน]"*
    - หากผู้ใช้คลิกปุ่ม **"ขยายเวลาใช้งาน"** ให้ส่งคำขอ Heartbeat/Ping ไปยัง Backend เพื่อรีเซ็ตตัวนับทั้งฝั่ง Frontend และ Backend
 3. **การตัดเซสชันเมื่อครบกำหนด (Auto-Logout Execution):**
-   - หากนับถอยหลังจนครบ 30 นาทีโดยไม่มีการโต้ตอบ:
+   - หากนับถอยหลังจนครบกำหนดเวลาโดยไม่มีการโต้ตอบ:
    - ลบ Access Token / In-Memory Session / SessionStorage / LocalStorage
    - เรียก Backend API `/api/auth/logout` หรือ `/api/auth/sso/logout`
    - นำทาง (Redirect) ผู้ใช้กลับหน้า Login:
      `window.location.href = '/login?reason=idle_timeout&redirect_uri=' + encodeURIComponent(window.location.pathname);`
-   - หน้า Login แสดงแบนเนอร์สีเหลืองแจ้งเตือน: *"เซสชันของคุณหมดอายุเนื่องจากไม่มีการใช้งานระบบเกิน 30 นาที (Idle Timeout) กรุณาเข้าสู่ระบบใหม่อีกครั้ง"*
+   - หน้า Login แสดงแบนเนอร์สีเหลืองแจ้งเตือน: *"เซสชันของคุณหมดอายุเนื่องจากไม่มีการใช้งานระบบเกินระยะเวลาที่กำหนด (Idle Timeout) กรุณาเข้าสู่ระบบใหม่อีกครั้ง"*
 
 ---
 
@@ -3000,14 +3016,14 @@ export function ForcedPasswordChangeModal({ username, isExpired, onSuccess }: Pa
      idle_limit_ms = ciam_idle_timeout_minutes * 60 * 1000;
      if (current_time - session.last_active_at > idle_limit_ms) {
          session.destroy();
-         log_idle_timeout(session.user);
-         return HTTP 401 Unauthorized ("Session expired due to 30-minute inactivity");
+         log_idle_timeout(session.user, client_ip, ciam_idle_timeout_minutes);
+         return HTTP 401 Unauthorized ("Session expired due to inactivity");
      }
      session.last_active_at = current_time; // Sliding reset
      ```
 2. **JWT-based Applications (Stateless with Cache / Refresh):**
    - บันทึก `last_seen_at` ของ User ลงใน In-memory Cache / Redis / DB
-   - หากคำขอ API ถัดไปมีช่องว่างเวลาเกิน 30 นาที ให้ปฏิเสธการ Refresh หรือ Reject ด้วย HTTP 401
+   - หากคำขอ API ถัดไปมีช่องว่างเวลาเกิน `ciam_idle_timeout_minutes` นาที ให้ปฏิเสธการ Refresh หรือ Reject ด้วย HTTP 401
    - ส่ง Response Header: `X-Session-Expired: idle_timeout`
 
 ---
@@ -3016,9 +3032,9 @@ export function ForcedPasswordChangeModal({ username, isExpired, onSuccess }: Pa
 
 เมื่อระบบตัดเซสชันผู้ใช้จาก Idle Timeout ระบบลูกต้องบันทึก `transaction_logs` ดังนี้:
 
-| Category | Action | Status | Message (ภาษาไทย) | Triggered By | Details (JSON) |
-| :--- | :--- | :---: | :--- | :--- | :--- |
-| `ciam_sso` | `session_idle_timeout` | `info` | ระบบตัดเซสชันและออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งานเกิน 30 นาที (Idle Timeout) | `system:idle_timeout` | `{"idle_minutes": 30, "user": "{username}", "ip": "{client_ip}"}` |
+| Category | Action | Status | Client IP (Mandatory) | Message (ภาษาไทย) | Triggered By | Details (JSON) |
+| :--- | :--- | :---: | :---: | :--- | :--- | :--- |
+| `ciam_sso` | `session_idle_timeout` | `info` | Client IP จริง | ระบบตัดเซสชันและออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งานเกิน {minutes} นาที (Idle Timeout) | `system:idle_timeout` | `{"idle_minutes": 30, "user": "{username}"}` |
 
 ---
 

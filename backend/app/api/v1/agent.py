@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import secrets
 import logging
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, status, Request
 from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from app.models.mapping import AppAccountMapping
 from app.models.identity import MasterIdentity
 from app.models.audit import IamAuditLog
 from app.schemas.application import CURRENT_SPOKE_FRAMEWORK_VERSION
+from app.services.network_service import get_client_ip
 
 logger = logging.getLogger("ciam.agent")
 router = APIRouter(prefix="/agent", tags=["On-Premise Spoke Agent"])
@@ -73,6 +74,7 @@ class AgentHeartbeatResponse(BaseModel):
 @router.post("/heartbeat", response_model=AgentHeartbeatResponse)
 def handle_agent_heartbeat(
     payload: AgentHeartbeatRequest,
+    request: Request,
     x_spoke_client_id: Optional[str] = Header(None, alias="X-Spoke-Client-ID"),
     x_spoke_api_key: Optional[str] = Header(None, alias="X-Spoke-API-Key"),
     db: Session = Depends(get_db)
@@ -87,6 +89,7 @@ def handle_agent_heartbeat(
     4. Fetch any pending management commands (e.g., DISABLE_USER from 1-Click Offboarding).
     """
     candidate_code = payload.app_code.strip().lower()
+    client_ip = get_client_ip(request)
     
     # 1. Authenticate spoke application
     app = None
@@ -143,6 +146,7 @@ def handle_agent_heartbeat(
                     target_username=cmd.username,
                     affected_app_code=app.app_code,
                     execution_mode="OUTBOUND_AGENT",
+                    ip_address=client_ip,
                     reason=f"Executed command {cmd.command_id}: {res.message or res.status}",
                     status="SUCCESS" if res.status.upper() == "COMPLETED" else "FAILED"
                 ))
@@ -207,6 +211,7 @@ def handle_agent_heartbeat(
                         previous_status="ACTIVE" if old_status else "DISABLED",
                         new_status="ACTIVE" if acc.is_active else "DISABLED",
                         execution_mode="OUTBOUND_AGENT",
+                        ip_address=client_ip,
                         reason=f"ระบบลูก {app.app_name} ปรับสถานะเป็น {'เปิดใช้งาน' if acc.is_active else 'ระงับสิทธิ์'} ผ่าน Heartbeat",
                         status="SUCCESS"
                     ))

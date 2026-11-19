@@ -23,6 +23,7 @@ class AppCreate(BaseModel):
     network_policy: Optional[str] = "ANYWHERE"
     vpn_restriction_mode: Optional[str] = "HIDE"
     allowed_network_cidrs: Optional[str] = None
+    idle_timeout_minutes: Optional[int] = 30
 
 class AppUpdate(BaseModel):
     app_name: Optional[str] = None
@@ -43,6 +44,7 @@ class AppUpdate(BaseModel):
     network_policy: Optional[str] = None
     vpn_restriction_mode: Optional[str] = None
     allowed_network_cidrs: Optional[str] = None
+    idle_timeout_minutes: Optional[int] = None
 
 class AppOut(BaseModel):
     id: int
@@ -75,6 +77,7 @@ class AppOut(BaseModel):
     network_policy: Optional[str] = "ANYWHERE"
     vpn_restriction_mode: Optional[str] = "HIDE"
     allowed_network_cidrs: Optional[str] = None
+    idle_timeout_minutes: int = 30
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -98,6 +101,7 @@ class AppCredentialOut(BaseModel):
     header_name: str = "X-Management-API-Key"
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
+    idle_timeout_minutes: int = 30
     redirect_uris: Optional[str] = None
     portal_launch_url: Optional[str] = None
     sso_enabled: bool = True

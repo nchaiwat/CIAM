@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 19 พฤศจิกายน 2026 (Local Time: 14:30 ICT)  
+> **Date Updated:** 19 พฤศจิกายน 2026 (Local Time: 15:15 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Repository (APEX):** [https://github.com/ITWA-PCL/apex](https://github.com/ITWA-PCL/apex)  
@@ -9,7 +9,7 @@
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Production VPS (APEX):** `/var/www/Apex` (Hostinger VPS)  
 > **Test Integrity:** Backend Pytest: 105/105 passed (`.\backend\.venv\Scripts\pytest.exe`), Frontend TypeScript: 0 errors (`npx tsc --noEmit`), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
-> **Git Status:** Production Ready — Sprint 67 (Enterprise 30-Minute Idle Session Timeout & Spoke Framework v2.14.0)
+> **Git Status:** Production Ready — Sprint 68 (Configurable Per-App Idle Timeout, Honeypot Verification & Mandatory Audit Transaction IP Logging v2.15.0)
 
 ---
 
@@ -17,6 +17,23 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
+0f. **Configurable Per-App Idle Timeout, Honeypot Verification & Mandatory Audit Transaction IP Logging (Sprint 68):**
+   - **1. ปรับปรุงข้อกำหนด Idle Timeout ให้ตั้งค่าราย Application ได้ในหน่วยนาที (Configurable Per-App Idle Timeout in Minutes):**
+     - ปรับ Security Framework (Spoke Enterprise Integration Specification v2.15.0) หมวด H (ข้อกำหนดที่ 14) ให้แต่ละ Application สามารถกำหนดระยะเวลา Inactivity / Idle Timeout ได้อย่างอิสระตามความเหมาะสมของระดับความเสี่ยง (Risk Profile) เช่น 30, 60, 120 นาที โดยต้องระบุเวลาเป็น "นาที" เสมอ
+     - รองรับการตั้งค่าได้ 2 ช่องทาง: ผ่านหน้า Settings บน Spoke App เอง (ตาราง `system_settings` คีย์ `ciam_idle_timeout_minutes`) หรือกำหนดจากศูนย์กลางผ่าน Central IAM Portal
+     - ฐานข้อมูล CIAM: เพิ่มคอลัมน์ `idle_timeout_minutes = Column(Integer, default=30, nullable=False)` ในโมเดล `ConnectedApplication` พร้อม Auto-Migration ใน `initial_data.py`
+     - Backend API & Schemas: เพิ่ม `idle_timeout_minutes` ใน `AppCreate`, `AppUpdate`, `AppOut`, `AppCredentialOut`
+     - Frontend UI: เพิ่มฟิลด์แก้ไข Idle Timeout (หน่วยนาที พร้อม validation min 1, max 1440) ใน Edit Application Modal และเพิ่ม Badge แสดง `Idle Timeout: ⏱️ {minutes} นาที` บนการ์ดระบบลูกใน `/applications`
+   - **2. ตรวจสอบการใช้งาน Honeypot Defense ใน Security Framework และ Central IAM:**
+     - ตรวจสอบใน Security Framework: มีกำหนดไว้อย่างสมบูรณ์ใน **หมวด F (F.3 Layer 2 Decoy Honeypot Trap)** กำหนดฟิลด์คู่หลอกบอท `corporate_fax` และ `security_honey` ซ่อนนอกจอด้วย CSS หากกรอกเข้ามาจะ Reject ด้วย HTTP 401 และบันทึก Audit Log `BOT_HONEYPOT_DETECTED`
+     - ตรวจสอบใน Central IAM: มีการใช้งานจริงครบวงจร 100% ทั้ง Backend (`app/core/bot_defense.py`, `app/schemas/auth.py`, `app/api/v1/auth.py`), Frontend (`login/page.tsx`, `admin/login/page.tsx`) และมี Unit Tests ใน `tests/test_bot_defense.py` ผ่าน 100%
+   - **3. บังคับเก็บ IP Address ใน Audit Trail / Transaction Logs ทุก Action:**
+     - ใน Spoke Specification: ปรับปรุง Section 2.2 ตาราง `transaction_logs` เพิ่มคอลัมน์ `ip_address VARCHAR(50) NOT NULL` พร้อม Index `idx_trans_logs_ip` และใน Section 4 Log Matrix ระบุข้อบังคับ ISO 27001 ให้สกัด Client IP จริงจาก `X-Forwarded-For` หรือ `X-Real-IP` เสมอ สำหรับระบบภายในให้ใช้ `127.0.0.1 (SYSTEM)`
+     - ใน Central IAM: สำรวจและปรับปรุง Backend ทุก Endpoint ที่สร้าง `IamAuditLog` ให้บันทึก IP จริงของ Client จาก Request หรือใส่ `127.0.0.1 (SYSTEM)` ปิดโอกาสเกิดค่า NULL โดยเด็ดขาด ครอบคลุมทั้ง `applications.py`, `directory.py`, `auth.py`, `agent.py`, `scheduler.py`, `daily_digest_service.py`, `telegram_service.py`
+   - **4. คุณภาพและสเปก:**
+     - อัปเกรด Specification กลางเป็น **`v2.15.0`** ทั้งใน `SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`, `backend/SPOKE_ENTERPRISE_INTEGRATION_SPECIFICATION.md`, และหน้า UI `/applications`
+     - Backend Pytest: 105/105 passed (100%), Frontend TypeScript: 0 errors
+
 0e. **Enterprise 30-Minute Idle Session Timeout & Spoke Framework v2.14.0 (Sprint 67):**
    - **ตรวจสอบและบรรจุข้อกำหนด Security Framework เรื่อง Idle Timeout 30 นาที สำหรับแต่ละ Account:**
      - ผลการตรวจสอบ: เดิมในระบบ Spoke Integration Specification มีเฉพาะ `ciam_session_ttl_minutes: 480` (Absolute Session Limit 8 ชั่วโมง) และหน้าเว็บ Central IAM มี Idle Timeout 30 นาที แต่ใน Spoke Framework ยังไม่มีข้อกำหนดบังคับเรื่อง Inactivity Timeout 30 นาที สำหรับระบบลูก (Spoke Applications)

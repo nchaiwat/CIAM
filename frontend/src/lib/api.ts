@@ -214,6 +214,7 @@ export interface ConnectedApp {
   network_policy?: "ANYWHERE" | "VPN_ONLY" | string;
   vpn_restriction_mode?: "HIDE" | "LOCK_WITH_BANNER" | string;
   allowed_network_cidrs?: string | null;
+  idle_timeout_minutes?: number;
   created_at: string;
 }
 
@@ -536,6 +537,7 @@ export const ciamApi = {
       network_policy?: string | null;
       vpn_restriction_mode?: string | null;
       allowed_network_cidrs?: string | null;
+      idle_timeout_minutes?: number | null;
     }>(`/applications/${id}/credentials`),
 
   updateApplication: (
@@ -559,6 +561,7 @@ export const ciamApi = {
       network_policy?: string;
       vpn_restriction_mode?: string;
       allowed_network_cidrs?: string;
+      idle_timeout_minutes?: number;
     }
   ) =>
     fetchApi<ConnectedApp>(`/applications/${id}`, {
