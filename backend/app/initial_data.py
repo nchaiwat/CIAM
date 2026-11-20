@@ -376,6 +376,8 @@ def init_db():
                     app.sso_enabled = True
                     app.network_policy = "VPN_ONLY"
                     app.vpn_restriction_mode = "LOCK_WITH_BANNER"
+                    if app.spoke_framework_version == "2.15":
+                        app.spoke_framework_version = None
                     logger.info("Ensured MTPulse portal_launch_url configured: %s, network_policy: VPN_ONLY, vpn_restriction_mode: LOCK_WITH_BANNER", app.portal_launch_url)
                 # Auto-upgrade WA-RDT2 Remote Desktop configuration
                 if item["app_code"] == "wa_rdt2":

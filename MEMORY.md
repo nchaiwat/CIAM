@@ -1,8 +1,8 @@
 # Central IAM - System Memory & Technical Context (MEMORY.md)
 
-**Last Updated:** 2026-11-19  
+**Last Updated:** 2026-11-20  
 
-**Version:** 2.15.0 (Configurable Per-App Idle Timeout, Honeypot Verification & Mandatory Audit Transaction IP Logging Standard)  
+**Version:** 2.15.0 (Sprint 69: Spoke UI Cleanup, Framework Version Badge Refactor & Native Infra Backend Sync Classification)  
 
 **Project:** Centralized Identity & Access Governance System (Central IAM)  
 

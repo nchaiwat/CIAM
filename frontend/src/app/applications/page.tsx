@@ -741,172 +741,163 @@ export default function ApplicationsPage() {
                 </div>
 
                 {/* Details */}
-                <div className="mt-4 pt-4 border-t-2 border-slate-200 space-y-2 text-xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                    <span className="text-slate-600 font-medium shrink-0">URL ปลายทาง:</span>
-                    <span className="font-mono text-slate-900 font-bold break-all bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-xs sm:text-right" title={app.base_url || "Local"}>
-                      {app.base_url || "Local"}
-                    </span>
-                  </div>
+                {(() => {
+                  const isDirectInfra =
+                    ["ad", "m365", "pfsense_ho", "pfsense_fac", "sap_b1", "wa_rdt2"].includes(app.app_code.toLowerCase()) ||
+                    ["AD_PROXY", "SAP_B1", "M365", "PFSENSE", "RDP"].includes(app.connector_type);
+                  const latestVer = (app.latest_framework_version || "2.15.0").replace(/^v/i, "").trim();
+                  const rawFw = app.spoke_framework_version ? app.spoke_framework_version.replace(/^v/i, "").trim() : "";
+                  const normFw = rawFw.replace(/\.0$/, "");
+                  const normLatest = latestVer.replace(/\.0$/, "");
+                  const isMatch = normFw === normLatest || rawFw === latestVer;
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600 font-medium">จำนวนบัญชีที่ผูก:</span>
-                    <span className="font-bold text-slate-900">{app.total_linked_accounts} บัญชี</span>
-                  </div>
+                  return (
+                    <div className="mt-4 pt-4 border-t-2 border-slate-200 space-y-2 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <span className="text-slate-600 font-medium shrink-0">URL ปลายทาง:</span>
+                        <span className="font-mono text-slate-900 font-bold break-all bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-xs sm:text-right" title={app.base_url || "Local"}>
+                          {app.base_url || "Local"}
+                        </span>
+                      </div>
 
-                  {app.connector_type === "AD_PROXY" || app.app_code === "ad" ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-600 font-medium">สิทธิ์คำสั่ง PATCH AD:</span>
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          app.ad_allow_status_patch
-                            ? "bg-rose-100 text-rose-900 border border-rose-300"
-                            : "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                        }`}
-                      >
-                        {app.ad_allow_status_patch ? "⚠️ อนุญาตคำสั่ง PATCH" : "🛡️ ปิด PATCH (Read-Only)"}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-600 font-medium">Single Sign-On (SSO):</span>
-                      {app.sso_enabled === false ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                          ✕ Disabled (ปิด SSO)
-                        </span>
-                      ) : app.connector_type === "SSO_ONLY" ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                          ✓ SSO Active (Client Mode)
-                        </span>
-                      ) : app.spoke_sso_status === "DISABLED" ? (
-                        <span
-                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse"
-                          title="ระบบลูกสลับไปโหมดฉุกเฉิน (Break-Glass) หรือปิดสวิตช์ SSO ภายในตนเอง"
-                        >
-                          ⚠️ Spoke ปิด SSO (Break-Glass)
-                        </span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600 font-medium">จำนวนบัญชีที่ผูก:</span>
+                        <span className="font-bold text-slate-900">{app.total_linked_accounts} บัญชี</span>
+                      </div>
+
+                      {app.connector_type === "AD_PROXY" || app.app_code === "ad" ? (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-600 font-medium">สิทธิ์คำสั่ง PATCH AD:</span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              app.ad_allow_status_patch
+                                ? "bg-rose-100 text-rose-900 border border-rose-300"
+                                : "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                            }`}
+                          >
+                            {app.ad_allow_status_patch ? "⚠️ อนุญาตคำสั่ง PATCH" : "🛡️ ปิด PATCH (Read-Only)"}
+                          </span>
+                        </div>
+                      ) : isDirectInfra ? (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-600 font-medium">ประเภทการเชื่อมต่อ:</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                            🛠️ Direct Inventory Sync
+                          </span>
+                        </div>
                       ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                          ✓ SSO Active
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-600 font-medium">Single Sign-On (SSO):</span>
+                          {app.sso_enabled === false ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                              ✕ Disabled (ปิด SSO)
+                            </span>
+                          ) : app.connector_type === "SSO_ONLY" ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                              ✓ SSO Active (Client Mode)
+                            </span>
+                          ) : app.spoke_sso_status === "DISABLED" ? (
+                            <span
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse"
+                              title="ระบบลูกสลับไปโหมดฉุกเฉิน (Break-Glass) หรือปิดสวิตช์ SSO ภายในตนเอง"
+                            >
+                              ⚠️ Spoke ปิด SSO (Break-Glass)
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                              ✓ SSO Active
+                            </span>
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
 
-                  {/* Framework / Spec Version Compliance Row */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600 font-medium">เวอร์ชัน Framework:</span>
-                    {(() => {
-                      const isDirectInfra =
-                        ["ad", "m365", "pfsense_ho", "pfsense_fac", "sap_b1", "wa_rdt2"].includes(app.app_code.toLowerCase()) ||
-                        ["AD_PROXY", "SAP_B1", "M365", "PFSENSE", "RDP"].includes(app.connector_type);
-                      if (isDirectInfra) {
-                        return (
+                      {/* Framework / Spec Version Compliance Row */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600 font-medium">เวอร์ชัน Framework:</span>
+                        {isDirectInfra ? (
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
                             🛠️ Native Infra Connector
                           </span>
-                        );
-                      }
-                      const latestVer = (app.latest_framework_version || "2.15.0").replace(/^v/i, "");
-                      const rawFw = app.spoke_framework_version ? app.spoke_framework_version.replace(/^v/i, "").trim() : "";
-                      if (!rawFw) {
-                        return (
-                          <span
-                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-300"
-                            title={`ระบบลูกยังไม่ได้ส่งค่า framework_version กลับมาใน Sync/Ping/Heartbeat (มาตรฐานล่าสุด v${latestVer})`}
-                          >
-                            ❔ ยังไม่ระบุเวอร์ชัน (&lt; v{latestVer})
+                        ) : !rawFw ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-300">
+                            ยังไม่ระบุ
                           </span>
-                        );
-                      }
-                      if (rawFw === latestVer) {
-                        return (
-                          <span
-                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300"
-                            title={`อัปเดตตรงตามมาตรฐาน Central IAM Spoke Framework v${latestVer} แล้ว`}
-                          >
-                            ✓ v{rawFw} (ตรงสเปกล่าสุด)
+                        ) : isMatch ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            v{rawFw}
                           </span>
-                        );
-                      }
-                      return (
-                        <span
-                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300"
-                          title={`Spoke ใช้ Framework v${rawFw} — ควรอัปเดตให้ตรงกับ v${latestVer}`}
-                        >
-                          ⚠️ v{rawFw} (ควรอัปเดตเป็น v{latestVer})
-                        </span>
-                      );
-                    })()}
-                  </div>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                            v{rawFw}
+                          </span>
+                        )}
+                      </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600 font-medium">นโยบายเครือข่าย:</span>
-                    {app.network_policy === "VPN_ONLY" ? (
-                      app.vpn_restriction_mode === "HIDE" ? (
-                        <span
-                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1"
-                          title="จำกัดเฉพาะเชื่อมต่อ VPN หรือใช้งานในสำนักงาน (ซ่อนแอปจาก Portal ทันทีเมื่ออยู่นอกวง)"
-                        >
-                          <Shield className="w-3 h-3 text-purple-700" />
-                          VPN Only (ซ่อน)
-                        </span>
-                      ) : (
-                        <span
-                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1"
-                          title="จำกัดเฉพาะเชื่อมต่อ VPN หรือใช้งานในสำนักงาน (แสดงการ์ดแบบล็อกพร้อมเตือนเมื่ออยู่นอกวง)"
-                        >
-                          <Lock className="w-3 h-3 text-amber-700" />
-                          VPN Only (ล็อก)
-                        </span>
-                      )
-                    ) : (
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-850 border border-emerald-300 flex items-center gap-1"
-                        title="เข้าถึงได้จากทุกที่บนอินเทอร์เน็ตโดยตรง"
-                      >
-                        <Globe className="w-3 h-3 text-emerald-600" />
-                        เข้าได้ทุกที่ (Anywhere)
-                      </span>
-                    )}
-                  </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600 font-medium">นโยบายเครือข่าย:</span>
+                        {isDirectInfra ? (
+                          <span
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300 flex items-center gap-1"
+                            title="เชื่อมต่อดึงข้อมูลระดับระบบ (Backend Service) ไม่ได้เปิดให้ผู้ใช้ล็อกอินผ่าน Portal"
+                          >
+                            🛠️ เฉพาะระบบ (Backend Sync)
+                          </span>
+                        ) : app.network_policy === "VPN_ONLY" ? (
+                          app.vpn_restriction_mode === "HIDE" ? (
+                            <span
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1"
+                              title="จำกัดเฉพาะเชื่อมต่อ VPN หรือใช้งานในสำนักงาน (ซ่อนแอปจาก Portal ทันทีเมื่ออยู่นอกวง)"
+                            >
+                              <Shield className="w-3 h-3 text-purple-700" />
+                              VPN Only (ซ่อน)
+                            </span>
+                          ) : (
+                            <span
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1"
+                              title="จำกัดเฉพาะเชื่อมต่อ VPN หรือใช้งานในสำนักงาน (แสดงการ์ดแบบล็อกพร้อมเตือนเมื่ออยู่นอกวง)"
+                            >
+                              <Lock className="w-3 h-3 text-amber-700" />
+                              VPN Only (ล็อก)
+                            </span>
+                          )
+                        ) : (
+                          <span
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-850 border border-emerald-300 flex items-center gap-1"
+                            title="เข้าถึงได้จากทุกที่บนอินเทอร์เน็ตโดยตรง"
+                          >
+                            <Globe className="w-3 h-3 text-emerald-600" />
+                            เข้าได้ทุกที่ (Anywhere)
+                          </span>
+                        )}
+                      </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600 font-medium">Idle Timeout:</span>
-                    <span
-                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-1"
-                      title={`ตัดเซสชันเมื่อไม่มีการใช้งานติดต่อกัน ${app.idle_timeout_minutes || 30} นาที (ตามมาตรฐาน ISO 27001 / NIST)`}
-                    >
-                      <Clock className="w-3 h-3 text-amber-700" />
-                      ⏱️ {app.idle_timeout_minutes || 30} นาที
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600 font-medium">สถานะการเชื่อมต่อ:</span>
-                    <div className="flex items-center space-x-1.5">
-                      <span
-                        className={`w-2.5 h-2.5 rounded-full ${
-                          app.connector_type === "SSO_ONLY" || app.health_status === "ONLINE" ? "bg-emerald-600" : "bg-rose-600"
-                        }`}
-                      ></span>
-                      <span
-                        className={`font-bold ${
-                          app.connector_type === "SSO_ONLY"
-                            ? "text-emerald-800"
-                            : app.health_status === "ONLINE"
-                            ? "text-emerald-800"
-                            : "text-rose-800"
-                        }`}
-                      >
-                        {app.connector_type === "SSO_ONLY" ? "ออนไลน์ (Client Mode)" : app.health_status === "ONLINE" ? "ออนไลน์" : "ออฟไลน์"}
-                      </span>
-                      {app.latency_ms && (
-                        <span className="text-[11px] font-mono text-slate-500 font-semibold">({app.latency_ms} ms)</span>
-                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600 font-medium">สถานะการเชื่อมต่อ:</span>
+                        <div className="flex items-center space-x-1.5">
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full ${
+                              app.connector_type === "SSO_ONLY" || app.health_status === "ONLINE" ? "bg-emerald-600" : "bg-rose-600"
+                            }`}
+                          ></span>
+                          <span
+                            className={`font-bold ${
+                              app.connector_type === "SSO_ONLY"
+                                ? "text-emerald-800"
+                                : app.health_status === "ONLINE"
+                                ? "text-emerald-800"
+                                : "text-rose-800"
+                            }`}
+                          >
+                            {app.connector_type === "SSO_ONLY" ? "ออนไลน์ (Client Mode)" : app.health_status === "ONLINE" ? "ออนไลน์" : "ออฟไลน์"}
+                          </span>
+                          {app.latency_ms && (
+                            <span className="text-[11px] font-mono text-slate-500 font-semibold">({app.latency_ms} ms)</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
 
               {/* Action Toolbar */}

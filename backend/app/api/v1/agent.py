@@ -124,7 +124,7 @@ def handle_agent_heartbeat(
     app.latency_ms = 1
     app.last_health_check_at = now
     app.spoke_sso_status = "ACTIVE"
-    raw_fw = payload.framework_version or payload.spec_version or payload.app_version
+    raw_fw = payload.framework_version or payload.spec_version
     if raw_fw and str(raw_fw).strip():
         clean_fw = str(raw_fw).strip().lstrip("vV").strip()[:50]
         if clean_fw:

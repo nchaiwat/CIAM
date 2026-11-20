@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 19 พฤศจิกายน 2026 (Local Time: 15:15 ICT)  
+> **Date Updated:** 20 พฤศจิกายน 2026 (Local Time: 10:10 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Repository (APEX):** [https://github.com/ITWA-PCL/apex](https://github.com/ITWA-PCL/apex)  
@@ -8,8 +8,8 @@
 > **Production VPS (CIAM):** `/var/www/Ciam` (Linux Ubuntu, IP: `157.173.219.153`)  
 > **Production VPS (IRM):** `/var/www/Irm` (Hostinger VPS)  
 > **Production VPS (APEX):** `/var/www/Apex` (Hostinger VPS)  
-> **Test Integrity:** Backend Pytest: 105/105 passed (`.\backend\.venv\Scripts\pytest.exe`), Frontend TypeScript: 0 errors (`npx tsc --noEmit`), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
-> **Git Status:** Production Ready — Sprint 68 (Configurable Per-App Idle Timeout, Honeypot Verification & Mandatory Audit Transaction IP Logging v2.15.0)
+> **Test Integrity:** Backend Pytest: 105/105 passed (`.\backend\.venv\Scripts\pytest.exe`), Frontend TypeScript: 0 errors (`npm --prefix frontend run build`), APEX `node scripts/verify-local.js`: 13 syntax + 10 security/finance checks passed  
+> **Git Status:** Production Ready — Sprint 69 (Spoke UI Cleanup: Framework Version Badges, Native Infra Connector Classification, and Card Idle Timeout Removal v2.15.0)
 
 ---
 
@@ -17,6 +17,19 @@
 
 ### 0.1 สถานะโครงการและความคืบหน้าล่าสุด (Current State & Recent Sprints)
 ระบบ **Central IAM** ได้รับการพัฒนา ตรวจสอบ และทดสอบคุณภาพอย่างเข้มข้นจนอยู่ในสถานะ **Production-Ready 100%**:
+0g. **Spoke UI Cleanup & Native Infra Classification (Sprint 69):**
+   - **1. ปรับปรุงการแสดงผล Framework Version บน Spoke Cards:**
+     - แก้ไข Backend `agent.py`: ตัด Fallback `payload.app_version` ออก ให้รับเฉพาะ `framework_version` หรือ `spec_version` ป้องกัน MTPulse ส่ง app version 2.15 มาทับ Spoke Framework Version
+     - ปรับ `CURRENT_SPOKE_FRAMEWORK_VERSION = "2.15.0"` ใน `schemas/application.py` และ `tests/test_local_portal_account.py`
+     - ปรับ Frontend Badge: หากตรงกับ Final Framework (`2.15` หรือ `2.15.0`) แสดงเลข `v{version}` สีเขียว, หากต่ำกว่าหรือแตกต่างแสดงเลขสีแดง, หากไม่มีแสดง `ยังไม่ระบุ` สีเทา, และหากเป็น Native Infra แสดง `🛠️ Native Infra Connector` ตัดข้อความแนะนำยาวทั้งหมด
+   - **2. ลบแถว Idle Timeout ออกจากการ์ด Spoke:**
+     - ลบแถวแสดง `Idle Timeout: 30 นาที` ออกจากการ์ดหน้า `/applications` ไม่ให้แสดงข้อมูลสับสนกับระบบที่ไม่รองรับหรือยังไม่ได้พัฒนา
+   - **3. จำแนก Native Infra Connector อย่างชัดเจน:**
+     - แยกแยะระบบ Direct Infra (SAP B1, AD, M365, pfSense HO/FAC, RDP):
+       - แถว Single Sign-On: แสดง `🛠️ Direct Inventory Sync` แทน `✕ Disabled (ปิด SSO)`
+       - แถวนโยบายเครือข่าย: แสดง `🛠️ เฉพาะระบบ (Backend Sync)` แทน `เข้าได้ทุกที่ (Anywhere)`
+   - **4. คุณภาพและการทดสอบ:**
+     - Backend Pytest: 105/105 passed (100%), Frontend TypeScript: 0 errors
 0f. **Configurable Per-App Idle Timeout, Honeypot Verification & Mandatory Audit Transaction IP Logging (Sprint 68):**
    - **1. ปรับปรุงข้อกำหนด Idle Timeout ให้ตั้งค่าราย Application ได้ในหน่วยนาที (Configurable Per-App Idle Timeout in Minutes):**
      - ปรับ Security Framework (Spoke Enterprise Integration Specification v2.15.0) หมวด H (ข้อกำหนดที่ 14) ให้แต่ละ Application สามารถกำหนดระยะเวลา Inactivity / Idle Timeout ได้อย่างอิสระตามความเหมาะสมของระดับความเสี่ยง (Risk Profile) เช่น 30, 60, 120 นาที โดยต้องระบุเวลาเป็น "นาที" เสมอ

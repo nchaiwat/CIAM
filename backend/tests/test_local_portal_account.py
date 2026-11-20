@@ -435,7 +435,7 @@ def test_spoke_framework_version_handshake_across_sync_ping_and_heartbeat():
             ping_res = client.post(f"/api/v1/applications/{mode_a_app.id}/ping", headers=admin_headers)
             assert ping_res.status_code == 200, ping_res.text
             assert ping_res.json()["spoke_framework_version"] == "2.12.0"
-            assert ping_res.json()["latest_framework_version"] == "2.14.0"
+            assert ping_res.json()["latest_framework_version"] == "2.15.0"
 
         # 3. Mode C Heartbeat updates spoke_framework_version
         hb_res = client.post(
@@ -445,7 +445,7 @@ def test_spoke_framework_version_handshake_across_sync_ping_and_heartbeat():
         )
         assert hb_res.status_code == 200, hb_res.text
         hb_data = hb_res.json()
-        assert hb_data["latest_framework_version"] == "2.14.0"
+        assert hb_data["latest_framework_version"] == "2.15.0"
         assert hb_data["detected_framework_version"] == "2.13.0"
 
         # 4. GET /api/v1/applications exposes spoke_framework_version for UI badges
@@ -454,7 +454,7 @@ def test_spoke_framework_version_handshake_across_sync_ping_and_heartbeat():
         apps_by_code = {a["app_code"]: a for a in apps_res.json()}
         assert apps_by_code["petty_fw_a"]["spoke_framework_version"] == "2.12.0"
         assert apps_by_code["petty_fw_c"]["spoke_framework_version"] == "2.13.0"
-        assert apps_by_code["petty_fw_c"]["latest_framework_version"] == "2.14.0"
+        assert apps_by_code["petty_fw_c"]["latest_framework_version"] == "2.15.0"
     finally:
         for code in ("petty_fw_a", "petty_fw_c"):
             app_row = db.query(ConnectedApplication).filter_by(app_code=code).first()
