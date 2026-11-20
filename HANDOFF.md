@@ -1,6 +1,6 @@
 # Central-IAM — Project Handoff & Development Context
 
-> **Date Updated:** 20 พฤศจิกายน 2026 (Local Time: 10:10 ICT)  
+> **Date Updated:** 20 พฤศจิกายน 2026 (Local Time: 21:42 ICT)  
 > **Repository (CIAM):** [https://github.com/nchaiwat/CIAM](https://github.com/nchaiwat/CIAM)  
 > **Repository (IRM):** [https://github.com/nchaiwat/IRM](https://github.com/nchaiwat/IRM)  
 > **Repository (APEX):** [https://github.com/ITWA-PCL/apex](https://github.com/ITWA-PCL/apex)  
@@ -30,6 +30,9 @@
        - แถวนโยบายเครือข่าย: แสดง `🛠️ เฉพาะระบบ (Backend Sync)` แทน `เข้าได้ทุกที่ (Anywhere)`
    - **4. คุณภาพและการทดสอบ:**
      - Backend Pytest: 105/105 passed (100%), Frontend TypeScript: 0 errors
+   - **5. กฎ Single Source of Truth และงานค้างต่อรอบหน้า (Pending):**
+     - **กฎเหล็ก Single Source of Truth:** ข้อมูลสถานะ/ค่าคอนฟิกของระบบลูกที่แสดงใน CIAM ต้องมาจากค่าจริงที่ Spoke รายงานผ่าน API/Agent/Sync เท่านั้น ห้ามนำค่า Default ใน DB ของ CIAM มาแสดงเป็นค่าของ Spoke และห้ามสร้างช่องตั้งค่าใน CIAM หากยังไม่มีกลไกสั่ง Push/Enforce ลง Spoke จริง
+     - **จุดค้าง (Pending Edit Modal Cleanup):** หน้าต่าง **ตั้งค่าเชื่อมต่อ (Edit Modal)** ใน `frontend/src/app/applications/page.tsx` (บรรทัด 1161–1180) ยังมีช่องกรอก `Idle Timeout (นาที)` ค้างอยู่ ซึ่งปัจจุบันบันทึกแค่ใน DB ของ CIAM ยังไม่ได้สั่ง Push ลง Spoke จริง — รอบหน้ารอดำเนินการถอดช่องนี้ออก (หรือทำ Policy Push/Pull ลง Spoke จริง)
 0f. **Configurable Per-App Idle Timeout, Honeypot Verification & Mandatory Audit Transaction IP Logging (Sprint 68):**
    - **1. ปรับปรุงข้อกำหนด Idle Timeout ให้ตั้งค่าราย Application ได้ในหน่วยนาที (Configurable Per-App Idle Timeout in Minutes):**
      - ปรับ Security Framework (Spoke Enterprise Integration Specification v2.15.0) หมวด H (ข้อกำหนดที่ 14) ให้แต่ละ Application สามารถกำหนดระยะเวลา Inactivity / Idle Timeout ได้อย่างอิสระตามความเหมาะสมของระดับความเสี่ยง (Risk Profile) เช่น 30, 60, 120 นาที โดยต้องระบุเวลาเป็น "นาที" เสมอ
@@ -416,6 +419,12 @@
 
 ### 0.2 รายการ Git Commits ล่าสุดและแผนงานสำหรับการพัฒนาต่อในรอบหน้า (Next Session Roadmap)
 - **Git Commits ล่าสุดบน `origin/main` (Central-IAM):**
+  - `d2bb774`: `fix(spoke-ui): clean up framework version badges, remove idle timeout from cards, and fix native infra network policy` (Sprint 69)
+  - `68b9a5b`: `feat(spec): add configurable per-app idle timeout, honeypot verification and mandatory audit transaction ip logging` (Sprint 68)
+  - `ffaa6c5`: `feat(spec): add 30-minute idle session timeout standard v2.14.0` (Sprint 67)
+  - `2392346`: `fix(directory): rollback false autoheal exceptions and restore ghost account detection` (Sprint 66)
+  - `e4a20c4` / `ed743f8`: Mode C stale inactive account pruning & Section D.6.3 spec (Sprint 65)
+  - `b0f1a29` / `9eabf35`: Sprint 64, Spoke Spec v2.13.0 & Framework Version Handshake
   - `a10638c`: `fix(sso): add /oauth2/* compatibility rewrites and document APEX SSO fixes` (Sprint 63)
   - `051a7ac`: `fix(security): enforce CIAM origin IP 157.173.219.153 across M2M, OIDC, and isolate pytest from live spokes` (Sprint 62)
   - `aa554a8`: `docs(handoff): record Sprint 61 commit b2bb697 and next steps`
@@ -426,6 +435,10 @@
   - `393efef`: `fix(security): log verified CIAM origin IP 157.173.219.153 on SSO/M2M events and honor X-CIAM-Origin-IP` (Sprint 62)
   - (`main` ปัจจุบันอยู่ที่ `4a92ab1` — รอเปิด/Merge PR จาก `Sec1` เข้า `main` หรือดึง `origin/Sec1` บน `/var/www/Apex`)
 - **แนวทางเมื่อกลับมาพัฒนาต่อรอบหน้า (Pending Issues & Next Session Roadmap):**
+  0. **[Sprint 69 Follow-up — Single Source of Truth & Edit Modal Cleanup]:**
+     - Deploy โค้ด Sprint 69 (`d2bb774`) บน Production VPS (`/var/www/Ciam`) ทั้ง `api` และ `web` (หากยังไม่ได้ Deploy)
+     - ถอดช่องกรอก `Idle Timeout (นาที)` ออกจาก Edit Modal ใน `frontend/src/app/applications/page.tsx` (บรรทัด 1161–1180) หรือพัฒนา API สั่ง Push/Pull Policy ลง Spoke จริง เพื่อไม่ให้ขัดหลัก Single Source of Truth
+     - ตรวจสอบหน้าอื่นๆ ไม่ให้แสดงค่า Default/Fallback ของ CIAM แทนค่าจริงจาก Spoke
   1. **[Deploy & Verify บน Production VPS (`/var/www/Ciam` & `/var/www/Apex`)]:**
      - ฝั่ง Central-IAM (`/var/www/Ciam`): Deploy ทั้ง **`api`** (จาก Sprint 62 `051a7ac`) และ **`web`** (จาก `a10638c`) ตาม Section 5
      - ฝั่ง APEX (`/var/www/Apex`): เปิด & Merge PR `Sec1` (`8477d45`) เข้า `main` (`https://github.com/ITWA-PCL/apex/pull/new/Sec1`) หรือดึง `origin Sec1` แล้ว Build/Restart Service `apex-app`
